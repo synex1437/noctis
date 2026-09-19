@@ -160,7 +160,7 @@ Since 5.2 the same engine runs inside **OpenAI Codex CLI**, **Antigravity CLI** 
 ## Friday night → Monday morning
 
 <details>
-<summary>A weekend that needs nobody, and how it compares with dashboards, loop plugins and auto-resume scripts.</summary>
+<summary>A weekend that needs nobody: checkpoint, wait out the reset, relaunch on Monday.</summary>
 
 <p align="center"><img src="docs/timeline.svg" alt="Timeline: checkpoint at 92 percent, wait, resume after the reset, save at the weekly limit, relaunch on Monday" width="100%"></p>
 
@@ -168,7 +168,9 @@ Nothing in that weekend needs you. The checkpoint holds the last request, touche
 
 <p align="center"><img src="docs/before-after.svg" alt="The same night with and without the plugin: 14 of 48 tasks versus 48 of 48" width="100%"></p>
 
-<details><summary>How it compares</summary>
+</details>
+
+## How it compares
 
 | Capability | noctis | usage dashboards / status lines | loop plugins ("keep going") | auto-resume scripts |
 |---|:---:|:---:|:---:|:---:|
@@ -186,9 +188,6 @@ Nothing in that weekend needs you. The checkpoint holds the last request, touche
 | Roles profile: which model and effort does code, research, planning, digests, search, fallback | ✅ | — | — | — |
 | Follows the language you are typing in (14 languages, all complete) | ✅ | some | — | — |
 | Works inside Claude Code, Codex CLI, Antigravity CLI, Droid and Copilot CLI | ✅ | some | Claude only | some |
-</details>
-
-</details>
 
 ## Install (details)
 

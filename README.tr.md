@@ -159,7 +159,7 @@ Noctis hook ve durum çubuğu ekler; kimsenin hook'unu silmez ya da yeniden yazm
 ## Cuma gecesi → Pazartesi sabahı
 
 <details>
-<summary>Kimseyi gerektirmeyen bir hafta sonu, ve panolar, döngü eklentileri ve otomatik devam betikleriyle karşılaştırması.</summary>
+<summary>Kimseyi gerektirmeyen bir hafta sonu: checkpoint, sıfırlanmayı bekleme, Pazartesi yeniden başlatma.</summary>
 
 <p align="center"><img src="docs/timeline.svg" alt="Zaman çizgisi: %92'de checkpoint, bekleme, sıfırlanınca devam, haftalık limitte kayıt, Pazartesi yeniden başlatma" width="100%"></p>
 
@@ -167,7 +167,9 @@ O hafta sonunda size düşen hiçbir şey yok. Checkpoint son isteği, dokunulan
 
 <p align="center"><img src="docs/before-after.svg" alt="Aynı gece eklentisiz ve eklentiyle: 48 işin 14'ü yerine 48'i" width="100%"></p>
 
-<details><summary>Rakiplerle karşılaştırma</summary>
+</details>
+
+## Rakiplerle karşılaştırma
 
 | Yetenek | noctis | kullanım panoları / durum çubukları | döngü eklentileri ("devam et") | otomatik devam betikleri |
 |---|:---:|:---:|:---:|:---:|
@@ -185,9 +187,6 @@ O hafta sonunda size düşen hiçbir şey yok. Checkpoint son isteği, dokunulan
 | Rol profili: kod, araştırma, planlama, özet, arama, yedek için model ve effort | ✅ | — | — | — |
 | Yazdığınız dile uyar (14 dil, hepsi tam) | ✅ | bazıları | — | — |
 | Claude Code, Codex CLI, Antigravity CLI, Droid ve Copilot CLI içinde çalışır | ✅ | bazıları | yalnızca Claude | bazıları |
-</details>
-
-</details>
 
 ## Kurulum (ayrıntı)
 
