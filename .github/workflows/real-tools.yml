@@ -1,0 +1,56 @@
+name: real-tools
+on:
+  schedule: [{ cron: '17 4 * * 1' }]
+  workflow_dispatch:
+
+# The host adapters are written against documented contracts that can change without notice. Once a
+# week this installs the real CLIs and checks the surfaces the plugin depends on (flags, hook file
+# locations, the app-server handshake). It never signs in and never runs a model. Installing is
+# best-effort (a registry hiccup is not a contract break); the checks themselves fail the run, and
+# the job opens an issue so a silent change cannot pass unnoticed.
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Build the engine
+        run: cd go && CGO_ENABLED=0 go build -trimpath -o ../bin/linux-amd64/noctis ./cmd/noctis
+      - name: Install the CLIs
+        continue-on-error: true
+        run: npm i -g @anthropic-ai/claude-code @openai/codex @github/copilot
+      - name: Claude Code — flags the plugin passes
+        run: |
+          claude --version
+          claude --help | tee help.txt
+          missing=""
+          for flag in --resume --model --permission-mode --print; do grep -q -- "$flag" help.txt || missing="$missing $flag"; done
+          if [ -n "$missing" ]; then echo "::error::claude --help no longer lists:$missing"; exit 1; fi
+      - name: Codex CLI — resume flags and app-server handshake
+        run: |
+          codex --version
+          codex exec resume --help | tee codex.txt
+          grep -q -- "--skip-git-repo-check" codex.txt || { echo "::error::codex exec resume no longer lists --skip-git-repo-check"; exit 1; }
+          printf '%s\n' '{"method":"initialize","id":0,"params":{"clientInfo":{"name":"noctis","title":"noctis","version":"0"}}}' | timeout 20 codex app-server | head -c 400 | tee handshake.txt
+          grep -q '"id":0' handshake.txt || { echo "::error::codex app-server did not answer initialize"; exit 1; }
+      - name: Copilot CLI — resume flags
+        run: |
+          copilot --help | tee copilot.txt
+          grep -q -- "--resume" copilot.txt || { echo "::error::copilot --help no longer lists --resume"; exit 1; }
+      - name: Lab against the fakes (contract regression)
+        run: node tests/lab.js
+      - name: Open an issue when a contract moved
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'A host CLI contract changed (weekly check)';
+            const { data: open } = await github.rest.issues.listForRepo({ owner: context.repo.owner, repo: context.repo.repo, state: 'open', labels: 'contract' });
+            if (open.some((issue) => issue.title === title)) return;
+            await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title, labels: ['contract'],
+              body: `The weekly real-tool check failed: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` });

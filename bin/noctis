@@ -1,0 +1,9 @@
+#!/bin/sh
+# Fallback launcher shipped in the repo so exec-form hooks work right after a marketplace install.
+# The first `noctis ensure` / `noctis setup` run replaces this file with the real bin/<os>-<arch>/noctis.
+root=$(cd "$(dirname "$0")/.." && pwd)
+case "$(uname -s)" in Darwin) os=darwin ;; *) os=linux ;; esac
+case "$(uname -m)" in arm64|aarch64) arch=arm64 ;; *) arch=amd64 ;; esac
+binary="$root/bin/$os-$arch/noctis"
+[ -x "$binary" ] || chmod +x "$binary" 2>/dev/null
+exec "$binary" "$@"

@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-label="Install in under a minute: add the marketplace, install the plugin, run setup which asks which model does which work, reload — then queue your tasks and go to bed">
+  <title>Sixty seconds from install to an unattended night</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0f17"/>
+      <stop offset="1" stop-color="#121a27"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4f8ff7"/>
+      <stop offset="1" stop-color="#38c7d9"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#141c2b"/>
+      <stop offset="1" stop-color="#0f1622"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <style>
+      .sans { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif; }
+      .mono { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace; }
+      .eyebrow { font-size: 14px; font-weight: 700; fill: #7f8ea3; letter-spacing: 2.4px; }
+      .title { font-size: 30px; font-weight: 800; fill: #f2f5f9; letter-spacing: -0.4px; }
+      .step { font-size: 15px; font-weight: 700; fill: #dbe2ec; }
+      .num { font-size: 15px; font-weight: 800; fill: #0b0f17; }
+      .cmd { font-size: 14.5px; fill: #e6e9ee; }
+      .prompt { font-size: 14.5px; fill: #6fb1ff; }
+      .dim { font-size: 13px; fill: #6b7687; }
+      .q { font-size: 14px; fill: #f2f5f9; }
+      .opt { font-size: 13.5px; fill: #aab4c3; }
+      .optHi { font-size: 13.5px; fill: #f5b544; font-weight: 700; }
+      .ok { font-size: 13.5px; fill: #3ecf8e; }
+      .pill { font-size: 13px; font-weight: 600; fill: #dbe2ec; }
+    </style>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="1199" height="559" rx="18" fill="url(#bg)" stroke="#232c3b"/>
+
+  <text x="48" y="58" class="sans eyebrow">INSTALL · SIXTY SECONDS</text>
+  <text x="48" y="98" class="sans title">Four commands, one question, one TASKS.md. Then go to bed.</text>
+
+  <!-- step rail -->
+  <g class="sans">
+    <!-- 1 -->
+    <g transform="translate(48 132)">
+      <rect x="0" y="0" width="262" height="112" rx="14" fill="url(#card)" stroke="#26303f" filter="url(#shadow)"/>
+      <circle cx="26" cy="28" r="13" fill="url(#accent)"/>
+      <text x="26" y="28" class="num" text-anchor="middle" dominant-baseline="central">1</text>
+      <text x="48" y="28" class="step" dominant-baseline="central">Add the marketplace</text>
+      <text x="20" y="64" class="mono prompt">/plugin marketplace add</text>
+      <text x="20" y="86" class="mono cmd">synex1437/noctis</text>
+    </g>
+    <path d="M 316 188 L 336 188" stroke="#2f3b50" stroke-width="2"/>
+    <path d="M 331 183 L 337 188 L 331 193" fill="none" stroke="#2f3b50" stroke-width="2"/>
+    <!-- 2 -->
+    <g transform="translate(342 132)">
+      <rect x="0" y="0" width="262" height="112" rx="14" fill="url(#card)" stroke="#26303f" filter="url(#shadow)"/>
+      <circle cx="26" cy="28" r="13" fill="url(#accent)"/>
+      <text x="26" y="28" class="num" text-anchor="middle" dominant-baseline="central">2</text>
+      <text x="48" y="28" class="step" dominant-baseline="central">Install</text>
+      <text x="20" y="64" class="mono prompt">/plugin install</text>
+      <text x="20" y="86" class="mono cmd">noctis</text>
+    </g>
+    <path d="M 610 188 L 630 188" stroke="#2f3b50" stroke-width="2"/>
+    <path d="M 625 183 L 631 188 L 625 193" fill="none" stroke="#2f3b50" stroke-width="2"/>
+    <!-- 3 -->
+    <g transform="translate(636 132)">
+      <rect x="0" y="0" width="262" height="112" rx="14" fill="url(#card)" stroke="#3b4d6e" filter="url(#shadow)"/>
+      <circle cx="26" cy="28" r="13" fill="url(#accent)"/>
+      <text x="26" y="28" class="num" text-anchor="middle" dominant-baseline="central">3</text>
+      <text x="48" y="28" class="step" dominant-baseline="central">Set up — it asks one thing</text>
+      <text x="20" y="64" class="mono prompt">/noctis:setup</text>
+      <text x="20" y="84" class="dim">binary checked · settings.json updated</text>
+      <text x="20" y="101" class="dim">(backup kept) · self-check runs</text>
+    </g>
+    <path d="M 904 188 L 924 188" stroke="#2f3b50" stroke-width="2"/>
+    <path d="M 919 183 L 925 188 L 919 193" fill="none" stroke="#2f3b50" stroke-width="2"/>
+    <!-- 4 -->
+    <g transform="translate(930 132)">
+      <rect x="0" y="0" width="222" height="112" rx="14" fill="url(#card)" stroke="#26303f" filter="url(#shadow)"/>
+      <circle cx="26" cy="28" r="13" fill="url(#accent)"/>
+      <text x="26" y="28" class="num" text-anchor="middle" dominant-baseline="central">4</text>
+      <text x="48" y="28" class="step" dominant-baseline="central">Reload</text>
+      <text x="20" y="64" class="mono prompt">/reload-plugins</text>
+      <text x="20" y="86" class="dim">no compiler, no Node, no shell</text>
+    </g>
+  </g>
+
+  <!-- the one question -->
+  <g transform="translate(48 272)">
+    <rect x="0" y="0" width="716" height="240" rx="14" fill="#0d1320" stroke="#26303f" filter="url(#shadow)"/>
+    <circle cx="24" cy="24" r="6" fill="#ff5f57"/>
+    <circle cx="46" cy="24" r="6" fill="#febc2e"/>
+    <circle cx="68" cy="24" r="6" fill="#28c840"/>
+    <text x="358" y="29" class="mono dim" text-anchor="middle">setup — the one question</text>
+    <line x1="20" y1="44" x2="696" y2="44" stroke="#1d2634"/>
+    <g class="mono">
+      <text x="24" y="74" class="q">Which model should do which kind of work?</text>
+      <text x="24" y="102" class="optHi">1 noctis</text>
+      <text x="124" y="102" class="opt">Fable 5.1·max code &amp; planning · Opus 5·xhigh research · Haiku digests</text>
+      <text x="24" y="126" class="opt">2 balanced</text>
+      <text x="124" y="126" class="opt">Opus 5·high code &amp; planning · Sonnet 5·high research · Haiku digests</text>
+      <text x="24" y="150" class="opt">3 economy</text>
+      <text x="124" y="150" class="opt">Sonnet 5·high code · Haiku research · Opus 5·medium planning</text>
+      <text x="24" y="174" class="opt">4 custom</text>
+      <text x="124" y="174" class="opt">model or model:effort for each of the six roles</text>
+      <text x="24" y="210" class="prompt">›</text>
+      <text x="44" y="210" class="q">1</text>
+      <text x="64" y="210" class="ok">✔ roles saved · unattended (permissions=auto) · status line · self-check OK</text>
+    </g>
+  </g>
+
+  <!-- what you get -->
+  <g transform="translate(792 272)" class="sans">
+    <rect x="0" y="0" width="360" height="240" rx="14" fill="url(#card)" stroke="#26303f" filter="url(#shadow)"/>
+    <text x="24" y="38" class="step">What the night looks like afterwards</text>
+    <g class="pill">
+      <text x="24" y="74"><tspan fill="#f5b544">⏸</tspan>  pauses before the limit, resumes on its own</text>
+      <text x="24" y="102"><tspan fill="#3ecf8e">✔</tspan>  works down TASKS.md without asking</text>
+      <text x="24" y="130"><tspan fill="#a78bfa">🔀</tspan>  research on a cheaper model, code on yours</text>
+      <text x="24" y="158"><tspan fill="#38c7d9">⟳</tspan>  interrupted workflows relaunched, not restarted</text>
+      <text x="24" y="186"><tspan fill="#6fb1ff">🌐</tspan>  every notice in the language you type in</text>
+      <text x="24" y="214"><tspan fill="#e6e9ee">◎</tspan>  0 tokens per decision · no noticeable slowdown</text>
+    </g>
+  </g>
+
+  <text x="1152" y="544" class="sans dim" text-anchor="end">Windows · macOS · Linux · one binary, prebuilt for six platforms · also Codex CLI, Antigravity CLI, Droid, Copilot CLI</text>
+</svg>

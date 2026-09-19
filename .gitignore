@@ -1,0 +1,10 @@
+
+# author-only checklist, stays out of the public repo
+docs/PUBLISHING.md
+
+# local builds
+go/siw
+go/noctis
+go/noctis.exe
+node_modules/
+go/bin/

@@ -1,0 +1,7 @@
+* text=auto
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.svg text eol=lf
+bin/** binary
+bin/noctis text eol=lf
+bin/SHA256SUMS text eol=lf

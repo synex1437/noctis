@@ -1,0 +1,46 @@
+name: Bug report
+description: Something paused, resumed, routed or switched when it should not have — or did not when it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected and what the plugin did instead. One event is enough.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`noctis doctor` output"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: "`noctis why --last 20` around the event"
+      description: Each line shows the hook event, the action, the reason and the usage facts it looked at.
+      render: text
+  - type: textarea
+    id: errors
+    attributes:
+      label: "Relevant lines from `errors.log`"
+      description: "`<account>/noctis/errors.log` — WARN/ERROR only."
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Claude Code version and OS
+      placeholder: "2.1.275 · Windows 11 (VS Code extension)"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - marketplace (/plugin install)
+        - zip / clone (install.ps1 / install.sh)
+    validations:
+      required: true

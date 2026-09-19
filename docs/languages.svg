@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-label="The same two notices — a pause that resumed and a finished queue — as the plugin shows them in English, Turkish, German, Spanish, Japanese and Russian, detected from the language the person types in">
+  <title>Speaks the language you type in</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0f17"/>
+      <stop offset="1" stop-color="#121a27"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4f8ff7"/>
+      <stop offset="1" stop-color="#38c7d9"/>
+    </linearGradient>
+    <style>
+      .sans { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif; }
+      .mono { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono CJK JP", monospace; font-size: 14.5px; }
+      .eyebrow { font-size: 14px; font-weight: 700; fill: #7f8ea3; letter-spacing: 2.4px; }
+      .title { font-size: 30px; font-weight: 800; fill: #f2f5f9; letter-spacing: -0.4px; }
+      .sub { font-size: 16px; fill: #a9b3c2; }
+      .lang { font-size: 12px; font-weight: 800; fill: #0b0f17; letter-spacing: 1px; }
+      .you { fill: #f2f5f9; }
+      .pause { fill: #f5b544; font-size: 13px; }
+      .done { fill: #3ecf8e; font-size: 13px; }
+      .dim { fill: #6b7687; font-size: 12.5px; }
+      .foot { font-size: 13px; fill: #6b7687; }
+    </style>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="1199" height="429" rx="18" fill="url(#bg)" stroke="#232c3b"/>
+  <text x="48" y="58" class="sans eyebrow">14 LANGUAGES · ZERO TOKENS</text>
+  <text x="48" y="98" class="sans title">Speaks the language you type in.</text>
+  <text x="48" y="126" class="sans sub">Detected from what you type — no model call, no tokens — per session. Notices, status line, toasts. Pin one with <tspan class="mono" fill="#dbe2ec">locale</tspan> if you prefer.</text>
+
+  <!-- six cards, two columns -->
+  <g class="mono">
+    <!-- EN -->
+    <g transform="translate(48 152)">
+      <rect x="0" y="0" width="548" height="78" rx="12" fill="#0d1320" stroke="#26303f"/>
+      <rect x="14" y="14" width="30" height="18" rx="9" fill="url(#accent)"/>
+      <text x="29" y="23" class="sans lang" text-anchor="middle" dominant-baseline="central">EN</text>
+      <text x="56" y="28" class="you">› keep going with the refactor of the module</text>
+      <text x="56" y="50" class="pause">⏸ 5h limit 92%: waited 54 min, continuing.</text>
+      <text x="56" y="68" class="done">✔ Queue finished: TASKS.md has no open items.</text>
+    </g>
+    <!-- TR -->
+    <g transform="translate(604 152)">
+      <rect x="0" y="0" width="548" height="78" rx="12" fill="#0d1320" stroke="#26303f"/>
+      <rect x="14" y="14" width="30" height="18" rx="9" fill="url(#accent)"/>
+      <text x="29" y="23" class="sans lang" text-anchor="middle" dominant-baseline="central">TR</text>
+      <text x="56" y="28" class="you">› modülü düzeltmeye devam et lütfen</text>
+      <text x="56" y="50" class="pause">⏸ 5s limit %92: 54 dk beklendi, devam ediliyor.</text>
+      <text x="56" y="68" class="done">✔ Kuyruk bitti: TASKS.md içinde açık madde kalmadı.</text>
+    </g>
+    <!-- DE -->
+    <g transform="translate(48 240)">
+      <rect x="0" y="0" width="548" height="78" rx="12" fill="#0d1320" stroke="#26303f"/>
+      <rect x="14" y="14" width="30" height="18" rx="9" fill="url(#accent)"/>
+      <text x="29" y="23" class="sans lang" text-anchor="middle" dominant-baseline="central">DE</text>
+      <text x="56" y="28" class="you">› bitte mach mit dem Refactoring weiter</text>
+      <text x="56" y="50" class="pause">⏸ 5h-Limit 92%: 54 min gewartet, weiter geht's.</text>
+      <text x="56" y="68" class="done" textLength="474" lengthAdjust="spacingAndGlyphs">✔ Warteschlange erledigt: TASKS.md hat keine offenen Punkte mehr.</text>
+    </g>
+    <!-- ES -->
+    <g transform="translate(604 240)">
+      <rect x="0" y="0" width="548" height="78" rx="12" fill="#0d1320" stroke="#26303f"/>
+      <rect x="14" y="14" width="30" height="18" rx="9" fill="url(#accent)"/>
+      <text x="29" y="23" class="sans lang" text-anchor="middle" dominant-baseline="central">ES</text>
+      <text x="56" y="28" class="you">› por favor sigue con el refactor del módulo</text>
+      <text x="56" y="50" class="pause">⏸ límite 5h 92%: esperé 54 min, continúo.</text>
+      <text x="56" y="68" class="done">✔ Cola terminada: TASKS.md no tiene elementos abiertos.</text>
+    </g>
+    <!-- JA -->
+    <g transform="translate(48 328)">
+      <rect x="0" y="0" width="548" height="78" rx="12" fill="#0d1320" stroke="#26303f"/>
+      <rect x="14" y="14" width="30" height="18" rx="9" fill="url(#accent)"/>
+      <text x="29" y="23" class="sans lang" text-anchor="middle" dominant-baseline="central">JA</text>
+      <text x="56" y="28" class="you">› モジュールのリファクタリングを続けてください</text>
+      <text x="56" y="50" class="pause">⏸ 5時間上限 92%: 54分待機して再開します。</text>
+      <text x="56" y="68" class="done">✔ キュー完了: TASKS.md に未完了項目はありません。</text>
+    </g>
+    <!-- RU -->
+    <g transform="translate(604 328)">
+      <rect x="0" y="0" width="548" height="78" rx="12" fill="#0d1320" stroke="#26303f"/>
+      <rect x="14" y="14" width="30" height="18" rx="9" fill="url(#accent)"/>
+      <text x="29" y="23" class="sans lang" text-anchor="middle" dominant-baseline="central">RU</text>
+      <text x="56" y="28" class="you">› продолжай рефакторинг модуля, пожалуйста</text>
+      <text x="56" y="50" class="pause">⏸ лимит 5ч 92%: ждал 54 мин, продолжаю.</text>
+      <text x="56" y="68" class="done">✔ Очередь завершена: в TASKS.md нет открытых пунктов.</text>
+    </g>
+  </g>
+
+  <text x="1152" y="420" class="sans foot" text-anchor="end">also fr · pt · it · nl · pl · zh · ko · ar — the short [noctis] instructions given to Claude stay in English</text>
+</svg>

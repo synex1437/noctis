@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="590" viewBox="0 0 1200 590" role="img" aria-label="How noctis decides: signals feed hooks, deterministic rules pick an outcome">
+  <title>One tool turn through the guard</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0f17"/>
+      <stop offset="1" stop-color="#121a27"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#4a5568"/>
+    </marker>
+    <style>
+      .sans { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif; }
+      .mono { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace; }
+      .cap { font-size: 15px; fill: #8b95a5; }
+      .col { font-size: 12px; fill: #6b7687; letter-spacing: 1.5px; font-weight: 700; }
+      .box { fill: #111722; stroke: #26303f; }
+      .t { font-size: 16px; font-weight: 700; fill: #eef2f7; }
+      .s { font-size: 13px; fill: #8b95a5; }
+      .n { font-size: 14px; font-weight: 700; fill: #eef2f7; }
+      .d { font-size: 12px; fill: #8b95a5; }
+      .f { font-size: 12px; fill: #5b9bff; }
+      .o { font-size: 15px; font-weight: 700; }
+      .od { font-size: 12px; fill: #9aa5b6; }
+      .a { stroke: #4a5568; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect x="0.5" y="0.5" width="1199" height="589" rx="16" fill="url(#bg)" stroke="#232c3b"/>
+  <text x="30" y="38" class="sans cap">One tool turn through the guard — deterministic rules, no LLM calls, ~7 ms per hook</text>
+  <text x="30" y="70" class="sans col">SIGNALS</text>
+  <text x="340" y="70" class="sans col">HOOKS</text>
+  <text x="610" y="70" class="sans col">DECIDE</text>
+  <text x="880" y="70" class="sans col">OUTCOME</text>
+
+  <g class="sans">
+    <rect x="30" y="84" width="270" height="66" rx="10" class="box"/>
+    <text x="44" y="110" class="t">statusLine payload</text>
+    <text x="44" y="132" class="s">rate_limits 5h · 7d, model, context %</text>
+    <rect x="30" y="162" width="270" height="66" rx="10" class="box"/>
+    <text x="44" y="188" class="t">OAuth usage endpoint</text>
+    <text x="44" y="210" class="s">Fable bucket · 10 min, 15 s near edge</text>
+    <rect x="30" y="240" width="270" height="66" rx="10" class="box"/>
+    <text x="44" y="266" class="t">Transcript</text>
+    <text x="44" y="288" class="s">last request, todos, compaction summary</text>
+    <rect x="30" y="318" width="270" height="66" rx="10" class="box"/>
+    <text x="44" y="344" class="t">Project</text>
+    <text x="44" y="366" class="s">TASKS.md queue, git status, touched files</text>
+    <rect x="30" y="396" width="270" height="66" rx="10" class="box"/>
+    <text x="44" y="422" class="t">Config</text>
+    <text x="44" y="444" class="s">thresholds, presets, observe / enforce</text>
+  </g>
+
+  <g class="a">
+    <path d="M300 117 H338"/>
+    <path d="M300 195 H338"/>
+    <path d="M300 273 H338"/>
+    <path d="M300 351 H338"/>
+    <path d="M300 429 H338"/>
+  </g>
+
+  <g class="sans">
+    <rect x="340" y="84" width="240" height="430" rx="10" class="box"/>
+    <text x="354" y="110" class="t">Hook events</text>
+    <text x="354" y="146" class="n">UserPromptSubmit</text>
+    <text x="354" y="163" class="d">limit check, research router</text>
+    <text x="354" y="190" class="n">PreToolUse</text>
+    <text x="354" y="207" class="d">subagent gate, WebSearch deny</text>
+    <text x="354" y="234" class="n">PostToolBatch</text>
+    <text x="354" y="251" class="d">before every model call</text>
+    <text x="354" y="278" class="n">Stop</text>
+    <text x="354" y="295" class="d">queue continuation</text>
+    <text x="354" y="322" class="n">StopFailure</text>
+    <text x="354" y="339" class="d">429 → wake the same session</text>
+    <text x="354" y="366" class="n">SessionStart / SessionEnd</text>
+    <text x="354" y="383" class="d">self-check, checkpoint hand-off</text>
+    <text x="354" y="410" class="n">PostModelSwitch</text>
+    <text x="354" y="427" class="d">live model per session</text>
+    <text x="354" y="454" class="n">Notification</text>
+    <text x="354" y="471" class="d">built-in limit notices</text>
+    <text x="354" y="500" class="f">~7 ms per hook · 0 tokens</text>
+  </g>
+
+  <path d="M580 299 H608" class="a" stroke-width="2.5"/>
+
+  <g class="sans">
+    <rect x="610" y="84" width="230" height="430" rx="10" class="box"/>
+    <text x="624" y="110" class="t">Decision rules</text>
+    <text x="624" y="146" class="n">Thresholds</text>
+    <text x="624" y="163" class="d">5h 92 · weekly 89 · scoped 95</text>
+    <text x="624" y="190" class="n">Burst projection</text>
+    <text x="624" y="207" class="d">largest recent jump vs. headroom</text>
+    <text x="624" y="234" class="n">Burn-rate slope</text>
+    <text x="624" y="251" class="d">stale data → projected usage</text>
+    <text x="624" y="278" class="n">Blind-spot probe</text>
+    <text x="624" y="295" class="d">no data near the edge → stop</text>
+    <text x="624" y="322" class="n">Warn band</text>
+    <text x="624" y="339" class="d">6–15 pts wide, adapts to burn</text>
+    <text x="624" y="366" class="n">Daily budget</text>
+    <text x="624" y="383" class="d">soft notice or hard stop</text>
+    <text x="624" y="410" class="n">Queue state</text>
+    <text x="624" y="427" class="d">idle counter, completion promise</text>
+    <text x="624" y="454" class="n">Router</text>
+    <text x="624" y="471" class="d">learns from misroutes</text>
+    <text x="624" y="500" class="f">every decision journaled → noctis why</text>
+  </g>
+
+  <g class="a">
+    <path d="M840 299 C860 299 860 111 878 111"/>
+    <path d="M840 299 C860 299 860 175 878 175"/>
+    <path d="M840 299 C860 299 860 239 878 239"/>
+    <path d="M840 299 C860 299 860 303 878 303"/>
+    <path d="M840 299 C860 299 860 367 878 367"/>
+    <path d="M840 299 C860 299 860 431 878 431"/>
+    <path d="M840 299 C860 299 860 495 878 495"/>
+  </g>
+
+  <g class="sans">
+    <rect x="880" y="84" width="290" height="54" rx="10" class="box"/>
+    <rect x="880" y="94" width="4" height="34" rx="2" fill="#3ecf8e"/>
+    <text x="898" y="106" class="o" fill="#3ecf8e">✓ Continue</text>
+    <text x="898" y="125" class="od">below every threshold · nothing to do</text>
+
+    <rect x="880" y="148" width="290" height="54" rx="10" class="box"/>
+    <rect x="880" y="158" width="4" height="34" rx="2" fill="#f5b544"/>
+    <text x="898" y="170" class="o" fill="#f5b544">⚠ Warn band</text>
+    <text x="898" y="189" class="od">one line: finish the step cleanly</text>
+
+    <rect x="880" y="212" width="290" height="54" rx="10" class="box"/>
+    <rect x="880" y="222" width="4" height="34" rx="2" fill="#4f8ff7"/>
+    <text x="898" y="234" class="o" fill="#5b9bff">⏸ Checkpoint + wait in place</text>
+    <text x="898" y="253" class="od">resumes after reset · context kept</text>
+
+    <rect x="880" y="276" width="290" height="54" rx="10" class="box"/>
+    <rect x="880" y="286" width="4" height="34" rx="2" fill="#4f8ff7"/>
+    <text x="898" y="298" class="o" fill="#5b9bff">⏰ Save + schedule + relaunch</text>
+    <text x="898" y="317" class="od">scheduled task → claude --resume</text>
+
+    <rect x="880" y="340" width="290" height="54" rx="10" class="box"/>
+    <rect x="880" y="350" width="4" height="34" rx="2" fill="#a78bfa"/>
+    <text x="898" y="362" class="o" fill="#a78bfa">🔁 Scoped model out</text>
+    <text x="898" y="381" class="od">default → fallback · reverts on reset</text>
+
+    <rect x="880" y="404" width="290" height="54" rx="10" class="box"/>
+    <rect x="880" y="414" width="4" height="34" rx="2" fill="#38c7d9"/>
+    <text x="898" y="426" class="o" fill="#38c7d9">▶ Queue continues</text>
+    <text x="898" y="445" class="od">Stop hook → next - [ ] item, no prompt</text>
+
+    <rect x="880" y="468" width="290" height="54" rx="10" class="box"/>
+    <rect x="880" y="478" width="4" height="34" rx="2" fill="#8b95a5"/>
+    <text x="898" y="490" class="o" fill="#c7cfda">🔀 Research routed</text>
+    <text x="898" y="509" class="od">a cheaper subagent handles it</text>
+  </g>
+
+  <text x="30" y="560" class="sans cap">Alarms on every pause and resume: beep · toast · webhook (Telegram, Discord, Slack, ntfy)</text>
+  <text x="1170" y="560" class="mono" font-size="13" fill="#6b7687" text-anchor="end">state.json · usage.json · decisions.jsonl</text>
+</svg>

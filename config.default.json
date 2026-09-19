@@ -1,0 +1,158 @@
+{
+  "locale": "auto",
+  "mode": "enforce",
+  "thresholds": {
+    "session5h": 92,
+    "weeklyAll": 89,
+    "weeklyFable": 95
+  },
+  "roles": {
+    "profile": "noctis",
+    "code": {
+      "model": "fable",
+      "effort": "max"
+    },
+    "research": {
+      "model": "opus",
+      "effort": "xhigh"
+    },
+    "planning": {
+      "model": "fable",
+      "effort": "max"
+    },
+    "digest": {
+      "model": "haiku",
+      "effort": "high"
+    },
+    "explore": {
+      "model": "haiku",
+      "effort": "high"
+    },
+    "fallback": {
+      "model": "opus",
+      "effort": "max"
+    }
+  },
+  "models": {
+    "primary": "fable",
+    "fallback": "opus",
+    "effort": "max",
+    "scopedPattern": "fable",
+    "scopedLabel": "Fable"
+  },
+  "router": {
+    "enabled": true,
+    "agent": "lite",
+    "minPromptLength": 15,
+    "maxDeniesPerPrompt": 3,
+    "digest": true,
+    "digestAgent": "digest",
+    "subagentModels": {
+      "Explore": "haiku",
+      "Plan": "fable"
+    }
+  },
+  "fable": {
+    "source": "oauth",
+    "pollMinutes": 10,
+    "revertOnReset": true,
+    "autoRelaunch": true
+  },
+  "usage": {
+    "staleMinutes": 20,
+    "blindProbeSeconds": 60,
+    "blindProbeRounds": 5,
+    "multiSessionMax": true
+  },
+  "wait": {
+    "maxInHookMinutes": 330,
+    "earlyResetPollMinutes": 5,
+    "retryMinutes": [
+      10,
+      20,
+      30,
+      45,
+      60
+    ],
+    "resetMarginSeconds": 90,
+    "builtinGraceSeconds": 180,
+    "heartbeatGraceSeconds": 45,
+    "workspaceGuard": true
+  },
+  "overload": {
+    "baseSeconds": 30,
+    "maxSeconds": 300,
+    "maxTotalMinutes": 120
+  },
+  "wake": {
+    "sameSession": true,
+    "maxMinutes": 330,
+    "graceSeconds": 300
+  },
+  "resume": {
+    "mode": "window",
+    "terminal": "auto",
+    "closePrevious": true,
+    "permissionMode": "auto",
+    "prompt": "Continue. The task was paused at a usage-limit threshold; pick up exactly where you left off and finish the pending work.",
+    "remoteControl": false,
+    "extraArgs": [],
+    "copilotAllowAllTools": false
+  },
+  "budget": {
+    "dailyWeeklyPercent": 0,
+    "hardStop": false
+  },
+  "alarm": {
+    "enabled": true,
+    "wakePc": true,
+    "webhookUrl": "",
+    "webhook": {
+      "url": "",
+      "preset": "generic",
+      "chatId": ""
+    }
+  },
+  "statusline": {
+    "chainCommand": "",
+    "emoji": true,
+    "mode": "own",
+    "pace": true
+  },
+  "report": {
+    "pricing": {}
+  },
+  "queue": {
+    "enabled": true,
+    "auto": true,
+    "files": [
+      "TASKS.md",
+      "tasks.md",
+      ".claude/TASKS.md",
+      "docs/TASKS.md"
+    ],
+    "maxIdleContinues": 4,
+    "maxContinuesPerSession": 200,
+    "completionPromise": "",
+    "github": {
+      "closeOnDone": false,
+      "comment": "Completed by Claude Code (noctis queue)."
+    },
+    "requireTrust": true
+  },
+  "update": {
+    "check": true,
+    "url": "https://raw.githubusercontent.com/synex1437/noctis/main/.claude-plugin/plugin.json"
+  },
+  "workflow": {
+    "suggest": true,
+    "gate": true,
+    "size": "medium"
+  },
+  "checkpoint": {
+    "gitSnapshot": false
+  },
+  "compaction": {
+    "contextPercent": 85
+  }
+}
