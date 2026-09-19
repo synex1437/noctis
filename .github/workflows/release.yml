@@ -64,15 +64,22 @@ jobs:
         run: |
           node -e "require('./tests/harness.js').refreshChecksums()"
           git diff --exit-code -- bin/SHA256SUMS
+      - name: Stage release assets under unique names
+        run: |
+          mkdir -p dist
+          for p in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+            cp "bin/$p/noctis" "dist/noctis-$p"
+          done
+          for p in windows-amd64 windows-arm64; do
+            cp "bin/$p/noctis.exe" "dist/noctis-$p.exe"
+          done
+          (cd dist && sha256sum noctis-* > SHA256SUMS)
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: 'bin/*/noctis*'
+          subject-path: 'dist/noctis-*'
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            bin/SHA256SUMS
-            bin/*/noctis
-            bin/*/noctis.exe
+          files: dist/*
           generate_release_notes: true
