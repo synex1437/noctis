@@ -16,12 +16,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24.7'
       - name: Build all platforms from source
         run: |
           for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
             GOOS=${target%/*} GOARCH=${target#*/}; ext=""; [ "$GOOS" = windows ] && ext=".exe"
-            (cd go && CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -ldflags="-s -w" -o ../bin/$GOOS-$GOARCH/noctis$ext ./cmd/noctis)
+            (cd go && CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -buildvcs=false -ldflags="-s -w" -o ../bin/$GOOS-$GOARCH/noctis$ext ./cmd/noctis)
           done
           cp bin/windows-amd64/noctis.exe bin/noctis.exe
       # Signing is wired but dormant: with no secrets set this prints one line and changes nothing,

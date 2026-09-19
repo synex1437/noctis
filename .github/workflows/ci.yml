@@ -9,7 +9,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24.7'
       - name: Vet and unit tests
         run: cd go && test -z "$(gofmt -l ./cmd/noctis)" && go vet ./... && go test ./...
       - name: Fuzz (short)
@@ -22,16 +22,16 @@ jobs:
         run: |
           for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
             GOOS=${target%/*} GOARCH=${target#*/}; ext=""; [ "$GOOS" = windows ] && ext=".exe"
-            (cd go && CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -ldflags="-s -w" -o ../bin/$GOOS-$GOARCH/noctis$ext ./cmd/noctis)
+            (cd go && CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -buildvcs=false -ldflags="-s -w" -o ../bin/$GOOS-$GOARCH/noctis$ext ./cmd/noctis)
           done
           cp bin/windows-amd64/noctis.exe bin/noctis.exe
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Committed binaries must match the source
         run: |
-          # Compare, never regenerate: regenerating made every push agree with itself, so a binary
-          # swapped in the tree with a matching manifest passed CI. The install path reads the
-          # committed tree, not a release artifact, so this is the check that matters.
-          cd bin && sha256sum */noctis* noctis.exe > /tmp/SHA256SUMS.built
-          diff -u SHA256SUMS /tmp/SHA256SUMS.built
+          node -e "require('./tests/harness.js').refreshChecksums()"
+          git diff --exit-code -- bin/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: binaries
