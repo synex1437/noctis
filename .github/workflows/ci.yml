@@ -31,7 +31,7 @@ jobs:
       - name: Committed binaries must match the source
         run: |
           node -e "require('./tests/harness.js').refreshChecksums()"
-          git diff --exit-code -- bin/SHA256SUMS
+          git diff --exit-code -- bin/
       - uses: actions/upload-artifact@v4
         with:
           name: binaries
