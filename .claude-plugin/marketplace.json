@@ -1,0 +1,34 @@
+{
+  "name": "noctis",
+  "owner": {
+    "name": "synex"
+  },
+  "metadata": {
+    "description": "Keeps long Claude Code jobs running unattended: usage-limit guard (checkpoint, wait, alarm, auto-resume), scoped-model fallback, research router to a cheaper subagent, queue mode with priorities and GitHub issues, dynamic-workflow rescue, roles profile, 14 languages; also runs inside Codex CLI, Antigravity CLI, Factory Droid and Copilot CLI. Native Go binary, zero dependencies."
+  },
+  "plugins": [
+    {
+      "name": "noctis",
+      "source": "./",
+      "description": "Keeps long Claude Code jobs running unattended: usage-limit guard (checkpoint, wait, alarm, auto-resume), scoped-model fallback, research router to a cheaper subagent, queue mode with priorities and GitHub issues, dynamic-workflow rescue, roles profile, 14 languages; also runs inside Codex CLI, Antigravity CLI, Factory Droid and Copilot CLI. Native Go binary, zero dependencies.",
+      "version": "5.5.0",
+      "author": {
+        "name": "synex"
+      },
+      "category": "productivity",
+      "keywords": [
+        "usage-limit",
+        "auto-resume",
+        "rate-limit",
+        "queue",
+        "router",
+        "statusline",
+        "ralph",
+        "codex",
+        "antigravity",
+        "droid",
+        "copilot"
+      ]
+    }
+  ]
+}

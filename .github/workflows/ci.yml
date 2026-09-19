@@ -1,0 +1,73 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Vet and unit tests
+        run: cd go && test -z "$(gofmt -l ./cmd/noctis)" && go vet ./... && go test ./...
+      - name: Fuzz (short)
+        run: |
+          cd go
+          for target in FuzzNormalizeHookInput FuzzAutoQueueItems FuzzDetectLanguage FuzzParseUsagePayload FuzzQueueSnapshot; do
+            go test ./cmd/noctis -run '^$' -fuzz "^$target\$" -fuzztime 30s
+          done
+      - name: Build all platforms
+        run: |
+          for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            GOOS=${target%/*} GOARCH=${target#*/}; ext=""; [ "$GOOS" = windows ] && ext=".exe"
+            (cd go && CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -ldflags="-s -w" -o ../bin/$GOOS-$GOARCH/noctis$ext ./cmd/noctis)
+          done
+          cp bin/windows-amd64/noctis.exe bin/noctis.exe
+      - name: Committed binaries must match the source
+        run: |
+          # Compare, never regenerate: regenerating made every push agree with itself, so a binary
+          # swapped in the tree with a matching manifest passed CI. The install path reads the
+          # committed tree, not a release artifact, so this is the check that matters.
+          cd bin && sha256sum */noctis* noctis.exe > /tmp/SHA256SUMS.built
+          diff -u SHA256SUMS /tmp/SHA256SUMS.built
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: bin
+  lab:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: bin
+      - name: Make binaries executable
+        if: runner.os != 'Windows'
+        run: chmod +x bin/*/noctis bin/noctis
+      - name: Source hygiene
+        run: node tests/hygiene.js
+      - name: Host contract (runs the hooks exactly as the host declares them)
+        run: node tests/contract.js
+      - name: Chaos (network, disk, old state files)
+        run: node tests/chaos.js
+      - name: Lab
+        run: node tests/lab.js
+      - name: Soak (hard, 2 days)
+        run: node tests/soak.js --days 2 --seed 11 --hard 1
+      - name: Torrent (thousands of jobs; does the guard leak, what does it cost)
+        run: node tests/torrent.js --jobs 600 --accounts 3 --seed 11
+      - name: Monkey (the chaos user)
+        run: |
+          node tests/monkey.js --seed 7 --rounds 200
+          node tests/monkey.js --seed 23 --rounds 200

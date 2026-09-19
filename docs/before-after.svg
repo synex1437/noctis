@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-label="The same night with and without the plugin: without it the session dies at the usage limit at 01:40 and idles until morning with 14 of 48 tasks done; with it the session waits 55 minutes, continues and finishes all 48 tasks at 06:55">
+  <title>The same night, with and without</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0f17"/>
+      <stop offset="1" stop-color="#121a27"/>
+    </linearGradient>
+    <linearGradient id="work" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b9bff"/>
+      <stop offset="1" stop-color="#3f7fe0"/>
+    </linearGradient>
+    <linearGradient id="waitg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7c25c"/>
+      <stop offset="1" stop-color="#e0a232"/>
+    </linearGradient>
+    <pattern id="hatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="9" height="9" fill="#171e2b"/>
+      <line x1="0" y1="0" x2="0" y2="9" stroke="#3b4556" stroke-width="2.5"/>
+    </pattern>
+    <style>
+      .sans { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif; }
+      .mono { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace; }
+      .cap { font-size: 15px; fill: #8b95a5; }
+      .tick { font-size: 13px; fill: #6b7687; }
+      .row { font-size: 16px; font-weight: 700; }
+      .in { font-size: 13px; font-weight: 600; }
+      .res { font-size: 14px; font-weight: 700; }
+      .leg { font-size: 12px; fill: #8b95a5; }
+    </style>
+  </defs>
+  <rect x="0.5" y="0.5" width="1199" height="379" rx="18" fill="url(#bg)" stroke="#232c3b"/>
+  <text x="30" y="36" class="sans cap">The same night — 48 queued tasks, nobody at the keyboard</text>
+
+  <g class="mono tick" text-anchor="middle">
+    <text x="200" y="78">23:00</text>
+    <text x="411" y="78">01:00</text>
+    <text x="622" y="78">03:00</text>
+    <text x="833" y="78">05:00</text>
+    <text x="1044" y="78">07:00</text>
+  </g>
+  <g stroke="#1f2836">
+    <line x1="200" y1="86" x2="200" y2="318"/>
+    <line x1="411" y1="86" x2="411" y2="318"/>
+    <line x1="622" y1="86" x2="622" y2="318"/>
+    <line x1="833" y1="86" x2="833" y2="318"/>
+    <line x1="1044" y1="86" x2="1044" y2="318"/>
+  </g>
+  <line x1="1150" y1="60" x2="1150" y2="318" stroke="#f5b544" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="1142" y="50" class="sans" font-size="13" fill="#f5b544" text-anchor="end">☀ 08:00 you wake up</text>
+
+  <!-- without -->
+  <text x="30" y="126" class="sans row" fill="#f0605d">Without</text>
+  <text x="30" y="146" class="sans" font-size="12" fill="#6b7687">plain Claude Code</text>
+  <rect x="200" y="110" width="281" height="44" rx="8" fill="url(#work)"/>
+  <text x="340" y="132" class="sans in" fill="#0b1220" text-anchor="middle" dominant-baseline="central">working · 14 tasks</text>
+  <rect x="481" y="110" width="669" height="44" rx="8" fill="url(#hatch)" stroke="#2a3342"/>
+  <circle cx="481" cy="132" r="13" fill="#0b0f17" stroke="#f0605d" stroke-width="2.5"/>
+  <text x="481" y="132" class="sans" font-size="14" font-weight="700" fill="#f0605d" text-anchor="middle" dominant-baseline="central">✖</text>
+  <text x="815" y="132" class="sans in" fill="#aab4c3" text-anchor="middle" dominant-baseline="central">01:40 usage limit → session dead until someone comes back · 6 h 20 min lost</text>
+  <text x="1150" y="176" class="sans res" fill="#f0605d" text-anchor="end">14 / 48 tasks by morning</text>
+
+  <!-- with -->
+  <text x="30" y="246" class="sans row" fill="#3ecf8e">With</text>
+  <text x="30" y="266" class="sans" font-size="12" fill="#6b7687">noctis</text>
+  <rect x="200" y="230" width="281" height="44" rx="8" fill="url(#work)"/>
+  <text x="340" y="252" class="sans in" fill="#0b1220" text-anchor="middle" dominant-baseline="central">working · 14 tasks</text>
+  <rect x="481" y="230" width="97" height="44" fill="url(#waitg)"/>
+  <text x="529" y="252" class="sans in" fill="#1a1400" text-anchor="middle" dominant-baseline="central">⏸ waits 55 min</text>
+  <rect x="578" y="230" width="458" height="44" rx="8" fill="url(#work)"/>
+  <rect x="578" y="230" width="20" height="44" fill="url(#work)"/>
+  <text x="807" y="252" class="sans in" fill="#0b1220" text-anchor="middle" dominant-baseline="central">continues the same turn · 34 more tasks</text>
+  <rect x="1036" y="230" width="114" height="44" rx="8" fill="#141b28" stroke="#26303f"/>
+  <text x="1093" y="252" class="sans in" fill="#6b7687" text-anchor="middle" dominant-baseline="central">nothing left</text>
+  <circle cx="1036" cy="252" r="13" fill="#0b0f17" stroke="#3ecf8e" stroke-width="2.5"/>
+  <text x="1036" y="252" class="sans" font-size="14" font-weight="700" fill="#3ecf8e" text-anchor="middle" dominant-baseline="central">✔</text>
+  <rect x="673" y="226" width="4" height="52" rx="2" fill="#38c7d9"/>
+  <text x="675" y="292" class="sans" font-size="11" fill="#38c7d9" text-anchor="middle">🔁 03:30 model fallback</text>
+  <text x="1150" y="316" class="sans res" fill="#3ecf8e" text-anchor="end">48 / 48 tasks · finished 06:55 · alarm + webhook sent</text>
+
+  <g class="sans leg">
+    <rect x="30" y="346" width="14" height="10" rx="2" fill="url(#work)"/>
+    <text x="50" y="355">working</text>
+    <rect x="126" y="346" width="14" height="10" rx="2" fill="url(#waitg)"/>
+    <text x="146" y="355">waiting for the reset inside the hook — context kept, nothing re-typed</text>
+    <rect x="560" y="346" width="14" height="10" rx="2" fill="url(#hatch)" stroke="#2a3342"/>
+    <text x="580" y="355">session dead, no one to press continue</text>
+    <text x="820" y="355">✖ usage-limit wall</text>
+    <text x="950" y="355">✔ queue finished</text>
+  </g>
+</svg>

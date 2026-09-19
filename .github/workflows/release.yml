@@ -1,0 +1,78 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Build all platforms from source
+        run: |
+          for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            GOOS=${target%/*} GOARCH=${target#*/}; ext=""; [ "$GOOS" = windows ] && ext=".exe"
+            (cd go && CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -ldflags="-s -w" -o ../bin/$GOOS-$GOARCH/noctis$ext ./cmd/noctis)
+          done
+          cp bin/windows-amd64/noctis.exe bin/noctis.exe
+      # Signing is wired but dormant: with no secrets set this prints one line and changes nothing,
+      # so the workflow behaves exactly as it does today. When a certificate exists, filling in the
+      # repository secrets is the only change needed — and note the ORDER, because codesign rewrites
+      # the binary: build → sign → notarise → checksum. The checksum step below compares against the
+      # committed SHA256SUMS, so those must be regenerated after signing, not before.
+      - name: Sign macOS binaries (skipped without a certificate)
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        run: |
+          if [ -z "$MACOS_CERTIFICATE" ]; then
+            echo "no MACOS_CERTIFICATE secret; shipping unsigned macOS binaries (see docs/PUBLISHING.md §7)"
+            exit 0
+          fi
+          echo "MACOS_CERTIFICATE is set, but signing must run on a macOS runner."
+          echo "Move this job to macos-latest and follow docs/PUBLISHING.md §7 before enabling."
+          exit 1
+
+      - name: Sign Windows binaries (skipped without a certificate)
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+        run: |
+          if [ -z "$WINDOWS_CERTIFICATE" ]; then
+            echo "no WINDOWS_CERTIFICATE secret; shipping unsigned Windows binaries (see docs/PUBLISHING.md §7)"
+            exit 0
+          fi
+          echo "WINDOWS_CERTIFICATE is set, but signtool needs a Windows runner and an HSM-backed key."
+          echo "Follow docs/PUBLISHING.md §7 before enabling."
+          exit 1
+
+      # Regenerate with the SAME code the repo uses (tests/harness.js) and require no diff. The
+      # shell one-liner this replaces could not reproduce the committed manifest at all: its glob
+      # missed the bare `bin/noctis` launcher and it emitted a different order, so `diff` failed on
+      # every release. One generator, or the check is theatre.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Checksums must match the ones in the repo
+        run: |
+          node -e "require('./tests/harness.js').refreshChecksums()"
+          git diff --exit-code -- bin/SHA256SUMS
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'bin/*/noctis*'
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            bin/SHA256SUMS
+            bin/*/noctis
+            bin/*/noctis.exe
+          generate_release_notes: true

@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="534" viewBox="0 0 1200 534" role="img" aria-label="A night with noctis: the session pauses at the 5-hour limit, resumes after the reset, routes research to a cheaper model, switches model when the scoped quota is out, relaunches an interrupted workflow without redoing finished agents, and finishes the queue by morning">
+  <title>One night, one queue, no one at the keyboard</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0f17"/>
+      <stop offset="1" stop-color="#121a27"/>
+    </linearGradient>
+    <style>
+      .mono { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 17px; }
+      .sans { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif; }
+      .ts { fill: #556275; }
+      .user { fill: #f2f5f9; }
+      .task { fill: #aab4c3; }
+      .done { fill: #3ecf8e; }
+      .pause { fill: #f5b544; }
+      .go { fill: #3ecf8e; }
+      .route { fill: #a78bfa; }
+      .switch { fill: #38c7d9; }
+      .dim { fill: #6b7687; }
+      .st { font-size: 17px; }
+    </style>
+  </defs>
+  <rect x="0.5" y="0.5" width="1199" height="533" rx="18" fill="url(#bg)" stroke="#232c3b"/>
+  <rect x="20.5" y="20.5" width="1159" height="493" rx="14" fill="#0d1320" stroke="#26303f"/>
+  <circle cx="44" cy="44" r="6" fill="#ff5f57"/>
+  <circle cx="66" cy="44" r="6" fill="#febc2e"/>
+  <circle cx="88" cy="44" r="6" fill="#28c840"/>
+  <text x="600" y="49" class="mono dim" font-size="14" text-anchor="middle">claude — my-project</text>
+  <g class="sans" font-size="13">
+    <rect x="1002" y="32" width="158" height="26" rx="13" fill="#161e2e" stroke="#2a3548"/>
+    <text x="1081" y="46" fill="#9aa5b6" text-anchor="middle" dominant-baseline="central">🌙 you: asleep</text>
+  </g>
+  <line x1="44" y1="68" x2="1156" y2="68" stroke="#1d2634"/>
+
+  <g class="mono">
+    <text x="44" y="104" class="ts">23:12</text>
+    <text x="114" y="104" class="user">› Work through TASKS.md until every item is checked off.</text>
+
+    <text x="44" y="138" class="ts">23:13</text>
+    <text x="114" y="138" class="task">● Task 12/48 · refactor queue/worker.go <tspan class="done">— done, tests green</tspan></text>
+
+    <text x="44" y="172" class="ts">23:41</text>
+    <text x="114" y="172" class="dim">⋯ noctis — hook waiting for the 5h reset (00:35), watching for an early one</text>
+
+    <text x="44" y="206" class="ts">00:35</text>
+    <text x="114" y="206" class="pause">⏸ 5h limit reset early: waited 41 min, continuing.  <tspan class="dim">← same turn, context kept</tspan></text>
+
+    <text x="44" y="240" class="ts">01:10</text>
+    <text x="114" y="240" class="route">🔀 Research routed to the lite subagent; Fable kept for coding.</text>
+
+    <text x="44" y="274" class="ts">02:48</text>
+    <text x="114" y="274" class="task">● Task 27/48 · migrations + rollback test <tspan class="done">— done</tspan></text>
+
+    <text x="44" y="308" class="ts">03:30</text>
+    <text x="114" y="308" class="switch">🔁 Fable 95%: work saved, resuming with opus in a new window in ~1 min.</text>
+
+    <text x="44" y="342" class="ts">04:05</text>
+    <text x="114" y="342" class="switch">⟳ Workflow "audit-endpoints" relaunched after the pause — 11/16 agents reused their saved results.</text>
+
+    <text x="44" y="376" class="ts">05:52</text>
+    <text x="114" y="376" class="task">● Task 41/48 · docs/api.md regenerated <tspan class="done">— done</tspan></text>
+
+    <text x="44" y="410" class="ts">06:55</text>
+    <text x="114" y="410" class="done">✔ Queue finished — TASKS.md has no open items; stopping cleanly.</text>
+  </g>
+
+  <line x1="44" y1="438" x2="1156" y2="438" stroke="#1d2634"/>
+  <g class="mono st">
+    <text x="44" y="474" fill="#6fb1ff">∞ 5h %34→10:12</text>
+    <text x="206" y="474" fill="#4b5563">·</text>
+    <text x="230" y="474" fill="#56c98a">Wk %71●→Mon 21.09</text>
+    <text x="420" y="474" fill="#4b5563">·</text>
+    <text x="444" y="474" fill="#b59cff">Fable %95</text>
+    <text x="551" y="474" fill="#4b5563">·</text>
+    <text x="575" y="474" fill="#f0b75a">⌛ Fable ~2d 6h</text>
+    <text x="816" y="474" fill="#4b5563">·</text>
+    <text x="840" y="474" fill="#e6e9ee">Opus 5/max</text>
+    <text x="957" y="474" fill="#4b5563">·</text>
+    <text x="981" y="474" fill="#9aa0a6">ctx %52</text>
+  </g>
+  <text x="1156" y="500" class="sans dim" font-size="12" text-anchor="end">⏸ 🔀 🔁 ⟳ ✔ are the plugin's own notices — one short line per event, shown to you, never sent to the model</text>
+</svg>

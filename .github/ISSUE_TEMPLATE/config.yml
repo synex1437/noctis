@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or idea
+    url: https://github.com/synex1437/noctis/issues/new?labels=question&title=Question%3A+
+    about: Anything that is not a bug — open an issue with the question label.
