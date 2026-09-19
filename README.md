@@ -29,6 +29,9 @@ You queued forty tasks, went to bed, and woke up to a session that died on a usa
 
 ## What it changes on your machine — and how to undo it
 
+<details>
+<summary>Every settings key setup writes, what it talks to on the network, and the undo for each.</summary>
+
 Setup writes a backup `settings.json.bak-<time>` first, then touches exactly this:
 
 | Where | What | Undo |
@@ -68,6 +71,8 @@ If the plugin is already gone and the settings are still in place, undo it by ha
 ```
 Clone install: `scripts/install.sh --uninstall` (macOS/Linux) or `scripts\install.ps1 -Uninstall` (Windows) instead of the middle line.
 
+</details>
+
 ## The first five minutes
 
 1. After `/reload-plugins`, look at the bottom of the Claude Code window: a line like `∞ 5h %41→14:35 · Wk %23▲→Mon 21.09 · Fable 5.1/max · ctx %37` shows your 5-hour and weekly usage, when each resets, and the current model. If it says *waiting for limit data*, send one message — it fills in after the first reply.
@@ -77,6 +82,9 @@ Clone install: `scripts/install.sh --uninstall` (macOS/Linux) or `scripts\instal
 5. Not ready to trust it? Put `"mode": "observe"` in `~/.claude/noctis/config.json` for the first days: it logs every decision (`/noctis:status` shows them) and enforces nothing.
 
 ## Queue file
+
+<details>
+<summary>The `TASKS.md` format, plus priorities, tags, dependencies and GitHub issues.</summary>
 
 Put a `TASKS.md` in the folder where you start `claude`, one task per line:
 
@@ -100,7 +108,12 @@ That is the whole format. Claude takes the first open item, ticks it `- [x]` in 
 `(P0)`–`(P9)` orders the work (default P5, lower first); `#name` tags an item; `(after #tag)` or `(after 3)` makes an item wait until the referenced items are checked (`(after 2)` means the 2nd checklist item in the file). The Stop hook hands Claude the best eligible item next, tells it how many items are still waiting, and stops cleanly (with a notice) when every open item is blocked or when the queue is finished. References that match nothing are ignored, so a typo never deadlocks a night. `noctis queue import` appends open GitHub issues as `- [ ] (P1) #123 Title` items through the `gh` CLI (priority from `P0`–`P9` or `priority: high` labels, idempotent), and `queue.github.closeOnDone` closes an issue when its item is checked off.
 </details>
 
+</details>
+
 ## What it does while you're away
+
+<details>
+<summary>Situation by situation: limits, early resets, queue stops, quota switches and the failures it handles alone.</summary>
 
 | Situation | What happens |
 |---|---|
@@ -130,6 +143,8 @@ That is the whole format. Claude takes the first open item, ticks it `- [x]` in 
 
 <p align="center"><img src="docs/flow.svg" alt="One tool turn through the guard: signals feed the hooks, deterministic rules pick an outcome" width="100%"></p>
 
+</details>
+
 ## Works alongside other plugins
 
 Noctis adds hooks and a status line; it never removes or rewrites anyone else's. Claude Code runs every hook registered for an event, so a loop plugin (ralph-loop and friends) and Noctis's queue can both push the same turn — harmless, but if you see double continues, pause one of them. A status line you already had (ccstatusline, claude-powerline, …) keeps running behind Noctis's line. Usage dashboards (ccusage, Claude-Code-Usage-Monitor) read the same files Claude Code writes and are unaffected. Two tools that both auto-resume after a limit (unsnooze, claude-auto-resume) would race each other — keep one. `noctis doctor` lists the neighbouring hooks and plugins it can see on your machine.
@@ -143,6 +158,9 @@ Noctis adds hooks and a status line; it never removes or rewrites anyone else's.
 Since 5.2 the same engine runs inside **OpenAI Codex CLI**, **Antigravity CLI** (Google), **Factory Droid** and **GitHub Copilot CLI**. From the zip or clone: `./scripts/install.sh` (macOS/Linux) or `.\scripts\install.ps1` (Windows) asks which tool with a numbered list — or pass `--host codex` / `-Tool codex` — then wires that tool's own hook file and resumes sessions with its own command. Codex and Antigravity expose their usage windows to scripts, so the full pause-before-the-wall guard works there; Droid and Copilot get queue mode, checkpoints and error retries. The per-tool table, what each one can and cannot do, and the smoke-test steps are in [docs/REFERENCE.md](docs/REFERENCE.md#other-ai-coding-tools) and [docs/HOSTS.md](docs/HOSTS.md).
 
 ## Friday night → Monday morning
+
+<details>
+<summary>A weekend that needs nobody, and how it compares with dashboards, loop plugins and auto-resume scripts.</summary>
 
 <p align="center"><img src="docs/timeline.svg" alt="Timeline: checkpoint at 92 percent, wait, resume after the reset, save at the weekly limit, relaunch on Monday" width="100%"></p>
 
@@ -170,7 +188,12 @@ Nothing in that weekend needs you. The checkpoint holds the last request, touche
 | Works inside Claude Code, Codex CLI, Antigravity CLI, Droid and Copilot CLI | ✅ | some | Claude only | some |
 </details>
 
+</details>
+
 ## Install (details)
+
+<details>
+<summary>Marketplace and clone installs, the roles profile, the flags, and what to do if the binary will not run.</summary>
 
 <p align="center"><img src="docs/install.svg" alt="Install in sixty seconds: add the marketplace, install, run setup (which asks which model does which work), reload, write TASKS.md" width="100%"></p>
 
@@ -190,6 +213,8 @@ Nothing is downloaded or compiled: the binary for your OS is in the repo (`bin/<
 
 In the VS Code / Cursor extension everything works, except that an automatic relaunch after a long wait runs outside the editor (a separate terminal window on Windows, a background `claude --resume` elsewhere), not in an editor tab.
 
+</details>
+
 ## Commands inside Claude Code
 
 `/noctis:setup` (run again to change models) · `:status` (usage, pause points, pending waits, last decisions) · `:pause [minutes]` (switches the **guard** off for a while — Claude keeps working, even past a limit) · `:resume` (guard back on). From a terminal the same are `noctis setup`, `noctis status` + `noctis why`, `noctis off [minutes]`, `noctis on`.
@@ -204,28 +229,11 @@ In the VS Code / Cursor extension everything works, except that an automatic rel
 
 `▲ / ● / ▼` shows whether you are ahead of, on, or behind an even weekly pace (no tokens spent). `⌛` shows when a pause point will be reached at the current burn rate. `⏸` shows a pending resume time, `⚠ hooks inactive` means the status line updates but no hook has run for 30 minutes, `👁` means observe mode. `statusline.mode: silent` keeps the data capture but prints nothing (or only your chained status line).
 
-## Reference, limits, tests
+## Reference and limits
 
 Every command (`noctis status`, `noctis check`, `noctis why`, `noctis doctor`, `noctis report`, `noctis queue import`, `noctis version`, …), the full configuration table, the host adapters and the file layout are in [docs/REFERENCE.md](docs/REFERENCE.md). Design notes and the bug log (Turkish): [docs/PLAN.md](docs/PLAN.md). Three limits worth knowing: usage data comes from Claude Code's official status-line payload (`rate_limits`, Claude Code ≥ 2.1.251) and, for scoped buckets, from the undocumented OAuth usage endpoint, so keep an eye on `errors.log` after Claude Code updates; same-session wake relies on `asyncRewake`, documented as observational, with the scheduled relaunch as the fallback; hooks cannot type `/clear`, so compaction stays with Claude Code.
 
-Tests, each asking a different question:
-
-| | |
-| --- | --- |
-| `node tests/contract.js` | Runs every hook in `hooks/hooks.json` the way Claude Code runs it — resolving `${CLAUDE_PLUGIN_ROOT}`, spawning that command with those arguments. Everything else in the suite pipes a payload into `noctis hook`, which is the one way the host never calls it. |
-| `node tests/lab.js` | 504 black-box checks against the binary, with a fake `claude`, `codex`, `agy`, `droid`, `copilot`, `gh` and a usage endpoint in a separate process. |
-| `node tests/torrent.js` | Thousands of long sessions at once. Asks the two questions only volume answers: does the guard ever let a session past the wall, and what does it cost per hook. |
-| `node tests/chaos.js` | The failures a real machine produces: 429/403/500, invalid JSON, a body cut halfway, a chunked response cut before its terminating chunk, TLS that will not negotiate, a genuinely full disk, and state files written by older versions. |
-| `node tests/scheduler.js` | The OS schedulers, which nothing had ever run. A strict stand-in for `systemd-run` goes on PATH, the plugin's own backend detection picks it, and a parked session really is relaunched by the timer with nobody watching. The launchd plist is validated by Python's `plistlib` — Apple's own parser — and the Windows task script by parsing it. |
-| `node tests/soak.js --days 14 [--hard 1]` | A fortnight of one account, with 20 kinds of chaos injected. |
-| `node tests/monkey.js` | A chaos user hammering it in random order. |
-| `node tests/hygiene.js` | Control bytes, invisible characters, executable bits, checksum freshness, version agreement, the state schema, and that `lang.go` still matches `i18n/*.json`. |
-| `go test ./...` | Unit tests for the decision core, the scheduler and the message catalogs, plus five fuzz targets — and three structural tests that fail the build on dead code: a capability flag nothing reads, a field set and never read, a parameter passed and discarded. |
-| `node tests/coverage.js` | How much of the Go source the suite actually reaches, measured by running the lab against a `go build -cover` binary and merging that with the unit profile. |
-
-Latest run: lab 504/504 · contract 109/109 · chaos 69/69 (including a genuinely full filesystem) · scheduler 23/23 (**a parked session really was relaunched by a systemd timer**) · **2 000 sessions and 9 768 hooks through the torrent with 0 leaks**, median hook 17.7 ms · 0 breaches and 0 anomalies over 7-day hard and 14-day hard soaks · monkey clean on seeds 41 and 77 · **80.5% of statements covered** (`node tests/coverage.js`).
-
-What that costs, measured rather than asserted: a hook is ~7 ms (median) on a quiet single session, and the cost scales with the size of `state.json` — 1 KB of state is a 5 ms hook, 313 KB is a 31 ms hook — which is why the state file is pruned rather than left to grow.
+Ten suites cover the hook contract, a black-box lab against the binary, thousands of concurrent sessions, injected machine failures, the OS schedulers, multi-week soaks, source hygiene and the Go unit and fuzz tests — what each one asks, and what the latest run measured, are in [docs/TESTING.md](docs/TESTING.md).
 
 ## Contributing
 
