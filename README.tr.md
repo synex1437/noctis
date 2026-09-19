@@ -29,6 +29,9 @@ Kırk iş kuyruğa koyup yattınız; sabah kalktığınızda oturum 01:40'ta lim
 
 ## Makinenizde neyi değiştirir — nasıl geri alınır
 
+<details>
+<summary>Setup'ın yazdığı her ayar, ağda konuştuğu yerler ve her birinin geri alınışı.</summary>
+
 Setup önce `settings.json.bak-<zaman>` yedeğini alır, sonra yalnızca şunlara dokunur:
 
 | Nerede | Ne | Geri alma |
@@ -68,6 +71,8 @@ Eklenti çoktan gittiyse ve ayarlar duruyorsa elle geri alın: `~/.claude/settin
 ```
 Klon kurulumunda ortadaki satır yerine `scripts/install.sh --uninstall` (macOS/Linux) ya da `scripts\install.ps1 -Uninstall` (Windows).
 
+</details>
+
 ## İlk beş dakika
 
 1. `/reload-plugins` sonrası Claude Code penceresinin altına bakın: `∞ 5s %41→14:35 · Hf %23▲→Pzt 21.09 · Fable 5.1/max · ctx %37` gibi bir satır 5 saatlik ve haftalık kullanımınızı, sıfırlanma zamanlarını ve modeli gösterir. *limit verisi bekleniyor* diyorsa bir mesaj gönderin — ilk yanıttan sonra dolar.
@@ -77,6 +82,9 @@ Klon kurulumunda ortadaki satır yerine `scripts/install.sh --uninstall` (macOS/
 5. Henüz güvenmiyor musunuz? İlk günler için `~/.claude/noctis/config.json` içine `"mode": "observe"` yazın: her kararı günlüğe yazar (`/noctis:status` gösterir), hiçbir şey uygulamaz.
 
 ## Kuyruk dosyası
+
+<details>
+<summary>`TASKS.md` biçimi, artı öncelikler, etiketler, bağımlılıklar ve GitHub issue'ları.</summary>
 
 `claude`'u başlattığınız klasöre bir `TASKS.md` koyun, her satıra bir iş:
 
@@ -100,7 +108,12 @@ Biçimin tamamı bu. Claude ilk açık maddeyi alır, bitince dosyada `- [x]` ya
 `(P0)`–`(P9)` sırayı belirler (varsayılan P5, küçük önce); `#ad` etiketler; `(after #etiket)` ya da `(after 3)` maddeyi başvurulan maddeler işaretlenene kadar bekletir (`(after 2)` = dosyadaki 2. madde). Stop hook'u Claude'a sıradaki en uygun maddeyi verir, kaç maddenin beklediğini söyler, tüm açık maddeler bloklandığında ya da kuyruk bittiğinde bildirimle temiz durur. Hiçbir şeye uymayan referanslar yok sayılır; bir yazım hatası geceyi kilitlemez. `noctis queue import` açık GitHub issue'larını `gh` ile `- [ ] (P1) #123 Başlık` olarak ekler (öncelik `P0`–`P9` ya da `priority: high` etiketlerinden; idempotent); `queue.github.closeOnDone` işaretlenen maddenin issue'sunu kapatır.
 </details>
 
+</details>
+
 ## Siz yokken ne yapar
+
+<details>
+<summary>Durum durum: limitler, erken sıfırlanmalar, kuyruk duruşları, kota geçişleri ve tek başına hallettiği arızalar.</summary>
 
 | Durum | Ne olur |
 |---|---|
@@ -129,6 +142,8 @@ Biçimin tamamı bu. Claude ilk açık maddeyi alır, bitince dosyada `- [x]` ya
 
 <p align="center"><img src="docs/flow.svg" alt="Bir araç turu korumadan geçerken: sinyaller hook'ları besler, deterministik kurallar sonucu seçer" width="100%"></p>
 
+</details>
+
 ## Diğer eklentilerle yan yana
 
 Noctis hook ve durum çubuğu ekler; kimsenin hook'unu silmez ya da yeniden yazmaz. Claude Code bir olaya kayıtlı tüm hook'ları çalıştırır; bir döngü eklentisi (ralph-loop vb.) ile Noctis'in kuyruğu aynı turu birlikte itebilir — zararsızdır, çift devam görürseniz birini duraklatın. Var olan durum çubuğunuz (ccstatusline, claude-powerline, …) Noctis'in satırının arkasında çalışmaya devam eder. Kullanım panoları (ccusage, Claude-Code-Usage-Monitor) Claude Code'un yazdığı aynı dosyaları okur, etkilenmez. Limit sonrası otomatik devam ettiren iki araç (unsnooze, claude-auto-resume) birbiriyle yarışır — birini bırakın. `noctis doctor` makinenizde gördüğü komşu hook ve eklentileri listeler.
@@ -142,6 +157,9 @@ Noctis hook ve durum çubuğu ekler; kimsenin hook'unu silmez ya da yeniden yazm
 5.2'den itibaren aynı motor **OpenAI Codex CLI**, **Antigravity CLI** (Google), **Factory Droid** ve **GitHub Copilot CLI** içinde de çalışır. Zip ya da klondan: `./scripts/install.sh` (macOS/Linux) ya da `.\scripts\install.ps1` (Windows) hangi araç için olduğunu numaralı listeyle sorar — ya da `--host codex` / `-Tool codex` geçin — sonra o aracın kendi hook dosyasını bağlar ve oturumları onun komutuyla sürdürür. Codex ve Antigravity kullanım pencerelerini betiklere açtığından duvardan-önce-durma korumasının tamamı orada da çalışır; Droid ve Copilot'ta kuyruk modu, checkpoint ve hata sonrası yeniden deneme vardır. Araç tablosu, her birinin yapabildikleri ve duman testi adımları: [docs/REFERENCE.md](docs/REFERENCE.md#other-ai-coding-tools) ve [docs/HOSTS.md](docs/HOSTS.md).
 
 ## Cuma gecesi → Pazartesi sabahı
+
+<details>
+<summary>Kimseyi gerektirmeyen bir hafta sonu, ve panolar, döngü eklentileri ve otomatik devam betikleriyle karşılaştırması.</summary>
 
 <p align="center"><img src="docs/timeline.svg" alt="Zaman çizgisi: %92'de checkpoint, bekleme, sıfırlanınca devam, haftalık limitte kayıt, Pazartesi yeniden başlatma" width="100%"></p>
 
@@ -169,7 +187,12 @@ O hafta sonunda size düşen hiçbir şey yok. Checkpoint son isteği, dokunulan
 | Claude Code, Codex CLI, Antigravity CLI, Droid ve Copilot CLI içinde çalışır | ✅ | bazıları | yalnızca Claude | bazıları |
 </details>
 
+</details>
+
 ## Kurulum (ayrıntı)
+
+<details>
+<summary>Marketplace ve klon kurulumu, rol profili, bayraklar, ve binary çalışmazsa ne yapılacağı.</summary>
 
 <p align="center"><img src="docs/install.svg" alt="Altmış saniyede kurulum: marketplace ekle, kur, setup'ı çalıştır (hangi model hangi işi yapsın diye sorar), yeniden yükle, TASKS.md yaz" width="100%"></p>
 
@@ -189,6 +212,8 @@ Hiçbir şey indirilmez ya da derlenmez: işletim sisteminizin binary'si depoda 
 
 VS Code / Cursor eklentisinde her şey çalışır; tek fark uzun bekleme sonrası otomatik yeniden başlatmanın editör sekmesinde değil dışarıda çalışması (Windows'ta ayrı terminal penceresi, diğerlerinde arka planda `claude --resume`).
 
+</details>
+
 ## Claude Code içindeki komutlar
 
 `/noctis:setup` (modelleri değiştirmek için yeniden çalıştırın) · `:status` (kullanım, duraklama noktaları, bekleyenler, son kararlar) · `:pause [dakika]` (**korumayı** bir süre kapatır — Claude limiti geçse bile çalışmaya devam eder) · `:resume` (koruma yeniden açık). Terminalden aynıları: `noctis setup`, `noctis status` + `noctis why`, `noctis off [dakika]`, `noctis on`.
@@ -203,26 +228,11 @@ VS Code / Cursor eklentisinde her şey çalışır; tek fark uzun bekleme sonras
 
 `▲ / ● / ▼` haftalık eşit tempoya göre önde / tempoda / geride olduğunuzu gösterir (token harcamaz). `⌛` mevcut yakım hızıyla duraklama noktasına ne zaman varılacağını söyler. `⏸` bekleyen devam saatini, `⚠ hook yok` durum çubuğunun güncellenip 30 dakikadır hiçbir hook'un çalışmadığını, `👁` gözlem modunu gösterir. `statusline.mode: silent` veriyi toplamaya devam eder ama hiçbir şey basmaz (ya da yalnızca zincirlenen durum çubuğunuzu).
 
-## Referans, sınırlar, testler
+## Referans ve sınırlar
 
 Her komut (`noctis status`, `noctis check`, `noctis why`, `noctis doctor`, `noctis report`, `noctis queue import`, `noctis version`, …), tam yapılandırma tablosu, araç adaptörleri ve dosya düzeni [docs/REFERENCE.md](docs/REFERENCE.md) içinde. Bilinmesi gereken üç sınır: kullanım verisi Claude Code'un resmî durum çubuğu yükünden (`rate_limits`, Claude Code ≥ 2.1.251) ve kapsamlı kovalar için belgelenmemiş OAuth kullanım uç noktasından gelir — Claude Code güncellemelerinden sonra `errors.log`'a bakın; aynı oturumda uyanma "gözlemsel" belgelenen `asyncRewake`'e dayanır, zamanlanmış yeniden başlatma yedektir; hook'lar `/clear` yazamaz, sıkıştırma Claude Code'da kalır.
 
-Testler — her biri başka bir soru soruyor:
-
-| | |
-| --- | --- |
-| `node tests/contract.js` | `hooks/hooks.json`'daki her hook'u Claude Code'un çağırdığı gibi çalıştırır: `${CLAUDE_PLUGIN_ROOT}` çözülür, o komut o argümanlarla başlatılır. Süitin geri kalanı payload'u doğrudan `noctis hook`'a borular — yani host'un asla kullanmadığı tek yol. |
-| `node tests/lab.js` | Binary'ye karşı 503 kara-kutu kontrol; sahte `claude`, `codex`, `agy`, `droid`, `copilot`, `gh` ve ayrı süreçte bir kullanım endpoint'iyle. |
-| `node tests/torrent.js` | Aynı anda binlerce uzun oturum. Yalnızca hacmin cevapladığı iki soruyu sorar: koruma bir oturumu duvarın ötesine hiç geçiriyor mu, ve hook başına ne kadara mal oluyor. |
-| `node tests/chaos.js` | Gerçek bir makinenin ürettiği arızalar: 429/403/500, bozuk JSON, yarıda kesilen gövde, sonlandırıcı parçası gelmeden kesilen chunked yanıt, anlaşamayan TLS, gerçekten dolu bir disk, ve eski sürümlerin yazdığı durum dosyaları. |
-| `node tests/soak.js --days 14 [--hard 1]` | Tek hesabın iki haftası, 20 çeşit kaos enjekte edilerek. |
-| `node tests/monkey.js` | Rastgele sırayla saldıran maymun kullanıcı. |
-| `node tests/hygiene.js` | Kontrol baytları, görünmez karakterler, çalıştırma bitleri, checksum tazeliği, sürüm tutarlılığı, durum şeması, ve `lang.go`'nun hâlâ `i18n/*.json` ile aynı olması. |
-| `go test ./...` | Karar çekirdeği, zamanlayıcı ve mesaj katalogları için birim testleri, artı beş fuzz hedefi. |
-
-Son koşu: lab 504/504 · sözleşme 109/109 · kaos 69/69 (gerçekten dolu bir dosya sistemi dahil) · zamanlayıcı 23/23 (**park edilmiş bir oturum gerçekten bir systemd zamanlayıcısıyla geri geldi**) · **2 000 oturum ve 9 768 hook, 0 sızıntı**, medyan hook 17.7 ms · 7 günlük ve 14 günlük zorlu soak'larda 0 ihlal, 0 anormallik · 41 ve 77 tohumunda maymun temiz · **ifadelerin %80,5'i kapsanıyor** (`node tests/coverage.js`).
-
-Bunun maliyeti, iddia değil ölçüm: sakin tek oturumda hook ~7 ms (medyan), ve maliyet `state.json` büyüklüğüyle ölçekleniyor — 1 KB durum 5 ms'lik bir hook, 313 KB durum 31 ms'lik bir hook. Durum dosyasının büyümeye bırakılmayıp budanmasının sebebi bu.
+Süit hook sözleşmesini, binary'ye karşı kara-kutu laboratuvarını, aynı anda binlerce oturumu, enjekte edilen makine arızalarını, işletim sistemi zamanlayıcılarını, haftalarca süren soak'ları, kaynak hijyenini ve Go birim ile fuzz testlerini kapsıyor — her birinin ne sorduğu ve son ölçülen koşu [docs/TESTING.md](docs/TESTING.md) içinde (İngilizce).
 
 Tasarım notları ve hata günlüğü: [docs/PLAN.md](docs/PLAN.md).
 
