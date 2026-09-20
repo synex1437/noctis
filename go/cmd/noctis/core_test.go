@@ -257,7 +257,7 @@ func TestReadStoredStateRecovery(t *testing.T) {
 		if err := os.WriteFile(files.state, []byte(broken), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		state := readStoredState()
+		state, _ := readStoredState()
 		if getMap(getMap(state, "waits"), "s1") == nil {
 			t.Fatalf("%s: the wait was not recovered from the backup", broken)
 		}

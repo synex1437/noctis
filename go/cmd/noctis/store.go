@@ -30,6 +30,7 @@ const (
 	lockStaleMs             = 15000
 	lockLiveHolderMs        = 120000
 	lockDeadOwnerMs         = 2000
+	lockQueueBackgroundMs   = 900000
 	stopFailureMaxAttempts  = 5
 	burstHistoryLimit       = 6
 	burstWindowSeconds      = 1800
@@ -304,6 +305,7 @@ type strictRead struct {
 	exists bool
 	ok     bool
 	data   object
+	raw    []byte
 	err    string
 }
 
@@ -320,7 +322,7 @@ func readJSONStrict(file string) strictRead {
 		return strictRead{exists: true, ok: false, err: err.Error()}
 	}
 	data, _ := raw.(object)
-	return strictRead{exists: true, ok: true, data: data}
+	return strictRead{exists: true, ok: true, data: data, raw: content}
 }
 
 func readJSON(file string) object {
@@ -616,13 +618,13 @@ func stateProblem(result strictRead) string {
 	return "not a JSON object"
 }
 
-func readStoredState() object {
+func readStoredState() (object, []byte) {
 	primary := readJSONStrict(files.state)
 	if primary.ok && !primary.exists {
-		return object{}
+		return object{}, nil
 	}
 	if primary.ok && primary.data != nil {
-		return primary.data
+		return primary.data, primary.raw
 	}
 
 	for attempt := 0; attempt < 4 && !(primary.ok && primary.data != nil); attempt++ {
@@ -630,7 +632,7 @@ func readStoredState() object {
 		primary = readJSONStrict(files.state)
 	}
 	if primary.ok && primary.data != nil {
-		return primary.data
+		return primary.data, primary.raw
 	}
 
 	backup := readJSONStrict(files.stateBackup)
@@ -641,18 +643,23 @@ func readStoredState() object {
 		} else {
 			warn("state.json unusable (%s); restored from the backup", stateProblem(primary))
 		}
-		return backup.data
+		return backup.data, nil
 	}
 	if err := os.Remove(files.state); err == nil {
 		fail("state.json unusable and no usable backup (%s); cleared, starting empty", stateProblem(primary))
 	} else {
 		fail("state.json unusable and no usable backup (%s); starting empty", stateProblem(primary))
 	}
-	return object{}
+	return object{}, nil
 }
 
 func readState() object {
-	stored := readStoredState()
+	state, _ := readStateWithBytes()
+	return state
+}
+
+func readStateWithBytes() (object, []byte) {
+	stored, raw := readStoredState()
 	state := emptyState()
 	for key, template := range state {
 		value, present := stored[key]
@@ -669,7 +676,7 @@ func readState() object {
 		}
 		state[key] = value
 	}
-	return state
+	return state, raw
 }
 
 func stateMap(state object, key string) object {
@@ -821,10 +828,19 @@ func pruneState(state object, now int64) {
 	}
 }
 
+func lockQueueMs() time.Duration {
+	switch command {
+	case "sleeper", "resume":
+		return lockQueueBackgroundMs
+	default:
+		return lockLiveHolderMs
+	}
+}
+
 func withFileLock(lockFile string, work func()) bool {
 	ensureDir(files.guardDir)
 	deadline := time.Now().Add(lockWaitMs * time.Millisecond)
-	queueDeadline := time.Now().Add(lockLiveHolderMs * time.Millisecond)
+	queueDeadline := time.Now().Add(lockQueueMs() * time.Millisecond)
 	holder := ""
 	var lock *os.File
 	for lock == nil {
@@ -900,7 +916,7 @@ func drainPrunedRunners() {
 func updateState(mutator func(state object)) object {
 	var result object
 	withFileLock(files.stateLock, func() {
-		state := readState()
+		state, before := readStateWithBytes()
 		mutator(state)
 		pruneState(state, nowSec())
 		encoded := marshalPretty(state)
@@ -909,12 +925,14 @@ func updateState(mutator func(state object)) object {
 			result = state
 			return
 		}
-		before, readErr := os.ReadFile(files.state)
-		if readErr == nil && bytes.Equal(before, encoded) {
+		if before == nil {
+			before, _ = os.ReadFile(files.state)
+		}
+		if before != nil && bytes.Equal(before, encoded) {
 			result = state
 			return
 		}
-		if readErr == nil && usableStateJSON(before) {
+		if before != nil && usableStateJSON(before) {
 			_ = os.WriteFile(files.stateBackup, before, 0o600)
 		}
 		mustWriteJSON(files.state, state)

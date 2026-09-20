@@ -296,7 +296,7 @@ func TestTornStateReadDoesNotRollBackToTheBackup(t *testing.T) {
 		_ = os.WriteFile(files.state, whole, 0o600)
 	}()
 
-	state := readStoredState()
+	state, _ := readStoredState()
 	if getMap(getMap(state, "waits"), "fresh") == nil {
 		t.Fatal("a torn read rolled state back and lost a parked session")
 	}
@@ -311,7 +311,7 @@ func TestRealCorruptionStillRecoversFromTheBackup(t *testing.T) {
 	if err := os.WriteFile(files.state, []byte("{this is not json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	state := readStoredState()
+	state, _ := readStoredState()
 	if getMap(getMap(state, "waits"), "kept") == nil {
 		t.Fatal("real corruption was not recovered from the backup")
 	}
