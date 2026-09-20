@@ -26,7 +26,7 @@ const (
 	routeTTLSeconds         = 3600
 	heartbeatFreshSeconds   = 120
 	responseBodyLimit       = 1024 * 1024
-	lockWaitMs              = 3000
+	lockWaitMs              = 10000
 	lockStaleMs             = 15000
 	stopFailureMaxAttempts  = 5
 	burstHistoryLimit       = 6

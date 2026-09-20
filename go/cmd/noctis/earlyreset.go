@@ -10,9 +10,6 @@ const (
 	sleepTickSeconds    = 15
 	earlyResetDrop      = 10
 	earlyResetMaxAgeMul = 2
-
-	sleeperSettleTries    = 10
-	sleeperSettleInterval = 200 * time.Millisecond
 )
 
 func earlyResetPollSeconds(cfg object) float64 {
