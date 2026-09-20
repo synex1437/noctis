@@ -29,6 +29,7 @@ const (
 	lockWaitMs              = 10000
 	lockStaleMs             = 15000
 	lockLiveHolderMs        = 120000
+	lockDeadOwnerMs         = 2000
 	stopFailureMaxAttempts  = 5
 	burstHistoryLimit       = 6
 	burstWindowSeconds      = 1800
@@ -845,7 +846,8 @@ func withFileLock(lockFile string, work func()) bool {
 			fail("lock open failed: %v; %s not written", err, filepath.Base(lockFile))
 			return false
 		}
-		if lockAbandoned(lockFile) {
+		owner := lockOwner(lockFile)
+		if lockAbandoned(lockFile) && lockOwner(lockFile) == owner {
 			if err := os.Remove(lockFile); err == nil || errors.Is(err, os.ErrNotExist) {
 				continue
 			} else {
@@ -853,7 +855,7 @@ func withFileLock(lockFile string, work func()) bool {
 				return false
 			}
 		}
-		if owner := lockOwner(lockFile); owner != holder {
+		if owner != holder {
 			holder = owner
 			deadline = time.Now().Add(lockWaitMs * time.Millisecond)
 		}
