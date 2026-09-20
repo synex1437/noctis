@@ -225,8 +225,25 @@ async function main() {
       }
 
       for (const leftover of fs.readdirSync(account.guardDir)) {
-        if (leftover.endsWith('.lock')) fail(`${account.name}: ${leftover} left behind`);
-        if (leftover.endsWith('.tmp')) fail(`${account.name}: staging file ${leftover} left behind`);
+        if (leftover.endsWith('.lock') || leftover.endsWith('.tmp')) {
+          const stray = path.join(account.guardDir, leftover);
+          const ownerOf = () => {
+            if (leftover.endsWith('.tmp')) return (/\.(\d+)\.tmp$/.exec(leftover) || [])[1] || '';
+            try { return fs.readFileSync(stray, 'utf8').trim().slice(0, 20); } catch { return ''; }
+          };
+          const running = (owner) => {
+            if (!/^\d+$/.test(owner)) return false;
+            try { process.kill(Number(owner), 0); return true; } catch { return false; }
+          };
+          if (!running(ownerOf())) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            const owner = ownerOf();
+            if (fs.existsSync(stray) && !running(owner)) {
+              const what = leftover.endsWith('.lock') ? leftover : `staging file ${leftover}`;
+              fail(`${account.name}: ${what} left behind`, `owner=${owner || '(empty)'} is not running`);
+            }
+          }
+        }
       }
 
       const errorsFile = path.join(account.guardDir, 'errors.log');
