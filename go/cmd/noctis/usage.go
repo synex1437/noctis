@@ -358,10 +358,12 @@ func usageEndpoint() *url.URL {
 }
 
 type fetchResult struct {
-	status int
-	body   []byte
-	date   string
-	err    string
+	status    int
+	body      []byte
+	date      string
+	sentAt    int64
+	roundTrip time.Duration
+	err       string
 }
 
 func fetchOauthUsage(token, version string) fetchResult {
@@ -375,7 +377,10 @@ func fetchOauthUsage(token, version string) fetchResult {
 	request.Header.Set("User-Agent", "claude-code/"+version)
 	request.Header.Set("Accept", "application/json")
 	client := &http.Client{Timeout: fetchTimeout}
+	sentAt := nowSec()
+	started := time.Now()
 	response, err := client.Do(request)
+	roundTrip := time.Since(started)
 	if err != nil {
 		message := err.Error()
 		if strings.Contains(message, "Timeout") || strings.Contains(message, "deadline") {
@@ -389,7 +394,7 @@ func fetchOauthUsage(token, version string) fetchResult {
 	if readErr != nil && !errors.Is(readErr, io.EOF) {
 		return fetchResult{err: "truncated-response " + readErr.Error()}
 	}
-	return fetchResult{status: response.StatusCode, body: body, date: response.Header.Get("Date")}
+	return fetchResult{status: response.StatusCode, body: body, date: response.Header.Get("Date"), sentAt: sentAt, roundTrip: roundTrip}
 }
 
 func sanePercent(value float64) (float64, bool) {
@@ -506,12 +511,16 @@ func liveRefreshError(fable object, now int64) string {
 	return getString(fable, "error")
 }
 
-func clockOffsetFrom(dateHeader string, now int64, previous float64) float64 {
-	serverTime, err := http.ParseTime(dateHeader)
+func clockOffsetFrom(result fetchResult, previous float64) float64 {
+	serverTime, err := http.ParseTime(result.date)
 	if err != nil {
 		return previous
 	}
-	offset := float64(serverTime.Unix() - now)
+	if result.sentAt == 0 || result.roundTrip < 0 || result.roundTrip > fetchTimeout {
+		return previous
+	}
+	midpoint := time.Unix(result.sentAt, 0).Add(result.roundTrip / 2)
+	offset := math.Round(serverTime.Sub(midpoint).Seconds())
 	if math.Abs(offset) < clockSkewMinSeconds || math.Abs(offset) > clockSkewMaxSeconds {
 		return 0
 	}
@@ -617,7 +626,7 @@ func refreshFable(cfg object, now int64, reason string, maxAge float64, ignoreBa
 		"seven_day":   parsed["seven_day"],
 		"fable":       parsed["fable"],
 		"buckets":     parsed["buckets"],
-		"clockOffset": clockOffsetFrom(response.date, now, numberOr(cached, "clockOffset", 0)),
+		"clockOffset": clockOffsetFrom(response, numberOr(cached, "clockOffset", 0)),
 		"history":     history,
 	}
 	if parsed["fable"] == nil {
