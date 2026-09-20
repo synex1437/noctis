@@ -30,6 +30,7 @@ const (
 	lockStaleMs             = 15000
 	lockLiveHolderMs        = 120000
 	lockDeadOwnerMs         = 2000
+	schedulingGraceSeconds  = 30
 	lockQueueBackgroundMs   = 900000
 	stopFailureMaxAttempts  = 5
 	burstHistoryLimit       = 6
