@@ -141,25 +141,6 @@ func ownHelperProcess(name string) bool {
 	return base == strings.TrimSuffix(strings.ToLower(filepath.Base(executable)), ".exe")
 }
 
-func processName(pid int) string {
-	if isWindows {
-		out, err := runWithTimeout(exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FO", "CSV", "/NH"), 5*time.Second)
-		if err != nil {
-			return ""
-		}
-		fields := strings.Split(strings.TrimSpace(string(out)), ",")
-		if len(fields) > 0 {
-			return strings.Trim(fields[0], `"`)
-		}
-		return ""
-	}
-	out, err := runWithTimeout(exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "comm="), 5*time.Second)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
 func terminateProcess(pid int) error {
 	if isWindows {
 		_, err := runWithTimeout(exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/T", "/F"), 10*time.Second)
