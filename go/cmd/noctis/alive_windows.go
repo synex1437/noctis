@@ -10,6 +10,7 @@ func processAlive(pid int) bool {
 	}
 	handle, err := syscall.OpenProcess(syscall.PROCESS_QUERY_INFORMATION, false, uint32(pid))
 	if err != nil {
+		warn("alive-diag: OpenProcess(PROCESS_QUERY_INFORMATION, %d) failed: %v", pid, err)
 		return false
 	}
 	defer syscall.CloseHandle(handle)
