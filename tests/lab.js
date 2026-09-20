@@ -1737,7 +1737,7 @@ async function scenarioVisibleRelaunch(acc) {
   acc.statusline('vr1', 'claude-fable-5-1', 94, now + 900, 20, now + 3 * 86400);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'vr1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('visible relaunch: wait parked', Boolean(acc.state().waits.vr1), true);
-  const previous = spawn('sh', ['-c', 'sleep 60'], { stdio: 'ignore' });
+  const previous = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
   const state = acc.state();
   state.launched.vr1 = { pid: previous.pid, at: now - 3600, how: 'terminal' };
   state.waits.vr1.resumeAt = now - 5;
