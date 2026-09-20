@@ -730,6 +730,15 @@ func detachedSelf(argsList []string) int {
 	return pid
 }
 
+func scheduledWithoutTask(scheduled object) bool {
+	switch getString(scheduled, "method") {
+	case "sleeper", "manual":
+		return true
+	default:
+		return false
+	}
+}
+
 func removeScheduledTask(name string) {
 	if !isWindows {
 		return
@@ -751,7 +760,7 @@ func cancelRunnerExcept(sid string, state object, keep object) {
 }
 
 func cancelScheduled(sid string, scheduled object) {
-	if isWindows {
+	if isWindows && !scheduledWithoutTask(scheduled) {
 		removeScheduledTask(taskName(sid))
 	}
 	cancelNative(sid, scheduled)
