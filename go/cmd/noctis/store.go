@@ -303,20 +303,25 @@ func warn(format string, values ...any)    { logLevel("warn", fmt.Sprintf(format
 func fail(format string, values ...any)    { logLevel("error", fmt.Sprintf(format, values...)) }
 
 type strictRead struct {
-	exists bool
-	ok     bool
-	data   object
-	raw    []byte
-	err    string
+	exists   bool
+	ok       bool
+	unopened bool
+	data     object
+	raw      []byte
+	err      string
 }
 
 func readJSONStrict(file string) strictRead {
 	content, err := os.ReadFile(file)
+	for attempt := 0; err != nil && !errors.Is(err, os.ErrNotExist) && attempt < 8; attempt++ {
+		time.Sleep(time.Duration(5+attempt*10) * time.Millisecond)
+		content, err = os.ReadFile(file)
+	}
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return strictRead{exists: false, ok: true, data: object{}}
 		}
-		return strictRead{exists: true, ok: false, err: err.Error()}
+		return strictRead{exists: true, ok: false, unopened: true, err: err.Error()}
 	}
 	var raw any
 	if err := json.Unmarshal(content, &raw); err != nil {
@@ -637,7 +642,7 @@ func readStoredState() (object, []byte) {
 	}
 
 	backup := readJSONStrict(files.stateBackup)
-	if backup.ok && backup.data != nil && backup.exists {
+	if !primary.unopened && backup.ok && backup.data != nil && backup.exists {
 
 		if err := writeJSONAtomic(files.state, backup.data); err != nil {
 			warn("state.json unusable (%s); recovered from backup but could not rewrite it: %v", stateProblem(primary), err)
@@ -645,6 +650,10 @@ func readStoredState() (object, []byte) {
 			warn("state.json unusable (%s); restored from the backup", stateProblem(primary))
 		}
 		return backup.data, nil
+	}
+	if primary.unopened {
+		fail("state.json could not be opened (%s); leaving it alone", stateProblem(primary))
+		return nil, nil
 	}
 	if err := os.Remove(files.state); err == nil {
 		fail("state.json unusable and no usable backup (%s); cleared, starting empty", stateProblem(primary))
@@ -656,11 +665,17 @@ func readStoredState() (object, []byte) {
 
 func readState() object {
 	state, _ := readStateWithBytes()
+	if state == nil {
+		return emptyState()
+	}
 	return state
 }
 
 func readStateWithBytes() (object, []byte) {
 	stored, raw := readStoredState()
+	if stored == nil {
+		return nil, nil
+	}
 	state := emptyState()
 	for key, template := range state {
 		value, present := stored[key]
@@ -918,6 +933,11 @@ func updateState(mutator func(state object)) object {
 	var result object
 	withFileLock(files.stateLock, func() {
 		state, before := readStateWithBytes()
+		if state == nil {
+			fail("state.json could not be read; not written")
+			result = emptyState()
+			return
+		}
 		mutator(state)
 		pruneState(state, nowSec())
 		encoded := marshalPretty(state)
