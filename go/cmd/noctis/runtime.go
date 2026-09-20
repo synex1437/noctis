@@ -759,7 +759,9 @@ func runResume() {
 func runSleeper() {
 	at, ok := toNumber(flagString("at"))
 	sid := flagString("sid")
+	warn("sleeper-diag: argv=%q sid=%q at=%v ok=%t flags=%v positional=%v", os.Args, sid, at, ok, args.flags, args.positional)
 	if sid == "" || !ok {
+		warn("sleeper-diag: giving up before any work: sid=%q ok=%t", sid, ok)
 		return
 	}
 	watching := args.present["watch"]
@@ -781,8 +783,10 @@ func runSleeper() {
 		return
 	}
 	if watching {
+		warn("sleeper-diag: --watch set and window did not clear early; not resuming sid=%q", sid)
 		return
 	}
+	warn("sleeper-diag: reached the scheduled time, resuming sid=%q", sid)
 	runResume()
 }
 
