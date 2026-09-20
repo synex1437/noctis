@@ -1102,6 +1102,9 @@ func rescheduleStrandedWaits(state object) {
 		if getMap(getMap(state, "handedOff"), sid) != nil {
 			continue
 		}
+		if float64(nowSec())-numberOr(record, "startedAt", 0) < schedulingGraceSeconds {
+			continue
+		}
 		resumeAt := numberOr(record, "resumeAt", 0)
 		if resumeAt <= 0 {
 			continue
