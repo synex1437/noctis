@@ -69,9 +69,17 @@ function refreshChecksums() {
   fs.writeFileSync(path.join(binDir, 'SHA256SUMS'), `${lines.join('\n')}\n`);
 }
 
+function canonicalTmpdir() {
+  try {
+    return fs.realpathSync.native(os.tmpdir());
+  } catch {
+    return os.tmpdir();
+  }
+}
+
 class Lab {
   constructor(name) {
-    this.root = path.join(os.tmpdir(), `${name}-${process.pid}`);
+    this.root = path.join(canonicalTmpdir(), `${name}-${process.pid}`);
     this.binDir = path.join(this.root, 'bin');
     this.projectDir = path.join(this.root, 'project');
     this.callsFile = path.join(this.root, 'claude-calls.log');
@@ -322,8 +330,11 @@ class Account {
   }
 
   env(extra = {}) {
+    const inherited = { ...process.env };
+    delete inherited.LC_ALL;
+    delete inherited.LC_MESSAGES;
     const env = {
-      ...process.env,
+      ...inherited,
       PATH: `${this.lab.binDir}${path.delimiter}${process.env.PATH}`,
       CLAUDE_CONFIG_DIR: this.dir,
       NOCTIS_LAB_GH_LOG: this.lab.ghLog,
