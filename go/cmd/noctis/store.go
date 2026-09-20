@@ -26,7 +26,7 @@ const (
 	routeTTLSeconds         = 3600
 	heartbeatFreshSeconds   = 120
 	responseBodyLimit       = 1024 * 1024
-	lockWaitMs              = 10000
+	lockWaitForegroundMs    = 10000
 	lockStaleMs             = 15000
 	lockLiveHolderMs        = 120000
 	lockDeadOwnerMs         = 2000
@@ -853,9 +853,32 @@ func lockQueueMs() time.Duration {
 	}
 }
 
+func lockPollDelay(waited time.Duration) time.Duration {
+	step := time.Duration(15+os.Getpid()%21) * time.Millisecond
+	switch {
+	case waited > 10*time.Second:
+		return step * 8
+	case waited > 2*time.Second:
+		return step * 3
+	default:
+		return step
+	}
+}
+
+func lockNoProgressMs() time.Duration {
+	switch command {
+	case "sleeper", "resume":
+		return lockLiveHolderMs
+	default:
+		return lockWaitForegroundMs
+	}
+}
+
 func withFileLock(lockFile string, work func()) bool {
 	ensureDir(files.guardDir)
-	deadline := time.Now().Add(lockWaitMs * time.Millisecond)
+	begin := time.Now()
+	noProgress := lockNoProgressMs() * time.Millisecond
+	deadline := time.Now().Add(noProgress)
 	queueDeadline := time.Now().Add(lockQueueMs() * time.Millisecond)
 	holder := ""
 	var lock *os.File
@@ -885,13 +908,13 @@ func withFileLock(lockFile string, work func()) bool {
 		}
 		if owner != holder {
 			holder = owner
-			deadline = time.Now().Add(lockWaitMs * time.Millisecond)
+			deadline = time.Now().Add(noProgress)
 		}
 		if now := time.Now(); now.After(deadline) || now.After(queueDeadline) {
 			fail("%s is held by another process; not written", filepath.Base(lockFile))
 			return false
 		}
-		time.Sleep(time.Duration(15+os.Getpid()%21) * time.Millisecond)
+		time.Sleep(lockPollDelay(time.Since(begin)))
 	}
 	defer func() {
 		if lock == nil {
