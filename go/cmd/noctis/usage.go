@@ -696,7 +696,7 @@ func lockAbandoned(lockFile string) bool {
 	switch {
 	case readErr == nil && parseErr == nil && pid > 0 && pid != os.Getpid():
 		if !processAlive(pid) {
-			return true
+			return age > lockDeadOwnerMs*time.Millisecond
 		}
 		return age > lockLiveHolderMs*time.Millisecond
 	default:
