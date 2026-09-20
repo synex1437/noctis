@@ -756,6 +756,15 @@ func runResume() {
 	}
 }
 
+func awaitWaitRecord(sid string) {
+	for attempt := 0; attempt < sleeperSettleTries; attempt++ {
+		if getMap(getMap(readState(), "waits"), sid) != nil {
+			return
+		}
+		time.Sleep(sleeperSettleInterval)
+	}
+}
+
 func runSleeper() {
 	at, ok := toNumber(flagString("at"))
 	sid := flagString("sid")
@@ -764,6 +773,7 @@ func runSleeper() {
 	}
 	watching := args.present["watch"]
 	cfg := loadConfig()
+	awaitWaitRecord(sid)
 	watch := newWaitWatch(cfg, sid, false)
 	watch.pollEvery = earlyResetPollSeconds(cfg)
 	if !currentHost().limits {
