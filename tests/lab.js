@@ -1657,6 +1657,9 @@ async function scenarioEarlyReset(acc) {
   resetCalls();
   mock.limits = limited(3, 18000);
   await callsMatching('--resume er3 ');
+  const er3Resumes = callsLog().filter((line) => line.includes('--resume er3 '));
+  process.stdout.write(`  er3 resume calls: ${er3Resumes.length}\n`);
+  for (const line of er3Resumes) process.stdout.write(`    ${line}\n`);
   check('early reset: sleeper resumed the session ahead of schedule', callsLog().filter((line) => line.includes('--resume er3 ')).length, 1);
   check('early reset: sleeper journaled it', acc.run(['why', '--last', '6']).includes('early-reset'), true);
   acc.manualSchedule = true;
