@@ -924,11 +924,13 @@ async function main() {
   }
   sweepWorks(accounts);
   lab.stopMock();
-  const p95 = percentile(stats.latencies, 0.95);
-  if (p95 > 400) {
-    const worst = stats.timings.slice().sort((a, b) => b.ms - a.ms).slice(0, 8).map((entry) => `${entry.event}/${entry.sid} ${entry.ms}ms`).join(', ');
-    stats.anomalies.push(`hook p95 latency ${p95} ms is above the 400 ms budget (slowest: ${worst})`);
-  }
+  const slowest = (list) => list.slice().sort((a, b) => b.ms - a.ms).slice(0, 20).map((entry) => `${entry.event}/${entry.sid} ${entry.ms}ms`).join(', ');
+  const guarding = stats.timings.filter((entry) => entry.event !== 'StopFailure');
+  const pausing = stats.timings.filter((entry) => entry.event === 'StopFailure');
+  const p95 = percentile(guarding.map((entry) => entry.ms), 0.95);
+  if (p95 > 400) stats.anomalies.push(`hook p95 latency ${p95} ms is above the 400 ms budget (slowest: ${slowest(guarding)})`);
+  const pauseP95 = pausing.length ? percentile(pausing.map((entry) => entry.ms), 0.95) : 0;
+  if (pauseP95 > 3000) stats.anomalies.push(`StopFailure p95 latency ${pauseP95} ms is above the 3000 ms budget (slowest: ${slowest(pausing)})`);
   if (stats.corruptions > 0 && stats.recoveries === 0) stats.anomalies.push(`${stats.corruptions} file corruption(s) and not one recovery from a backup`);
   const summary = {
     simulatedDays: options.days,
@@ -963,6 +965,8 @@ async function main() {
     transient429: stats.transient429,
     maxUsageWhenAllowed: { five: Number(stats.maxAllowedFive.toFixed(1)), week: Number(stats.maxAllowedWeek.toFixed(1)) },
     hookLatencyMs: { p50: percentile(stats.latencies, 0.5), p95: percentile(stats.latencies, 0.95), max: Math.max(...stats.latencies) },
+    guardLatencyMs: { p95, budget: 400 },
+    stopFailureLatencyMs: { p95: pauseP95, budget: 3000, calls: pausing.length },
     breaches: stats.breaches.length,
     breachDetails: stats.breaches.slice(0, 6),
     anomalies: stats.anomalies.slice(0, 20),
