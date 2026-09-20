@@ -1197,7 +1197,7 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 			journal(sid, kind, "wait-cancelled", hitLabel(wait), nil)
 			logInfo("in-hook wait for %s cancelled; continuing", sid)
 			return waitOutcome{notice: T("wait.cancelled", wait.label)}
-		case watch.early:
+		case watch.early && (wait.until <= 0 || float64(nowSec()) < wait.until):
 			journal(sid, kind, "early-reset", hitLabel(wait), object{"waited": float64(nowSec() - now)})
 			notify(cfg, pluginName, T("wait.earlyResetNotify", wait.label))
 			logInfo("in-hook wait for %s ended early: %s reset ahead of schedule", sid, wait.window)
@@ -1213,7 +1213,7 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 			logInfo("an in-hook wait of %ds completed past the learned cap; cap forgotten", int(slept))
 		}
 		outcome := waitOutcome{notice: T("wait.resumed", wait.label, formatNumber(wait.used), durationText(float64(nowSec()-now)))}
-		if watch.early {
+		if watch.early && (wait.until <= 0 || float64(nowSec()) < wait.until) {
 			outcome.notice = T("wait.earlyReset", wait.label, durationText(float64(nowSec()-now)))
 		}
 		if workspaceChanged(record) {

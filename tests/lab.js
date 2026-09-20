@@ -196,6 +196,7 @@ async function scenarioInHookWait(acc) {
   const watchdogPid = mid && mid.scheduled && mid.scheduled.pid;
   await new Promise((resolve) => child.on('close', resolve));
   check('in-hook wait lasted until reset', Boolean(mid) && Date.now() / 1000 >= mid.resumeAt - 1, true);
+  if (!stdout.includes('beklendi, devam ediliyor')) process.stdout.write(`  in-hook-diag: ${JSON.stringify(stdout.trim().slice(0, 400))}\n`);
   check('in-hook notice', stdout.includes('beklendi, devam ediliyor'), true);
   check('wait cleared after hook', acc.state().waits.s1 === undefined, true);
   await sleep(300);
