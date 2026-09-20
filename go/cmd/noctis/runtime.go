@@ -584,8 +584,7 @@ func runResume() {
 	}
 	auto := getMap(getMap(state, "autoResume"), sid)
 	if getString(auto, "type") == "quota_auto_resume_fired" && numberOr(auto, "at", 0) >= numberOr(wait, "startedAt", 0) {
-		clearWait(sid, state)
-		consumeCheckpoint(sid)
+		clearWaitAndConsume(sid, state)
 		logInfo("runner %s: builtin auto-continue already resumed the session", sid)
 		return
 	}
@@ -617,8 +616,7 @@ func runResume() {
 	}
 	kind := getString(wait, "kind")
 	if kind != "fable" && sessionActiveAfter(wait, numberOr(wait, "until", 0)) {
-		clearWait(sid, state)
-		consumeCheckpoint(sid)
+		clearWaitAndConsume(sid, state)
 		logInfo("runner %s: transcript changed after reset, session already continued", sid)
 		return
 	}
@@ -672,8 +670,7 @@ func runResume() {
 		return
 	}
 	if wakeAt := numberOr(wait, "wakeAttemptedAt", 0); wakeAt > 0 && sessionActiveAfter(wait, wakeAt) {
-		clearWait(sid, state)
-		consumeCheckpoint(sid)
+		clearWaitAndConsume(sid, state)
 		journal(sid, "resume", "skip-launch", "same-session wake succeeded", nil)
 		logInfo("runner %s: same-session wake already continued the session", sid)
 		return

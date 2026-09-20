@@ -79,8 +79,7 @@ func onSessionStart(input, cfg object) {
 	waits := getMap(state, "waits")
 	handedOff := getMap(state, "handedOff")
 	if source == "resume" && waits[sid] != nil && handedOff[sid] == nil && !isHandoffSession(sid) {
-		clearWait(sid, state)
-		consumeCheckpoint(sid)
+		clearWaitAndConsume(sid, state)
 		logInfo("manual resume of %s: pending wait cleared", sid)
 	}
 	if source == "clear" {

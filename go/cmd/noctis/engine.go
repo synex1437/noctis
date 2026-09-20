@@ -937,6 +937,19 @@ func clearWait(sid string, state object) {
 	})
 }
 
+func clearWaitAndConsume(sid string, state object) {
+	if state == nil {
+		state = readState()
+	}
+	cancelRunner(sid, state)
+	updateState(func(next object) {
+		delete(stateMap(next, "waits"), sid)
+		if entry := getMap(getMap(next, "checkpoints"), sid); entry != nil {
+			entry["consumed"] = true
+		}
+	})
+}
+
 func notify(cfg object, title, body string) {
 	alarm := section(cfg, "alarm")
 	if !getBool(alarm, "enabled", true) {
@@ -1178,8 +1191,7 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 	if inHook {
 		watch := newWaitWatch(cfg, sid, true)
 		sleepUntilEvery(resumeAt, watch.tickSeconds(), watch.tick)
-		clearWait(sid, nil)
-		consumeCheckpoint(sid)
+		clearWaitAndConsume(sid, nil)
 		switch {
 		case watch.cancelled:
 			journal(sid, kind, "wait-cancelled", hitLabel(wait), nil)
