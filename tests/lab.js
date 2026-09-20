@@ -57,6 +57,11 @@ function resetCalls() {
   lab.resetCalls();
 }
 
+async function waitRecord(acc, sid, seconds = 20) {
+  for (let i = 0; i < seconds * 50 && !(acc.state().waits || {})[sid]; i += 1) await sleep(20);
+  return (acc.state().waits || {})[sid];
+}
+
 async function callsMatching(fragment, seconds = 60) {
   for (let i = 0; i < seconds * 2 && !callsLog().some((line) => line.includes(fragment)); i += 1) await sleep(500);
   return callsLog().filter((line) => line.includes(fragment));
@@ -180,8 +185,7 @@ async function scenarioInHookWait(acc) {
   child.stdout.on('data', (chunk) => {
     stdout += chunk;
   });
-  await sleep(1500);
-  const mid = acc.state().waits.s1;
+  const mid = await waitRecord(acc, 's1');
   check('wait registered mid-hook', Boolean(mid && mid.inHook), true);
   check('heartbeat present', Boolean(mid && mid.heartbeat >= now), true);
   const watchdogPid = mid && mid.scheduled && mid.scheduled.pid;
@@ -210,8 +214,8 @@ async function scenarioWorkspaceGuard(acc) {
   child.stdout.on('data', (chunk) => {
     stdout += chunk;
   });
-  await sleep(1200);
-  check('workspace guard: fingerprint stored with the wait', typeof acc.state().waits.wg1.tree === 'string' && acc.state().waits.wg1.tree.length === 16, true);
+  const wg1 = await waitRecord(acc, 'wg1');
+  check('workspace guard: fingerprint stored with the wait', typeof wg1.tree === 'string' && wg1.tree.length === 16, true);
   fs.writeFileSync(path.join(repo, 'a.txt'), 'someone edited this while it waited\n');
   await new Promise((resolve) => child.on('close', resolve));
   check('workspace guard: user notice mentions the changed tree', stdout.includes('çalışma ağacı değişti'), true);
@@ -225,8 +229,8 @@ async function scenarioWorkspaceGuard(acc) {
   });
   acc.statusline('wg3', 'claude-fable-5-1', 93, nowSec() + 3, 23, now + 3 * 86400);
   const off = acc.hookAsync({ hook_event_name: 'UserPromptSubmit', session_id: 'wg3', cwd: repo, transcript_path: TRANSCRIPT, prompt: 'keep going with a.txt' });
-  await sleep(1200);
-  check('workspace guard: off -> no fingerprint', acc.state().waits.wg3.tree, undefined);
+  const wg3 = await waitRecord(acc, 'wg3');
+  check('workspace guard: off -> no fingerprint', wg3.tree, undefined);
   await new Promise((resolve) => off.on('close', resolve));
   acc.setConfig((config) => {
     config.wait.workspaceGuard = true;
@@ -258,7 +262,7 @@ async function scenarioKilledHookRecovery(acc) {
   resetCalls();
   acc.statusline('s2', 'claude-opus-5', 94, now + 6, 23, now + 3 * 86400);
   const child = acc.hookAsync({ hook_event_name: 'PostToolBatch', session_id: 's2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
-  await sleep(1200);
+  await waitRecord(acc, 's2');
   child.kill();
   await sleep(300);
   const wait = acc.state().waits.s2;
@@ -331,7 +335,8 @@ async function scenarioFableFlow(acc) {
   const pid = acc.state().waits.s4.scheduled.pid;
   try {
     process.kill(pid);
-  } catch {
+  } catch (error) {
+    process.stdout.write(`  fable watchdog kill failed: ${error && error.code} pid=${JSON.stringify(pid)} scheduled=${JSON.stringify(acc.state().waits.s4 && acc.state().waits.s4.scheduled)}\n`);
     results.push({ name: 'fable watchdog pid', ok: false });
   }
   const runner = spawn(acc.engine()[0], ['resume', '--sid', 's4', '--account', acc.dir], { env: acc.env(), stdio: 'ignore' });
@@ -1223,9 +1228,11 @@ async function scenarioMarketplaceBootstrap(acc) {
   const platformBinary = path.join(root, 'bin', platform, path.basename(acc.engine()[0]));
   const sums = path.join(root, 'bin', 'SHA256SUMS');
   fs.writeFileSync(sums, `${'0'.repeat(64)}  ${platform}/${path.basename(acc.engine()[0])}\n`);
+  const untouchedBytes = fs.readFileSync(shipped);
+  const untouchedMtime = fs.statSync(shipped).mtimeMs;
   const tampered = spawnSync(shipped, ['ensure'], { encoding: 'utf8', env });
   const tamperedLog = `${tampered.stdout}${tampered.stderr}${fs.existsSync(path.join(acc.guardDir, 'errors.log')) ? fs.readFileSync(path.join(acc.guardDir, 'errors.log'), 'utf8') : ''}`;
-  check('ensure refuses a binary that fails the SHA256SUMS check', !fs.readFileSync(shipped).equals(fs.readFileSync(platformBinary)) && /SHA256SUMS/.test(tamperedLog), true);
+  check('ensure refuses a binary that fails the SHA256SUMS check', fs.readFileSync(shipped).equals(untouchedBytes) && fs.statSync(shipped).mtimeMs === untouchedMtime && /SHA256SUMS/.test(tamperedLog), true);
   const crypto = require('crypto');
   fs.writeFileSync(sums, `${crypto.createHash('sha256').update(fs.readFileSync(platformBinary)).digest('hex')}  ${platform}/${path.basename(acc.engine()[0])}\n`);
   const ensure = spawnSync(shipped, ['ensure'], { encoding: 'utf8', env });
@@ -1660,6 +1667,14 @@ async function scenarioEarlyReset(acc) {
   const er3Resumes = callsLog().filter((line) => line.includes('--resume er3 '));
   process.stdout.write(`  er3 resume calls: ${er3Resumes.length}\n`);
   for (const line of er3Resumes) process.stdout.write(`    ${line}\n`);
+  if (er3Resumes.length === 0) {
+    const parkedNow = (acc.state().waits || {}).er3;
+    process.stdout.write(`    er3 wait now: ${JSON.stringify(parkedNow && parkedNow.scheduled)}\n`);
+    process.stdout.write(`    er3 all calls: ${JSON.stringify(callsLog())}\n`);
+    const errorsFile = path.join(acc.guardDir, 'errors.log');
+    const errors = fs.existsSync(errorsFile) ? fs.readFileSync(errorsFile, 'utf8').trim().split('\n').slice(-12) : [];
+    for (const line of errors) process.stdout.write(`    er3 errors.log: ${line}\n`);
+  }
   check('early reset: sleeper resumed the session ahead of schedule', callsLog().filter((line) => line.includes('--resume er3 ')).length, 1);
   check('early reset: sleeper journaled it', acc.run(['why', '--last', '6']).includes('early-reset'), true);
   acc.manualSchedule = true;
