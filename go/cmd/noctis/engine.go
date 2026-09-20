@@ -823,7 +823,7 @@ func ensureRunnerLauncher() string {
 		"exit /b %errorlevel%",
 		"",
 	}, "\r\n")
-	existing, _ := os.ReadFile(files.runnerLauncher)
+	existing, _ := readFileShared(files.runnerLauncher)
 	if string(existing) != content {
 		_ = os.WriteFile(files.runnerLauncher, []byte(content), 0o644)
 	}

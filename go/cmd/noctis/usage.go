@@ -682,7 +682,7 @@ func lockHolder(lockFile string) (string, time.Duration, bool) {
 		return "", 0, false
 	}
 	age := time.Since(info.ModTime())
-	content, readErr := os.ReadFile(lockFile)
+	content, readErr := readFileShared(lockFile)
 	if readErr != nil {
 		return "", age, true
 	}

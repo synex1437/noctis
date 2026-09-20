@@ -312,10 +312,10 @@ type strictRead struct {
 }
 
 func readJSONStrict(file string) strictRead {
-	content, err := os.ReadFile(file)
+	content, err := readFileShared(file)
 	for attempt := 0; err != nil && !errors.Is(err, os.ErrNotExist) && attempt < 8; attempt++ {
 		time.Sleep(time.Duration(5+attempt*10) * time.Millisecond)
-		content, err = os.ReadFile(file)
+		content, err = readFileShared(file)
 	}
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -947,7 +947,7 @@ func updateState(mutator func(state object)) object {
 			return
 		}
 		if before == nil {
-			before, _ = os.ReadFile(files.state)
+			before, _ = readFileShared(files.state)
 		}
 		if before != nil && bytes.Equal(before, encoded) {
 			result = state
