@@ -62,6 +62,11 @@ async function waitRecord(acc, sid, seconds = 20) {
   return (acc.state().waits || {})[sid];
 }
 
+async function handoffRecord(acc, sid, seconds = 20) {
+  for (let i = 0; i < seconds * 4 && !(acc.state().handedOff || {})[sid]; i += 1) await sleep(250);
+  return (acc.state().handedOff || {})[sid];
+}
+
 async function callsMatching(fragment, seconds = 60) {
   for (let i = 0; i < seconds * 2 && !callsLog().some((line) => line.includes(fragment)); i += 1) await sleep(500);
   return callsLog().filter((line) => line.includes(fragment));
@@ -343,7 +348,7 @@ async function scenarioFableFlow(acc) {
     }
   }
   const runner = spawn(acc.engine()[0], ['resume', '--sid', 's4', '--account', acc.dir], { env: acc.env(), stdio: 'ignore' });
-  await sleep(600);
+  check('fable handoff registered', Boolean(await handoffRecord(acc, 's4')), true);
   const unmarked = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's4', prompt: 'typing in old window' });
   check('old window blocked during handoff', unmarked.includes('"decision":"block"') && unmarked.includes('başka pencerede sürüyor'), true);
   const marked = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's4', cwd: PROJECT_DIR, prompt: 'continue the code' }, { NOCTIS_HANDOFF: 's4' });
