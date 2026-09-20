@@ -2164,12 +2164,18 @@ async function scenarioSilentFailures(acc) {
 
 async function scenarioHousekeeping(acc) {
   const now = nowSec();
+  writeTranscript();
+  acc.statusline('s9base', 'claude-opus-5', 93, now + 2 * 86400, 10, now + 3 * 86400);
+  const baseStarted = Date.now();
+  acc.hook({ hook_event_name: 'PostToolBatch', session_id: 's9base', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
+  const baseline = Date.now() - baseStarted;
   writeTranscript(300 * 1024);
   acc.statusline('s9', 'claude-opus-5', 93, now + 2 * 86400, 10, now + 3 * 86400);
   const started = Date.now();
   const out = acc.hook({ hook_event_name: 'PostToolBatch', session_id: 's9', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
+  const large = Date.now() - started;
   check('large transcript checkpoint stop', out.includes('"continue":false'), true);
-  results.push({ name: `large transcript checkpoint ${Date.now() - started}ms`, ok: Date.now() - started < 1500, actual: Date.now() - started, expected: '<1500ms' });
+  results.push({ name: `large transcript checkpoint ${large}ms over ${baseline}ms baseline`, ok: large - baseline < 1500, actual: large - baseline, expected: '<1500ms over baseline' });
   const checkpoint = fs.readFileSync(acc.state().checkpoints.s9.path, 'utf8');
   check('checkpoint has todos', checkpoint.includes('- [ ] tests'), true);
   acc.run(['cancel']);

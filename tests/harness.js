@@ -193,7 +193,8 @@ class Lab {
         '@echo off',
         'if "%~1"=="--help" (echo   --permission-mode ^<mode^>  (choices: "acceptEdits", "bypassPermissions", "default", "plan", "auto")& exit /b 0)',
         'echo FAKE_CLAUDE args=[%*] HANDOFF=%NOCTIS_HANDOFF% CONFIG=%CLAUDE_CONFIG_DIR% EFFORT=%CLAUDE_CODE_EFFORT_LEVEL%>> "%NOCTIS_LAB_CALLS%"',
-        'if "%NOCTIS_LAB_FAST%"=="" timeout /t 1 /nobreak >nul',
+        'if "%NOCTIS_LAB_FAST%"=="" ping -n 2 127.0.0.1 >nul',
+        'exit /b 0',
         '',
       ].join('\r\n'));
       return;

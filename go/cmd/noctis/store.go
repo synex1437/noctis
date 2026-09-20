@@ -851,7 +851,7 @@ func withFileLock(lockFile string, work func()) bool {
 	defer func() {
 		if lock != nil {
 			lock.Close()
-			if err := os.Remove(lockFile); err != nil {
+			if err := os.Remove(lockFile); err != nil && !errors.Is(err, os.ErrNotExist) {
 				warn("lock release failed: %v", err)
 			}
 		}
