@@ -344,8 +344,10 @@ async function scenarioFableFlow(acc) {
   }
   const runner = spawn(acc.engine()[0], ['resume', '--sid', 's4', '--account', acc.dir], { env: acc.env(), stdio: 'ignore' });
   await sleep(600);
-  check('old window blocked during handoff', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's4', prompt: 'typing in old window' }).includes('"decision":"block"'), true);
-  check('new window passes with env marker', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's4', cwd: PROJECT_DIR, prompt: 'continue the code' }, { NOCTIS_HANDOFF: 's4' }), '');
+  const unmarked = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's4', prompt: 'typing in old window' });
+  check('old window blocked during handoff', unmarked.includes('"decision":"block"') && unmarked.includes('başka pencerede sürüyor'), true);
+  const marked = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's4', cwd: PROJECT_DIR, prompt: 'continue the code' }, { NOCTIS_HANDOFF: 's4' });
+  check('new window passes with env marker', marked.includes('başka pencerede sürüyor'), false);
   await new Promise((resolve) => runner.on('close', resolve));
   const calls = callsLog();
   check('relaunched on opus', calls.some((line) => line.includes('--model opus')), true);
