@@ -1162,17 +1162,13 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 		runnerAt += math.Max(0, numberOr(waitCfg, "builtinGraceSeconds", 0))
 	}
 
+	scheduled := scheduleRunner(cfg, sid, runnerAt)
+	record["scheduled"] = scheduled
 	if !registerWait(sid, record, cfg) {
+		cancelRunner(sid, readState())
 		journal(sid, kind, "pause-failed", reasonLine, object{"window": wait.window, "used": wait.used})
 		return waitOutcome{notice: T("wait.notStored", pluginName)}
 	}
-	scheduled := scheduleRunner(cfg, sid, runnerAt)
-	record["scheduled"] = scheduled
-	updateState(func(next object) {
-		if current := getMap(getMap(next, "waits"), sid); current != nil {
-			current["scheduled"] = scheduled
-		}
-	})
 	journal(sid, kind, "pause", reasonLine, object{"inHook": inHook, "resumeAt": resumeAt, "hit": wait.hit, "window": wait.window, "used": wait.used})
 	logInfo("wait (%s) for %s: %s; inHook=%t; checkpoint=%s", kind, sid, reasonLine, inHook, orDefault(checkpoint, "none"))
 	if inHook {

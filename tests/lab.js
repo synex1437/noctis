@@ -333,11 +333,14 @@ async function scenarioFableFlow(acc) {
   const stop = acc.hook({ hook_event_name: 'PostToolBatch', session_id: 's4', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('fable batch relaunch plan', stop.includes('yeni pencerede'), true);
   const pid = acc.state().waits.s4.scheduled.pid;
+  check('fable watchdog pid', Number.isInteger(pid) && pid > 0, true);
   try {
     process.kill(pid);
   } catch (error) {
-    process.stdout.write(`  fable watchdog kill failed: ${error && error.code} pid=${JSON.stringify(pid)} scheduled=${JSON.stringify(acc.state().waits.s4 && acc.state().waits.s4.scheduled)}\n`);
-    results.push({ name: 'fable watchdog pid', ok: false });
+    if (error && error.code !== 'ESRCH') {
+      process.stdout.write(`  fable watchdog kill failed: ${error.code} pid=${JSON.stringify(pid)} scheduled=${JSON.stringify(acc.state().waits.s4 && acc.state().waits.s4.scheduled)}\n`);
+      results.push({ name: 'fable watchdog still owned', ok: false });
+    }
   }
   const runner = spawn(acc.engine()[0], ['resume', '--sid', 's4', '--account', acc.dir], { env: acc.env(), stdio: 'ignore' });
   await sleep(600);
