@@ -28,6 +28,7 @@ const (
 	responseBodyLimit       = 1024 * 1024
 	lockWaitMs              = 10000
 	lockStaleMs             = 15000
+	lockLiveHolderMs        = 120000
 	stopFailureMaxAttempts  = 5
 	burstHistoryLimit       = 6
 	burstWindowSeconds      = 1800
@@ -819,9 +820,19 @@ func pruneState(state object, now int64) {
 	}
 }
 
+func lockOwner(lockFile string) string {
+	content, err := os.ReadFile(lockFile)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(content))
+}
+
 func withFileLock(lockFile string, work func()) bool {
 	ensureDir(files.guardDir)
 	deadline := time.Now().Add(lockWaitMs * time.Millisecond)
+	queueDeadline := time.Now().Add(lockLiveHolderMs * time.Millisecond)
+	holder := ""
 	var lock *os.File
 	for lock == nil {
 		handle, err := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
@@ -842,7 +853,11 @@ func withFileLock(lockFile string, work func()) bool {
 				return false
 			}
 		}
-		if time.Now().After(deadline) {
+		if owner := lockOwner(lockFile); owner != holder {
+			holder = owner
+			deadline = time.Now().Add(lockWaitMs * time.Millisecond)
+		}
+		if now := time.Now(); now.After(deadline) || now.After(queueDeadline) {
 			fail("%s is held by another process; not written", filepath.Base(lockFile))
 			return false
 		}

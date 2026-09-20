@@ -698,7 +698,7 @@ func lockAbandoned(lockFile string) bool {
 		if !processAlive(pid) {
 			return true
 		}
-		return age > 120*time.Second
+		return age > lockLiveHolderMs*time.Millisecond
 	default:
 		return age > lockStaleMs*time.Millisecond
 	}
