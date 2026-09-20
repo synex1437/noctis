@@ -40,10 +40,16 @@ walk(ROOT, (file) => {
   if (file.endsWith('.go') && /\t \t/.test(text)) problems.push(`${relative} mixes tabs and spaces in indentation`);
 });
 
+function isExecutable(relative, full) {
+  const listed = require('child_process').spawnSync('git', ['ls-files', '-s', '--', relative], { cwd: ROOT, encoding: 'utf8' });
+  if (listed.status === 0 && listed.stdout.trim()) return listed.stdout.trim().split(/\s+/)[0] === '100755';
+  return Boolean(fs.statSync(full).mode & 0o111);
+}
+
 for (const relative of ['bin/noctis', 'scripts/install.sh']) {
   const full = path.join(ROOT, relative);
   if (!fs.existsSync(full)) { problems.push(`${relative} is missing`); continue; }
-  if (!(fs.statSync(full).mode & 0o111)) problems.push(`${relative} is not executable`);
+  if (!isExecutable(relative, full)) problems.push(`${relative} is not executable`);
 }
 const launcher = fs.readFileSync(path.join(ROOT, 'bin', 'noctis'));
 if (!launcher.subarray(0, 2).equals(Buffer.from('#!'))) {
