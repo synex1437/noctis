@@ -10,6 +10,7 @@ const (
 	sleepTickSeconds    = 15
 	earlyResetDrop      = 10
 	earlyResetMaxAgeMul = 2
+	waitWatchBirthGrace = 30
 )
 
 func earlyResetPollSeconds(cfg object) float64 {
@@ -98,13 +99,16 @@ type waitWatch struct {
 	cancelled bool
 	early     bool
 	heartbeat bool
+	bornAt    float64
+	seen      bool
 }
 
 func newWaitWatch(cfg object, sid string, heartbeat bool) *waitWatch {
-	watch := &waitWatch{sid: sid, cfg: cfg, pollEvery: earlyResetPollSeconds(cfg), lastPoll: float64(nowSec()), heartbeat: heartbeat}
+	watch := &waitWatch{sid: sid, cfg: cfg, pollEvery: earlyResetPollSeconds(cfg), lastPoll: float64(nowSec()), heartbeat: heartbeat, bornAt: float64(nowSec())}
 
 	if record := getMap(getMap(readState(), "waits"), sid); record != nil {
 		watch.startedAt = numberOr(record, "startedAt", 0)
+		watch.seen = true
 	}
 	return watch
 }
@@ -112,10 +116,14 @@ func newWaitWatch(cfg object, sid string, heartbeat bool) *waitWatch {
 func (w *waitWatch) tick() bool {
 	now := float64(nowSec())
 	record := getMap(getMap(readState(), "waits"), w.sid)
+	if record == nil && !w.seen && now-w.bornAt < waitWatchBirthGrace {
+		return false
+	}
 	if record == nil || (w.startedAt > 0 && numberOr(record, "startedAt", -1) != w.startedAt) {
 		w.cancelled = true
 		return true
 	}
+	w.seen = true
 	if w.heartbeat {
 		updateState(func(state object) {
 			if current := getMap(getMap(state, "waits"), w.sid); current != nil {
