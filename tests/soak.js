@@ -75,6 +75,7 @@ const stats = {
   maxAllowedFive: 0,
   maxAllowedWeek: 0,
   latencies: [],
+  timings: [],
 };
 const pendingResumes = [];
 
@@ -134,6 +135,7 @@ function timedHook(acc, input, extraEnv = {}) {
   const output = acc.hook(input, extraEnv);
   const elapsed = Date.now() - started;
   stats.latencies.push(elapsed);
+  stats.timings.push({ ms: elapsed, event: input.hook_event_name || '?', sid: input.session_id || '?' });
   stats.hooks += 1;
   if (elapsed >= 2000) {
     T += Math.round(elapsed / 1000);
@@ -923,7 +925,10 @@ async function main() {
   sweepWorks(accounts);
   lab.stopMock();
   const p95 = percentile(stats.latencies, 0.95);
-  if (p95 > 400) stats.anomalies.push(`hook p95 latency ${p95} ms is above the 400 ms budget`);
+  if (p95 > 400) {
+    const worst = stats.timings.slice().sort((a, b) => b.ms - a.ms).slice(0, 8).map((entry) => `${entry.event}/${entry.sid} ${entry.ms}ms`).join(', ');
+    stats.anomalies.push(`hook p95 latency ${p95} ms is above the 400 ms budget (slowest: ${worst})`);
+  }
   if (stats.corruptions > 0 && stats.recoveries === 0) stats.anomalies.push(`${stats.corruptions} file corruption(s) and not one recovery from a backup`);
   const summary = {
     simulatedDays: options.days,
