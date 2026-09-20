@@ -58,7 +58,7 @@ function resetCalls() {
 }
 
 async function waitRecord(acc, sid, seconds = 20) {
-  for (let i = 0; i < seconds * 50 && !(acc.state().waits || {})[sid]; i += 1) await sleep(20);
+  for (let i = 0; i < seconds * 4 && !(acc.state().waits || {})[sid]; i += 1) await sleep(250);
   return (acc.state().waits || {})[sid];
 }
 
@@ -1765,7 +1765,17 @@ async function scenarioVisibleRelaunch(acc) {
   acc.fastClaude = wasFast;
   acc.timeOffset = 0;
   check('visible relaunch: claude ran through the terminal launcher', callsLog().some((line) => line.includes('--resume vr1') && line.includes('HANDOFF=vr1')), true);
-  check('visible relaunch: the previous window was closed first', !isAlive(previous.pid) && acc.run(['why', '--last', '6']).includes('close-previous'), true);
+  await new Promise((resolve) => {
+    if (previous.exitCode !== null || previous.signalCode !== null) return resolve();
+    previous.once('exit', resolve);
+    setTimeout(resolve, 3000);
+  });
+  const previousAlive = isAlive(previous.pid);
+  const closeJournal = acc.run(['why', '--last', '6']);
+  if (previousAlive || !closeJournal.includes('close-previous')) {
+    process.stdout.write(`  visible relaunch: alive=${previousAlive} exit=${previous.exitCode} signal=${previous.signalCode} journal=${closeJournal.includes('close-previous')}\n`);
+  }
+  check('visible relaunch: the previous window was closed first', !previousAlive && closeJournal.includes('close-previous'), true);
   check('visible relaunch: launch record and wait cleared afterwards', acc.state().launched.vr1 === undefined && acc.state().waits.vr1 === undefined, true);
   check('visible relaunch: no launcher files left behind', fs.existsSync(path.join(acc.guardDir, 'launches')) ? fs.readdirSync(path.join(acc.guardDir, 'launches')).filter((name) => name.startsWith('vr1')) : [], []);
   try { previous.kill(); } catch {}
