@@ -23,7 +23,7 @@ func launchFiles(sid string) (spec, started, pidFile string) {
 }
 
 func readPidFile(path string) int {
-	content, err := os.ReadFile(path)
+	content, err := readFileShared(path)
 	if err != nil {
 		return 0
 	}

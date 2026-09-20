@@ -252,7 +252,7 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 		}
 		if len(previous) > 0 {
 			if current := readJSONStrict(files.usage); current.ok && current.exists {
-				if content, err := os.ReadFile(files.usage); err == nil {
+				if content, err := readFileShared(files.usage); err == nil {
 					_ = os.WriteFile(files.usageBackup, content, 0o600)
 				}
 			}

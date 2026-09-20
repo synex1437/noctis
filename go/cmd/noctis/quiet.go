@@ -20,7 +20,7 @@ func quietMarkerPath(sid string) string {
 }
 
 func fileStamp(path string) string {
-	content, err := os.ReadFile(path)
+	content, err := readFileShared(path)
 	if err != nil {
 		return "absent"
 	}
