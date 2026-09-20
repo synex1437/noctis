@@ -358,6 +358,16 @@ func runChain(chain string, input []byte) string {
 }
 
 func locateExecutable(name string) string {
+	if found, err := exec.LookPath(name); err == nil && found != "" {
+		if absolute, absErr := filepath.Abs(found); absErr == nil {
+			return absolute
+		}
+		return found
+	}
+	return probeExecutable(name)
+}
+
+func probeExecutable(name string) string {
 	finder := "which"
 	if isWindows {
 		finder = "where.exe"
