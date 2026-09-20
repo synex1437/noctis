@@ -31,11 +31,23 @@ function readJson(file) {
   }
 }
 
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 function writeJson(file, data) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const staging = `${file}.${process.pid}.labtmp`;
   fs.writeFileSync(staging, JSON.stringify(data, null, 2));
-  fs.renameSync(staging, file);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      fs.renameSync(staging, file);
+      return;
+    } catch (error) {
+      if (attempt === 11 || !['EPERM', 'EACCES', 'EBUSY'].includes(error.code)) throw error;
+      sleepSync(10 + attempt * 10);
+    }
+  }
 }
 
 function isAlive(pid) {
