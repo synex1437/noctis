@@ -676,32 +676,41 @@ func sweepTempFiles() {
 	})
 }
 
-func lockAbandoned(lockFile string) bool {
+func lockHolder(lockFile string) (string, time.Duration, bool) {
 	info, err := os.Stat(lockFile)
 	if err != nil {
-		return false
+		return "", 0, false
 	}
 	age := time.Since(info.ModTime())
 	content, readErr := os.ReadFile(lockFile)
-	pid, parseErr := 0, error(nil)
-	if readErr == nil {
-		pid, parseErr = strconv.Atoi(strings.TrimSpace(string(content)))
-		if parseErr != nil {
+	if readErr != nil {
+		return "", age, true
+	}
+	return strings.TrimSpace(string(content)), age, true
+}
 
-			if match := firstNumber.FindString(string(content)); match != "" {
-				pid, parseErr = strconv.Atoi(match)
-			}
+func holderStale(owner string, age time.Duration) bool {
+	pid, parseErr := strconv.Atoi(owner)
+	if parseErr != nil {
+		if match := firstNumber.FindString(owner); match != "" {
+			pid, parseErr = strconv.Atoi(match)
 		}
 	}
-	switch {
-	case readErr == nil && parseErr == nil && pid > 0 && pid != os.Getpid():
+	if parseErr == nil && pid > 0 && pid != os.Getpid() {
 		if !processAlive(pid) {
 			return age > lockDeadOwnerMs*time.Millisecond
 		}
 		return age > lockLiveHolderMs*time.Millisecond
-	default:
-		return age > lockStaleMs*time.Millisecond
 	}
+	return age > lockStaleMs*time.Millisecond
+}
+
+func lockAbandoned(lockFile string) bool {
+	owner, age, present := lockHolder(lockFile)
+	if !present {
+		return false
+	}
+	return holderStale(owner, age)
 }
 
 func tryFileLock(lockFile string) (func(), bool) {

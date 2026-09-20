@@ -821,14 +821,6 @@ func pruneState(state object, now int64) {
 	}
 }
 
-func lockOwner(lockFile string) string {
-	content, err := os.ReadFile(lockFile)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(content))
-}
-
 func withFileLock(lockFile string, work func()) bool {
 	ensureDir(files.guardDir)
 	deadline := time.Now().Add(lockWaitMs * time.Millisecond)
@@ -842,17 +834,21 @@ func withFileLock(lockFile string, work func()) bool {
 			lock = handle
 			break
 		}
-		if !errors.Is(err, os.ErrExist) {
+		if !errors.Is(err, os.ErrExist) && !(isWindows && errors.Is(err, os.ErrPermission)) {
 			fail("lock open failed: %v; %s not written", err, filepath.Base(lockFile))
 			return false
 		}
-		owner := lockOwner(lockFile)
-		if lockAbandoned(lockFile) && lockOwner(lockFile) == owner {
-			if err := os.Remove(lockFile); err == nil || errors.Is(err, os.ErrNotExist) {
-				continue
-			} else {
-				fail("stale %s cannot be removed: %v; not written", filepath.Base(lockFile), err)
-				return false
+		owner, age, present := lockHolder(lockFile)
+		if present && holderStale(owner, age) {
+			if again, _, stillThere := lockHolder(lockFile); !stillThere || again == owner {
+				removeErr := os.Remove(lockFile)
+				if removeErr == nil || errors.Is(removeErr, os.ErrNotExist) {
+					continue
+				}
+				if !isWindows {
+					fail("stale %s cannot be removed: %v; not written", filepath.Base(lockFile), removeErr)
+					return false
+				}
 			}
 		}
 		if owner != holder {
@@ -863,14 +859,23 @@ func withFileLock(lockFile string, work func()) bool {
 			fail("%s is held by another process; not written", filepath.Base(lockFile))
 			return false
 		}
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(time.Duration(15+os.Getpid()%21) * time.Millisecond)
 	}
 	defer func() {
-		if lock != nil {
-			lock.Close()
-			if err := os.Remove(lockFile); err != nil && !errors.Is(err, os.ErrNotExist) {
-				warn("lock release failed: %v", err)
+		if lock == nil {
+			return
+		}
+		lock.Close()
+		for attempt := 0; ; attempt++ {
+			err := os.Remove(lockFile)
+			if err == nil || errors.Is(err, os.ErrNotExist) {
+				return
 			}
+			if attempt == 5 {
+				warn("lock release failed: %v", err)
+				return
+			}
+			time.Sleep(time.Duration(10+attempt*15) * time.Millisecond)
 		}
 	}()
 	work()
