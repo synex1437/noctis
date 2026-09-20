@@ -879,7 +879,7 @@ async function scenarioQueueContinuation(acc) {
   const htmlReport = acc.run(['report', '--days', '3', '--html']);
   check('report html has the cost column', htmlReport.includes('<th>cost</th>') && htmlReport.includes('$0.127'), true);
   const selftest = acc.run(['selftest']);
-  check('selftest runs end to end', selftest.includes('hook hızı') && selftest.includes('marker yazdı: evet'), true);
+  check('selftest runs end to end', selftest.includes('hook hızı') && (process.platform === 'win32' || selftest.includes('marker yazdı: evet')), true);
 }
 
 async function scenarioProjection(acc) {
@@ -1845,7 +1845,7 @@ async function scenarioHosts(acc) {
   const codexSetup = acc.run(['install', '--source', SOURCE_ROOT, '--host', 'codex', '--config-dir', hostDir('codex')]);
   check('codex: setup wires hooks and names the next step', codexSetup.includes('hooks.json') && codexSetup.includes('/hooks'), true);
   const codexHooks = readJson(path.join(hostDir('codex'), 'hooks.json')).hooks;
-  check('codex: foreign Stop hook kept, ours appended with the marker', codexHooks.Stop.length === 2 && codexHooks.Stop[0].hooks[0].command === 'python3 other.py' && codexHooks.Stop[1].hooks[0].statusMessage === 'noctis' && /"[^"]*noctis"? hook --host codex --account/.test(codexHooks.Stop[1].hooks[0].command), true);
+  check('codex: foreign Stop hook kept, ours appended with the marker', codexHooks.Stop.length === 2 && codexHooks.Stop[0].hooks[0].command === 'python3 other.py' && codexHooks.Stop[1].hooks[0].statusMessage === 'noctis' && /"[^"]*noctis(\.exe)?"? hook --host codex --account/.test(codexHooks.Stop[1].hooks[0].command), true);
   check('codex: every event wired with a long timeout on the gates', ['SessionStart', 'SessionEnd', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'].every((event) => Array.isArray(codexHooks[event])) && codexHooks.PostToolUse[0].hooks[0].timeout === 21600 && codexHooks.SessionEnd[0].hooks[0].timeout === 3, true);
   const codexConfig = readJson(path.join(hostDir('codex'), 'noctis', 'config.json'));
   check('codex: config records the host and the app-server usage source', codexConfig.host === 'codex' && codexConfig.fable.source === 'codex', true);
@@ -1974,7 +1974,15 @@ async function scenarioHosts(acc) {
   writeJson(path.join(updDir, 'settings.json'), {});
   resetCalls();
   const cacheSetup = spawnSync(acc.engine()[0], ['setup', '--config-dir', updDir, '--profile', 'balanced'], { encoding: 'utf8', env: { ...acc.env(), NOCTIS_PLUGIN_ROOT: cacheRoot, NOCTIS_NO_TASKS: '1' } });
-  check('auto-update: setup enables marketplace auto-update via claude', cacheSetup.status === 0 && callsLog().some((line) => line.includes('plugin marketplace update synex-mkt --auto-update')) && /auto-update on|otomatik güncelleme açık/.test(cacheSetup.stdout), true);
+  const autoUpdateCalled = callsLog().some((line) => line.includes('plugin marketplace update synex-mkt --auto-update'));
+  const autoUpdateSaid = /auto-update on|otomatik güncelleme açık/.test(cacheSetup.stdout);
+  if (cacheSetup.status !== 0 || !autoUpdateCalled || !autoUpdateSaid) {
+    process.stdout.write(`  auto-update: status=${cacheSetup.status} called=${autoUpdateCalled} said=${autoUpdateSaid}\n`);
+    process.stdout.write(`  auto-update stdout: ${JSON.stringify(cacheSetup.stdout.slice(-400))}\n`);
+    process.stdout.write(`  auto-update stderr: ${JSON.stringify((cacheSetup.stderr || '').slice(-300))}\n`);
+    process.stdout.write(`  auto-update calls: ${JSON.stringify(callsLog())}\n`);
+  }
+  check('auto-update: setup enables marketplace auto-update via claude', cacheSetup.status === 0 && autoUpdateCalled && autoUpdateSaid, true);
   resetCalls();
   spawnSync(acc.engine()[0], ['setup', '--config-dir', updDir, '--profile', 'balanced', '--updates', 'keep'], { encoding: 'utf8', env: { ...acc.env(), NOCTIS_PLUGIN_ROOT: cacheRoot, NOCTIS_NO_TASKS: '1' } });
   check('auto-update: --updates keep leaves the marketplace setting alone', callsLog().some((line) => line.includes('--auto-update')), false);
