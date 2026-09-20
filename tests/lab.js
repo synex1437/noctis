@@ -551,7 +551,22 @@ async function scenarioIsolationAndConcurrency(accA, accB) {
   const children = [];
   for (let i = 0; i < 12; i += 1) children.push(accA.hookAsync({ hook_event_name: 'PostModelSwitch', session_id: `c${i}`, to_model: 'claude-opus-5' }));
   await Promise.all(children.map((child) => new Promise((resolve) => child.on('close', resolve))));
-  check('12 parallel writes kept', Object.keys(accA.state().modelOverrides).filter((key) => key.startsWith('c')).length, 12);
+  const kept = Object.keys(accA.state().modelOverrides).filter((key) => key.startsWith('c'));
+  if (kept.length !== 12) {
+    const exits = JSON.stringify(children.map((child) => child.exitCode));
+    await sleep(1500);
+    const later = Object.keys(accA.state().modelOverrides).filter((key) => key.startsWith('c'));
+    process.stdout.write(`  parallel-diag: kept ${kept.length} [${kept.slice().sort().join(',')}]\n`);
+    process.stdout.write(`  parallel-diag: after settle ${later.length} [${later.slice().sort().join(',')}]\n`);
+    process.stdout.write(`  parallel-diag: child exit codes ${exits}\n`);
+    for (const name of fs.readdirSync(accA.guardDir).filter((entry) => entry.includes('state'))) {
+      process.stdout.write(`  parallel-diag: leftover ${name}\n`);
+    }
+    const errorsFile = path.join(accA.guardDir, 'errors.log');
+    const errors = fs.existsSync(errorsFile) ? fs.readFileSync(errorsFile, 'utf8').trim().split('\n').slice(-30) : ['(no errors.log)'];
+    for (const line of errors) process.stdout.write(`  parallel-diag: ${line}\n`);
+  }
+  check('12 parallel writes kept', kept.length, 12);
   check('no lock left', fs.existsSync(path.join(accA.guardDir, 'state.lock')), false);
 }
 
