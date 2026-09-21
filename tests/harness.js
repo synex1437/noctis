@@ -492,8 +492,17 @@ class Account {
     return readJson(this.stateFile) || {};
   }
 
+  stateAnswer(out) {
+    const line = String(out || '').split('\n').filter(Boolean).pop();
+    try {
+      return JSON.parse(line);
+    } catch {
+      return { ok: false, reason: `state-write answered with something that is not JSON: ${String(out).slice(0, 160)}` };
+    }
+  }
+
   putState(document) {
-    const answer = JSON.parse(this.run(['state-write'], { document }) || '{}');
+    const answer = this.stateAnswer(this.run(['state-write'], { document }));
     if (!answer.ok) throw new Error(`state-write refused the document: ${answer.reason || 'no answer'}`);
     return document;
   }
@@ -517,7 +526,7 @@ class Account {
         }
       }
       mutate(document);
-      const answer = JSON.parse(this.run(['state-write'], { document, expect }) || '{}');
+      const answer = this.stateAnswer(this.run(['state-write'], { document, expect }));
       if (answer.ok) return document;
       if (answer.reason !== 'conflict') {
         throw new Error(`state-write refused the document: ${answer.reason || 'no answer'}`);
