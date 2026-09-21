@@ -415,7 +415,24 @@ func insideGitRepo(cwd string) bool {
 	return false
 }
 
+type gitStatusCacheEntry struct {
+	raw     string
+	ok      bool
+	takenAt time.Time
+}
+
+var gitStatusCache = map[string]gitStatusCacheEntry{}
+
 func gitStatusRaw(cwd string) (string, bool) {
+	if cached, seen := gitStatusCache[cwd]; seen && time.Since(cached.takenAt) < gitStatusCacheTTL {
+		return cached.raw, cached.ok
+	}
+	raw, ok := gitStatusUncached(cwd)
+	gitStatusCache[cwd] = gitStatusCacheEntry{raw: raw, ok: ok, takenAt: time.Now()}
+	return raw, ok
+}
+
+func gitStatusUncached(cwd string) (string, bool) {
 	if !insideGitRepo(cwd) {
 		return "", false
 	}
@@ -750,6 +767,11 @@ func cancelRunner(sid string, state object) {
 	cancelRunnerExcept(sid, state, nil)
 }
 
+func cancelRunnerKeepingTask(sid string, state object, keepTask bool) {
+	scheduled := getMap(getMap(getMap(state, "waits"), sid), "scheduled")
+	cancelScheduledKeepingTask(sid, scheduled, keepTask)
+}
+
 func cancelRunnerExcept(sid string, state object, keep object) {
 	wait := getMap(getMap(state, "waits"), sid)
 	scheduled := getMap(wait, "scheduled")
@@ -760,7 +782,11 @@ func cancelRunnerExcept(sid string, state object, keep object) {
 }
 
 func cancelScheduled(sid string, scheduled object) {
-	if isWindows && !scheduledWithoutTask(scheduled) {
+	cancelScheduledKeepingTask(sid, scheduled, false)
+}
+
+func cancelScheduledKeepingTask(sid string, scheduled object, keepTask bool) {
+	if isWindows && !keepTask && !scheduledWithoutTask(scheduled) {
 		removeScheduledTask(taskName(sid))
 	}
 	cancelNative(sid, scheduled)
@@ -869,14 +895,16 @@ func runnerArgs(command, sid, account string, extra ...string) []string {
 func scheduleRunnerLocked(cfg object, sid string, atEpoch float64) object {
 	now := nowSec()
 	at := math.Max(atEpoch, float64(now+15))
-	cancelRunner(sid, readState())
-	var scheduled object
 	nativeAllowed := os.Getenv("NOCTIS_NO_TASKS") == ""
-	if isWindows && nativeAllowed {
+	replacingTask := isWindows && nativeAllowed
+	cancelRunnerKeepingTask(sid, readState(), replacingTask)
+	var scheduled object
+	if replacingTask {
 		result := scheduleWindowsTask(taskName(sid), at, runnerArgs("resume", sid, `"`+files.configDir+`"`), getBool(section(cfg, "alarm"), "wakePc", true))
 		if result.ok {
 			scheduled = object{"method": "task", "taskName": taskName(sid), "at": at, "watcherPid": float64(startResetWatcher(cfg, sid, at))}
 		} else {
+			removeScheduledTask(taskName(sid))
 			warn("task scheduling failed, falling back to sleeper: %s", orDefault(result.err, result.stderr))
 		}
 	} else if nativeAllowed {
