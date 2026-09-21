@@ -113,7 +113,6 @@ type paths struct {
 	stateLock      string
 	usageLock      string
 	fableLock      string
-	scheduleLock   string
 	settingsLock   string
 	decisions      string
 	hooks          string
@@ -246,7 +245,6 @@ func initPaths() {
 		stateLock:      filepath.Join(guardDir, "state.lock"),
 		usageLock:      filepath.Join(guardDir, "usage.lock"),
 		fableLock:      filepath.Join(guardDir, "fable.lock"),
-		scheduleLock:   filepath.Join(guardDir, "schedule.lock"),
 		settingsLock:   filepath.Join(guardDir, "settings.lock"),
 		decisions:      filepath.Join(guardDir, "decisions.jsonl"),
 		hooks:          filepath.Join(pluginRoot, "hooks", "hooks.json"),

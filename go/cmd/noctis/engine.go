@@ -876,9 +876,13 @@ func windowsTaskScript(name string, at float64, commandArgs []string, wake bool)
 	}, "; ")
 }
 
+func scheduleLockFile(sid string) string {
+	return filepath.Join(files.guardDir, "schedule-"+hashKey(sid)+".lock")
+}
+
 func scheduleRunner(cfg object, sid string, atEpoch float64) object {
 	var scheduled object
-	withFileLock(files.scheduleLock, func() {
+	withFileLock(scheduleLockFile(sid), func() {
 		scheduled = scheduleRunnerLocked(cfg, sid, atEpoch)
 	})
 	return scheduled

@@ -643,7 +643,14 @@ func refreshFable(cfg object, now int64, reason string, maxAge float64, ignoreBa
 var firstNumber = lazyRegexp(`\d+`)
 
 func sweepStaleLocks() {
-	for _, lockFile := range []string{files.fableLock, files.stateLock, files.usageLock} {
+	lockFiles := []string{files.fableLock, files.stateLock, files.usageLock}
+	entries, _ := os.ReadDir(files.guardDir)
+	for _, entry := range entries {
+		if name := entry.Name(); !entry.IsDir() && strings.HasPrefix(name, "schedule-") && strings.HasSuffix(name, ".lock") {
+			lockFiles = append(lockFiles, filepath.Join(files.guardDir, name))
+		}
+	}
+	for _, lockFile := range lockFiles {
 		if lockAbandoned(lockFile) {
 			if err := os.Remove(lockFile); err == nil {
 				logInfo("abandoned %s removed", filepath.Base(lockFile))
