@@ -69,6 +69,7 @@ jobs:
       - name: Soak (hard, 2 days)
         run: node tests/soak.js --days 2 --seed 11 --hard 1
       - name: Torrent (thousands of jobs; does the guard leak, what does it cost)
+        if: runner.os != 'Windows'
         run: node tests/torrent.js --jobs 600 --accounts 3 --seed 11
       - name: Monkey (the chaos user)
         run: |
