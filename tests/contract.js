@@ -239,9 +239,12 @@ async function main() {
       (reported.stdout || '').trim() === pluginVersion,
       `binary ${(reported.stdout || '').trim()} vs manifest ${pluginVersion}`);
 
+    account.stopRunners();
+
     if (failures.length > 0) {
       console.error('CONTRACT FAILED');
       for (const failure of failures) console.error(`  ✗ ${failure}`);
+      lab.stopMock();
       process.exit(1);
     }
     console.log(`contract: ${checks}/${checks} checks passed (${entries.length} manifest entries run as the host runs them)`);
