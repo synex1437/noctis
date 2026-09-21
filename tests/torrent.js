@@ -264,6 +264,8 @@ async function main() {
       }
     }
 
+    const collected = accounts.reduce((sum, account) => sum + account.stopRunners(), 0);
+
     const elapsed = (Date.now() - startedAt) / 1000;
     const sorted = stats.hookMs.slice().sort((a, b) => a - b);
     const at = (q) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))] || 0;
@@ -280,6 +282,7 @@ async function main() {
     console.log('── ne kadara mal oldu ───────────────────────────────────');
     console.log(`  hook süresi  medyan ${at(0.5).toFixed(1)} ms · p95 ${at(0.95).toFixed(1)} ms · p99 ${at(0.99).toFixed(1)} ms · en kötü ${at(1).toFixed(1)} ms`);
     console.log(`  durum dosyası: hesap başına ortalama ${(totalState / accounts.length / 1024).toFixed(1)} KB`);
+    console.log(`  arkada çalışan süreç: ${collected} tanesi toplandı`);
     console.log('');
 
     if (problems.length > 0) {
@@ -287,6 +290,7 @@ async function main() {
       for (const problem of problems.slice(0, 40)) console.error(`  ✗ ${problem}`);
       if (problems.length > 40) console.error(`  … ve ${problems.length - 40} tane daha`);
       console.error(`lab dir: ${lab.root}`);
+      lab.stopMock();
       process.exit(1);
     }
     console.log(`TORRENT PASSED — ${stats.jobs} iş, ${stats.hooks} hook, 0 sorun`);

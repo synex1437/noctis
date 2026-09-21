@@ -335,10 +335,11 @@ async function main() {
   const errors = fs.existsSync(path.join(acc.guardDir, 'errors.log')) ? fs.readFileSync(path.join(acc.guardDir, 'errors.log'), 'utf8') : '';
   const panics = errors.split('\n').filter((line) => /panic|goroutine/.test(line));
   if (panics.length) problems.push(`errors.log records ${panics.length} panic line(s): ${panics[0].slice(0, 160)}`);
+  const collected = acc.stopRunners();
   lab.stopMock();
   const seconds = ((Date.now() - started) / 1000).toFixed(0);
   process.stdout.write(`\naction mix: ${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}=${v}`).join(' ')}\n`);
-  process.stdout.write(`${ROUNDS} rounds in ${seconds}s\n`);
+  process.stdout.write(`${ROUNDS} rounds in ${seconds}s, ${collected} background process(es) collected\n`);
   if (problems.length) {
     process.stdout.write(`\nMONKEY FOUND ${problems.length} PROBLEM(S)\n`);
     for (const line of problems.slice(0, 40)) process.stdout.write(`  ${line}\n`);
