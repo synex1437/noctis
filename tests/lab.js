@@ -2322,10 +2322,11 @@ async function main() {
   };
   check('suite: the account config is back to what install wrote',
     canonical(stripManaged(JSON.parse(fs.readFileSync(accA.configFile, 'utf8')))), canonical(stripManaged(JSON.parse(baselineConfig))));
+  const collected = accA.stopRunners() + accB.stopRunners();
   lab.stopMock();
   const failed = results.filter((result) => !result.ok);
   process.stdout.write(`\n${results.length - failed.length}/${results.length} checks passed${failed.length ? ` — FAILED: ${failed.map((f) => f.name).join('; ')}` : ''}\n`);
-  process.stdout.write(`lab dir: ${LAB_ROOT} (errors.log: ${path.join(accA.guardDir, 'errors.log')})\n`);
+  process.stdout.write(`lab dir: ${LAB_ROOT} (errors.log: ${path.join(accA.guardDir, 'errors.log')}), ${collected} background process(es) collected\n`);
   process.exitCode = failed.length ? 1 : 0;
 }
 
