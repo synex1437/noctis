@@ -24,6 +24,14 @@ function limitsAt(sessionPercent, resetIn) {
   ];
 }
 
+const started = [];
+
+function newAccount(lab, name) {
+  const account = lab.account(name);
+  started.push(account);
+  return account;
+}
+
 function installStubs(lab, logFile, names) {
   const stubDir = path.join(__dirname, 'stubs');
   fs.copyFileSync(path.join(stubDir, 'fire.js'), path.join(lab.binDir, 'fire.js'));
@@ -56,7 +64,7 @@ function parkSession(account, sid, resetIn, extraEnv) {
 }
 
 async function scenarioSystemdFiresAndResumes(lab) {
-  const account = lab.account('systemd');
+  const account = newAccount(lab, 'systemd');
   account.install((config) => { config.wait.maxInHookMinutes = 1; });
   const logFile = path.join(lab.root, 'scheduler-systemd.jsonl');
   installStubs(lab, logFile, ['systemd-run', 'systemctl']);
@@ -116,7 +124,7 @@ async function waitForTheSessionToComeBack(lab, account, sid, logFile, backend) 
 }
 
 async function scenarioCancelStopsTheTimer(lab) {
-  const account = lab.account('systemd-cancel');
+  const account = newAccount(lab, 'systemd-cancel');
   account.install((config) => { config.wait.maxInHookMinutes = 1; });
   const logFile = path.join(lab.root, 'scheduler-cancel.jsonl');
   installStubs(lab, logFile, ['systemd-run', 'systemctl']);
@@ -143,7 +151,7 @@ async function scenarioCancelStopsTheTimer(lab) {
 }
 
 async function scenarioLaunchdFiresAndResumes(lab) {
-  const account = lab.account('launchd-fire');
+  const account = newAccount(lab, 'launchd-fire');
   account.install((config) => { config.wait.maxInHookMinutes = 1; });
   const logFile = path.join(lab.root, 'scheduler-launchd.jsonl');
   installStubs(lab, logFile, ['launchctl']);
@@ -185,7 +193,7 @@ async function scenarioLaunchdFiresAndResumes(lab) {
 }
 
 async function scenarioCancelStopsTheAgent(lab) {
-  const account = lab.account('launchd-cancel');
+  const account = newAccount(lab, 'launchd-cancel');
   account.install((config) => { config.wait.maxInHookMinutes = 1; });
   const logFile = path.join(lab.root, 'scheduler-launchd-cancel.jsonl');
   installStubs(lab, logFile, ['launchctl']);
@@ -217,7 +225,7 @@ async function scenarioCancelStopsTheAgent(lab) {
 
 function scenarioLaunchdPlistIsValid(lab) {
   const python = pythonExecutable();
-  const account = lab.account('launchd');
+  const account = newAccount(lab, 'launchd');
   account.install();
   const at = nowSec() + 3600;
   const out = account.run(['schedule-preview', '--backend', 'launchd', '--sid', 'macP', '--at', String(at)]);
@@ -301,7 +309,7 @@ function deleteTask(name) {
 }
 
 async function scenarioWindowsTaskIsRegisteredAndRuns(lab) {
-  const account = lab.account('task');
+  const account = newAccount(lab, 'task');
   account.install((config) => { config.wait.maxInHookMinutes = 1; });
   const extraEnv = { NOCTIS_NO_TASKS: '' };
   let name = '';
@@ -385,7 +393,7 @@ async function scenarioWindowsTaskIsRegisteredAndRuns(lab) {
 }
 
 async function scenarioCancelRemovesTheTask(lab) {
-  const account = lab.account('task-cancel');
+  const account = newAccount(lab, 'task-cancel');
   account.install((config) => { config.wait.maxInHookMinutes = 1; });
   const extraEnv = { NOCTIS_NO_TASKS: '' };
   let name = '';
@@ -425,6 +433,7 @@ async function main() {
       scenarioLaunchdPlistIsValid(lab);
     }
   } finally {
+    for (const account of started) account.stopRunners();
     lab.stopMock();
   }
 

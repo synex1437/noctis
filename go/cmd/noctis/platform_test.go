@@ -278,3 +278,57 @@ func TestTerminalPreferenceIsNormalised(t *testing.T) {
 		}
 	}
 }
+
+func cmdParsesTheTail(argument string) (program string, rest string, ok bool) {
+	tail, found := strings.CutPrefix(argument, "/d /s /c ")
+	if !found {
+		return "", "", false
+	}
+
+	if len(tail) >= 2 && tail[0] == '"' {
+		tail = tail[1 : len(tail)-1]
+	}
+	if len(tail) == 0 || tail[0] != '"' {
+		cut := strings.IndexByte(tail, ' ')
+		if cut < 0 {
+			return tail, "", true
+		}
+		return tail[:cut], tail[cut+1:], true
+	}
+	end := strings.IndexByte(tail[1:], '"')
+	if end < 0 {
+		return "", "", false
+	}
+	return tail[1 : end+1], strings.TrimPrefix(tail[end+2:], " "), true
+}
+
+func TestTheScheduledTaskCommandSurvivesTheQuotesCmdStrips(t *testing.T) {
+	cases := []struct {
+		name     string
+		launcher string
+		args     []string
+	}{
+		{"a space in both paths",
+			`C:\Users\Ada Byron\AppData\Roaming\noctis\runner.cmd`,
+			[]string{"resume", "--sid", "s1", "--account", `"C:\Users\Ada Byron\.claude"`}},
+		{"no space anywhere",
+			`C:\noctis\runner.cmd`,
+			[]string{"resume", "--sid", "s1", "--account", `"C:\claude"`}},
+		{"a host flag as well",
+			`C:\Users\Ada\runner.cmd`,
+			[]string{"resume", "--sid", "s1", "--account", `"C:\Users\Ada\.codex"`, "--host", "codex"}},
+	}
+	for _, tc := range cases {
+		program, rest, ok := cmdParsesTheTail(windowsTaskArgument(tc.launcher, tc.args))
+		if !ok {
+			t.Errorf("%s: cmd.exe cannot parse the tail at all", tc.name)
+			continue
+		}
+		if program != tc.launcher {
+			t.Errorf("%s: cmd.exe would run %q, not the launcher %q", tc.name, program, tc.launcher)
+		}
+		if want := strings.Join(tc.args, " "); rest != want {
+			t.Errorf("%s: the launcher would be handed %q, want %q", tc.name, rest, want)
+		}
+	}
+}
