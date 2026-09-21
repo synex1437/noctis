@@ -54,7 +54,7 @@ const (
 	nearEdgePollClose       = 15
 	blindAfterSeconds       = 60
 	fetchTimeout            = 5 * time.Second
-	pluginVersion           = "5.5.0"
+	pluginVersion           = "5.5.1"
 	codingActivityWindow    = 45 * 60
 	codingTailBytes         = 64 * 1024
 	longTextSummaryChars    = 1200
