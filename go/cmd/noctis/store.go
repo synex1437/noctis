@@ -40,6 +40,7 @@ const (
 	projectionMinStaleness  = 60.0
 	projectionMaxStaleness  = 3600.0
 	clockSkewMinSeconds     = 30
+	gitStatusCacheTTL       = 2 * time.Second
 	clockSkewMaxSeconds     = 86400
 	selfHealIntervalSeconds = 600
 	selfCheckIntervalSec    = 86400

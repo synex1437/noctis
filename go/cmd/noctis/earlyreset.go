@@ -8,6 +8,8 @@ import (
 
 const (
 	sleepTickSeconds    = 15
+	sleepFarSeconds     = 1800
+	sleepFarTickSeconds = 60
 	earlyResetDrop      = 10
 	earlyResetMaxAgeMul = 2
 )
@@ -69,7 +71,10 @@ func sleepUntil(epoch float64, onTick func() bool) bool {
 }
 
 func sleepUntilEvery(epoch, tickSeconds float64, onTick func() bool) bool {
-	tickSeconds = math.Max(1, tickSeconds)
+	return sleepUntilPaced(epoch, func(float64) float64 { return tickSeconds }, onTick)
+}
+
+func sleepUntilPaced(epoch float64, pace func(remaining float64) float64, onTick func() bool) bool {
 	for {
 		remaining := epoch - float64(nowSec())
 		if remaining <= 0 {
@@ -78,7 +83,8 @@ func sleepUntilEvery(epoch, tickSeconds float64, onTick func() bool) bool {
 		if onTick != nil && onTick() {
 			return false
 		}
-		time.Sleep(time.Duration(math.Min(remaining, tickSeconds)*1000) * time.Millisecond)
+		step := math.Max(1, pace(remaining))
+		time.Sleep(time.Duration(math.Min(remaining, step)*1000) * time.Millisecond)
 	}
 }
 
@@ -87,6 +93,21 @@ func (w *waitWatch) tickSeconds() float64 {
 		return w.pollEvery
 	}
 	return sleepTickSeconds
+}
+
+func (w *waitWatch) tickPace(remaining float64) float64 {
+	base := w.tickSeconds()
+	if remaining <= sleepFarSeconds {
+		return base
+	}
+	relaxed := float64(sleepFarTickSeconds)
+	if w.pollEvery > 0 && w.pollEvery < relaxed {
+		relaxed = w.pollEvery
+	}
+	if relaxed < base {
+		return base
+	}
+	return relaxed
 }
 
 type waitWatch struct {

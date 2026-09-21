@@ -776,7 +776,7 @@ func runSleeper() {
 	if !currentHost().limits {
 		watch.pollEvery = 0
 	}
-	sleepUntilEvery(at, watch.tickSeconds(), watch.tick)
+	sleepUntilPaced(at, watch.tickPace, watch.tick)
 	if watch.cancelled {
 		logInfo("sleeper %s: wait cancelled; nothing to resume", sid)
 		return
