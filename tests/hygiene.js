@@ -81,6 +81,13 @@ walk(ROOT, (file) => {
   if (result.status !== 0) problems.push((result.stderr || result.stdout || 'i18n check failed').trim());
 }
 
+for (const name of fs.readdirSync(path.join(ROOT, 'tests')).filter((file) => file.endsWith('.js'))) {
+  const text = fs.readFileSync(path.join(ROOT, 'tests', name), 'utf8');
+  for (const [call] of text.matchAll(/writeJson\([^;]*stateFile[^;]*\)/g)) {
+    problems.push(`tests/${name} replaces state.json behind the plugin's back: ${call.slice(0, 60)} — use editState or putState, which write under state.lock`);
+  }
+}
+
 const pluginVersion = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
 const marketplace = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude-plugin', 'marketplace.json'), 'utf8'));
 if (marketplace.plugins[0].version !== pluginVersion) problems.push(`marketplace.json says ${marketplace.plugins[0].version}, plugin.json says ${pluginVersion}`);

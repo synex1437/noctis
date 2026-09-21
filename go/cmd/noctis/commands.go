@@ -487,6 +487,35 @@ func runSelftestMark() {
 	_ = os.WriteFile(filepath.Join(files.launches, "selftest-"+safeName(token)+".ok"), []byte(time.Now().UTC().Format(time.RFC3339)), 0o600)
 }
 
+func stateWriteResult(payload object) object {
+	document := getMap(payload, "document")
+	if document == nil {
+		return object{"ok": false, "reason": "no state document on stdin"}
+	}
+	expect, guarded := payload["expect"].(string)
+	result := object{"ok": false, "reason": "state.lock is held by another process"}
+	withFileLock(files.stateLock, func() {
+		if stamp := fileStamp(files.state); guarded && expect != stamp {
+			result = object{"ok": false, "reason": "conflict", "stamp": stamp}
+			return
+		}
+		if err := writeJSONAtomic(files.state, document); err != nil {
+			result = object{"ok": false, "reason": err.Error()}
+			return
+		}
+		result = object{"ok": true, "stamp": fileStamp(files.state)}
+	})
+	return result
+}
+
+func runStateWrite() {
+	result := stateWriteResult(readStdinJSON())
+	fmt.Println(string(marshalCompact(result)))
+	if !getBool(result, "ok", false) {
+		os.Exit(1)
+	}
+}
+
 func yesNo(value bool) string {
 	if value {
 		return T("yes")

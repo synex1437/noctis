@@ -252,9 +252,9 @@ async function scenarioWorkspaceGuard(acc) {
   const checkpointText = fs.readFileSync(acc.state().checkpoints.gs1.path, 'utf8');
   check('git snapshot: checkpoint tells how to restore', checkpointText.includes(ref) && checkpointText.includes(`git stash apply ${hash}`), true);
   acc.run(['cancel', 'gs1']);
-  const aged = acc.state();
-  aged.checkpoints.gs1.at = nowSec() - 8 * 86400;
-  writeJson(acc.stateFile, aged);
+  acc.editState((aged) => {
+    aged.checkpoints.gs1.at = nowSec() - 8 * 86400;
+  });
   acc.hook({ hook_event_name: 'PostModelSwitch', session_id: 'gs1', to_model: 'claude-fable-5-1' });
   check('git snapshot: pruned with the expired checkpoint', git('for-each-ref', 'refs/noctis/gs1/').stdout.trim(), '');
   acc.setConfig((config) => {
@@ -281,9 +281,9 @@ async function scenarioKilledHookRecovery(acc) {
       results.push({ name: 'watchdog pid missing', ok: false });
     }
   }
-  const stale = acc.state();
-  stale.waits.s2.heartbeat = now - 400;
-  writeJson(acc.stateFile, stale);
+  acc.editState((stale) => {
+    stale.waits.s2.heartbeat = now - 400;
+  });
   await sleep(5500);
   const old = new Date(Date.now() - 3600000);
   fs.utimesSync(TRANSCRIPT, old, old);
@@ -363,15 +363,15 @@ async function scenarioFableFlow(acc) {
   mock.limits = limits;
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
   check('no premature revert while quota window open', acc.settingsModel(), 'opus');
-  const switched = acc.state();
-  switched.modelSwitched.fableResetsAt = now - 10;
-  writeJson(acc.stateFile, switched);
+  acc.editState((switched) => {
+    switched.modelSwitched.fableResetsAt = now - 10;
+  });
   const morning = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 's4-morning', cwd: PROJECT_DIR });
   check('SessionStart reverts the default model once the scoped window cleared', morning.includes('yeniden fable') && acc.settingsModel() === 'fable', true);
   writeJson(path.join(acc.dir, 'settings.json'), { ...readJson(path.join(acc.dir, 'settings.json')), model: 'opus' });
-  const again = acc.state();
-  again.modelSwitched = { at: now - 3600, from: 'fable', to: 'opus', fableResetsAt: now - 10 };
-  writeJson(acc.stateFile, again);
+  acc.editState((again) => {
+    again.modelSwitched = { at: now - 3600, from: 'fable', to: 'opus', fableResetsAt: now - 10 };
+  });
   const notice = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's4', cwd: PROJECT_DIR, prompt: 'continue the code' }, { NOCTIS_HANDOFF: 's4' });
   check('revert notice after quota reset', notice.includes('yeniden fable'), true);
   check('default reverted', acc.settingsModel(), 'fable');
@@ -443,9 +443,9 @@ async function scenarioStopFailure(acc) {
   acc.hook({ hook_event_name: 'StopFailure', session_id: 's7', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, error_type: 'rate_limit', error_message: 'Fable usage limit reached for this week' });
   check('error_message naming the scoped bucket -> switch even at 60 %', acc.state().waits.s7 && acc.state().waits.s7.window === 'fable' && acc.settingsModel() === 'opus', true);
   acc.run(['cancel']);
-  const namedState = acc.state();
-  namedState.modelSwitched = null;
-  writeJson(acc.stateFile, namedState);
+  acc.editState((namedState) => {
+    namedState.modelSwitched = null;
+  });
   writeJson(path.join(acc.dir, 'settings.json'), { ...readJson(path.join(acc.dir, 'settings.json')), model: 'fable' });
   mock.limits = [...lowLimits, { kind: 'weekly_scoped', percent: 97, resets_at: new Date((now + 2 * 86400) * 1000).toISOString(), scope: { group: 'model', model: { display_name: 'Fable' } } }];
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
@@ -454,9 +454,9 @@ async function scenarioStopFailure(acc) {
   check('fable cap suspected with bucket evidence', fableWait && fableWait.window, 'fable');
   check('fable suspicion switches default', acc.settingsModel(), 'opus');
   acc.run(['cancel']);
-  const state = acc.state();
-  state.modelSwitched = null;
-  writeJson(acc.stateFile, state);
+  acc.editState((state) => {
+    state.modelSwitched = null;
+  });
   writeJson(path.join(acc.dir, 'settings.json'), { ...readJson(path.join(acc.dir, 'settings.json')), model: 'fable' });
   mock.limits = lowLimits;
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
@@ -476,14 +476,14 @@ async function scenarioStopFailure(acc) {
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'ov1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('successful model call clears the overload episode', acc.state().overload.ov1 === undefined, true);
   acc.run(['cancel', 'ov1']);
-  const spent = acc.state();
-  spent.overload = { ov1: { firstAt: nowSec() - 9000, lastAt: nowSec() - 60, attempts: 12 } };
-  writeJson(acc.stateFile, spent);
+  acc.editState((spent) => {
+    spent.overload = { ov1: { firstAt: nowSec() - 9000, lastAt: nowSec() - 60, attempts: 12 } };
+  });
   acc.hook({ hook_event_name: 'StopFailure', session_id: 'ov1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, error_type: 'overloaded' });
   check('overloaded: retry budget spent -> give up, no wait registered', acc.state().waits.ov1 === undefined && acc.run(['why', '--last', '1']).includes('overload-giveup'), true);
-  const stale = acc.state();
-  stale.overload = { ov1: { firstAt: nowSec() - 5 * 3600, lastAt: nowSec() - 4 * 3600, attempts: 12 } };
-  writeJson(acc.stateFile, stale);
+  acc.editState((stale) => {
+    stale.overload = { ov1: { firstAt: nowSec() - 5 * 3600, lastAt: nowSec() - 4 * 3600, attempts: 12 } };
+  });
   acc.hook({ hook_event_name: 'StopFailure', session_id: 'ov1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, error_type: 'overloaded' });
   check('overloaded: an old episode starts fresh', acc.state().overload.ov1.attempts === 1 && acc.state().waits.ov1 !== undefined, true);
   acc.run(['cancel', 'ov1']);
@@ -616,9 +616,9 @@ async function scenarioFoundation(acc) {
   check('self-check reports missing statusLine', notice.includes('statusLine bağlı değil'), true);
   check('self-check once per day', acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'boot2', cwd: PROJECT_DIR }).includes('systemMessage'), false);
   writeJson(settingsFile, { ...settings, statusLine: savedStatusLine });
-  const state = acc.state();
-  state.checkpoints.orphan = { path: path.join(acc.guardDir, 'checkpoints', 's3.md'), cwd: PROJECT_DIR, at: now + 1, consumed: false };
-  writeJson(acc.stateFile, state);
+  acc.editState((state) => {
+    state.checkpoints.orphan = { path: path.join(acc.guardDir, 'checkpoints', 's3.md'), cwd: PROJECT_DIR, at: now + 1, consumed: false };
+  });
   const startup = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'boot3', cwd: PROJECT_DIR });
   check('orphan checkpoint injected as context', startup.includes('additionalContext') && startup.includes('devam notu'), true);
   check('orphan checkpoint consumed', acc.state().checkpoints.orphan.consumed, true);
@@ -648,10 +648,10 @@ async function scenarioCompactAndClear(acc) {
   acc.run(['cancel', 'cmp']);
   acc.statusline('cmp', 'claude-opus-5', 10, now + 7200, 10, now + 3 * 86400, 30);
   acc.statusline('old', 'claude-opus-5', 10, now + 7200, 10, now + 3 * 86400);
-  const state = acc.state();
-  state.waits.old = { kind: 'batch', window: 'five_hour', label: '5s', until: now + 600, resumeAt: now + 601, inHook: true, heartbeat: now, cwd: PROJECT_DIR, transcript: TRANSCRIPT, checkpoint: '', queuedPrompt: '', startedAt: now - 5 };
-  state.waits.parked = { kind: 'batch', window: 'seven_day', label: 'haftalık', until: now + 86400, resumeAt: now + 86401, inHook: false, cwd: PROJECT_DIR, transcript: TRANSCRIPT, checkpoint: '', queuedPrompt: '', startedAt: now - 5 };
-  writeJson(acc.stateFile, state);
+  acc.editState((state) => {
+    state.waits.old = { kind: 'batch', window: 'five_hour', label: '5s', until: now + 600, resumeAt: now + 601, inHook: true, heartbeat: now, cwd: PROJECT_DIR, transcript: TRANSCRIPT, checkpoint: '', queuedPrompt: '', startedAt: now - 5 };
+    state.waits.parked = { kind: 'batch', window: 'seven_day', label: 'haftalık', until: now + 86400, resumeAt: now + 86401, inHook: false, cwd: PROJECT_DIR, transcript: TRANSCRIPT, checkpoint: '', queuedPrompt: '', startedAt: now - 5 };
+  });
   acc.hook({ hook_event_name: 'PostModelSwitch', session_id: 'old', to_model: 'claude-fable-5-1' });
   acc.hook({ hook_event_name: 'SessionStart', source: 'clear', session_id: 'fresh', cwd: PROJECT_DIR });
   const after = acc.state();
@@ -707,10 +707,10 @@ async function scenarioQueueMode(acc) {
   check('checkpoint lists queue items', checkpoint.includes('## Sıradaki işler (TASKS.md: 4 açık)') && checkpoint.includes('- [ ] Paddle webhook signature verification') && checkpoint.includes('SmartScreen notes'), true);
   check('checkpoint lists open tracked tasks', checkpoint.includes('## Açık görevler (Claude Code)') && checkpoint.includes('Paddle webhook') && !checkpoint.includes('- Ads copy'), true);
   resetCalls();
-  const wait = acc.state();
-  wait.waits.q1.resumeAt = now - 5;
-  wait.waits.q1.until = now - 10;
-  writeJson(acc.stateFile, wait);
+  acc.editState((wait) => {
+    wait.waits.q1.resumeAt = now - 5;
+    wait.waits.q1.until = now - 10;
+  });
   const old = new Date(Date.now() - 3600000);
   fs.utimesSync(TRANSCRIPT, old, old);
   acc.statusline('q1', 'claude-fable-5-1', 5, now + 7200, 10, now + 3 * 86400);
@@ -747,10 +747,10 @@ async function scenarioUptime(acc) {
   const usage = readJson(usageFile);
   usage.history.five_hour = Array.from({ length: 9 }, (_, i) => ({ used: 10 + i, resetsAt: now + 7200, at: now - 900 + i * 100 }));
   writeJson(usageFile, usage);
-  const dead = acc.state();
-  dead.lastHookAt = now - 4000;
-  delete dead.notified.hooksDead;
-  writeJson(acc.stateFile, dead);
+  acc.editState((dead) => {
+    dead.lastHookAt = now - 4000;
+    delete dead.notified.hooksDead;
+  });
   const errorsBefore = fs.readFileSync(path.join(acc.guardDir, 'errors.log'), 'utf8').split('\n').filter((line) => line.includes('hooks appear inactive')).length;
   const line = acc.statusline('seen', 'claude-opus-5', 20, now + 7200, 10, now + 3 * 86400);
   check('dead hooks flagged in status bar', line.includes('⚠ hook yok'), true);
@@ -760,9 +760,9 @@ async function scenarioUptime(acc) {
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'seen', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('hook pulse clears the alert', acc.statusline('seen', 'claude-opus-5', 20, now + 7200, 10, now + 3 * 86400).includes('⚠ hook yok'), false);
   for (const slept of [600, 640]) {
-    const state = acc.state();
-    state.waits.cap = { kind: 'batch', window: 'five_hour', label: '5s', until: now + 3000, resumeAt: now + 3001, inHook: true, startedAt: now - 1000, heartbeat: now - 1000 + slept, cwd: PROJECT_DIR, transcript: TRANSCRIPT, checkpoint: '', queuedPrompt: '' };
-    writeJson(acc.stateFile, state);
+    acc.editState((state) => {
+      state.waits.cap = { kind: 'batch', window: 'five_hour', label: '5s', until: now + 3000, resumeAt: now + 3001, inHook: true, startedAt: now - 1000, heartbeat: now - 1000 + slept, cwd: PROJECT_DIR, transcript: TRANSCRIPT, checkpoint: '', queuedPrompt: '' };
+    });
     acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'cap', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   }
   check('hook timeout cap learned from repeated interruptions', acc.state().hookCapSeconds, 600);
@@ -770,10 +770,10 @@ async function scenarioUptime(acc) {
   const stop = acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'cap', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('waits beyond learned cap use the runner instead of sleeping', stop.includes('"continue":false'), true);
   acc.run(['cancel']);
-  const reset = acc.state();
-  reset.hookCapSeconds = 0;
-  reset.interruptedWaits = [];
-  writeJson(acc.stateFile, reset);
+  acc.editState((reset) => {
+    reset.hookCapSeconds = 0;
+    reset.interruptedWaits = [];
+  });
   const etaUsage = readJson(usageFile);
   etaUsage.history.seven_day = [{ used: 40, resetsAt: now + 3 * 86400, at: now - 3600 }, { used: 50, resetsAt: now + 3 * 86400, at: now - 1800 }];
   writeJson(usageFile, etaUsage);
@@ -849,10 +849,10 @@ async function scenarioQueueContinuation(acc) {
   });
   acc.statusline('qc2', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400, 62);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'qc2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
-  const wait = acc.state();
-  wait.waits.qc2.resumeAt = now - 5;
-  wait.waits.qc2.until = now - 10;
-  writeJson(acc.stateFile, wait);
+  acc.editState((wait) => {
+    wait.waits.qc2.resumeAt = now - 5;
+    wait.waits.qc2.until = now - 10;
+  });
   const old = new Date(Date.now() - 3600000);
   fs.utimesSync(TRANSCRIPT, old, old);
   acc.statusline('qc2', 'claude-fable-5-1', 5, now + 7200, 10, now + 3 * 86400, 62);
@@ -1061,9 +1061,9 @@ async function scenarioMultiSessionAndScoped(acc) {
     delete config.thresholds.weeklyScoped;
   });
   writeJson(path.join(acc.dir, 'settings.json'), { ...readJson(path.join(acc.dir, 'settings.json')), model: 'fable' });
-  const state = acc.state();
-  state.modelSwitched = null;
-  writeJson(acc.stateFile, state);
+  acc.editState((state) => {
+    state.modelSwitched = null;
+  });
   mock.limits = [];
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
   acc.statusline('sc1', 'claude-fable-5-1', 10, now + 7200, 10, now + 3 * 86400);
@@ -1124,9 +1124,9 @@ async function scenarioBudgetWakeWebhook(acc) {
   acc.setConfig((config) => {
     config.budget.dailyWeeklyPercent = 10;
   });
-  const state = acc.state();
-  delete state.budgetDay;
-  writeJson(acc.stateFile, state);
+  acc.editState((state) => {
+    delete state.budgetDay;
+  });
   const weekReset = now + 4 * 86400;
   acc.statusline('bd1', 'claude-fable-5-1', 20, now + 7200, 30, weekReset);
   check('budget day start recorded from first sample', acc.state().budgetDay.startUsed, 30);
@@ -1150,10 +1150,10 @@ async function scenarioBudgetWakeWebhook(acc) {
   acc.statusline('pm1', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'pm1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, permission_mode: 'plan' });
   check('permission mode captured from hook input', acc.state().waits.pm1.permissionMode, 'plan');
-  const waitState = acc.state();
-  waitState.waits.pm1.resumeAt = now - 5;
-  waitState.waits.pm1.until = now - 10;
-  writeJson(acc.stateFile, waitState);
+  acc.editState((waitState) => {
+    waitState.waits.pm1.resumeAt = now - 5;
+    waitState.waits.pm1.until = now - 10;
+  });
   const old = new Date(Date.now() - 3600000);
   fs.utimesSync(TRANSCRIPT, old, old);
   acc.statusline('pm1', 'claude-fable-5-1', 5, now + 7200, 10, now + 3 * 86400);
@@ -1214,9 +1214,9 @@ async function scenarioBudgetWakeWebhook(acc) {
     config.alarm.webhook = { url: '', preset: 'generic', chatId: '' };
     config.wake.graceSeconds = 300;
   });
-  const webhookState = acc.state();
-  webhookState.webhook = {};
-  writeJson(acc.stateFile, webhookState);
+  acc.editState((webhookState) => {
+    webhookState.webhook = {};
+  });
   const setupDir = path.join(LAB_ROOT, 'setup-account');
   fs.mkdirSync(setupDir, { recursive: true });
   writeJson(path.join(setupDir, 'settings.json'), { statusLine: { type: 'command', command: 'my-bar' } });
@@ -1426,11 +1426,11 @@ async function scenarioWorkflows(acc) {
   check('workflow: launch denied at the pause threshold', denied.includes('"permissionDecision":"deny"') && denied.includes('pause threshold'), true);
   acc.hook({ hook_event_name: 'SessionEnd', session_id: 'wf1', reason: 'exit' });
   check('workflow: session end keeps the record while a wait is pending', acc.state().workflows.wf1.length, 1);
-  const wait = acc.state();
-  wait.waits.wf1.resumeAt = now - 5;
-  wait.waits.wf1.until = now - 10;
-  wait.workflows.wf1[0].at = now - 5 * 86400;
-  writeJson(acc.stateFile, wait);
+  acc.editState((wait) => {
+    wait.waits.wf1.resumeAt = now - 5;
+    wait.waits.wf1.until = now - 10;
+    wait.workflows.wf1[0].at = now - 5 * 86400;
+  });
   acc.hook({ hook_event_name: 'PostModelSwitch', session_id: 'wfx', to_model: 'claude-opus-5' });
   check('workflow: pruning keeps a 5-day-old record while its wait is pending', acc.state().workflows.wf1.length, 1);
   const old = new Date(Date.now() - 3600000);
@@ -1719,9 +1719,8 @@ async function scenarioEarlyReset(acc) {
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'er5', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   const parked5 = acc.state().waits.er5;
   check('early reset: wait parked for the waking check', Boolean(parked5 && !parked5.inHook), true);
-  writeJson(acc.stateFile, {
-    ...acc.state(),
-    waits: { ...acc.state().waits, er5: { ...parked5, waking: nowSec(), heartbeat: nowSec() } },
+  acc.editState((state) => {
+    state.waits.er5 = { ...parked5, waking: nowSec(), heartbeat: nowSec() };
   });
   resetCalls();
   mock.limits = limited(3, 18000);
@@ -1729,9 +1728,9 @@ async function scenarioEarlyReset(acc) {
   await sleep(3000);
   check('early reset: a wait a hook is waking is left to that hook', callsLog().filter((line) => line.includes('--resume er5 ')).length, 0);
   check('early reset: and it is not marked as triggered', acc.state().waits.er5 && acc.state().waits.er5.earlyTriggeredAt, undefined);
-  const waking5 = acc.state().waits.er5;
-  delete waking5.waking;
-  writeJson(acc.stateFile, { ...acc.state(), waits: { ...acc.state().waits, er5: waking5 } });
+  acc.editState((state) => {
+    delete state.waits.er5.waking;
+  });
   acc.run(['statusline'], acc.statuslineInput('other-window', 'claude-fable-5-1', 3, now + 18000, 20, now + 3 * 86400), { NOCTIS_NO_EARLY_TRIGGER: '' });
   await callsMatching('--resume er5 ');
   check('early reset: the same wait resumes once the hook is no longer on it', callsLog().filter((line) => line.includes('--resume er5 ')).length, 1);
@@ -1764,11 +1763,11 @@ async function scenarioVisibleRelaunch(acc) {
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'vr1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('visible relaunch: wait parked', Boolean(acc.state().waits.vr1), true);
   const previous = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
-  const state = acc.state();
-  state.launched.vr1 = { pid: previous.pid, at: now - 3600, how: 'terminal' };
-  state.waits.vr1.resumeAt = now - 5;
-  state.waits.vr1.until = now - 10;
-  writeJson(acc.stateFile, state);
+  acc.editState((state) => {
+    state.launched.vr1 = { pid: previous.pid, at: now - 3600, how: 'terminal' };
+    state.waits.vr1.resumeAt = now - 5;
+    state.waits.vr1.until = now - 10;
+  });
   const old = new Date(Date.now() - 3600000);
   fs.utimesSync(TRANSCRIPT, old, old);
   mock.limits = [
@@ -1807,17 +1806,17 @@ async function scenarioVisibleRelaunch(acc) {
   try { previous.kill(); } catch {}
   const stranger = spawn('sleep', ['30'], { stdio: 'ignore' });
   await sleep(200);
-  const strangerState = acc.state();
-  strangerState.launched.vr2 = { pid: stranger.pid, at: nowSec() - 600, how: 'terminal' };
-  writeJson(acc.stateFile, strangerState);
+  acc.editState((strangerState) => {
+    strangerState.launched.vr2 = { pid: stranger.pid, at: nowSec() - 600, how: 'terminal' };
+  });
   resetCalls();
   acc.run(['resume', '--sid', 'vr2', '--account', acc.dir]);
   check('visible relaunch: a recycled pid running something else is never killed', isAlive(stranger.pid), true);
   check('visible relaunch: and no window was closed for it', fs.readFileSync(path.join(acc.guardDir, 'guard.log'), 'utf8').includes('closed the previous window of vr2'), false);
   try { stranger.kill(); } catch {}
-  const oldState = acc.state();
-  oldState.launched.vr3 = { pid: process.pid, at: nowSec() - 40 * 86400, how: 'terminal' };
-  writeJson(acc.stateFile, oldState);
+  acc.editState((oldState) => {
+    oldState.launched.vr3 = { pid: process.pid, at: nowSec() - 40 * 86400, how: 'terminal' };
+  });
   acc.run(['resume', '--sid', 'vr3', '--account', acc.dir]);
   check('visible relaunch: a launch record older than any wait is ignored', true, true);
   fs.unlinkSync(fakeTerminal);
@@ -1836,10 +1835,10 @@ async function scenarioRepair(acc) {
   ];
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
   acc.statusline('rp1', 'claude-fable-5-1', 20, now + 7200, 95, now + 2 * 86400);
-  const state = acc.state();
-  state.handedOff.rp1 = { at: now - 600, model: 'opus', mode: 'window', pid: 999999 };
-  state.waits.rp1 = { kind: 'batch', window: 'seven_day', label: 'weekly', used: 95, threshold: 89, until: now + 2 * 86400, resumeAt: now + 2 * 86400, inHook: false, cwd: PROJECT_DIR, transcript: TRANSCRIPT, checkpoint: '', queuedPrompt: '', startedAt: now - 600, permissionMode: '' };
-  writeJson(acc.stateFile, state);
+  acc.editState((state) => {
+    state.handedOff.rp1 = { at: now - 600, model: 'opus', mode: 'window', pid: 999999 };
+    state.waits.rp1 = { kind: 'batch', window: 'seven_day', label: 'weekly', used: 95, threshold: 89, until: now + 2 * 86400, resumeAt: now + 2 * 86400, inHook: false, cwd: PROJECT_DIR, transcript: TRANSCRIPT, checkpoint: '', queuedPrompt: '', startedAt: now - 600, permissionMode: '' };
+  });
   const blocked = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'rp1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'carry on with the refactor please' });
   check('repair: a hand-off whose process is gone stops blocking the session', !/başka pencerede sürüyor|another window with/.test(blocked) && !blocked.includes('handoff'), true);
   check('repair: the dead hand-off is cleared', acc.state().handedOff.rp1, undefined);
@@ -2026,24 +2025,24 @@ async function scenarioHosts(acc) {
   const versionFile = path.join(lab.mockDir, 'plugin-version.json');
   fs.writeFileSync(versionFile, JSON.stringify({ name: PLUGIN_NAME, version: '9.9.9' }));
   const updateEnv = { NOCTIS_UPDATE_URL: `http://127.0.0.1:${lab.mockPort}/plugin.json` };
-  const st0 = acc.state();
-  delete st0.notified['update:checkAt'];
-  writeJson(acc.stateFile, st0);
+  acc.editState((st0) => {
+    delete st0.notified['update:checkAt'];
+  });
   const first = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd1', cwd: PROJECT_DIR }, updateEnv);
   check('update check: a newer published version is announced once with the update command', first.includes('9.9.9') && first.includes('/plugin update noctis'), true);
   check('update check: not repeated the same day', acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd2', cwd: PROJECT_DIR }, updateEnv).includes('9.9.9'), false);
   const checksBefore = fs.readFileSync(path.join(lab.mockDir, 'version-checks.log'), 'utf8').split('\n').filter(Boolean).length;
-  const st = acc.state();
-  delete st.notified['update:checkAt'];
-  writeJson(acc.stateFile, st);
+  acc.editState((st) => {
+    delete st.notified['update:checkAt'];
+  });
   acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd3', cwd: PROJECT_DIR }, updateEnv);
   check('update check: a new day fetches again but the known version is not announced twice', fs.readFileSync(path.join(lab.mockDir, 'version-checks.log'), 'utf8').split('\n').filter(Boolean).length === checksBefore + 1, true);
   acc.setConfig((config) => {
     config.update.check = false;
   });
-  const st2 = acc.state();
-  delete st2.notified['update:checkAt'];
-  writeJson(acc.stateFile, st2);
+  acc.editState((st2) => {
+    delete st2.notified['update:checkAt'];
+  });
   acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd4', cwd: PROJECT_DIR }, updateEnv);
   check('update check: update.check=false never fetches', fs.readFileSync(path.join(lab.mockDir, 'version-checks.log'), 'utf8').split('\n').filter(Boolean).length, checksBefore + 1);
   acc.setConfig((config) => {
@@ -2053,9 +2052,9 @@ async function scenarioHosts(acc) {
   const newerRoot = path.join(LAB_ROOT, 'plugins', 'cache', 'synex-mkt', PLUGIN_NAME, '9.0.0');
   fs.mkdirSync(newerRoot, { recursive: true });
   const restartEnv = { ...acc.env(), NOCTIS_PLUGIN_ROOT: cacheRoot };
-  const st3 = acc.state();
-  delete st3.notified['update:checkAt'];
-  writeJson(acc.stateFile, st3);
+  acc.editState((st3) => {
+    delete st3.notified['update:checkAt'];
+  });
   const banner = spawnSync(acc.engine()[0], ['hook'], { encoding: 'utf8', input: JSON.stringify({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'rs1', cwd: PROJECT_DIR }), env: restartEnv }).stdout;
   check('restart banner: a newer cached version is announced with the reload hint', banner.includes('9.0.0') && /reload-plugins/.test(banner) && banner.includes(PLUGIN_VERSION), true);
   const again2 = spawnSync(acc.engine()[0], ['hook'], { encoding: 'utf8', input: JSON.stringify({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'rs2', cwd: PROJECT_DIR }), env: restartEnv }).stdout;
@@ -2148,9 +2147,9 @@ async function scenarioSilentFailures(acc) {
 
   const child = spawn(process.execPath, ['-e', 'setTimeout(()=>{},30000)'], { detached: true, stdio: 'ignore' });
   child.unref();
-  const withStranger = acc.state();
-  withStranger.waits.sf3 = { kind: 'batch', window: 'five_hour', label: '5h', resumeAt: nowSec() + 60, startedAt: nowSec(), scheduled: { method: 'sleeper', pid: child.pid } };
-  writeJson(acc.stateFile, withStranger);
+  acc.editState((withStranger) => {
+    withStranger.waits.sf3 = { kind: 'batch', window: 'five_hour', label: '5h', resumeAt: nowSec() + 60, startedAt: nowSec(), scheduled: { method: 'sleeper', pid: child.pid } };
+  });
   acc.run(['cancel', 'sf3']);
   let alive = true;
   try { process.kill(child.pid, 0); } catch { alive = false; }
@@ -2168,9 +2167,9 @@ async function scenarioSilentFailures(acc) {
   check('and prints a remedy under the problem', /fix:|çözüm:/.test(doctorBroken.stdout), true);
   writeJson(path.join(acc.dir, 'settings.json'), savedStatusLine);
 
-  const noHooks = acc.state();
-  noHooks.lastHookAt = 0;
-  writeJson(acc.stateFile, noHooks);
+  acc.editState((noHooks) => {
+    noHooks.lastHookAt = 0;
+  });
   const usageFile = path.join(acc.guardDir, 'usage.json');
   const usage = readJson(usageFile);
   const old = nowSec() - 4000;
@@ -2180,9 +2179,9 @@ async function scenarioSilentFailures(acc) {
   writeJson(usageFile, usage);
   const line = acc.statusline('sf4', 'claude-fable-5-1', 20, nowSec() + 7200, 20, nowSec() + 3 * 86400);
   check('a status line that runs while the hooks never did is reported', line.includes('⚠'), true);
-  const restored = acc.state();
-  restored.lastHookAt = nowSec();
-  writeJson(acc.stateFile, restored);
+  acc.editState((restored) => {
+    restored.lastHookAt = nowSec();
+  });
 }
 
 async function scenarioHousekeeping(acc) {
@@ -2204,14 +2203,15 @@ async function scenarioHousekeeping(acc) {
   acc.run(['cancel']);
   writeTranscript();
   acc.statusline('s9', 'claude-opus-5', 10, now + 7200, 10, now + 3 * 86400);
-  const state = acc.state();
-  state.checkpoints.old = { path: path.join(acc.guardDir, 'checkpoints', 'old.md'), cwd: PROJECT_DIR, at: now - 8 * 86400, consumed: false };
-  fs.writeFileSync(state.checkpoints.old.path, 'old');
-  state.modelOverrides.parked = { model: 'x', at: now - 4 * 86400 };
-  state.modelOverrides.stale = { model: 'x', at: now - 9 * 86400 };
-  writeJson(acc.stateFile, state);
+  const expiredCheckpoint = path.join(acc.guardDir, 'checkpoints', 'old.md');
+  acc.editState((state) => {
+    state.checkpoints.old = { path: expiredCheckpoint, cwd: PROJECT_DIR, at: now - 8 * 86400, consumed: false };
+    state.modelOverrides.parked = { model: 'x', at: now - 4 * 86400 };
+    state.modelOverrides.stale = { model: 'x', at: now - 9 * 86400 };
+  });
+  fs.writeFileSync(expiredCheckpoint, 'old');
   acc.hook({ hook_event_name: 'PostModelSwitch', session_id: 's9', to_model: 'claude-opus-5' });
-  check('expired checkpoint pruned', acc.state().checkpoints.old === undefined && !fs.existsSync(state.checkpoints.old.path), true);
+  check('expired checkpoint pruned', acc.state().checkpoints.old === undefined && !fs.existsSync(expiredCheckpoint), true);
   check('stale override pruned', acc.state().modelOverrides.stale === undefined, true);
   check('override survives a weekly park', acc.state().modelOverrides.parked !== undefined, true);
   acc.hook({ hook_event_name: 'SessionEnd', session_id: 's9', reason: 'exit' });
