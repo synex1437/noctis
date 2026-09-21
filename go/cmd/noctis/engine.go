@@ -860,9 +860,13 @@ func scheduleWindowsTask(name string, at float64, commandArgs []string, wake boo
 	return runPowershell(windowsTaskScript(name, at, commandArgs, wake), 45*time.Second)
 }
 
+func windowsTaskArgument(launcher string, commandArgs []string) string {
+	return fmt.Sprintf(`/d /s /c ""%s" %s"`, launcher, strings.Join(commandArgs, " "))
+}
+
 func windowsTaskScript(name string, at float64, commandArgs []string, wake bool) string {
 	launcher := ensureRunnerLauncher()
-	argument := fmt.Sprintf(`/d /c "%s" %s`, launcher, strings.Join(commandArgs, " "))
+	argument := windowsTaskArgument(launcher, commandArgs)
 	wakeFlag := ""
 	if wake {
 		wakeFlag = "-WakeToRun "
