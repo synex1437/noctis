@@ -50,6 +50,15 @@ function writeJson(file, data) {
   }
 }
 
+function stateStamp(file) {
+  try {
+    const content = fs.readFileSync(file);
+    return `${content.length}:${crypto.createHash('sha256').update(content).digest('hex').slice(0, 16)}`;
+  } catch {
+    return 'absent';
+  }
+}
+
 function processTable() {
   try {
     if (IS_WINDOWS) {
@@ -483,6 +492,42 @@ class Account {
     return readJson(this.stateFile) || {};
   }
 
+  putState(document) {
+    const answer = JSON.parse(this.run(['state-write'], { document }) || '{}');
+    if (!answer.ok) throw new Error(`state-write refused the document: ${answer.reason || 'no answer'}`);
+    return document;
+  }
+
+  editState(mutate) {
+    for (let attempt = 0; ; attempt += 1) {
+      let raw = null;
+      try {
+        raw = fs.readFileSync(this.stateFile);
+      } catch {
+        raw = null;
+      }
+      const expect = raw === null ? 'absent'
+        : `${raw.length}:${crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16)}`;
+      let document = {};
+      if (raw !== null) {
+        try {
+          document = JSON.parse(raw.toString('utf8'));
+        } catch {
+          document = {};
+        }
+      }
+      mutate(document);
+      const answer = JSON.parse(this.run(['state-write'], { document, expect }) || '{}');
+      if (answer.ok) return document;
+      if (answer.reason !== 'conflict') {
+        throw new Error(`state-write refused the document: ${answer.reason || 'no answer'}`);
+      }
+      if (attempt === 9) {
+        throw new Error('state-write kept losing the race with the plugin after ten tries');
+      }
+    }
+  }
+
   stopRunners() {
     const state = this.state();
     const pids = new Set();
@@ -532,4 +577,4 @@ function waitKey(sid) {
 }
 
 module.exports = {
-  refreshChecksums, PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, Account, sleep, nowSec, readJson, writeJson, isAlive, waitKey };
+  refreshChecksums, PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, Account, sleep, nowSec, readJson, writeJson, isAlive, stateStamp, waitKey };

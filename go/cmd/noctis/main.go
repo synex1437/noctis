@@ -26,6 +26,7 @@ var ported = map[string]commandFunc{
 	"doctor":           runDoctor,
 	"selftest":         runSelftest,
 	"selftest-mark":    runSelftestMark,
+	"state-write":      runStateWrite,
 	"report":           runReport,
 	"install":          runInstall,
 	"setup":            runSetup,

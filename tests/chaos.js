@@ -233,7 +233,7 @@ function oldStateMigrations(lab, account) {
   };
 
   for (const [description, fixture] of Object.entries(fixtures)) {
-    writeJson(stateFile, fixture);
+    account.putState(fixture);
     const result = account.runFull(['status'], null);
     check(`${description}: status still runs`, result.status === 0,
       `exit ${result.status}: ${result.stderr.slice(0, 200)}`);
