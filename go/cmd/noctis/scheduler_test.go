@@ -352,6 +352,13 @@ func TestAnAbandonedScheduleLockIsSweptAway(t *testing.T) {
 	if err := os.Chtimes(abandoned, old, old); err != nil {
 		t.Fatalf("chtimes: %v", err)
 	}
+	retired := filepath.Join(files.guardDir, "schedule.lock")
+	if err := os.WriteFile(retired, []byte("2147483646"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := os.Chtimes(retired, old, old); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
 	mine := scheduleLockFile("live")
 	if err := os.WriteFile(mine, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
@@ -362,6 +369,9 @@ func TestAnAbandonedScheduleLockIsSweptAway(t *testing.T) {
 
 	if statSafe(abandoned) != nil {
 		t.Fatalf("a schedule lock whose owner is gone was left behind")
+	}
+	if statSafe(retired) != nil {
+		t.Fatalf("the shared schedule.lock this version stopped using was left behind on upgrade")
 	}
 	if statSafe(mine) == nil {
 		t.Fatalf("a schedule lock a live process is holding was swept away")

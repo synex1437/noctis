@@ -643,7 +643,7 @@ func refreshFable(cfg object, now int64, reason string, maxAge float64, ignoreBa
 var firstNumber = lazyRegexp(`\d+`)
 
 func sweepStaleLocks() {
-	lockFiles := []string{files.fableLock, files.stateLock, files.usageLock}
+	lockFiles := []string{files.fableLock, files.stateLock, files.usageLock, filepath.Join(files.guardDir, "schedule.lock")}
 	entries, _ := os.ReadDir(files.guardDir)
 	for _, entry := range entries {
 		if name := entry.Name(); !entry.IsDir() && strings.HasPrefix(name, "schedule-") && strings.HasSuffix(name, ".lock") {
