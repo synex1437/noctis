@@ -90,5 +90,5 @@
     <text x="1082" y="367" class="chip" dominant-baseline="central">Win · Mac · Linux</text>
   </g>
 
-  <text x="1228" y="404" class="sans foot" text-anchor="end">MIT · v5.5.0</text>
+  <text x="1228" y="404" class="sans foot" text-anchor="end">MIT</text>
 </svg>
