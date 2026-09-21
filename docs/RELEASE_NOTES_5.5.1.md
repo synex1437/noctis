@@ -444,7 +444,10 @@ watched the plugin make will still be there later.
   makes the person wait for it; that was wrong, and checking the code rather than repeating the
   claim is what found it: `notify` already starts the process detached and releases it without
   waiting. What the hook pays is one `CreateProcess`, which cannot be removed without removing the
-  notification. The soak measures the two costs separately rather than averaging them — an ordinary
-  hook keeps its 400 ms budget, a pausing hook has its own.
+  notification. The soak measures the two costs separately rather than averaging them, and each
+  platform is now held to what a pause actually costs there: 400 ms everywhere except
+  Windows, which gets 5000 because three process starts on a shared runner do not fit in
+  less. The single 3000 ms figure that covered all three was a hundred times too loose on
+  Linux and macOS and inside the noise on Windows.
 - **The binaries are unsigned.** The procedure and the dormant CI steps exist; the certificates do
   not.

@@ -930,7 +930,8 @@ async function main() {
   const p95 = percentile(guarding.map((entry) => entry.ms), 0.95);
   if (p95 > 400) stats.anomalies.push(`hook p95 latency ${p95} ms is above the 400 ms budget (slowest: ${slowest(guarding)})`);
   const pauseP95 = pausing.length ? percentile(pausing.map((entry) => entry.ms), 0.95) : 0;
-  if (pauseP95 > 3000) stats.anomalies.push(`StopFailure p95 latency ${pauseP95} ms is above the 3000 ms budget (slowest: ${slowest(pausing)})`);
+  const pauseBudget = process.platform === 'win32' ? 5000 : 400;
+  if (pauseP95 > pauseBudget) stats.anomalies.push(`StopFailure p95 latency ${pauseP95} ms is above the ${pauseBudget} ms budget (slowest: ${slowest(pausing)})`);
   if (stats.corruptions > 0 && stats.recoveries === 0) stats.anomalies.push(`${stats.corruptions} file corruption(s) and not one recovery from a backup`);
   const summary = {
     simulatedDays: options.days,
@@ -966,7 +967,7 @@ async function main() {
     maxUsageWhenAllowed: { five: Number(stats.maxAllowedFive.toFixed(1)), week: Number(stats.maxAllowedWeek.toFixed(1)) },
     hookLatencyMs: { p50: percentile(stats.latencies, 0.5), p95: percentile(stats.latencies, 0.95), max: Math.max(...stats.latencies) },
     guardLatencyMs: { p95, budget: 400 },
-    stopFailureLatencyMs: { p95: pauseP95, budget: 3000, calls: pausing.length },
+    stopFailureLatencyMs: { p95: pauseP95, budget: pauseBudget, calls: pausing.length },
     breaches: stats.breaches.length,
     breachDetails: stats.breaches.slice(0, 6),
     anomalies: stats.anomalies.slice(0, 20),
