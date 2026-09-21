@@ -67,6 +67,8 @@ jobs:
         run: node tests/contract.js
       - name: Chaos (network, disk, old state files)
         run: node tests/chaos.js
+      - name: Scheduler (the OS timer a real user on this platform would get)
+        run: node tests/scheduler.js
       - name: Lab
         run: node tests/lab.js
       - name: Soak (hard, 2 days)
