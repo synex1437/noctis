@@ -272,7 +272,7 @@ func ensureDir(dir string) {
 
 func appendRotating(file, line string) error {
 	if info, err := os.Stat(file); err == nil && info.Size() > logMaxBytes {
-		_ = os.Rename(file, file+".1")
+		_ = renameAtomic(file, file+".1")
 	}
 	handle, err := os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -375,7 +375,7 @@ func writeJSONAtomic(file string, value any) error {
 
 	var err error
 	for attempt := 0; attempt < 8; attempt++ {
-		if err = os.Rename(tmp, file); err == nil {
+		if err = renameAtomic(tmp, file); err == nil {
 			return nil
 		}
 		time.Sleep(time.Duration(10+attempt*10) * time.Millisecond)
