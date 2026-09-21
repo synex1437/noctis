@@ -40,10 +40,12 @@ func TestALockCanBeReleasedWhileAnotherProcessReadsIt(t *testing.T) {
 	}
 }
 
-func TestAReaderNeverStopsAWriteFromLanding(t *testing.T) {
+func TestARenameReplacesTheFileAReaderIsHolding(t *testing.T) {
 	sandboxFiles(t)
-	if err := writeJSONAtomic(files.state, object{"waits": object{"before": object{}}}); err != nil {
-		t.Fatalf("first write: %v", err)
+	ensureDir(files.guardDir)
+	original := []byte(`{"waits":{"before":{}}}`)
+	if err := os.WriteFile(files.state, original, 0o600); err != nil {
+		t.Fatalf("write: %v", err)
 	}
 
 	reader, err := openShared(files.state)
@@ -52,12 +54,58 @@ func TestAReaderNeverStopsAWriteFromLanding(t *testing.T) {
 	}
 	defer reader.Close()
 
-	if err := writeJSONAtomic(files.state, object{"waits": object{"after": object{}}}); err != nil {
+	replacement := []byte(`{"waits":{"after":{}}}`)
+	staging := files.state + ".staging"
+	if err := os.WriteFile(staging, replacement, 0o600); err != nil {
+		t.Fatalf("write staging: %v", err)
+	}
+	if err := renameAtomic(staging, files.state); err != nil {
+		t.Fatalf("a reader holding state.json open blocked the rename that replaces it: %v", err)
+	}
+
+	held, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("the open handle stopped reading once its file was replaced: %v", err)
+	}
+	if !bytes.Equal(held, original) {
+		t.Fatalf("the open handle read %q; it opened the file when it held %q, so the replacement "+
+			"overwrote the file the reader was holding instead of swapping a new one in", held, original)
+	}
+	if landed, readErr := readFileShared(files.state); readErr != nil || !bytes.Equal(landed, replacement) {
+		t.Fatalf("a fresh read got %q (%v), want the replacement %q", landed, readErr, replacement)
+	}
+}
+
+func TestAWriteNeverRewritesTheFileUnderAReader(t *testing.T) {
+	sandboxFiles(t)
+	if err := writeJSONAtomic(files.state, object{"hookCapSeconds": float64(11)}); err != nil {
+		t.Fatalf("first write: %v", err)
+	}
+	original, err := readFileShared(files.state)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	reader, err := openShared(files.state)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer reader.Close()
+
+	if err := writeJSONAtomic(files.state, object{"hookCapSeconds": float64(22)}); err != nil {
 		t.Fatalf("a reader holding state.json open made the write fail outright: %v", err)
 	}
-	waits := getMap(readState(), "waits")
-	if getMap(waits, "after") == nil || getMap(waits, "before") != nil {
-		t.Fatalf("the write did not land while a reader held the file open: %v", waits)
+	if numberOr(readState(), "hookCapSeconds", 0) != 22 {
+		t.Fatalf("the write did not land while a reader held the file open")
+	}
+
+	held, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("the open handle stopped reading once the file was written: %v", err)
+	}
+	if !bytes.Equal(held, original) {
+		t.Fatalf("the open handle read %q instead of the %q it opened: writeJSONAtomic gave up on the "+
+			"rename and rewrote the file in place, which is how a reader mid-read gets half a file", held, original)
 	}
 }
 

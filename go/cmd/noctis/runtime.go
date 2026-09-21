@@ -507,7 +507,7 @@ func launchClaude(cfg object, launch launchSpec) bool {
 		}
 	}
 	if info := statSafe(files.resumeLog); info != nil && info.Size() > logMaxBytes {
-		_ = os.Rename(files.resumeLog, files.resumeLog+".1")
+		_ = renameAtomic(files.resumeLog, files.resumeLog+".1")
 	}
 	logFile, err := os.OpenFile(files.resumeLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -536,7 +536,7 @@ func launchHostSession(cfg object, host hostSpec, exe string, launch launchSpec)
 	}
 	arguments := hostLaunchArgs(host.id, cfg, launch, "", "")
 	if info := statSafe(files.resumeLog); info != nil && info.Size() > logMaxBytes {
-		_ = os.Rename(files.resumeLog, files.resumeLog+".1")
+		_ = renameAtomic(files.resumeLog, files.resumeLog+".1")
 	}
 	logFile, err := os.OpenFile(files.resumeLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
