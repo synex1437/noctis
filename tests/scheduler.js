@@ -286,6 +286,15 @@ function lastErrors(account) {
   }
 }
 
+function lastLog(account) {
+  try {
+    const lines = fs.readFileSync(path.join(account.guardDir, 'guard.log'), 'utf8').split('\n').filter(Boolean);
+    return lines.slice(-3).join(' | ') || 'guard.log is empty';
+  } catch {
+    return 'guard.log is missing';
+  }
+}
+
 function schtasks(args, encoding = 'utf8') {
   return spawnSync('schtasks.exe', args, { encoding: encoding === 'buffer' ? 'buffer' : 'utf8', timeout: 120000 });
 }
@@ -346,7 +355,8 @@ async function scenarioWindowsTaskIsRegisteredAndRuns(lab) {
     check('task: it runs from the guard directory', tagValue(xml, 'WorkingDirectory').length > 0,
       tagValue(xml, 'WorkingDirectory'));
 
-    parkSession(account, 'winA', 1500, extraEnv);
+    const dueIn = 70;
+    parkSession(account, 'winA', dueIn, extraEnv);
     const again = (account.state().waits || {}).winA;
     const listed = schtasks(['/query', '/fo', 'csv', '/nh']);
     const rows = (listed.stdout || '').split(/\r?\n/).filter((line) => line.includes(name));
@@ -366,6 +376,7 @@ async function scenarioWindowsTaskIsRegisteredAndRuns(lab) {
     const workingDirectory = tagValue(replaced, 'WorkingDirectory');
 
     lab.resetCalls();
+    while (nowSec() < Number((again && again.resumeAt) || 0)) await sleep(1000);
     const ran = spawnSync(command, [argumentsText], {
       cwd: workingDirectory, windowsVerbatimArguments: true, encoding: 'utf8',
       env: account.env(extraEnv), timeout: 180000,
@@ -382,7 +393,7 @@ async function scenarioWindowsTaskIsRegisteredAndRuns(lab) {
       resumed = resumed || lab.calls().some((line) => /--resume|-p\b|headless/.test(line));
     }
     check('task: the session was relaunched by the task action, with nobody watching', resumed,
-      `calls: ${JSON.stringify(lab.calls().slice(-3))}`);
+      `calls: ${JSON.stringify(lab.calls().slice(-3))} — ${lastErrors(account)} — ${lastLog(account)}`);
     check('task: the wait was closed once the session came back', closed,
       JSON.stringify((account.state().waits || {}).winA));
     check('task: a session that came back leaves no task behind', taskXml(name) === null,
