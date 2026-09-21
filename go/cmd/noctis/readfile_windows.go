@@ -27,7 +27,7 @@ func extendedPath(path string) string {
 	return path
 }
 
-func readFileShared(path string) ([]byte, error) {
+func openShared(path string) (*os.File, error) {
 	wide, err := syscall.UTF16PtrFromString(extendedPath(path))
 	if err != nil {
 		return nil, &os.PathError{Op: "open", Path: path, Err: err}
@@ -38,7 +38,14 @@ func readFileShared(path string) ([]byte, error) {
 	if err != nil {
 		return nil, &os.PathError{Op: "open", Path: path, Err: err}
 	}
-	file := os.NewFile(uintptr(handle), path)
+	return os.NewFile(uintptr(handle), path), nil
+}
+
+func readFileShared(path string) ([]byte, error) {
+	file, err := openShared(path)
+	if err != nil {
+		return nil, err
+	}
 	defer file.Close()
 	var buffer bytes.Buffer
 	if info, statErr := file.Stat(); statErr == nil {

@@ -58,6 +58,9 @@ jobs:
       - name: Make binaries executable
         if: runner.os != 'Windows'
         run: chmod +x bin/*/noctis bin/noctis
+      - name: Vet and unit tests on this platform
+        shell: bash
+        run: cd go && go vet ./... && go test ./...
       - name: Source hygiene
         run: node tests/hygiene.js
       - name: Host contract (runs the hooks exactly as the host declares them)

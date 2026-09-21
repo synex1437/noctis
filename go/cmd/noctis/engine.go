@@ -749,7 +749,7 @@ func detachedSelf(argsList []string) int {
 
 func scheduledWithoutTask(scheduled object) bool {
 	switch getString(scheduled, "method") {
-	case "sleeper", "manual":
+	case "sleeper", "manual", "systemd", "launchd":
 		return true
 	default:
 		return false
@@ -896,7 +896,8 @@ func scheduleRunnerLocked(cfg object, sid string, atEpoch float64) object {
 	now := nowSec()
 	at := math.Max(atEpoch, float64(now+15))
 	nativeAllowed := os.Getenv("NOCTIS_NO_TASKS") == ""
-	replacingTask := isWindows && nativeAllowed
+	backend := schedulerBackend()
+	replacingTask := nativeAllowed && backend == "task"
 	cancelRunnerKeepingTask(sid, readState(), replacingTask)
 	var scheduled object
 	if replacingTask {
@@ -908,7 +909,7 @@ func scheduleRunnerLocked(cfg object, sid string, atEpoch float64) object {
 			warn("task scheduling failed, falling back to sleeper: %s", orDefault(result.err, result.stderr))
 		}
 	} else if nativeAllowed {
-		if native, ok := scheduleNative(sid, at, runnerArgs("resume", sid, files.configDir), getBool(section(cfg, "alarm"), "wakePc", true)); ok {
+		if native, ok := scheduleNative(backend, sid, at, runnerArgs("resume", sid, files.configDir), getBool(section(cfg, "alarm"), "wakePc", true)); ok {
 			scheduled = native
 			scheduled["watcherPid"] = float64(startResetWatcher(cfg, sid, at))
 		}

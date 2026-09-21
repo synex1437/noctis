@@ -220,6 +220,7 @@ func sandboxFiles(t *testing.T) string {
 	dir := t.TempDir()
 	previous := files
 	t.Cleanup(func() { files = previous })
+	t.Setenv("NOCTIS_NO_WATCHER", "1")
 	files.guardDir = dir
 	files.configDir = dir
 	files.state = filepath.Join(dir, "state.json")
