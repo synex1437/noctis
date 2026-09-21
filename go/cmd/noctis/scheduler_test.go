@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/xml"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -226,7 +228,6 @@ func sandboxFiles(t *testing.T) string {
 	files.state = filepath.Join(dir, "state.json")
 	files.stateBackup = filepath.Join(dir, "state.json.bak")
 	files.stateLock = filepath.Join(dir, "state.lock")
-	files.scheduleLock = filepath.Join(dir, "schedule.lock")
 	files.log, files.errors = filepath.Join(dir, "guard.log"), filepath.Join(dir, "errors.log")
 	files.usage = filepath.Join(dir, "usage.json")
 	files.fable = filepath.Join(dir, "fable.json")
@@ -304,5 +305,65 @@ func TestScheduleRunnerCancelsThePreviousTimer(t *testing.T) {
 	}
 	if stops == 0 {
 		t.Fatalf("the second schedule did not stop the first: %v", (*recorded)[before:])
+	}
+}
+
+func TestSchedulingASessionDoesNotWaitForAnotherSessionsLock(t *testing.T) {
+	sandboxFiles(t)
+	t.Setenv("NOCTIS_NO_TASKS", "")
+	withFakeScheduler(t, nil)
+	scheduleBackendOverride = "systemd"
+	t.Cleanup(func() { scheduleBackendOverride = "" })
+
+	busy := scheduleLockFile("a")
+	if busy == scheduleLockFile("b") {
+		t.Fatalf("two sessions share one schedule lock: %s", busy)
+	}
+	ensureDir(files.guardDir)
+	if err := os.WriteFile(busy, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+		t.Fatalf("hold a's lock: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(busy) })
+
+	at := float64(nowSec() + 3600)
+	updateState(func(state object) { stateMap(state, "waits")["b"] = liveWait(3600) })
+	started := time.Now()
+	scheduled := scheduleRunner(object{}, "b", at)
+
+	if waited := time.Since(started); waited > 2*time.Second {
+		t.Fatalf("scheduling b waited %v while a's lock was held", waited)
+	}
+	if getString(scheduled, "method") != "systemd" {
+		t.Fatalf("b was not scheduled while a's lock was held: %v", scheduled)
+	}
+	if statSafe(busy) == nil {
+		t.Fatalf("a's lock was taken away from it")
+	}
+}
+
+func TestAnAbandonedScheduleLockIsSweptAway(t *testing.T) {
+	sandboxFiles(t)
+	ensureDir(files.guardDir)
+	abandoned := scheduleLockFile("gone")
+	if err := os.WriteFile(abandoned, []byte("2147483646"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	old := time.Now().Add(-time.Minute)
+	if err := os.Chtimes(abandoned, old, old); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	mine := scheduleLockFile("live")
+	if err := os.WriteFile(mine, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(mine) })
+
+	sweepStaleLocks()
+
+	if statSafe(abandoned) != nil {
+		t.Fatalf("a schedule lock whose owner is gone was left behind")
+	}
+	if statSafe(mine) == nil {
+		t.Fatalf("a schedule lock a live process is holding was swept away")
 	}
 }
