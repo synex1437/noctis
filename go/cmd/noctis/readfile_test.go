@@ -5,85 +5,76 @@ import (
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func TestAReaderDoesNotBlockTheWriteThatReplacesTheFile(t *testing.T) {
-	dir := t.TempDir()
-	guard := filepath.Join(dir, "state.json")
-	original := []byte(`{"waits":{"a":{"resumeAt":1}}}`)
-	if err := os.WriteFile(guard, original, 0o600); err != nil {
+func TestALockCanBeReleasedWhileAnotherProcessReadsIt(t *testing.T) {
+	sandboxFiles(t)
+	ensureDir(files.guardDir)
+	owner := []byte("4321")
+	if err := os.WriteFile(files.stateLock, owner, 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	reader, err := openShared(guard)
+	waiting, err := openShared(files.stateLock)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer waiting.Close()
+
+	if err := os.Remove(files.stateLock); err != nil {
+		t.Fatalf("a process reading state.lock stopped its owner from releasing it: %v", err)
+	}
+	held, err := io.ReadAll(waiting)
+	if err != nil {
+		t.Fatalf("the open handle stopped reading once the lock was released: %v", err)
+	}
+	if !bytes.Equal(held, owner) {
+		t.Fatalf("the open handle read %q; it opened the lock when it held %q", held, owner)
+	}
+	if _, err := readFileShared(files.stateLock); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a fresh read of the released lock returned %v; withFileLock branches on os.ErrNotExist", err)
+	}
+}
+
+func TestAReaderNeverStopsAWriteFromLanding(t *testing.T) {
+	sandboxFiles(t)
+	if err := writeJSONAtomic(files.state, object{"waits": object{"before": object{}}}); err != nil {
+		t.Fatalf("first write: %v", err)
+	}
+
+	reader, err := openShared(files.state)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	defer reader.Close()
 
-	staging := filepath.Join(dir, "state.json.tmp")
-	if err := os.WriteFile(staging, []byte(`{"waits":{}}`), 0o600); err != nil {
-		t.Fatalf("write staging: %v", err)
+	if err := writeJSONAtomic(files.state, object{"waits": object{"after": object{}}}); err != nil {
+		t.Fatalf("a reader holding state.json open made the write fail outright: %v", err)
 	}
-	if err := os.Rename(staging, guard); err != nil {
-		t.Fatalf("a writer could not replace state.json while a reader held it open: %v", err)
-	}
-
-	held, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatalf("the open handle stopped reading once its file was replaced: %v", err)
-	}
-	if !bytes.Equal(held, original) {
-		t.Fatalf("the open handle read %q; it opened the file when it held %q", held, original)
+	waits := getMap(readState(), "waits")
+	if getMap(waits, "after") == nil || getMap(waits, "before") != nil {
+		t.Fatalf("the write did not land while a reader held the file open: %v", waits)
 	}
 }
 
-func TestAReaderDoesNotBlockTheDeleteThatRetiresTheFile(t *testing.T) {
-	dir := t.TempDir()
-	guard := filepath.Join(dir, "state.json")
-	original := []byte(`{"waits":{}}`)
-	if err := os.WriteFile(guard, original, 0o600); err != nil {
-		t.Fatalf("write: %v", err)
+func TestReadingAndWritingTheStateFileDoNotRefuseEachOther(t *testing.T) {
+	sandboxFiles(t)
+	document := object{"waits": object{}, "notified": object{}}
+	for index := 0; index < 400; index++ {
+		stateMap(document, "notified")[itoa(index)] = float64(index)
 	}
-
-	reader, err := openShared(guard)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	defer reader.Close()
-
-	if err := os.Remove(guard); err != nil {
-		t.Fatalf("a writer could not delete state.json while a reader held it open: %v", err)
-	}
-	held, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatalf("the open handle stopped reading once its file was deleted: %v", err)
-	}
-	if !bytes.Equal(held, original) {
-		t.Fatalf("the open handle read %q; it opened the file when it held %q", held, original)
-	}
-	if _, err := readFileShared(guard); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("a fresh read of the deleted file returned %v; callers branch on os.ErrNotExist", err)
-	}
-}
-
-func TestReplacingTheStateFileNeverWaitsForAReader(t *testing.T) {
-	dir := t.TempDir()
-	guard := filepath.Join(dir, "state.json")
-	payload := bytes.Repeat([]byte(`{"session":"x"},`), 15000)
-	if err := os.WriteFile(guard, payload, 0o600); err != nil {
-		t.Fatalf("write: %v", err)
+	if err := writeJSONAtomic(files.state, document); err != nil {
+		t.Fatalf("first write: %v", err)
 	}
 
 	stop := make(chan struct{})
 	var readers sync.WaitGroup
 	var reads, readRefusals atomic.Int64
-	for worker := 0; worker < 4; worker++ {
+	for worker := 0; worker < 3; worker++ {
 		readers.Add(1)
 		go func() {
 			defer readers.Done()
@@ -93,39 +84,34 @@ func TestReplacingTheStateFileNeverWaitsForAReader(t *testing.T) {
 					return
 				default:
 				}
-				if _, err := readFileShared(guard); err != nil {
+				if _, err := readFileShared(files.state); err != nil {
 					readRefusals.Add(1)
 					return
 				}
 				reads.Add(1)
+				time.Sleep(2 * time.Millisecond)
 			}
 		}()
 	}
 
-	staging := filepath.Join(dir, "state.json.staging")
+	writes := 0
 	var refused error
-	replacements := 0
-	for deadline := time.Now().Add(500 * time.Millisecond); time.Now().Before(deadline); {
-		if err := os.WriteFile(staging, payload, 0o600); err != nil {
+	for ; writes < 20; writes++ {
+		if err := writeJSONAtomic(files.state, document); err != nil {
 			refused = err
 			break
 		}
-		if err := os.Rename(staging, guard); err != nil {
-			refused = err
-			break
-		}
-		replacements++
 	}
 	close(stop)
 	readers.Wait()
 
 	if refused != nil {
-		t.Fatalf("a reader blocked the %dth replacement of state.json: %v", replacements+1, refused)
+		t.Fatalf("write %d of 20 failed while the file was being read: %v", writes+1, refused)
 	}
 	if got := readRefusals.Load(); got != 0 {
-		t.Fatalf("%d reads were refused while the file was being replaced", got)
+		t.Fatalf("%d reads were refused while the file was being written", got)
 	}
-	if replacements < 5 || reads.Load() < 5 {
-		t.Fatalf("%d replacements against %d reads: the two never overlapped, so nothing was proven", replacements, reads.Load())
+	if reads.Load() < 5 {
+		t.Fatalf("only %d reads ran against %d writes: the two never overlapped, so nothing was proven", reads.Load(), writes)
 	}
 }
