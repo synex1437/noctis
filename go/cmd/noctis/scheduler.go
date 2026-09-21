@@ -167,8 +167,8 @@ func cancelSystemd(sid string) {
 	_, _ = runScheduler(exec.Command("systemctl", "--user", "stop", unit+".timer", unit+".service"), 10*time.Second)
 }
 
-func scheduleNative(sid string, at float64, commandArgs []string, wake bool) (object, bool) {
-	switch schedulerBackend() {
+func scheduleNative(backend, sid string, at float64, commandArgs []string, wake bool) (object, bool) {
+	switch backend {
 	case "launchd":
 		return scheduleLaunchd(sid, at, commandArgs)
 	case "systemd":
