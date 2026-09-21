@@ -50,6 +50,26 @@ function writeJson(file, data) {
   }
 }
 
+function processTable() {
+  try {
+    if (IS_WINDOWS) {
+      const listed = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+        'Get-CimInstance Win32_Process | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress'],
+      { encoding: 'utf8', timeout: 120000 });
+      const parsed = JSON.parse(listed.stdout || '[]');
+      return (Array.isArray(parsed) ? parsed : [parsed])
+        .map((row) => ({ pid: Number(row.ProcessId), line: String(row.CommandLine || '') }));
+    }
+    const listed = spawnSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8', timeout: 120000 });
+    return (listed.stdout || '').split('\n').filter(Boolean).map((row) => {
+      const cut = row.trim().indexOf(' ');
+      return { pid: Number(row.trim().slice(0, cut)), line: row.trim().slice(cut + 1) };
+    });
+  } catch {
+    return [];
+  }
+}
+
 function isAlive(pid) {
   if (!pid) return false;
   if (process.platform === 'linux') {
@@ -461,6 +481,36 @@ class Account {
 
   state() {
     return readJson(this.stateFile) || {};
+  }
+
+  stopRunners() {
+    const state = this.state();
+    const pids = new Set();
+    for (const { pid, line } of processTable()) {
+      if (pid > 0 && pid !== process.pid && line.includes('--account') && line.includes(this.dir)) pids.add(pid);
+    }
+    for (const wait of Object.values(state.waits || {})) {
+      const scheduled = (wait && wait.scheduled) || {};
+      for (const key of ['pid', 'watcherPid']) {
+        const pid = Number(scheduled[key]);
+        if (Number.isInteger(pid) && pid > 0) pids.add(pid);
+      }
+    }
+    for (const record of Object.values(state.launched || {})) {
+      const pid = Number(record && record.pid);
+      if (Number.isInteger(pid) && pid > 0) pids.add(pid);
+    }
+    let stopped = 0;
+    for (const pid of pids) {
+      if (!isAlive(pid)) continue;
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        continue;
+      }
+      stopped += 1;
+    }
+    return stopped;
   }
 
   settingsModel() {
