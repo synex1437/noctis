@@ -411,6 +411,19 @@ func saneResetTime(at float64, now int64) bool {
 	return at < float64(now)+maxResetHorizon
 }
 
+func resetEpoch(value any) (float64, bool) {
+	if text, isText := value.(string); isText {
+		parsed, err := time.Parse(time.RFC3339Nano, text)
+		if err != nil {
+			parsed, err = time.Parse(time.RFC3339, text)
+		}
+		if err == nil {
+			return float64(parsed.Unix()), true
+		}
+	}
+	return toNumber(value)
+}
+
 func toWindow(percent any, resetsAt any) (object, bool) {
 	raw, ok := toNumber(percent)
 	if !ok {
@@ -420,29 +433,23 @@ func toWindow(percent any, resetsAt any) (object, bool) {
 	if !ok {
 		return nil, false
 	}
-	var at float64
-	switch typed := resetsAt.(type) {
-	case float64:
-		at = typed
-	case string:
-		parsed, err := time.Parse(time.RFC3339Nano, typed)
-		if err != nil {
-			parsed, err = time.Parse(time.RFC3339, typed)
-		}
-		if err != nil {
-			return nil, false
-		}
-		at = float64(parsed.Unix())
-	default:
-		return nil, false
-	}
-	if !saneResetTime(at, nowSec()) {
+	at, ok := resetEpoch(resetsAt)
+	if !ok || !saneResetTime(at, nowSec()) {
 		return nil, false
 	}
 	return object{"used": used, "resetsAt": at}, true
 }
 
 var percentKeys = []string{"percent", "utilization", "used_percentage"}
+
+func windowPercent(entry object) (float64, bool) {
+	for _, key := range percentKeys {
+		if value, ok := getNumber(entry, key); ok {
+			return value, true
+		}
+	}
+	return 0, false
+}
 
 func payloadWindow(entry object, resetsAt any) (object, bool) {
 	for _, key := range percentKeys {

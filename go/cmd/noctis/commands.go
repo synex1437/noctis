@@ -77,6 +77,9 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	lines = append(lines, T("status.usage", usageText))
 	lines = append(lines, T("status.plan", planWindows(usage, cfg)))
 	lines = append(lines, T("status.thresholds", getString(thresholds, "session5h"), getString(thresholds, "weeklyAll"), scopedLabel(cfg), formatNumber(scopedThreshold(cfg))))
+	if repaired := repairedThresholds(cfg); len(repaired) > 0 {
+		lines = append(lines, T("status.thresholdsFixed", strings.Join(repaired, ", ")))
+	}
 	if unguarded := unguardedWindows(cfg); len(unguarded) > 0 {
 		lines = append(lines, T("status.thresholdsBad", strings.Join(unguarded, ", ")))
 	}
@@ -390,13 +393,17 @@ func doctorLines(cfg object) []string {
 		tokenText = T("doctor.tokenNo", files.credentials)
 	}
 	lines = append(lines, fixLine(oauthToken() != "", T("doctor.token", scopedLabel(cfg), tokenText), "doctor.fixToken")...)
+	repaired := repairedThresholds(cfg)
 	unguarded := unguardedWindows(cfg)
 	limits := section(cfg, "thresholds")
 	thresholdText := T("doctor.thresholdsOk", getString(limits, "session5h"), getString(limits, "weeklyAll"), formatNumber(scopedThreshold(cfg)))
 	if len(unguarded) > 0 {
 		thresholdText = T("doctor.thresholdsBad", strings.Join(unguarded, ", "))
 	}
-	lines = append(lines, fixLine(len(unguarded) == 0, thresholdText, "doctor.fixThresholds")...)
+	if len(repaired) > 0 {
+		thresholdText = T("doctor.thresholdsFixed", strings.Join(repaired, ", "))
+	}
+	lines = append(lines, fixLine(len(repaired)+len(unguarded) == 0, thresholdText, "doctor.fixThresholds")...)
 	lines = append(lines, fixLine(!paidCreditsAllowed(cfg), T("doctor.credits", creditsText(cfg)), "doctor.fixCredits")...)
 	lines = append(lines, "    "+T("doctor.creditsNote"))
 	if isWindows {

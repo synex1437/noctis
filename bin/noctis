@@ -5,5 +5,9 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 case "$(uname -s)" in Darwin) os=darwin ;; *) os=linux ;; esac
 case "$(uname -m)" in arm64|aarch64) arch=arm64 ;; *) arch=amd64 ;; esac
 binary="$root/bin/$os-$arch/noctis"
+if [ ! -f "$binary" ]; then
+  echo "noctis: no binary for $os-$arch at $binary" >&2
+  exit 1
+fi
 [ -x "$binary" ] || chmod +x "$binary" 2>/dev/null
 exec "$binary" "$@"

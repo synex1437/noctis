@@ -18,7 +18,7 @@ The README says what the plugin does and how to install it; this page lists ever
 | `roles.profile / code / research / planning / digest / explore / fallback` | noctis / fable:max / opus:xhigh / fable:max / haiku:high / haiku:high / opus:max | Which model (and effort) does which work; setup writes it and projects it onto `models.*`, `router.subagentModels` and the plugin's own agents; `noctis ensure` keeps the agents in step after marketplace updates |
 | `workflow.suggest / gate / size` | true / true / medium | Suggest a dynamic workflow (ultracode) for fan-out prompts and queue items, with per-role models; deny a new `Workflow` launch inside the warn band or over a threshold; the size hint passed along |
 | `mode` | `enforce` | `observe` = journal every decision, enforce nothing (try it for the first days) |
-| `thresholds.session5h / weeklyAll / weeklyFable` | 92 / 89 / 95 | Pause thresholds (`weeklyScoped` is an alias for the scoped model) |
+| `thresholds.session5h / weeklyAll / weeklyFable` | 92 / 89 / 95 | Pause thresholds, 1-100 (`weeklyScoped` is an alias for the scoped model). `0` or `null` leaves a window unguarded on purpose; any other out-of-range value falls back to the shipped default and is named in `status`, `doctor` and the session self-check |
 | `models.primary / fallback / effort` | fable / opus / max | Default model, fallback when the scoped quota is out, effort level |
 | `models.scopedPattern / scopedLabel` | `fable` / Fable | Which OAuth bucket and which model names the scoped rule applies to |
 | `router.enabled / agent / minPromptLength / maxDeniesPerPrompt` | true / lite / 15 / 3 | Research router |
@@ -46,7 +46,7 @@ The README says what the plugin does and how to install it; this page lists ever
 | `report.pricing` | `{}` | USD per million tokens per model substring (`input/output/cacheWrite/cacheRead`), overriding the built-in list prices |
 | `compaction.contextPercent` | 85 (or autocompact override − 5) | Limit safety gate before a context compaction |
 | `host` | `claude` | Which AI coding tool the hooks belong to: `claude`, `codex`, `antigravity`, `droid`, `copilot` (set by setup, see [Other AI coding tools](#other-ai-coding-tools)) |
-| `update.check / url` | true / GitHub raw `plugin.json` | Once a day at session start, fetch the published version and show one line when a newer one exists (3 s budget, nothing about you is sent) |
+| `update.check / url` | true / GitHub raw `plugin.json` | Once a day a detached process fetches the published version into `release.json`; the next session start shows one line when a newer one exists. The session itself never waits on the network (nothing about you is sent) |
 | `resume.droidAuto / copilotAllowAllTools` | high / false | Permission level for unattended resumes on Factory Droid (`--auto`) and GitHub Copilot CLI (`--allow-all-tools`, off by default — turning it on pre-approves every tool for a session nobody is watching) |
 | `queue.requireTrust` | true | A queue file must be agreed to (`noctis queue trust`) before it drives a session. Set false to let any `TASKS.md` in a folder drive, as versions before 5.4 did |
 | `resume.permissionMode` | auto | `default`, `acceptEdits`, `plan`, `auto`, or `inherit` (reuse the session's own). `bypassPermissions` and `dontAsk` are refused for unattended relaunches and fall back to `acceptEdits` |
@@ -89,7 +89,7 @@ Install for another tool from the zip or clone: `./scripts/install.sh --host cod
 
 ## Files (`<account>/noctis/`)
 
-`usage.json` (status-line captures, per-session model/context, burst history — a stable contract other status lines can read), `fable.json` (OAuth buckets), `state.json` (+ `.bak`), `decisions.jsonl` (the journal behind `noctis why`), `checkpoints/<sid>.md`, `guard.log`, `errors.log` (WARN/ERROR only, rotated at 512 KB).
+`usage.json` (status-line captures, per-session model/context, burst history — a stable contract other status lines can read), `fable.json` (OAuth buckets), `release.json` (the last published version seen), `state.json` (+ `.bak`), `decisions.jsonl` (the journal behind `noctis why`), `checkpoints/<sid>.md`, `guard.log`, `errors.log` (WARN/ERROR only, rotated at 512 KB).
 
 ## Tests
 

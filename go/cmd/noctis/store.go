@@ -54,7 +54,7 @@ const (
 	nearEdgePollClose       = 15
 	blindAfterSeconds       = 60
 	fetchTimeout            = 5 * time.Second
-	pluginVersion           = "5.5.3"
+	pluginVersion           = "5.5.4"
 	codingActivityWindow    = 45 * 60
 	codingTailBytes         = 64 * 1024
 	longTextSummaryChars    = 1200
@@ -78,6 +78,7 @@ const (
 	etaMinSpanSeconds       = 1800
 	queueMaxBytes           = 1024 * 1024
 	queueMaxItems           = 15
+	openTaskLimit           = 50
 	defaultUsageURL         = "https://api.anthropic.com/api/oauth/usage"
 	aliveHookMaxChecks      = 6
 	fallbackClaudeVersion   = "2.1.267"
@@ -110,6 +111,7 @@ type paths struct {
 	usage          string
 	usageBackup    string
 	fable          string
+	release        string
 	state          string
 	stateBackup    string
 	stateLock      string
@@ -242,6 +244,7 @@ func initPaths() {
 		usage:          filepath.Join(guardDir, "usage.json"),
 		usageBackup:    filepath.Join(guardDir, "usage.json.bak"),
 		fable:          filepath.Join(guardDir, "fable.json"),
+		release:        filepath.Join(guardDir, "release.json"),
 		state:          filepath.Join(guardDir, "state.json"),
 		stateBackup:    filepath.Join(guardDir, "state.json.bak"),
 		stateLock:      filepath.Join(guardDir, "state.lock"),
@@ -312,6 +315,41 @@ type strictRead struct {
 	err      string
 }
 
+type parsedFile struct {
+	raw  []byte
+	data object
+}
+
+const parseCacheLimit = 12
+
+var parseCache = map[string]parsedFile{}
+
+func copyValue(value any) any {
+	switch typed := value.(type) {
+	case object:
+		clone := make(object, len(typed))
+		for key, item := range typed {
+			clone[key] = copyValue(item)
+		}
+		return clone
+	case []any:
+		clone := make([]any, len(typed))
+		for index, item := range typed {
+			clone[index] = copyValue(item)
+		}
+		return clone
+	}
+	return value
+}
+
+func copyObject(source object) object {
+	if source == nil {
+		return nil
+	}
+	clone, _ := copyValue(source).(object)
+	return clone
+}
+
 func readJSONStrict(file string) strictRead {
 	content, err := readFileShared(file)
 	for attempt := 0; err != nil && !errors.Is(err, os.ErrNotExist) && attempt < 8; attempt++ {
@@ -319,16 +357,25 @@ func readJSONStrict(file string) strictRead {
 		content, err = readFileShared(file)
 	}
 	if err != nil {
+		delete(parseCache, file)
 		if errors.Is(err, os.ErrNotExist) {
 			return strictRead{exists: false, ok: true, data: object{}}
 		}
 		return strictRead{exists: true, ok: false, unopened: true, err: err.Error()}
 	}
+	if cached, seen := parseCache[file]; seen && bytes.Equal(cached.raw, content) {
+		return strictRead{exists: true, ok: true, data: copyObject(cached.data), raw: content}
+	}
 	var raw any
 	if err := json.Unmarshal(content, &raw); err != nil {
+		delete(parseCache, file)
 		return strictRead{exists: true, ok: false, err: err.Error()}
 	}
 	data, _ := raw.(object)
+	if len(parseCache) >= parseCacheLimit {
+		parseCache = map[string]parsedFile{}
+	}
+	parseCache[file] = parsedFile{raw: content, data: copyObject(data)}
 	return strictRead{exists: true, ok: true, data: data, raw: content}
 }
 
@@ -546,7 +593,48 @@ func loadConfig() object {
 	if !userRead.ok {
 		merged["configError"] = userRead.err
 	}
+	repairThresholds(merged, defaults)
 	return merged
+}
+
+var builtinThresholds = map[string]float64{"session5h": 92, "weeklyAll": 89, "weeklyFable": 95}
+
+func thresholdSwitchedOff(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case bool:
+		return !typed
+	}
+	number, ok := toNumber(value)
+	return ok && number == 0
+}
+
+func repairThresholds(merged, defaults object) {
+	thresholds := getMap(merged, "thresholds")
+	if thresholds == nil {
+		return
+	}
+	shipped := getMap(defaults, "thresholds")
+	repaired := []string{}
+	for _, key := range []string{"session5h", "weeklyAll", "weeklyFable", "weeklyScoped"} {
+		value, present := thresholds[key]
+		if !present || validThreshold(value) || thresholdSwitchedOff(value) {
+			continue
+		}
+		switch fallback := shipped[key]; {
+		case validThreshold(fallback):
+			thresholds[key] = fallback
+		case builtinThresholds[key] > 0:
+			thresholds[key] = builtinThresholds[key]
+		default:
+			delete(thresholds, key)
+		}
+		repaired = append(repaired, key)
+	}
+	if len(repaired) > 0 {
+		merged["thresholdsRepaired"] = strings.Join(repaired, ", ")
+	}
 }
 
 func mergeDefaults(defaults, user object) object {
@@ -797,6 +885,13 @@ func pruneState(state object, now int64) {
 			delete(stateMap(state, "notified"), key)
 		}
 	}
+	for sid, raw := range stateMap(state, "tasks") {
+		items := getMap(toObject(raw), "items")
+		dropFinishedTasks(items)
+		if len(items) == 0 {
+			delete(stateMap(state, "tasks"), sid)
+		}
+	}
 	for key, raw := range stateMap(state, "checkpoints") {
 		entry, _ := raw.(object)
 		if entry != nil && float64(now)-numberOr(entry, "at", 0) <= checkpointTTLSeconds {
@@ -837,7 +932,11 @@ func pruneState(state object, now int64) {
 					newest = value
 				}
 			}
-			if newest > 0 && float64(now)-newest > ttl {
+			if newest == 0 {
+				entry["at"] = float64(now)
+				continue
+			}
+			if float64(now)-newest > ttl {
 				delete(stateMap(state, name), key)
 			}
 		}
@@ -981,7 +1080,9 @@ func updateState(mutator func(state object)) object {
 			return
 		}
 		if before != nil && usableStateJSON(before) {
-			_ = os.WriteFile(files.stateBackup, before, 0o600)
+			if err := os.WriteFile(files.stateBackup, before, 0o600); err != nil {
+				warn("state.json backup not written: %v", err)
+			}
 		}
 		mustWriteJSON(files.state, state)
 		result = state

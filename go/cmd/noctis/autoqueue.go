@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 var (
@@ -26,7 +27,7 @@ const (
 	autoQueueMinWords     = 4
 )
 
-var descriptiveStarters = wordSet(`i i'm i've we we're we've our my the this that these those there here it it's its currently
+var descriptiveStarters = lazyWordSet(`i i'm i've we we're we've our my the this that these those there here it it's its currently
 	note context background fyi for as because since when if so but and however today yesterday
 	ben biz bizim benim bu şu o burada burda not bağlam mevcut halihazırda hâlihazırda çünkü eğer ama fakat ancak ve bugün dün
 	ich wir unser unsere mein meine der die das es hier dort aktuell derzeit momentan hinweis kontext weil da wenn aber und
@@ -38,7 +39,7 @@ var descriptiveStarters = wordSet(`i i'm i've we we're we've our my the this tha
 	ja my nasz nasza mój moja to ten ta tu tutaj obecnie uwaga kontekst bo ponieważ jeśli ale i
 	я мы наш наша мой моя это этот эта тут здесь сейчас примечание контекст потому если но и`)
 
-var imperativeWords = wordSet(`add build create write fix update refactor implement remove delete rename move migrate deploy test
+var imperativeWords = lazyWordSet(`add build create write fix update refactor implement remove delete rename move migrate deploy test
 	check verify make set configure install run generate convert replace change improve optimize optimise clean document
 	review merge split extract wrap integrate connect enable disable ensure handle support upgrade bump port rewrite redesign
 	restructure use finish complete prepare design draft polish translate publish release ship investigate debug measure
@@ -59,7 +60,7 @@ var imperativeWords = wordSet(`add build create write fix update refactor implem
 	adicione crie escreva corrija implemente remova atualize construa teste verifique configure instale substitua melhore
 	aggiungi crea scrivi correggi implementa rimuovi aggiorna costruisci testa verifica configura installa sostituisci migliora`)
 
-var leadIns = wordSet(`please lütfen bitte veuillez merci por favor per favore alsjeblieft proszę пожалуйста
+var leadIns = lazyWordSet(`please lütfen bitte veuillez merci por favor per favore alsjeblieft proszę пожалуйста
 	then next finally lastly afterwards after that also and now
 	sonra ardından daha son olarak en ayrıca ve şimdi
 	dann danach schließlich zuletzt außerdem und
@@ -81,15 +82,15 @@ func imperativeLike(unit string) bool {
 	}
 	for index := 0; index < len(fields) && index < 4; index++ {
 		word := clean(fields[index])
-		if imperativeWords[word] {
+		if imperativeWords(word) {
 			return true
 		}
-		if !leadIns[word] {
+		if !leadIns(word) {
 			break
 		}
 	}
 	last := clean(fields[len(fields)-1])
-	return imperativeWords[last] || imperativeWords[strings.TrimSuffix(strings.TrimSuffix(last, "in"), "iniz")]
+	return imperativeWords(last) || imperativeWords(strings.TrimSuffix(strings.TrimSuffix(last, "in"), "iniz"))
 }
 
 var sequenceMarkers = []string{
@@ -112,12 +113,19 @@ var bugReportMarkers = []string{
 	"yeniden üret", "beklenen", "hata mesajı", "hata çıktısı",
 }
 
+func lazyWordSet(words string) func(string) bool {
+	var once sync.Once
+	var set map[string]bool
+	return func(word string) bool {
+		once.Do(func() { set = wordSet(words) })
+		return set[word]
+	}
+}
+
 func wordSet(words string) map[string]bool {
 	set := map[string]bool{}
-	for _, word := range wordSplit.Split(strings.TrimSpace(words), -1) {
-		if word != "" {
-			set[word] = true
-		}
+	for _, word := range strings.Fields(words) {
+		set[word] = true
 	}
 	return set
 }
@@ -143,7 +151,7 @@ func stepLike(unit string) bool {
 	if len(wordSplit.Split(unit, -1)) < autoQueueMinWords {
 		return false
 	}
-	return !descriptiveStarters[firstWord(unit)]
+	return !descriptiveStarters(firstWord(unit))
 }
 
 func autoQueueItems(prompt string) []string {

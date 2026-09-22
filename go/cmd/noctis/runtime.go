@@ -205,19 +205,20 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 		offered, parsed := 0, 0
 		for _, key := range []string{"five_hour", "seven_day"} {
 			win := getMap(limits, key)
-			if win != nil {
-				offered++
+			if win == nil {
+				continue
 			}
-			rawUsed, okUsed := getNumber(win, "used_percentage")
-			resetsAt, okReset := getNumber(win, "resets_at")
-			if win == nil || !okUsed || !okReset {
+			offered++
+			rawUsed, okUsed := windowPercent(win)
+			resetsAt, okReset := resetEpoch(win["resets_at"])
+			if !okUsed || !okReset {
 				continue
 			}
 			parsed++
 
 			used, sane := sanePercent(rawUsed)
 			if !sane || !saneResetTime(resetsAt, now) {
-				warn("status line reported an unusable %s window (used=%v resets_at=%v); ignored", key, rawUsed, resetsAt)
+				warn("status line reported an unusable %s window (used=%v resets_at=%v); ignored", key, rawUsed, win["resets_at"])
 				continue
 			}
 			origin := reporter
@@ -253,8 +254,8 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 		}
 		if len(previous) > 0 {
 			if current := readJSONStrict(files.usage); current.ok && current.exists {
-				if content, err := readFileShared(files.usage); err == nil {
-					_ = os.WriteFile(files.usageBackup, content, 0o600)
+				if err := os.WriteFile(files.usageBackup, current.raw, 0o600); err != nil {
+					warn("usage.json backup not written: %v", err)
 				}
 			}
 		}

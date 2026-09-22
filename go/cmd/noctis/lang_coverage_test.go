@@ -188,3 +188,14 @@ func TestEveryLanguageIsComplete(t *testing.T) {
 		}
 	}
 }
+
+func catalogTable() map[string]map[string]string {
+	table := map[string]map[string]string{}
+	for lang, entries := range baseTable() {
+		table[lang] = entries
+	}
+	for lang := range extraCatalogBuilders {
+		table[lang] = catalogFor(lang)
+	}
+	return table
+}

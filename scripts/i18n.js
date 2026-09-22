@@ -50,48 +50,36 @@ function extract() {
   }
 }
 
+function builderName(code) {
+  return `extraCatalog${code[0].toUpperCase()}${code.slice(1)}`;
+}
+
 function renderCatalogFunction() {
   const english = readCatalog('en');
   const order = Object.keys(english);
-  const lines = [
-    'func extraCatalogTable() map[string]map[string]string {',
-    '\treturn map[string]map[string]string{',
-  ];
+  const lines = ['var extraCatalogBuilders = map[string]func() map[string]string{'];
+  for (const code of LANGUAGES) lines.push(`\t"${code}": ${builderName(code)},`);
+  lines.push('}');
   for (const code of LANGUAGES) {
     const table = readCatalog(code);
     const extraKeys = Object.keys(table).filter((key) => !order.includes(key));
     if (extraKeys.length > 0) {
       throw new Error(`i18n/${code}.json has ${extraKeys.length} key(s) English does not: ${extraKeys.join(', ')}`);
     }
-    lines.push(`\t\t"${code}": {`);
+    lines.push('', `func ${builderName(code)}() map[string]string {`, '\treturn map[string]string{');
     for (const key of order) {
       if (!(key in table)) continue;
-      lines.push(`\t\t\t${JSON.stringify(key)}: ${JSON.stringify(table[key])},`);
+      lines.push(`\t\t${JSON.stringify(key)}: ${JSON.stringify(table[key])},`);
     }
-    lines.push('\t\t},');
+    lines.push('\t}', '}');
   }
-  lines.push('\t}', '}');
-  return lines.join('\n');
+  return `${lines.join('\n')}\n`;
 }
 
 function spliceInto(source, rendered) {
-  const startMarker = source.indexOf('func extraCatalogTable()');
-  if (startMarker < 0) throw new Error('extraCatalogTable not found in lang.go');
-  let start = startMarker;
-  const before = source.slice(0, startMarker).split('\n');
-  let keep = before.length - 1;
-  while (keep > 0 && before[keep - 1].startsWith('//')) keep -= 1;
-  start = before.slice(0, keep).join('\n').length + (keep > 0 ? 1 : 0);
-
-  let index = source.indexOf('{', startMarker);
-  let depth = 1;
-  index += 1;
-  while (depth > 0 && index < source.length) {
-    if (source[index] === '{') depth += 1;
-    else if (source[index] === '}') depth -= 1;
-    index += 1;
-  }
-  return source.slice(0, start) + rendered + source.slice(index);
+  const marker = source.indexOf('var extraCatalogBuilders = ');
+  if (marker < 0) throw new Error('extraCatalogBuilders not found in lang.go');
+  return source.slice(0, marker) + rendered;
 }
 
 function renderGo() {
