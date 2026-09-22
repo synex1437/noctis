@@ -6,6 +6,11 @@
     "weeklyAll": 89,
     "weeklyFable": 95
   },
+  "credits": {
+    "allowPaid": false,
+    "ceiling": 100,
+    "fanOutHeadroom": 25
+  },
   "roles": {
     "profile": "noctis",
     "code": {
@@ -17,16 +22,14 @@
       "effort": "xhigh"
     },
     "planning": {
-      "model": "fable",
-      "effort": "max"
+      "model": "fable"
     },
     "digest": {
       "model": "haiku",
       "effort": "high"
     },
     "explore": {
-      "model": "haiku",
-      "effort": "high"
+      "model": "haiku"
     },
     "fallback": {
       "model": "opus",

@@ -231,6 +231,9 @@ func sandboxFiles(t *testing.T) string {
 	files.log, files.errors = filepath.Join(dir, "guard.log"), filepath.Join(dir, "errors.log")
 	files.usage = filepath.Join(dir, "usage.json")
 	files.fable = filepath.Join(dir, "fable.json")
+	files.settings = filepath.Join(dir, "settings.json")
+	files.settingsLock = filepath.Join(dir, "settings.lock")
+	files.config = filepath.Join(dir, "config.json")
 	return dir
 }
 

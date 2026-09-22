@@ -48,9 +48,11 @@ func selfCheckIssues(cfg object) []string {
 	if getString(cfg, "configError") != "" {
 		issues = append(issues, T("selfcheck.config"))
 	}
-	thresholds := section(cfg, "thresholds")
-	if !validThreshold(thresholds["session5h"]) || !validThreshold(thresholds["weeklyAll"]) || !validThreshold(scopedThresholdValue(cfg)) {
-		issues = append(issues, T("selfcheck.threshold"))
+	if unguarded := unguardedWindows(cfg); len(unguarded) > 0 {
+		issues = append(issues, T("selfcheck.threshold", strings.Join(unguarded, ", ")))
+	}
+	if paidCreditsAllowed(cfg) {
+		issues = append(issues, T("credits.allowed"))
 	}
 	if getString(section(cfg, "fable"), "source") == "oauth" && oauthToken() == "" {
 		issues = append(issues, T("selfcheck.token", scopedLabel(cfg)))
@@ -270,7 +272,7 @@ func onUserPromptSubmit(input, cfg object) {
 	now := nowSec()
 	sid := sessionKey(input)
 	state := readState()
-	if numberOr(state, "disabledUntil", 0) > float64(now) {
+	if guardPaused(cfg, state, now) {
 		return
 	}
 	clearDeadHandoffs(state)
@@ -387,7 +389,7 @@ func pinnedSubagentModel(cfg, input object) string {
 
 func onAgentSpawn(input, cfg, state object, now int64) {
 	sid := sessionKey(input)
-	if numberOr(state, "disabledUntil", 0) > float64(now) {
+	if guardPaused(cfg, state, now) {
 		return
 	}
 	result := decide(cfg, state, input, now, decideOptions{})
@@ -505,7 +507,7 @@ func onPreToolUse(input, cfg object) {
 }
 
 func onWorkflowLaunch(input, cfg object, state object, now int64, sid string) {
-	result := decide(cfg, state, input, now, decideOptions{noProbe: true})
+	result := decide(cfg, state, input, now, decideOptions{force: true})
 	if reason := gateWorkflowLaunch(cfg, result); reason != "" {
 		if observed(sid, "PreToolUse", "deny-workflow", reason, usageFacts(result.usage)) {
 			recordWorkflowLaunch(sid, input, now)
@@ -558,7 +560,7 @@ func onStop(input, cfg object) {
 	now := nowSec()
 	sid := sessionKey(input)
 	state := readState()
-	if numberOr(state, "disabledUntil", 0) > float64(now) {
+	if guardPaused(cfg, state, now) {
 		return
 	}
 	if getMap(getMap(state, "handedOff"), sid) != nil && !isHandoffSession(sid) {
@@ -697,7 +699,7 @@ func onPostToolBatch(input, cfg object) {
 	sid := sessionKey(input)
 	state := readState()
 	clearOverload(state, sid)
-	if numberOr(state, "disabledUntil", 0) > float64(now) {
+	if guardPaused(cfg, state, now) {
 		return
 	}
 	releaseInterruptedWait(sid, state)

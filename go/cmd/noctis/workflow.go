@@ -115,5 +115,10 @@ func gateWorkflowLaunch(cfg object, result decision) string {
 	case result.fableHit:
 		return "[noctis] the scoped model quota is out; the plugin is switching the default model. Launch the workflow after the switch, on the fallback model."
 	}
+	if needed := fanOutHeadroom(cfg); needed > 0 {
+		if room, label := headroomLeft(cfg, result.usage); room < needed {
+			return fmt.Sprintf("[noctis] only %s points of the %s window are left before the pause point, and a workflow fans out many agents at once: between two checks they can burn through the rest, and past the subscription limit the account pays for the overflow in usage credits. A workflow needs %s points of room. Do this as a single-agent job now, or launch the workflow after the reset.", formatNumber(roundTo(room, 1)), label, formatNumber(needed))
+		}
+	}
 	return ""
 }

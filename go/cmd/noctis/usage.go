@@ -775,6 +775,31 @@ func settingsModel() string {
 	return ""
 }
 
+func setSettingsEffort(effort string) string {
+	if effort == "" || !currentHost().modelSwitch {
+		return ""
+	}
+	previous := ""
+	withSettings(func(data object) bool {
+		env := getMap(data, "env")
+		if env == nil {
+			env = object{}
+			data["env"] = env
+		}
+		previous = getString(env, "CLAUDE_CODE_EFFORT_LEVEL")
+		if previous == effort {
+			previous = ""
+			return false
+		}
+		env["CLAUDE_CODE_EFFORT_LEVEL"] = effort
+		return true
+	})
+	if previous != "" {
+		logInfo("settings env.CLAUDE_CODE_EFFORT_LEVEL %s -> %s", previous, effort)
+	}
+	return previous
+}
+
 func setSettingsModel(alias string) bool {
 
 	if !currentHost().modelSwitch {
@@ -931,6 +956,9 @@ func evaluate(cfg object, usage usageView, model string, contextPercent float64,
 				result.warnWindow = &warnPlan{window: spec.key, label: spec.label, used: win.used, threshold: limit, resetsAt: win.resetsAt}
 			}
 		}
+	}
+	if ceiling := ceilingHit(cfg, usage); ceiling != nil && (result.wait == nil || ceiling.until > result.wait.until) {
+		result.wait = ceiling
 	}
 	scopedValue := scopedThresholdValue(cfg)
 	result.fableHit = validThreshold(scopedValue) && usage.fable != nil && usage.fable.used >= scopedThreshold(cfg) && scopedModelPattern(cfg).MatchString(model)

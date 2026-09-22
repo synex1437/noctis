@@ -80,7 +80,7 @@ async function anyCall(seconds = 60) {
 async function scenarioBaseline(acc) {
   const now = nowSec();
   const line = acc.statusline('s1', 'claude-fable-5-1', 41, now + 7200, 23, now + 3 * 86400);
-  check('statusline badge', line.startsWith('∞ 5s %41'), true);
+  check('statusline badge', line.startsWith('∞ 5sa %41'), true);
   check('usage.json written', readJson(path.join(acc.guardDir, 'usage.json')).five_hour.used, 41);
   check('below threshold silent', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', cwd: PROJECT_DIR, prompt: 'fix the auth.js bug please' }), '');
   check('post batch silent', acc.hook({ hook_event_name: 'PostToolBatch', session_id: 's1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT }), '');
@@ -509,8 +509,10 @@ async function scenarioRouter(acc) {
     ['Compare pricing of Claude Max and ChatGPT Pro plans', 'web-words'],
     ['Docker compose ile deploy nasıl yapılır araştır', 'code-signal'],
     ['Research the best approach to implement caching in our api', 'code-signal'],
+    ['look up the current pricing of aws lambda and azure functions', 'web-words'],
+    ['en iyi vektör veritabanı hangisi karşılaştırma yapar mısın', 'web-words'],
     ['What are the latest findings on intermittent fasting?', 'web-words'],
-    ['Write a short poem about autumn in Ankara', 'no-research-signal'],
+    ['Write a short poem about autumn in Ankara', 'writing'],
     ['hataları araştır ve logları incele', 'code-signal'],
     ['the logic behind quantum computing, latest research', 'web-words'],
     ['Look up the current USD/TRY exchange rate news', 'web-words'],
@@ -945,7 +947,7 @@ async function scenarioAutocompactAdaptation(acc) {
 async function scenarioLocaleAndModes(acc) {
   const now = nowSec();
   const english = acc.statusline('lc1', 'claude-fable-5-1', 41, now + 7200, 23, now + 3 * 86400, 32);
-  check('turkish statusline by default in lab', english.startsWith('∞ 5s %41'), true);
+  check('turkish statusline by default in lab', english.startsWith('∞ 5sa %41'), true);
   const en = acc.run(['statusline'], acc.statuslineInput('lc1', 'claude-fable-5-1', 41, now + 7200, 23, now + 3 * 86400), { NOCTIS_LANG: 'en' });
   check('NOCTIS_LANG=en switches labels', en.startsWith('∞ 5h %41') && en.includes('Wk %23'), true);
   check('english off message', acc.run(['off', '1'], null, { NOCTIS_LANG: 'en' }).includes('disabled until'), true);
@@ -1016,7 +1018,7 @@ async function scenarioLocaleAndModes(acc) {
   const installedDoctor = spawnSync(installedBinary, ['doctor'], { encoding: 'utf8', env: envWithoutRoot }).stdout;
   check('installed binary resolves its plugin root without env hints', installedDoctor.includes(`OK  plugin konumu: ${path.join(acc.dir, 'skills', PLUGIN_NAME)}`), true);
   const installedStatus = spawnSync(installedBinary, ['status'], { encoding: 'utf8', env: envWithoutRoot }).stdout;
-  check('installed binary loads defaults from its own root', installedStatus.includes('5s ≥%92'), true);
+  check('installed binary loads defaults from its own root', installedStatus.includes('5sa ≥%92'), true);
   const status = acc.run(['status']);
   check('status reports plan windows', status.includes('Plan pencere : 5h + 7d'), true);
 }
@@ -1175,7 +1177,7 @@ async function scenarioBudgetWakeWebhook(acc) {
   const wake = acc.runFull(['hook'], { hook_event_name: 'StopFailure', session_id: 'wk1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, error_type: 'rate_limit' });
   mock.limits = savedLimits;
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
-  check('same-session wake exits 2 with a continue message', wake.status === 2 && wake.stdout.includes('[noctis] 5s limit'), true);
+  check('same-session wake exits 2 with a continue message', wake.status === 2 && wake.stdout.includes('[noctis] 5sa limit'), true);
   check('wake attempt recorded on the wait', acc.state().waits.wk1.wakeAttemptedAt > 0, true);
   const future = new Date(Date.now() + 5000);
   fs.utimesSync(TRANSCRIPT, future, future);
@@ -1269,7 +1271,7 @@ async function scenarioMarketplaceBootstrap(acc) {
   await sleep(20);
   check('second ensure is a no-op', spawnSync(shipped, ['ensure'], { encoding: 'utf8', env }).status === 0 && fs.statSync(shipped).mtimeMs === before, true);
   const status = spawnSync(shipped, ['status'], { encoding: 'utf8', env });
-  check('placed binary resolves the marketplace root', status.status === 0 && status.stdout.includes('5s ≥%92'), true);
+  check('placed binary resolves the marketplace root', status.status === 0 && status.stdout.includes('5sa ≥%92'), true);
   const doctor = spawnSync(shipped, ['doctor'], { encoding: 'utf8', env }).stdout;
   check('placed binary reports the marketplace root as plugin location', doctor.includes(`plugin konumu: ${root}`), true);
   const rolesDir = path.join(LAB_ROOT, 'roles-account');

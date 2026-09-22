@@ -54,13 +54,15 @@ const (
 	nearEdgePollClose       = 15
 	blindAfterSeconds       = 60
 	fetchTimeout            = 5 * time.Second
-	pluginVersion           = "5.5.1"
+	pluginVersion           = "5.5.3"
 	codingActivityWindow    = 45 * 60
 	codingTailBytes         = 64 * 1024
 	longTextSummaryChars    = 1200
 	compactionContextPct    = 85.0
 	compactionGuardGap      = 5.0
 	compactionBand          = 6.0
+	creditCeilingDefault    = 100.0
+	fanOutHeadroomDefault   = 25.0
 	clearedSessionWindow    = 600
 	handoffGraceSeconds     = 60
 	waitStaleSeconds        = 2 * 86400
@@ -381,6 +383,9 @@ func writeJSONAtomic(file string, value any) error {
 		time.Sleep(time.Duration(10+attempt*10) * time.Millisecond)
 	}
 	if writeErr := os.WriteFile(file, encoded, 0o600); writeErr != nil {
+		if removeErr := os.Remove(tmp); removeErr != nil {
+			warn("temp file left behind: %s", tmp)
+		}
 		return writeErr
 	}
 	if removeErr := os.Remove(tmp); removeErr != nil {
