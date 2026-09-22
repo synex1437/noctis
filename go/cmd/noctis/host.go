@@ -892,33 +892,58 @@ func toInt(text string) (int, bool) {
 	return value, true
 }
 
+func updateEndpoint(cfg object) string {
+	url := getString(section(cfg, "update"), "url")
+	if env := os.Getenv("NOCTIS_UPDATE_URL"); env != "" {
+		url = env
+	}
+	if url == "off" {
+		return ""
+	}
+	return url
+}
+
+func runReleaseCheck() {
+	cfg := loadConfig()
+	url := updateEndpoint(cfg)
+	if url == "" || !getBool(section(cfg, "update"), "check", true) {
+		return
+	}
+	record := object{"checkedAt": float64(nowSec())}
+	body, err := httpGetWithTimeout(url, 3*time.Second)
+	if err != nil {
+		record["error"] = err.Error()
+		logInfo("update check failed: %v", err)
+	} else {
+		var manifest object
+		if json.Unmarshal(body, &manifest) == nil && manifest != nil {
+			record["latest"] = getString(manifest, "version")
+		}
+	}
+	if err := writeJSONAtomic(files.release, record); err != nil {
+		warn("release.json not written: %v", err)
+	}
+}
+
 func checkForUpdate(cfg object, state object, now int64) string {
 	update := section(cfg, "update")
 	if !getBool(update, "check", true) {
 		return ""
 	}
-	url := getString(update, "url")
-	if env := os.Getenv("NOCTIS_UPDATE_URL"); env != "" {
-		url = env
-	}
-	if url == "" || url == "off" {
+	if updateEndpoint(cfg) == "" {
 		return ""
 	}
+	cached := readJSON(files.release)
 	notified := getMap(state, "notified")
-	if float64(now)-numberOr(notified, "update:checkAt", 0) < 86400 {
-		return ""
+	if float64(now)-numberOr(cached, "checkedAt", 0) > 86400 && float64(now)-numberOr(notified, "update:checkAt", 0) > 3600 {
+		updateState(func(next object) { stateMap(next, "notified")["update:checkAt"] = float64(now) })
+		arguments := []string{"release-check", "--account", files.configDir}
+		if host := currentHost().id; host != "claude" {
+			arguments = append(arguments, "--host", host)
+		}
+		detachedSelf(arguments)
 	}
-	updateState(func(next object) { stateMap(next, "notified")["update:checkAt"] = float64(now) })
-	body, err := httpGetWithTimeout(url, 3*time.Second)
-	if err != nil {
-		logInfo("update check skipped: %v", err)
-		return ""
-	}
-	var manifest object
-	if json.Unmarshal(body, &manifest) != nil || manifest == nil {
-		return ""
-	}
-	latest := getString(manifest, "version")
+	latest := getString(cached, "latest")
 	if !newerVersion(latest, pluginVersion) {
 		return ""
 	}

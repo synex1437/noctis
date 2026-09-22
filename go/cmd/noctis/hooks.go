@@ -48,6 +48,9 @@ func selfCheckIssues(cfg object) []string {
 	if getString(cfg, "configError") != "" {
 		issues = append(issues, T("selfcheck.config"))
 	}
+	if repaired := repairedThresholds(cfg); len(repaired) > 0 {
+		issues = append(issues, T("selfcheck.thresholdFixed", strings.Join(repaired, ", ")))
+	}
 	if unguarded := unguardedWindows(cfg); len(unguarded) > 0 {
 		issues = append(issues, T("selfcheck.threshold", strings.Join(unguarded, ", ")))
 	}
@@ -252,7 +255,7 @@ func pluginComposedPrompt(cfg object, sid, prompt string) bool {
 	if base := strings.TrimSpace(getString(section(cfg, "resume"), "prompt")); base != "" && strings.HasPrefix(trimmed, base) {
 		return true
 	}
-	if prefix := strings.SplitN(catalogTable()["en"]["overload.wakeMessage"], "%s", 2)[0]; prefix != "" && strings.HasPrefix(trimmed, prefix) {
+	if prefix := strings.SplitN(catalogFor("en")["overload.wakeMessage"], "%s", 2)[0]; prefix != "" && strings.HasPrefix(trimmed, prefix) {
 		return true
 	}
 	return false
@@ -1015,22 +1018,28 @@ func onTaskEvent(input, _ object) {
 	}
 	subject := truncateText(firstString(input, "task_subject", "subject", "task_description", "description"), 160)
 	completed := getString(input, "hook_event_name") == "TaskCompleted"
+	now := float64(nowSec())
 	updateState(func(state object) {
 		entry := getMap(stateMap(state, "tasks"), sid)
 		if entry == nil || getMap(entry, "items") == nil {
 			entry = object{"items": object{}}
 		}
 		items := getMap(entry, "items")
-		existing := getMap(items, id)
-		if subject == "" {
-			subject = orDefault(getString(existing, "subject"), id)
-		}
-		status := "open"
+		dropFinishedTasks(items)
 		if completed {
-			status = "completed"
+			delete(items, id)
+		} else {
+			if subject == "" {
+				subject = orDefault(getString(getMap(items, id), "subject"), id)
+			}
+			items[id] = object{"subject": subject, "status": "open", "at": now}
+			dropOldestTasks(items)
 		}
-		items[id] = object{"subject": subject, "status": status}
-		entry["at"] = float64(nowSec())
+		if len(items) == 0 {
+			delete(stateMap(state, "tasks"), sid)
+			return
+		}
+		entry["at"] = now
 		stateMap(state, "tasks")[sid] = entry
 	})
 }

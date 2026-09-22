@@ -1,6 +1,9 @@
 package main
 
-import "math"
+import (
+	"math"
+	"strings"
+)
 
 func creditsCfg(cfg object) object {
 	return section(cfg, "credits")
@@ -93,6 +96,14 @@ func unguardedWindows(cfg object) []string {
 		}
 	}
 	return unguarded
+}
+
+func repairedThresholds(cfg object) []string {
+	names := getString(cfg, "thresholdsRepaired")
+	if names == "" {
+		return nil
+	}
+	return strings.Split(names, ", ")
 }
 
 func creditsText(cfg object) string {

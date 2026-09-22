@@ -64,14 +64,15 @@ func baseCatalog() map[string]map[string]string {
 
 			"handoff.blocked": "⛔ This session has been running in another window with %[2]s since %[1]s; close this window (to force: noctis cancel %[3]s).",
 
-			"selfcheck.settings":   "settings.json unreadable",
-			"selfcheck.statusline": "statusLine not wired (no limit data)",
-			"selfcheck.config":     "config.json broken",
-			"selfcheck.threshold":  "threshold out of range (1–100): %s — that window is not guarded",
-			"selfcheck.token":      "no OAuth token: the %s weekly rule is off (fine if your plan has no %[1]s bucket)",
-			"selfcheck.message":    "%s: %s — noctis doctor",
-			"session.checkpoint":   "%s: the previous session was paused at %s because of a usage limit; resume note %s (full context: claude --resume %s).",
-			"session.alreadyOver":  "⏸ %s usage is already %s%%: new work pauses until %s and resumes on its own. To keep working anyway: /noctis:pause 120.",
+			"selfcheck.settings":       "settings.json unreadable",
+			"selfcheck.statusline":     "statusLine not wired (no limit data)",
+			"selfcheck.config":         "config.json broken",
+			"selfcheck.threshold":      "no threshold on %s: that window is not guarded",
+			"selfcheck.thresholdFixed": "threshold out of range (1–100): %s — the built-in default is guarding it; fix config.json",
+			"selfcheck.token":          "no OAuth token: the %s weekly rule is off (fine if your plan has no %[1]s bucket)",
+			"selfcheck.message":        "%s: %s — noctis doctor",
+			"session.checkpoint":       "%s: the previous session was paused at %s because of a usage limit; resume note %s (full context: claude --resume %s).",
+			"session.alreadyOver":      "⏸ %s usage is already %s%%: new work pauses until %s and resumes on its own. To keep working anyway: /noctis:pause 120.",
 
 			"queue.stuckNotify":    "Queue not progressing: %d open items, session stopped (%s).",
 			"queue.stuckMessage":   "⛔ Queue not progressing (%d open); auto-continue stopped — see errors.log.",
@@ -140,7 +141,8 @@ func baseCatalog() map[string]map[string]string {
 			"status.noData":            "(no data)",
 			"status.updated":           " (updated %s)",
 			"status.thresholds":        "Thresholds   : 5h ≥%s%% · weekly ≥%s%% · %s ≥%s%%",
-			"status.thresholdsBad":     "  ! out of range (1-100): %s — those windows are NOT guarded",
+			"status.thresholdsBad":     "  ! no threshold: %s — those windows are NOT guarded",
+			"status.thresholdsFixed":   "  ! out of range (1-100): %s — the built-in default is used instead",
 			"status.credits":           "Credits      : %s",
 			"status.model":             "Model        : setting=%s · primary=%s · fallback=%s · effort=%s",
 			"status.modelNone":         "(none)",
@@ -182,7 +184,8 @@ func baseCatalog() map[string]map[string]string {
 			"doctor.model":             "model setting: %s",
 			"doctor.token":             "OAuth token (%s tracking): %s",
 			"doctor.thresholdsOk":      "thresholds: 5h %s%% · weekly %s%% · scoped %s%%",
-			"doctor.thresholdsBad":     "thresholds out of range (1-100): %s — those windows are not guarded",
+			"doctor.thresholdsBad":     "no threshold on %s: those windows are not guarded",
+			"doctor.thresholdsFixed":   "thresholds out of range (1-100): %s — the built-in default is used instead",
 			"doctor.fixThresholds":     "put every threshold back between 1 and 100 in config.json",
 			"doctor.credits":           "paid usage credits: %s",
 			"doctor.fixCredits":        "set credits.allowPaid back to false in config.json",
@@ -386,14 +389,15 @@ func baseCatalog() map[string]map[string]string {
 
 			"handoff.blocked": "⛔ Bu oturum %[1]s itibarıyla %[2]s ile başka pencerede sürüyor; bu pencereyi kapat (zorla açmak için: noctis cancel %[3]s).",
 
-			"selfcheck.settings":   "settings.json okunamıyor",
-			"selfcheck.statusline": "statusLine bağlı değil (limit verisi gelmez)",
-			"selfcheck.config":     "config.json bozuk",
-			"selfcheck.threshold":  "eşik aralık dışı (1–100): %s — bu pencere korunmuyor",
-			"selfcheck.token":      "OAuth token yok: %s haftalık kuralı kapalı (planında %[1]s kovası yoksa sorun değil)",
-			"selfcheck.message":    "%s: %s — noctis doctor",
-			"session.checkpoint":   "%s: önceki oturum %s tarihinde kullanım limiti nedeniyle duraklatıldı; devam notu %s (tam bağlam: claude --resume %s).",
-			"session.alreadyOver":  "⏸ %s kullanımı zaten %%%s: yeni iş %s'e kadar duraklar ve kendiliğinden devam eder. Yine de çalışmak için: /noctis:pause 120.",
+			"selfcheck.settings":       "settings.json okunamıyor",
+			"selfcheck.statusline":     "statusLine bağlı değil (limit verisi gelmez)",
+			"selfcheck.config":         "config.json bozuk",
+			"selfcheck.threshold":      "%s için eşik yok: bu pencere korunmuyor",
+			"selfcheck.thresholdFixed": "eşik aralık dışı (1–100): %s — yerleşik varsayılan koruyor; config.json'ı düzelt",
+			"selfcheck.token":          "OAuth token yok: %s haftalık kuralı kapalı (planında %[1]s kovası yoksa sorun değil)",
+			"selfcheck.message":        "%s: %s — noctis doctor",
+			"session.checkpoint":       "%s: önceki oturum %s tarihinde kullanım limiti nedeniyle duraklatıldı; devam notu %s (tam bağlam: claude --resume %s).",
+			"session.alreadyOver":      "⏸ %s kullanımı zaten %%%s: yeni iş %s'e kadar duraklar ve kendiliğinden devam eder. Yine de çalışmak için: /noctis:pause 120.",
 
 			"queue.stuckNotify":    "Kuyruk ilerlemiyor: %d açık madde, oturum durdu (%s).",
 			"queue.stuckMessage":   "⛔ Kuyruk ilerlemiyor (%d açık); otomatik devam durduruldu — errors.log'a bak.",
@@ -462,7 +466,8 @@ func baseCatalog() map[string]map[string]string {
 			"status.noData":            "(veri yok)",
 			"status.updated":           " (güncelleme %s)",
 			"status.thresholds":        "Eşikler      : 5sa ≥%%%s · hafta ≥%%%s · %s ≥%%%s",
-			"status.thresholdsBad":     "  ! aralık dışı (1-100): %s — bu pencereler KORUNMUYOR",
+			"status.thresholdsBad":     "  ! eşik yok: %s — bu pencereler KORUNMUYOR",
+			"status.thresholdsFixed":   "  ! aralık dışı (1-100): %s — yerine yerleşik varsayılan kullanılıyor",
 			"status.credits":           "Kredi        : %s",
 			"status.model":             "Model        : ayar=%s · birincil=%s · yedek=%s · effort=%s",
 			"status.modelNone":         "(yok)",
@@ -504,7 +509,8 @@ func baseCatalog() map[string]map[string]string {
 			"doctor.model":             "model ayarı: %s",
 			"doctor.token":             "OAuth token (%s takibi): %s",
 			"doctor.thresholdsOk":      "eşikler: 5sa %%%s · hafta %%%s · kapsamlı %%%s",
-			"doctor.thresholdsBad":     "eşikler aralık dışı (1-100): %s — bu pencereler korunmuyor",
+			"doctor.thresholdsBad":     "%s için eşik yok: bu pencereler korunmuyor",
+			"doctor.thresholdsFixed":   "eşikler aralık dışı (1-100): %s — yerine yerleşik varsayılan kullanılıyor",
 			"doctor.fixThresholds":     "config.json içinde her eşiği 1 ile 100 arasına geri al",
 			"doctor.credits":           "ücretli kullanım kredisi: %s",
 			"doctor.fixCredits":        "config.json içinde credits.allowPaid değerini false yap",
@@ -669,31 +675,51 @@ func baseCatalog() map[string]map[string]string {
 }
 
 var (
-	catalogOnce  sync.Once
-	catalogCache map[string]map[string]string
+	baseOnce     sync.Once
+	baseCache    map[string]map[string]string
+	catalogCache = map[string]map[string]string{}
 )
 
-func catalogTable() map[string]map[string]string {
-	catalogOnce.Do(func() {
-		catalogCache = baseCatalog()
-		for lang, table := range extraCatalogTable() {
-			catalogCache[lang] = table
+func baseTable() map[string]map[string]string {
+	baseOnce.Do(func() { baseCache = baseCatalog() })
+	return baseCache
+}
+
+func knownLocale(code string) bool {
+	if code == "" {
+		return false
+	}
+	if _, ok := extraCatalogBuilders[code]; ok {
+		return true
+	}
+	return baseTable()[code] != nil
+}
+
+func catalogFor(code string) map[string]string {
+	if table, seen := catalogCache[code]; seen {
+		return table
+	}
+	table := baseTable()[code]
+	if table == nil {
+		if build, ok := extraCatalogBuilders[code]; ok {
+			table = build()
 		}
-	})
-	return catalogCache
+	}
+	catalogCache[code] = table
+	return table
 }
 
 func detectLocale(cfg object) string {
 	candidates := []string{os.Getenv("NOCTIS_LANG"), getString(cfg, "locale")}
 	for _, candidate := range candidates {
 		code := strings.ToLower(strings.TrimSpace(candidate))
-		if catalogTable()[code] != nil {
+		if knownLocale(code) {
 			return code
 		}
 	}
 	for _, variable := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
 		value := strings.ToLower(os.Getenv(variable))
-		if len(value) >= 2 && catalogTable()[value[:2]] != nil {
+		if len(value) >= 2 && knownLocale(value[:2]) {
 			return value[:2]
 		}
 		if value != "" && value != "c" && value != "posix" {
@@ -708,9 +734,9 @@ func setLocale(cfg object) {
 }
 
 func T(key string, values ...any) string {
-	text, ok := catalogTable()[locale][key]
+	text, ok := catalogFor(locale)[key]
 	if !ok {
-		text, ok = catalogTable()["en"][key]
+		text, ok = catalogFor("en")[key]
 	}
 	if !ok {
 		return key

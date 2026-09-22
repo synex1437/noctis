@@ -384,6 +384,27 @@ func queueSnapshot(file string) queueView {
 	return view
 }
 
+func dropFinishedTasks(items object) {
+	for id, raw := range items {
+		if getString(toObject(raw), "status") == "completed" {
+			delete(items, id)
+		}
+	}
+}
+
+func dropOldestTasks(items object) {
+	if len(items) <= openTaskLimit {
+		return
+	}
+	keys := sortedKeys(items)
+	sort.SliceStable(keys, func(a, b int) bool {
+		return numberOr(toObject(items[keys[a]]), "at", 0) < numberOr(toObject(items[keys[b]]), "at", 0)
+	})
+	for _, id := range keys[:len(items)-openTaskLimit] {
+		delete(items, id)
+	}
+}
+
 func openTasks(state object, sid string) []object {
 	entry := getMap(getMap(state, "tasks"), sid)
 	items := getMap(entry, "items")
@@ -851,7 +872,9 @@ func ensureRunnerLauncher() string {
 	}, "\r\n")
 	existing, _ := readFileShared(files.runnerLauncher)
 	if string(existing) != content {
-		_ = os.WriteFile(files.runnerLauncher, []byte(content), 0o644)
+		if err := os.WriteFile(files.runnerLauncher, []byte(content), 0o644); err != nil {
+			fail("runner launcher not written (%s): %v", files.runnerLauncher, err)
+		}
 	}
 	return files.runnerLauncher
 }

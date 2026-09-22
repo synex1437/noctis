@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
 const { spawn, spawnSync } = require('child_process');
 const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, isAlive, refreshChecksums } = require('./harness');
 const PLUGIN_VERSION = readJson(path.join(SOURCE_ROOT, '.claude-plugin', 'plugin.json')).version;
@@ -2030,23 +2031,45 @@ async function scenarioHosts(acc) {
   acc.editState((st0) => {
     delete st0.notified['update:checkAt'];
   });
-  const first = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd1', cwd: PROJECT_DIR }, updateEnv);
+  const versionChecks = () => {
+    try {
+      return fs.readFileSync(path.join(lab.mockDir, 'version-checks.log'), 'utf8').split('\n').filter(Boolean).length;
+    } catch {
+      return 0;
+    }
+  };
+  const releaseFile = path.join(acc.guardDir, 'release.json');
+  const waitForChecks = async (want) => {
+    for (let i = 0; i < 40 && versionChecks() < want; i += 1) await sleep(250);
+    return versionChecks();
+  };
+  fs.rmSync(releaseFile, { force: true });
+  const checksAtStart = versionChecks();
+  const triggering = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd1', cwd: PROJECT_DIR }, updateEnv);
+  check('update check: the session start that triggers the fetch waits for nothing', triggering.includes('9.9.9'), false);
+  await waitForChecks(checksAtStart + 1);
+  for (let i = 0; i < 40 && !fs.existsSync(releaseFile); i += 1) await sleep(250);
+  check('update check: the detached fetch stores the published version', readJson(releaseFile).latest, '9.9.9');
+  const first = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd2', cwd: PROJECT_DIR }, updateEnv);
   check('update check: a newer published version is announced once with the update command', first.includes('9.9.9') && first.includes('/plugin update noctis'), true);
-  check('update check: not repeated the same day', acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd2', cwd: PROJECT_DIR }, updateEnv).includes('9.9.9'), false);
-  const checksBefore = fs.readFileSync(path.join(lab.mockDir, 'version-checks.log'), 'utf8').split('\n').filter(Boolean).length;
+  check('update check: not repeated the same day', acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd3', cwd: PROJECT_DIR }, updateEnv).includes('9.9.9'), false);
+  const checksBefore = versionChecks();
   acc.editState((st) => {
     delete st.notified['update:checkAt'];
   });
-  acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd3', cwd: PROJECT_DIR }, updateEnv);
-  check('update check: a new day fetches again but the known version is not announced twice', fs.readFileSync(path.join(lab.mockDir, 'version-checks.log'), 'utf8').split('\n').filter(Boolean).length === checksBefore + 1, true);
+  writeJson(releaseFile, { checkedAt: 0, latest: '9.9.9' });
+  const nextDay = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd4', cwd: PROJECT_DIR }, updateEnv);
+  check('update check: a new day fetches again but the known version is not announced twice', await waitForChecks(checksBefore + 1) === checksBefore + 1 && !nextDay.includes('9.9.9'), true);
   acc.setConfig((config) => {
     config.update.check = false;
   });
   acc.editState((st2) => {
     delete st2.notified['update:checkAt'];
   });
-  acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd4', cwd: PROJECT_DIR }, updateEnv);
-  check('update check: update.check=false never fetches', fs.readFileSync(path.join(lab.mockDir, 'version-checks.log'), 'utf8').split('\n').filter(Boolean).length, checksBefore + 1);
+  writeJson(releaseFile, { checkedAt: 0, latest: '9.9.9' });
+  acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'upd5', cwd: PROJECT_DIR }, updateEnv);
+  await sleep(750);
+  check('update check: update.check=false never fetches', versionChecks(), checksBefore + 1);
   acc.setConfig((config) => {
     config.update.check = true;
   });
@@ -2215,6 +2238,21 @@ async function scenarioChannelBudget(acc) {
     ok: Buffer.byteLength(opening) <= 1024,
     actual: Buffer.byteLength(opening),
     expected: '<=1024 B',
+  });
+
+  const stalled = http.createServer(() => {}).listen(0, '127.0.0.1');
+  await new Promise((resolve) => stalled.once('listening', resolve));
+  const stalledUrl = `http://127.0.0.1:${stalled.address().port}/plugin.json`;
+  fs.rmSync(path.join(acc.guardDir, 'release.json'), { force: true });
+  const startedAt = Date.now();
+  acc.hook({ hook_event_name: 'SessionStart', session_id: 'c-update', cwd: PROJECT_DIR, source: 'startup', transcript_path: TRANSCRIPT }, { NOCTIS_UPDATE_URL: stalledUrl, NO_PROXY: '127.0.0.1' });
+  const startCost = Date.now() - startedAt;
+  stalled.close();
+  results.push({
+    name: `channel: session start took ${startCost} ms with the update endpoint hanging`,
+    ok: startCost < 2000,
+    actual: `${startCost} ms`,
+    expected: '<2000 ms — the version check never blocks a session start',
   });
 
   const long = 'x'.repeat(4000);

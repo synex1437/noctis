@@ -234,7 +234,10 @@ func unixLaunchScript(launch launchSpec, claudePath string, claudeArgs []string,
 		"rm -f " + shellQuote(script),
 		"exec " + shellQuote(claudePath) + " " + shellJoin(claudeArgs),
 	}
-	_ = os.WriteFile(script, []byte(strings.Join(lines, "\n")+"\n"), 0o755)
+	if err := os.WriteFile(script, []byte(strings.Join(lines, "\n")+"\n"), 0o755); err != nil {
+		fail("launcher script not written (%s): %v", script, err)
+		return "", pidFile
+	}
 	return script, pidFile
 }
 
@@ -260,6 +263,9 @@ func launchInDesktopTerminal(cfg object, launch launchSpec, claudePath string, c
 		return false
 	}
 	script, pidFile := unixLaunchScript(launch, claudePath, claudeArgs, effort)
+	if script == "" {
+		return false
+	}
 	defer func() {
 		_ = os.Remove(script)
 		_ = os.Remove(pidFile)

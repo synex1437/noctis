@@ -34,6 +34,7 @@ var ported = map[string]commandFunc{
 	"why":              runWhy,
 	"webhook":          runWebhookCommand,
 	"schedule-preview": runSchedulePreview,
+	"release-check":    runReleaseCheck,
 	"version":          runVersion,
 }
 
