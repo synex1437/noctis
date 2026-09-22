@@ -95,9 +95,16 @@ func rolesFromArgs(current object) (object, bool, error) {
 
 func askRoles(current object) object {
 	reader := bufio.NewReader(os.Stdin)
+	ended := false
 	ask := func(question, fallback string) string {
+		if ended {
+			return fallback
+		}
 		fmt.Printf("%s [%s]: ", question, fallback)
-		line, _ := reader.ReadString('\n')
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			ended = true
+		}
 		line = strings.TrimSpace(line)
 		if line == "" {
 			return fallback
@@ -127,6 +134,9 @@ func askRoles(current object) object {
 				break
 			}
 			fmt.Println("  " + err.Error())
+			if ended {
+				break
+			}
 		}
 	}
 	return roles
@@ -137,10 +147,10 @@ func derivedRoles(config object, defaults object) object {
 	models := section(config, "models")
 	if primary := getString(models, "primary"); primary != "" {
 		roles["code"] = object{"model": primary, "effort": orDefault(getString(models, "effort"), getString(getMap(roles, "code"), "effort"))}
-		roles["planning"] = object{"model": primary, "effort": orDefault(getString(models, "effort"), getString(getMap(roles, "planning"), "effort"))}
+		roles["planning"] = object{"model": primary}
 	}
 	if fallback := getString(models, "fallback"); fallback != "" {
-		roles["fallback"] = object{"model": fallback}
+		roles["fallback"] = withEffort(fallback, getString(getMap(roles, "fallback"), "effort"))
 	}
 	pinned := getMap(section(config, "router"), "subagentModels")
 	if explore := getString(pinned, "Explore"); explore != "" {
@@ -149,6 +159,11 @@ func derivedRoles(config object, defaults object) object {
 	if plan := getString(pinned, "Plan"); plan != "" {
 		roles["planning"] = object{"model": plan}
 	}
+	for role := range effortlessRoles {
+		if spec := getMap(roles, role); spec != nil {
+			delete(spec, "effort")
+		}
+	}
 	roles["profile"] = "custom"
 	for name, profile := range roleProfiles {
 		if sameRoles(profile, roles) {
@@ -156,6 +171,14 @@ func derivedRoles(config object, defaults object) object {
 		}
 	}
 	return roles
+}
+
+func withEffort(model, effort string) object {
+	spec := object{"model": model}
+	if effort != "" {
+		spec["effort"] = effort
+	}
+	return spec
 }
 
 func sameRoles(a, b object) bool {
@@ -170,7 +193,13 @@ func sameRoles(a, b object) bool {
 
 func stdinIsTerminal() bool {
 	info, err := os.Stdin.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+	if err != nil || info.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	if devNull, err := os.Stat(os.DevNull); err == nil && os.SameFile(info, devNull) {
+		return false
+	}
+	return true
 }
 
 func applyRoles(configFile string, config object, roles object) {

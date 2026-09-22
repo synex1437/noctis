@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -776,7 +777,13 @@ func runSleeper() {
 	if !currentHost().limits {
 		watch.pollEvery = 0
 	}
-	sleepUntilPaced(at, watch.tickPace, watch.tick)
+	sleepUntilPaced(at, watch.tickPace, func() bool {
+		stop := watch.tick()
+		if !stop {
+			debug.FreeOSMemory()
+		}
+		return stop
+	})
 	if watch.cancelled {
 		logInfo("sleeper %s: wait cancelled; nothing to resume", sid)
 		return

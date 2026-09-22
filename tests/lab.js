@@ -2186,6 +2186,44 @@ async function scenarioSilentFailures(acc) {
   });
 }
 
+async function scenarioChannelBudget(acc) {
+  const now = nowSec();
+  acc.statusline('c1', 'claude-fable-5-1', 20, now + 7200, 30, now + 5 * 86400);
+  const spoke = [];
+  let hooks = 0;
+  const run = (input) => {
+    hooks += 1;
+    const body = String(acc.hook(input) || '').trim();
+    if (body) spoke.push(body);
+    return body;
+  };
+  const opening = String(acc.hook({ hook_event_name: 'SessionStart', session_id: 'c1', cwd: PROJECT_DIR, source: 'startup', transcript_path: TRANSCRIPT }) || '').trim();
+  for (let turn = 0; turn < 3; turn += 1) {
+    run({ hook_event_name: 'UserPromptSubmit', session_id: 'c1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'fix the auth.js token refresh loop and keep the tests green' });
+    for (let batch = 0; batch < 4; batch += 1) run({ hook_event_name: 'PostToolBatch', session_id: 'c1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
+    run({ hook_event_name: 'PreToolUse', session_id: 'c1', cwd: PROJECT_DIR, tool_name: 'Write', tool_input: { file_path: 'x.js' } });
+    run({ hook_event_name: 'Stop', session_id: 'c1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
+  }
+  results.push({
+    name: `channel: ${spoke.length}/${hooks} ordinary turn hooks spoke`,
+    ok: spoke.length === 0,
+    actual: spoke.join(' | ').slice(0, 300) || 'nothing',
+    expected: 'nothing — a turn under the threshold costs Claude no context',
+  });
+  results.push({
+    name: `channel: SessionStart handed over ${Buffer.byteLength(opening)} B`,
+    ok: Buffer.byteLength(opening) <= 1024,
+    actual: Buffer.byteLength(opening),
+    expected: '<=1024 B',
+  });
+
+  const long = 'x'.repeat(4000);
+  const pinned = acc.hook({ hook_event_name: 'PreToolUse', session_id: 'c1', cwd: PROJECT_DIR, tool_name: 'Agent', tool_input: { subagent_type: 'Explore', prompt: long } });
+  const echoed = JSON.parse(pinned).hookSpecificOutput.updatedInput;
+  check('subagent pin returns the input intact, with only the model added', echoed.prompt === long && echoed.model === 'haiku', true);
+  check('an unpinned subagent is not echoed back at all', acc.hook({ hook_event_name: 'PreToolUse', session_id: 'c1', cwd: PROJECT_DIR, tool_name: 'Agent', tool_input: { subagent_type: 'general-purpose', prompt: 'x' } }), '');
+}
+
 async function scenarioHousekeeping(acc) {
   const now = nowSec();
   writeTranscript();
@@ -2279,6 +2317,7 @@ async function main() {
     ['auto queue from long prompts', () => scenarioAutoQueue(accA)],
     ['bug-report bundle', () => scenarioBundle(accA)],
     ['silent failures: wiring, unwritable wait, recycled pid, doctor gate', () => scenarioSilentFailures(accA)],
+    ['channel: what the plugin hands Claude, and how often', () => scenarioChannelBudget(accA)],
     ['housekeeping', () => scenarioHousekeeping(accA)],
   ];
   const only = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
