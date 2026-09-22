@@ -205,8 +205,16 @@ func TestQueueTrustKeyIsPerFile(t *testing.T) {
 	if first == second {
 		t.Fatalf("two different files share a trust key: %s", first)
 	}
-	if queueTrustKey("/a/TASKS.md") != queueTrustKey("/a/TASKS.md") {
-		t.Fatal("the same file must always produce the same trust key")
+	for input, want := range map[string]string{
+		"/a/TASKS.md":   "3355377d",
+		"türkçe/ütf8 ✓": "f98bf6bc",
+	} {
+		if got := hashKey(input); got != want {
+			t.Fatalf("hashKey(%q) is now %q, was %q: every stored queue-trust record, scheduler task name and lock file is keyed by this, so changing it silently orphans them on upgrade", input, got, want)
+		}
+	}
+	if got := queueTrustKey("/a/TASKS.md"); got != "TASKS.md-3355377d" {
+		t.Fatalf("queueTrustKey is now %q: queues a user already trusted would have to be trusted again", got)
 	}
 }
 

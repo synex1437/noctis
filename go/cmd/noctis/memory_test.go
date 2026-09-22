@@ -24,6 +24,7 @@ func growth(t *testing.T, name string, warmup, rounds int, work func()) {
 	}
 	before := heapAfterGC()
 	beforeRoutines := runtime.NumGoroutine()
+	beforeFDs, countable := openDescriptors()
 	for i := 0; i < rounds; i++ {
 		work()
 	}
@@ -38,6 +39,12 @@ func growth(t *testing.T, name string, warmup, rounds int, work func()) {
 	}
 	if afterRoutines > beforeRoutines {
 		t.Errorf("%s leaked %d goroutine(s)", name, afterRoutines-beforeRoutines)
+	}
+	if !countable {
+		return
+	}
+	if afterFDs, _ := openDescriptors(); afterFDs > beforeFDs {
+		t.Errorf("%s left %d descriptor(s) open over %d rounds (%d -> %d); a wait runs this for hours", name, afterFDs-beforeFDs, rounds, beforeFDs, afterFDs)
 	}
 }
 

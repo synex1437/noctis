@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -298,4 +300,52 @@ func toObjectKeys(table map[string]map[string]string) object {
 		out[key] = true
 	}
 	return out
+}
+
+func openDescriptors() (int, bool) {
+	entries, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		return 0, false
+	}
+	return len(entries), true
+}
+
+func TestAChattyAppServerLeavesNothingBehind(t *testing.T) {
+	t.Setenv("NOCTIS_TEST_APP_SERVER_NOISE", "1")
+	beforeRoutines := runtime.NumGoroutine()
+	beforeFDs, canCountFDs := openDescriptors()
+	for round := 0; round < 5; round++ {
+		if _, err := fetchCodexRateLimits(os.Args[0], 200*time.Millisecond); err == nil {
+			t.Fatalf("round %d: a server that never answers should time out", round)
+		}
+	}
+	for i := 0; i < 100 && runtime.NumGoroutine() > beforeRoutines; i++ {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if after := runtime.NumGoroutine(); after > beforeRoutines {
+		t.Errorf("five timed-out probes left %d goroutine(s) behind (%d -> %d): the stdout reader is stuck on a full channel", after-beforeRoutines, beforeRoutines, after)
+	}
+	if !canCountFDs {
+		return
+	}
+	afterFDs, _ := openDescriptors()
+	if afterFDs > beforeFDs {
+		t.Errorf("five timed-out probes left %d descriptor(s) open (%d -> %d): the pipes to the app server are never closed", afterFDs-beforeFDs, beforeFDs, afterFDs)
+	}
+}
+
+func TestTheParseCacheStaysBounded(t *testing.T) {
+	dir := sandboxFiles(t)
+	parseCache = map[string]parsedFile{}
+	t.Cleanup(func() { parseCache = map[string]parsedFile{} })
+	for i := 0; i < parseCacheLimit*20; i++ {
+		path := filepath.Join(dir, "file-"+itoa(i)+".json")
+		mustWriteJSON(path, object{"value": float64(i), "filler": strings.Repeat("x", 512)})
+		if got := numberOr(readJSON(path), "value", -1); got != float64(i) {
+			t.Fatalf("file %d read back as %v", i, got)
+		}
+		if len(parseCache) > parseCacheLimit {
+			t.Fatalf("the parse cache holds %d entries after %d distinct files; the cap is %d", len(parseCache), i+1, parseCacheLimit)
+		}
+	}
 }

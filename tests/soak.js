@@ -370,10 +370,6 @@ async function runSession(acc) {
   timedHook(acc, { hook_event_name: 'SessionEnd', session_id: session.sid, reason: 'exit' });
 }
 
-function dirSize(dir, pattern) {
-  return fs.readdirSync(dir).filter((name) => pattern.test(name)).length;
-}
-
 const LEFTOVER = /\.(lock|tmp)$/;
 const SWEEP_TTL_MS = 5 * 60 * 1000;
 
