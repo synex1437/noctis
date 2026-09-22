@@ -50,15 +50,6 @@ function writeJson(file, data) {
   }
 }
 
-function stateStamp(file) {
-  try {
-    const content = fs.readFileSync(file);
-    return `${content.length}:${crypto.createHash('sha256').update(content).digest('hex').slice(0, 16)}`;
-  } catch {
-    return 'absent';
-  }
-}
-
 function processTable() {
   try {
     if (IS_WINDOWS) {
@@ -586,4 +577,4 @@ function waitKey(sid) {
 }
 
 module.exports = {
-  refreshChecksums, PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, Account, sleep, nowSec, readJson, writeJson, isAlive, stateStamp, waitKey };
+  refreshChecksums, PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, Account, sleep, nowSec, readJson, writeJson, isAlive, waitKey };

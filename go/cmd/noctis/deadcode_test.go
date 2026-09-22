@@ -38,9 +38,34 @@ func indexPackage(t *testing.T) sourceIndex {
 	return sourceIndex{files: files, fset: fset}
 }
 
+func buildWorld(file *ast.File) string {
+	for _, group := range file.Comments {
+		for _, comment := range group.List {
+			constraint, found := strings.CutPrefix(comment.Text, "//go:build ")
+			if !found {
+				continue
+			}
+			switch strings.TrimSpace(constraint) {
+			case "windows":
+				return "windows"
+			case "!windows":
+				return "unix"
+			}
+		}
+	}
+	return ""
+}
+
 func (index sourceIndex) identifierUses() (production, tests map[string]int) {
+	return index.identifierUsesIn("")
+}
+
+func (index sourceIndex) identifierUsesIn(world string) (production, tests map[string]int) {
 	production, tests = map[string]int{}, map[string]int{}
 	for name, file := range index.files {
+		if only := buildWorld(file); only != "" && world != "" && only != world {
+			continue
+		}
 		counter := production
 		if strings.HasSuffix(name, "_test.go") {
 			counter = tests
@@ -81,28 +106,32 @@ func collectIdentifiers(node ast.Node, into map[string]int) {
 
 func TestNoFunctionIsDeadOrTestOnly(t *testing.T) {
 	index := indexPackage(t)
-	production, tests := index.identifierUses()
-
 	reserved := map[string]bool{"main": true, "init": true, "TestMain": true}
 
-	for name, file := range index.files {
-		if strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		for _, decl := range file.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Recv != nil || reserved[fn.Name.Name] {
+	for _, world := range []string{"unix", "windows"} {
+		production, tests := index.identifierUsesIn(world)
+		for name, file := range index.files {
+			if strings.HasSuffix(name, "_test.go") {
 				continue
 			}
-			label := fn.Name.Name
-			switch {
-			case production[label] > 0:
+			if only := buildWorld(file); only != "" && only != world {
+				continue
+			}
+			for _, decl := range file.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || fn.Recv != nil || reserved[fn.Name.Name] {
+					continue
+				}
+				label := fn.Name.Name
+				switch {
+				case production[label] > 0:
 
-			case tests[label] > 0:
-				t.Errorf("%s is called only from tests: it belongs in a _test.go file, or the "+
-					"production path that should call it is missing", label)
-			default:
-				t.Errorf("%s has no callers at all", label)
+				case tests[label] > 0:
+					t.Errorf("on %s, %s is called only from tests: it belongs in a _test.go file, or the "+
+						"production path that should call it is missing", world, label)
+				default:
+					t.Errorf("on %s, %s has no callers at all", world, label)
+				}
 			}
 		}
 	}

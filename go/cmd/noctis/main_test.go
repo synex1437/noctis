@@ -8,6 +8,13 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	if os.Getenv("NOCTIS_TEST_APP_SERVER_NOISE") != "" {
+		for i := 0; ; i++ {
+			if _, err := fmt.Printf("{\"method\":\"noise\",\"params\":{\"n\":%d}}\n", i); err != nil {
+				os.Exit(0)
+			}
+		}
+	}
 	for _, argument := range os.Args[1:] {
 		if strings.HasPrefix(argument, "-") {
 			continue

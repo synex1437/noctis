@@ -637,18 +637,24 @@ func fetchCodexRateLimits(exe string, timeout time.Duration) (object, error) {
 	}
 	defer func() {
 		_ = command.Process.Kill()
-		_, _ = command.Process.Wait()
+		_ = command.Wait()
 	}()
 	write := func(message object) error {
 		_, err := stdin.Write(append(marshalCompact(message), '\n'))
 		return err
 	}
 	lines := make(chan string, 64)
+	stop := make(chan struct{})
+	defer close(stop)
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 		for scanner.Scan() {
-			lines <- scanner.Text()
+			select {
+			case lines <- scanner.Text():
+			case <-stop:
+				return
+			}
 		}
 		close(lines)
 	}()

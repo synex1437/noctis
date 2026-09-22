@@ -254,6 +254,11 @@ func placeBinary(pluginRoot string) (string, error) {
 	}
 	ensureDir(filepath.Dir(binary))
 	staging := fmt.Sprintf("%s.%d.tmp", binary, os.Getpid())
+	defer func() {
+		if err := os.Remove(staging); err != nil && !errors.Is(err, os.ErrNotExist) {
+			warn("temp file left behind: %s", staging)
+		}
+	}()
 
 	linked := os.Link(source, staging) == nil
 	if !linked {
@@ -272,7 +277,6 @@ func placeBinary(pluginRoot string) (string, error) {
 		err = os.Rename(staging, binary)
 	}
 	if err != nil {
-		os.Remove(staging)
 		return "", fmt.Errorf(T("install.binaryFailed"), err)
 	}
 	return binary, nil

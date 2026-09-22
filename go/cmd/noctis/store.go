@@ -54,7 +54,7 @@ const (
 	nearEdgePollClose       = 15
 	blindAfterSeconds       = 60
 	fetchTimeout            = 5 * time.Second
-	pluginVersion           = "5.5.4"
+	pluginVersion           = "5.5.5"
 	codingActivityWindow    = 45 * 60
 	codingTailBytes         = 64 * 1024
 	longTextSummaryChars    = 1200
@@ -1121,7 +1121,7 @@ func withSettings(change func(object) bool) bool {
 
 func hashKey(text string) string {
 	var hash uint32 = 5381
-	for _, char := range []rune(text) {
+	for _, char := range text {
 		hash = (hash * 33) ^ uint32(char)
 	}
 	return fmt.Sprintf("%08x", hash)
