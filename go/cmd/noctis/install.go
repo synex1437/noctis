@@ -688,9 +688,12 @@ func chooseHost() string {
 	fmt.Println(describeHosts())
 	for {
 		fmt.Printf("%s [1]: ", T("host.prompt"))
-		line, _ := reader.ReadString('\n')
+		line, err := reader.ReadString('\n')
 		if host := parseHostChoice(line); host != "" {
 			return host
+		}
+		if err != nil {
+			return "claude"
 		}
 		fmt.Println("  " + T("host.badChoice", strings.TrimSpace(line)))
 	}

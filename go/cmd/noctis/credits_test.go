@@ -171,3 +171,34 @@ func TestAFailedWriteDoesNotLeaveItsTempFileBehind(t *testing.T) {
 		t.Fatalf("a write that failed left %v behind; those accumulate in the user's guard dir", left)
 	}
 }
+
+func TestNobodyIsAskedAQuestionDevNullCannotAnswer(t *testing.T) {
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Skip(err)
+	}
+	defer devNull.Close()
+	saved := os.Stdin
+	os.Stdin = devNull
+	t.Cleanup(func() { os.Stdin = saved })
+	if stdinIsTerminal() {
+		t.Fatal("stdin on /dev/null is a character device but nobody is behind it; setup would print a menu into the void")
+	}
+}
+
+func TestAPlainInstallKeepsItsProfileName(t *testing.T) {
+	defaults := readJSON(filepath.Join(repoRoot(), "config.default.json"))
+	config := cloneObject(defaults)
+	derived := derivedRoles(config, section(defaults, "roles"))
+	if got := getString(derived, "profile"); got != "noctis" {
+		t.Fatalf("a setup with no flags reported the profile as %q; the shipped defaults are the noctis profile", got)
+	}
+	if got := getString(getMap(derived, "fallback"), "effort"); got != "max" {
+		t.Fatalf("the fallback effort was dropped on the way (%q); it is the one effort the scoped switch applies", got)
+	}
+	for role := range effortlessRoles {
+		if got := getString(getMap(derived, role), "effort"); got != "" {
+			t.Errorf("%s came back with effort %q, which nothing applies", role, got)
+		}
+	}
+}
