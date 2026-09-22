@@ -41,7 +41,15 @@ var (
 		[]string{"güncel", "haber", "kaynak", "literatür", "karşılaştır", "inceleme", "makale", "fiyat", "trend", "piyasa", "avantaj", "dezavantaj", "en iyi", "en yeni", "hangisi daha iyi", "web'?de ara", "internette ara", "google"},
 		[]string{"latest", "newest", "recent", "news", "sources?", "literature", "compar(e|ison)", "which is better", "reviews?", "articles?", "papers?", "prices?", "pricing", "trends?", "market", "benchmarks?", "pros and cons", "best"},
 	)
-	investigateWords    = newWordMatcher([]string{"araştır", "incele"}, []string{"research", "investigate", "look (up|into)"})
+	investigateWords = newWordMatcher([]string{"araştır", "incele"}, []string{"research", "investigate", "look (up|into)"})
+	codeActionWords  = newWordMatcher(
+		[]string{"derle", "çalıştır", "uygula", "entegre", "düzelt", "optimiz", "refaktör", "kur", "kurma", "kurulum", "taşı", "dağıt", "test"},
+		[]string{"implement(ation)?", "integrate", "fix(es)?", "patch", "optimi[sz]e", "migrat(e|ion)", "deploy(ment)?", "build", "compile", "run", "install", "refactor(ing)?", "debug(ging)?", "lint", "merge", "rebase", "commit", "tests?", "add", "write"},
+	)
+	writeWords = newWordMatcher(
+		[]string{"tasla", "metin", "duyuru", "bülten", "özgeçmiş", "slogan", "sözleşme", "çevir"},
+		[]string{"write", "writing", "draft", "compose", "rewrite", "reword", "proofread", "copywriting", "copy for", "blog posts?", "press releases?", "newsletters?", "captions?", "taglines?", "slogans?", "essays?", "translate", "paraphrase", "outline"},
+	)
 	summaryWords        = newWordMatcher([]string{"özet"}, []string{"summari[sz]e", "summary", "tl;?dr"})
 	continuationPattern = lazyRegexp(`(?i)^\s*(devam|continue|evet|yes|ok(ay)?|tamam|hayır|no|peki|hmm|dur|stop|bekle|wait)\b`)
 	forcedLite          = lazyRegexp(`(?i)^lite:`)
@@ -150,7 +158,7 @@ func classifyPrompt(cfg object, learned object, prompt, transcriptPath string, n
 	if codeSymbolPattern.MatchString(withoutURLs) || codePathPattern.MatchString(withoutURLs) {
 		return verdict{reason: "code-signal"}
 	}
-	if _, found := codeWords.find(withoutURLs); found {
+	if _, found := codeWords.find(withoutURLs); found && !coldSessionResearch(withoutURLs, transcriptPath, now) {
 		return verdict{reason: "code-signal"}
 	}
 	blocked := func(signal string) bool {
@@ -173,6 +181,9 @@ func classifyPrompt(cfg object, learned object, prompt, transcriptPath string, n
 	if signal, found := webWords.find(withoutURLs); found {
 		return decide("web-words", signal)
 	}
+	if signal, found := writeWords.find(withoutURLs); found {
+		return decide("writing", signal)
+	}
 	if _, found := summaryWords.find(withoutURLs); found {
 		if len([]rune(withoutURLs)) >= longTextSummaryChars {
 			return decide("long-text-summary", "summary")
@@ -186,6 +197,16 @@ func classifyPrompt(cfg object, learned object, prompt, transcriptPath string, n
 		return decide("investigate", signal)
 	}
 	return verdict{reason: "no-research-signal"}
+}
+
+func coldSessionResearch(text, transcriptPath string, now int64) bool {
+	if _, web := webWords.find(text); !web {
+		return false
+	}
+	if _, doing := codeActionWords.find(text); doing {
+		return false
+	}
+	return transcriptPath == "" || !recentCodingActivity(transcriptPath, now)
 }
 
 func routeDirective(cfg object) string {

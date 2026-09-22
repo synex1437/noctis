@@ -67,6 +67,9 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	thresholds := section(cfg, "thresholds")
 	models := section(cfg, "models")
 	lines := []string{T("status.accountDir", files.configDir)}
+	if statSafe(files.config) == nil {
+		lines = append(lines, T("status.notSetUp", pluginName))
+	}
 	usageText := orDefault(usageBadgeAt(usage, cfg, now), T("status.noData"))
 	if usage.updatedAt > 0 {
 		usageText += T("status.updated", formatTime(usage.updatedAt))
@@ -74,6 +77,10 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	lines = append(lines, T("status.usage", usageText))
 	lines = append(lines, T("status.plan", planWindows(usage, cfg)))
 	lines = append(lines, T("status.thresholds", getString(thresholds, "session5h"), getString(thresholds, "weeklyAll"), scopedLabel(cfg), formatNumber(scopedThreshold(cfg))))
+	if unguarded := unguardedWindows(cfg); len(unguarded) > 0 {
+		lines = append(lines, T("status.thresholdsBad", strings.Join(unguarded, ", ")))
+	}
+	lines = append(lines, T("status.credits", creditsText(cfg)))
 	modelLine := T("status.model", orDefault(settingsModel(), T("status.modelNone")), getString(models, "primary"), getString(models, "fallback"), getString(models, "effort"))
 	if switched := getMap(state, "modelSwitched"); switched != nil {
 		modelLine += T("status.switched", formatTime(numberOr(switched, "at", 0)))
@@ -84,6 +91,7 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 		routerText = T("status.routerOn", liteAgentType(cfg))
 	}
 	lines = append(lines, T("status.router", routerText))
+	lines = append(lines, T("status.roles", describeRoles(section(cfg, "roles"))))
 	fable := readJSON(files.fable)
 	fableText := T("status.notFetched")
 	if fetched := numberOr(fable, "fetchedAt", 0); fetched > 0 {
@@ -382,6 +390,15 @@ func doctorLines(cfg object) []string {
 		tokenText = T("doctor.tokenNo", files.credentials)
 	}
 	lines = append(lines, fixLine(oauthToken() != "", T("doctor.token", scopedLabel(cfg), tokenText), "doctor.fixToken")...)
+	unguarded := unguardedWindows(cfg)
+	limits := section(cfg, "thresholds")
+	thresholdText := T("doctor.thresholdsOk", getString(limits, "session5h"), getString(limits, "weeklyAll"), formatNumber(scopedThreshold(cfg)))
+	if len(unguarded) > 0 {
+		thresholdText = T("doctor.thresholdsBad", strings.Join(unguarded, ", "))
+	}
+	lines = append(lines, fixLine(len(unguarded) == 0, thresholdText, "doctor.fixThresholds")...)
+	lines = append(lines, fixLine(!paidCreditsAllowed(cfg), T("doctor.credits", creditsText(cfg)), "doctor.fixCredits")...)
+	lines = append(lines, "    "+T("doctor.creditsNote"))
 	if isWindows {
 		result := runPowershell("$PSVersionTable.PSVersion.ToString()", 15*time.Second)
 		psText := T("doctor.present")

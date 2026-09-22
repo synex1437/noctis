@@ -1041,8 +1041,13 @@ func persistModelSwitch(cfg object, fableResetsAt float64, now int64) {
 	if settingsModel() != getString(models, "fallback") {
 		setSettingsModel(getString(models, "fallback"))
 	}
+	previousEffort := setSettingsEffort(getString(getMap(section(cfg, "roles"), "fallback"), "effort"))
 	updateState(func(state object) {
-		state["modelSwitched"] = object{"at": float64(now), "from": getString(models, "primary"), "to": getString(models, "fallback"), "fableResetsAt": fableResetsAt}
+		switched := object{"at": float64(now), "from": getString(models, "primary"), "to": getString(models, "fallback"), "fableResetsAt": fableResetsAt}
+		if previousEffort != "" {
+			switched["effortWas"] = previousEffort
+		}
+		state["modelSwitched"] = switched
 	})
 }
 
@@ -1170,7 +1175,7 @@ func recordTree(cfg object, record object, cwd string) {
 
 func hitLabel(wait *waitPlan) string {
 	switch wait.hit {
-	case "burst", "compaction", "blind", "projection", "budget":
+	case "burst", "compaction", "blind", "projection", "budget", "ceiling":
 		return T("hit." + wait.hit)
 	}
 	return T("hit.threshold", formatNumber(wait.threshold))
@@ -1334,6 +1339,7 @@ func maybeRevertDefaultModel(cfg object, state object, usage usageView, now int6
 	if settingsModel() == getString(models, "fallback") {
 		setSettingsModel(getString(models, "primary"))
 	}
+	setSettingsEffort(getString(switched, "effortWas"))
 	updateState(func(next object) { next["modelSwitched"] = nil })
 	logInfo("fable window cleared: default model reverted to primary")
 	return T("scoped.reverted", scopedLabel(cfg), getString(models, "primary"))

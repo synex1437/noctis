@@ -88,6 +88,13 @@ for (const name of fs.readdirSync(path.join(ROOT, 'tests')).filter((file) => fil
   }
 }
 
+walk(ROOT, (file) => {
+  const relative = path.relative(ROOT, file);
+  if (/\.tmp$/.test(relative) || /^\.\d+\.tmp$/.test(path.basename(relative))) {
+    problems.push(`${relative} is a leftover temp file — an atomic write died before its rename`);
+  }
+});
+
 const pluginVersion = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
 const marketplace = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude-plugin', 'marketplace.json'), 'utf8'));
 if (marketplace.plugins[0].version !== pluginVersion) problems.push(`marketplace.json says ${marketplace.plugins[0].version}, plugin.json says ${pluginVersion}`);

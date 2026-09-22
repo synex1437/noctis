@@ -13,21 +13,23 @@ var roleNames = []string{"code", "research", "planning", "digest", "explore", "f
 
 var validEfforts = map[string]bool{"low": true, "medium": true, "high": true, "xhigh": true, "max": true}
 
+var effortlessRoles = map[string]bool{"planning": true, "explore": true}
+
 var frontmatterLine = lazyRegexp(`(?m)^(model|effort):[^\n]*\n`)
 
 var roleProfiles = map[string]object{
 	"noctis": {
 		"code":     object{"model": "fable", "effort": "max"},
 		"research": object{"model": "opus", "effort": "xhigh"},
-		"planning": object{"model": "fable", "effort": "max"},
+		"planning": object{"model": "fable"},
 		"digest":   object{"model": "haiku", "effort": "high"},
-		"explore":  object{"model": "haiku", "effort": "high"},
+		"explore":  object{"model": "haiku"},
 		"fallback": object{"model": "opus", "effort": "max"},
 	},
 	"balanced": {
 		"code":     object{"model": "opus", "effort": "high"},
 		"research": object{"model": "sonnet", "effort": "high"},
-		"planning": object{"model": "opus", "effort": "high"},
+		"planning": object{"model": "opus"},
 		"digest":   object{"model": "haiku", "effort": "medium"},
 		"explore":  object{"model": "haiku"},
 		"fallback": object{"model": "sonnet"},
@@ -35,7 +37,7 @@ var roleProfiles = map[string]object{
 	"economy": {
 		"code":     object{"model": "sonnet", "effort": "high"},
 		"research": object{"model": "haiku", "effort": "high"},
-		"planning": object{"model": "opus", "effort": "medium"},
+		"planning": object{"model": "opus"},
 		"digest":   object{"model": "haiku", "effort": "low"},
 		"explore":  object{"model": "haiku"},
 		"fallback": object{"model": "haiku"},
@@ -54,7 +56,11 @@ func parseRoleFlag(role, value string) (object, error) {
 		if !validEfforts[effort] {
 			return nil, errors.New(T("roles.badEffort", role, parts[1]))
 		}
-		spec["effort"] = effort
+		if effortlessRoles[role] {
+			fmt.Println("  " + T("roles.effortIgnored", T("roles."+role), effort))
+		} else {
+			spec["effort"] = effort
+		}
 	}
 	return spec, nil
 }
@@ -141,7 +147,7 @@ func derivedRoles(config object, defaults object) object {
 		roles["explore"] = object{"model": explore}
 	}
 	if plan := getString(pinned, "Plan"); plan != "" {
-		roles["planning"] = object{"model": plan, "effort": getString(getMap(roles, "planning"), "effort")}
+		roles["planning"] = object{"model": plan}
 	}
 	roles["profile"] = "custom"
 	for name, profile := range roleProfiles {

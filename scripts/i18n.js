@@ -107,6 +107,66 @@ function build() {
   process.stdout.write(`lang.go written: ${counts}\n`);
 }
 
+const WIDE = [[0x1100, 0x115f], [0x2e80, 0x303e], [0x3041, 0x33ff], [0x3400, 0x4dbf], [0x4e00, 0x9fff],
+  [0xa000, 0xa4cf], [0xa960, 0xa97f], [0xac00, 0xd7a3], [0xf900, 0xfaff], [0xfe10, 0xfe19],
+  [0xfe30, 0xfe6f], [0xff00, 0xff60], [0xffe0, 0xffe6], [0x1f300, 0x1f64f], [0x1f900, 0x1f9ff],
+  [0x20000, 0x3fffd]];
+const ZERO = /\p{Mn}|\p{Me}|\p{Cf}/u;
+
+function displayWidth(text) {
+  let total = 0;
+  for (const char of text) {
+    if (ZERO.test(char)) continue;
+    const code = char.codePointAt(0);
+    total += WIDE.some(([from, to]) => code >= from && code <= to) ? 2 : 1;
+  }
+  return total;
+}
+
+const ARGUMENT = /%(?:\[(\d+)\])?[-+# 0]*\d*(?:\.\d+)?([a-zA-Z%])/g;
+
+function argumentTypes(text) {
+  const types = {};
+  let next = 1;
+  for (const [, index, verb] of text.matchAll(ARGUMENT)) {
+    if (verb === '%') continue;
+    const position = index ? Number(index) : next;
+    types[position] = position in types && types[position] !== verb ? 'conflict' : verb;
+    next = position + 1;
+  }
+  return types;
+}
+
+const STATUS_ROWS = ['status.accountDir', 'status.usage', 'status.thresholds', 'status.model',
+  'status.router', 'status.skew', 'status.configBroken', 'status.disabled', 'status.observe',
+  'status.plan', 'status.waits', 'status.handedOff', 'status.errorsClean', 'status.errors',
+  'status.credits', 'status.roles', 'status.scopedData'];
+
+function auditCatalog(code, english, table, problems) {
+  for (const [key, source] of Object.entries(english)) {
+    const target = table[key];
+    if (target === undefined) continue;
+    const wanted = JSON.stringify(argumentTypes(source));
+    const got = JSON.stringify(argumentTypes(target));
+    if (wanted !== got) {
+      problems.push(`i18n/${code}.json: "${key}" takes ${got} where English takes ${wanted} — Go would print %!verb(MISSING)`);
+    }
+    if (source.trimStart().startsWith('[noctis]') && target !== source) {
+      problems.push(`i18n/${code}.json: "${key}" is an instruction handed to the model; those stay in English`);
+    }
+  }
+  const columns = new Map();
+  for (const key of STATUS_ROWS) {
+    const label = /^(.*?)[:\uff1a]/.exec(table[key] || '');
+    if (label) columns.set(key, displayWidth(label[1]));
+  }
+  const widths = [...new Set(columns.values())];
+  if (widths.length > 1) {
+    const listed = [...columns].map(([key, width]) => `${key}=${width}`).join(' ');
+    problems.push(`i18n/${code}.json: the status labels do not line up (${listed})`);
+  }
+}
+
 function check() {
   const onDisk = fs.readFileSync(LANG, 'utf8');
   const temporary = path.join(require('os').tmpdir(), `noctis-i18n-${process.pid}.go`);
@@ -118,10 +178,16 @@ function check() {
     throw new Error('lang.go does not match i18n/*.json — run `node scripts/i18n.js build`');
   }
   const english = readCatalog('en');
-  const fromSource = parseEntries(blockBody(fs.readFileSync(MESSAGES, 'utf8').slice(fs.readFileSync(MESSAGES, 'utf8').indexOf('func baseCatalog()')), 'en'));
-  if (JSON.stringify(english) !== JSON.stringify(fromSource)) {
-    throw new Error('i18n/en.json does not match messages.go — run `node scripts/i18n.js extract`');
+  const base = fs.readFileSync(MESSAGES, 'utf8');
+  const baseCatalog = base.slice(base.indexOf('func baseCatalog()'));
+  for (const code of REFERENCE) {
+    if (JSON.stringify(readCatalog(code)) !== JSON.stringify(parseEntries(blockBody(baseCatalog, code)))) {
+      throw new Error(`i18n/${code}.json does not match messages.go — run \`node scripts/i18n.js extract\``);
+    }
   }
+  const problems = [];
+  for (const code of [...REFERENCE, ...LANGUAGES]) auditCatalog(code, english, readCatalog(code), problems);
+  if (problems.length) throw new Error(problems.join('\n'));
   return true;
 }
 

@@ -101,9 +101,9 @@
       <text x="24" y="126" class="opt">2 balanced</text>
       <text x="124" y="126" class="opt">Opus 5·high code &amp; planning · Sonnet 5·high research · Haiku digests</text>
       <text x="24" y="150" class="opt">3 economy</text>
-      <text x="124" y="150" class="opt">Sonnet 5·high code · Haiku research · Opus 5·medium planning</text>
+      <text x="124" y="150" class="opt">Sonnet 5·high code · Haiku research · Opus 5 planning</text>
       <text x="24" y="174" class="opt">4 custom</text>
-      <text x="124" y="174" class="opt">model or model:effort for each of the six roles</text>
+      <text x="124" y="174" class="opt">a model for each of the six roles, with an effort where one applies</text>
       <text x="24" y="210" class="prompt">›</text>
       <text x="44" y="210" class="q">1</text>
       <text x="64" y="210" class="ok">✔ roles saved · unattended (permissions=auto) · status line · self-check OK</text>

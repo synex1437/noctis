@@ -936,7 +936,11 @@ func checkForUpdate(cfg object, state object, now int64) string {
 	if currentHost().id != "claude" {
 		command = T("update.hostCommand")
 	}
-	return T("update.available", pluginName, latest, pluginVersion, command)
+	notice := T("update.available", pluginName, latest, pluginVersion, command)
+	if market != "" && currentHost().id == "claude" {
+		notice += " " + T("update.autoHint", market)
+	}
+	return notice
 }
 
 func httpGetWithTimeout(url string, timeout time.Duration) ([]byte, error) {
