@@ -419,7 +419,9 @@ func onUserPromptSubmit(input, cfg object) {
 	}
 	releaseInterruptedWait(sid, state)
 	clearOverload(state, sid)
-	resetIdleGuard(state, sid)
+	if !queueContinuationPrompt(getString(input, "prompt")) {
+		resetIdleGuard(state, sid)
+	}
 	result := decide(cfg, state, input, now, decideOptions{})
 	if result.fableHit {
 		if observed(sid, "UserPromptSubmit", "switch-model", scopedLabel(cfg), usageFacts(result.usage)) {
@@ -950,6 +952,15 @@ func hitLabelOrWarn(result decision) string {
 	return ""
 }
 
+func queueContinuationPrompt(prompt string) bool {
+	for _, line := range strings.Split(prompt, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), queueContinuesPrefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func resetIdleGuard(state object, sid string) {
 	guard := getMap(getMap(state, "stopGuard"), sid)
 	if guard == nil || numberOr(guard, "idle", 0) == 0 {
@@ -1105,7 +1116,7 @@ func onStop(input, cfg object) {
 	if isAutoQueue(queuePath) {
 		where = queuePath
 	}
-	reason := fmt.Sprintf("[noctis] Queue continues: %d open in %s. Take the next eligible item%s (priority and (after …) dependencies already applied), finish it completely, mark it done in the file, then move to the following one.%s Do not stop or ask for confirmation; decide yourself.", snapshot.total, where, nextItem, blockedNote)
+	reason := fmt.Sprintf(queueContinuesPrefix+": %d open in %s. Take the next eligible item%s (priority and (after …) dependencies already applied), finish it completely, mark it done in the file, then move to the following one.%s Do not stop or ask for confirmation; decide yourself.", snapshot.total, where, nextItem, blockedNote)
 	if waitContext != "" {
 		reason = waitContext + "\n" + reason
 	}
