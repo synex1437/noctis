@@ -94,7 +94,7 @@ var (
 	agentTools     = map[string]bool{"Agent": true, "Task": true}
 	textExtensions = map[string]bool{".md": true, ".markdown": true, ".txt": true, ".rst": true, ".adoc": true, ".csv": true, ".tsv": true, ".srt": true, ".vtt": true}
 
-	knownPermModes   = map[string]bool{"default": true, "acceptEdits": true, "plan": true, "auto": true}
+	knownPermModes   = map[string]bool{"default": true, "manual": true, "acceptEdits": true, "plan": true, "auto": true}
 	refusedPermModes = map[string]bool{"bypassPermissions": true, "dontAsk": true}
 	localHosts       = map[string]bool{"127.0.0.1": true, "localhost": true, "::1": true, "[::1]": true}
 	safeNamePattern  = lazyRegexp(`[^A-Za-z0-9_.-]`)
