@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +20,7 @@ const (
 )
 
 func launchFiles(sid string) (spec, started, pidFile string) {
-	base := filepath.Join(files.launches, safeName(sid))
+	base := filepath.Join(files.launches, safeName(sid)+"."+strconv.Itoa(os.Getpid()))
 	return base + ".json", base + ".started", base + ".pid"
 }
 
@@ -55,8 +57,21 @@ func recordLaunch(sid string, pid int, how string) {
 	})
 }
 
-func clearLaunch(sid string) {
-	updateState(func(state object) { delete(stateMap(state, "launched"), sid) })
+func clearLaunch(sid string, pid int) {
+	updateState(func(state object) {
+		if record := getMap(getMap(state, "launched"), sid); record != nil && int(numberOr(record, "pid", 0)) == pid {
+			delete(stateMap(state, "launched"), sid)
+		}
+	})
+}
+
+func handoffWatchesEarlierWindow(state object, sid string, startedAt float64) bool {
+	handoff, window := getMap(getMap(state, "handedOff"), sid), getMap(getMap(state, "launched"), sid)
+	if handoff == nil || window == nil {
+		return false
+	}
+	launchedAt := numberOr(window, "at", startedAt)
+	return numberOr(handoff, "at", launchedAt+1) <= launchedAt && launchedAt < startedAt
 }
 
 func closePreviousLaunch(cfg object, sid string, wait object) {
@@ -68,7 +83,7 @@ func closePreviousLaunch(cfg object, sid string, wait object) {
 		return
 	}
 	pid := int(numberOr(record, "pid", 0))
-	defer clearLaunch(sid)
+	defer clearLaunch(sid, pid)
 	if pid <= 0 || pid == os.Getpid() || !processAlive(pid) {
 		return
 	}
@@ -77,8 +92,8 @@ func closePreviousLaunch(cfg object, sid string, wait object) {
 		logInfo("launch record for %s is %ds old; not closing pid %d", sid, int(age), pid)
 		return
 	}
-	if wait != nil && sessionActiveAfter(wait, float64(nowSec()-300)) {
-		logInfo("previous window of %s (pid %d) was active in the last five minutes; leaving it open", sid, pid)
+	if wait != nil && sessionActiveAfter(wait, math.Max(numberOr(wait, "startedAt", 0)+pauseSettleSeconds, float64(nowSec()-300))) {
+		logInfo("previous window of %s (pid %d) was used in the last five minutes, after its pause; leaving it open", sid, pid)
 		return
 	}
 	if !looksLikeSessionProcess(pid) {
@@ -157,6 +172,50 @@ func terminalPreference(cfg object) string {
 	return strings.TrimSpace(strings.ToLower(getString(section(cfg, "resume"), "terminal")))
 }
 
+func relaunchConfigDir(wait object) string {
+	if recorded, _ := wait["configDirEnv"].(string); recorded != "" {
+		return recorded
+	}
+	if sameDir(files.configDir, filepath.Join(homeDir(), ".claude")) {
+		return ""
+	}
+	return files.configDir
+}
+
+func sameDir(left, right string) bool {
+	left, right = filepath.Clean(left), filepath.Clean(right)
+	if left == right || (isWindows && strings.EqualFold(left, right)) {
+		return true
+	}
+	leftInfo, rightInfo := statSafe(left), statSafe(right)
+	return leftInfo != nil && rightInfo != nil && os.SameFile(leftInfo, rightInfo)
+}
+
+var claudeSessionMarkers = []string{"CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_PID", "AI_AGENT", "CLAUDE_EFFORT", "TRACEPARENT", "CLAUDE_CODE_ENTRYPOINT"}
+
+func withoutEnv(env []string, names ...string) []string {
+	kept := make([]string, 0, len(env))
+	for _, entry := range env {
+		key, _, _ := strings.Cut(entry, "=")
+		if !slices.ContainsFunc(names, func(name string) bool { return key == name || (isWindows && strings.EqualFold(key, name)) }) {
+			kept = append(kept, entry)
+		}
+	}
+	return kept
+}
+
+func relaunchEnv(launch launchSpec, effort string) []string {
+	env := withoutEnv(os.Environ(), append([]string{claudeConfigEnv}, claudeSessionMarkers...)...)
+	if launch.configDir != "" {
+		env = append(env, claudeConfigEnv+"="+launch.configDir)
+	}
+	return append(env, "CLAUDE_CODE_EFFORT_LEVEL="+effort, handoffEnv+"="+launch.sid)
+}
+
+func hostRelaunchEnv(host hostSpec, launch launchSpec) []string {
+	return append(withoutEnv(os.Environ(), claudeSessionMarkers...), handoffEnv+"="+launch.sid, "NOCTIS_HOST="+host.id)
+}
+
 func launchInWindowsTerminal(cfg object, launch launchSpec, claudePath string, claudeArgs []string, env []string, effort string) bool {
 	ensureDir(files.launches)
 	spec, started, pidFile := launchFiles(launch.sid)
@@ -167,7 +226,7 @@ func launchInWindowsTerminal(cfg object, launch launchSpec, claudePath string, c
 		quoted = append(quoted, windowsQuote(arg))
 	}
 	title := pluginName + " · " + filepath.Base(launch.cwd)
-	mustWriteJSON(spec, object{"claude": claudePath, "cwd": launch.cwd, "configDir": files.configDir, "sessionId": launch.sid, "effort": effort, "arguments": strings.Join(quoted, " "), "title": title})
+	mustWriteJSON(spec, object{"claude": claudePath, "cwd": launch.cwd, "configDir": launch.configDir, "sessionId": launch.sid, "effort": effort, "arguments": strings.Join(quoted, " "), "title": title})
 	defer func() {
 		for _, file := range []string{spec, started, pidFile} {
 			_ = os.Remove(file)
@@ -212,7 +271,7 @@ func waitForLaunchedSession(sid, pidFile, how string) bool {
 		return false
 	}
 	recordLaunch(sid, pid, how)
-	defer clearLaunch(sid)
+	defer clearLaunch(sid, pid)
 	waitForPid(pid)
 	logInfo("%s session ended (pid %d)", how, pid)
 	return true
@@ -223,9 +282,14 @@ func unixLaunchScript(launch launchSpec, claudePath string, claudeArgs []string,
 	spec, _, pidFile := launchFiles(launch.sid)
 	script = strings.TrimSuffix(spec, ".json") + ".sh"
 	_ = os.Remove(pidFile)
+	configLine := "unset " + claudeConfigEnv
+	if launch.configDir != "" {
+		configLine = "export " + claudeConfigEnv + "=" + shellQuote(launch.configDir)
+	}
 	lines := []string{
 		"#!/bin/sh",
-		"export CLAUDE_CONFIG_DIR=" + shellQuote(files.configDir),
+		"unset " + strings.Join(claudeSessionMarkers, " "),
+		configLine,
 		"export CLAUDE_CODE_EFFORT_LEVEL=" + shellQuote(effort),
 		"export " + handoffEnv + "=" + shellQuote(launch.sid),
 		"cd " + shellQuote(launch.cwd) + " || exit 1",

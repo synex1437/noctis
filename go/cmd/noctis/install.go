@@ -183,13 +183,27 @@ func patchHooks(installRoot, binary string) error {
 	return writeJSONAtomic(hooksFile, hooks.data)
 }
 
-func mergeConfig(configFile string, defaults object) (object, bool, map[string]bool) {
-	existing := readJSONStrict(configFile)
-	if !existing.ok {
-		fmt.Println(T("install.configSkipped", configFile, existing.err))
-		return nil, false, nil
+func readInstallConfig(configFile string) (object, error) {
+	stored := readJSONStrict(configFile)
+	if !stored.ok {
+		return nil, errors.New(T("install.configBroken", configFile, stored.err))
 	}
-	current := existing.data
+	return stored.data, nil
+}
+
+func writeInstallConfig(configFile string, config object) error {
+	if err := writeJSONAtomic(configFile, config); err != nil {
+		fail("write %s failed: %v", filepath.Base(configFile), err)
+		return errors.New(T("install.configUnwritable", configFile, err))
+	}
+	return nil
+}
+
+func mergeConfig(configFile string, defaults object) (object, map[string]bool, error) {
+	current, err := readInstallConfig(configFile)
+	if err != nil {
+		return nil, nil, err
+	}
 	if current == nil {
 		current = object{}
 	}
@@ -219,8 +233,10 @@ func mergeConfig(configFile string, defaults object) (object, bool, map[string]b
 			merged[name] = own
 		}
 	}
-	mustWriteJSON(configFile, merged)
-	return merged, true, added
+	if err := writeInstallConfig(configFile, merged); err != nil {
+		return nil, nil, err
+	}
+	return merged, added, nil
 }
 
 func placeBinary(pluginRoot string) (string, error) {
@@ -289,7 +305,7 @@ func firstRunSetup(defaults object) {
 	fresh := statSafe(files.config) == nil
 	if fresh {
 		ensureDir(files.guardDir)
-		if _, ok, _ := mergeConfig(files.config, defaults); !ok {
+		if _, _, err := mergeConfig(files.config, defaults); err != nil {
 			return
 		}
 	}
@@ -304,8 +320,12 @@ func firstRunSetup(defaults object) {
 			return false
 		}
 		if current != "" {
-
-			config := readJSON(files.config)
+			stored := readJSONStrict(files.config)
+			if !stored.ok {
+				warn("ensure: statusLine left as it is: config.json, where its chain is kept, cannot be read (%s)", stored.err)
+				return false
+			}
+			config := stored.data
 			if config == nil {
 				config = object{}
 			}
@@ -316,7 +336,10 @@ func firstRunSetup(defaults object) {
 			}
 			if getString(statusline, "chainCommand") == "" {
 				statusline["chainCommand"] = current
-				mustWriteJSON(files.config, config)
+				if err := writeJSONAtomic(files.config, config); err != nil {
+					warn("ensure: statusLine left as it is: its chain could not be saved in config.json (%v)", err)
+					return false
+				}
 			}
 		}
 		data["statusLine"] = object{"type": "command", "command": fmt.Sprintf(`"%s" statusline`, forwardSlashes(binary))}
@@ -334,21 +357,25 @@ func firstRunSetup(defaults object) {
 }
 
 func runEnsure() {
-	if _, err := placeBinary(files.pluginRoot); err != nil {
+	binary := filepath.Join(files.pluginRoot, "bin", binaryFileName())
+	if os.SameFile(statSafe(platformBinary(files.pluginRoot)), statSafe(binary)) {
+		os.Remove(binary + ".old")
+	} else if _, err := placeBinary(files.pluginRoot); err != nil {
 		warn("ensure: %v", err)
 	}
-	firstRunSetup(readJSON(filepath.Join(files.pluginRoot, "config.default.json")))
+	defaults := readJSON(filepath.Join(files.pluginRoot, "config.default.json"))
+	firstRunSetup(defaults)
 
-	if statSafe(files.config) != nil {
-		if defaults := readJSON(filepath.Join(files.pluginRoot, "config.default.json")); len(defaults) > 0 {
-			if _, ok, added := mergeConfig(files.config, defaults); ok && len(added) > 0 {
-				logInfo("ensure: %d new config section(s) added: %s", len(added), strings.Join(sortedKeys(added), ", "))
-			}
+	if len(defaults) > 0 && statSafe(files.config) != nil {
+		if _, added, err := mergeConfig(files.config, defaults); err == nil && len(added) > 0 {
+			logInfo("ensure: %d new config section(s) added: %s", len(added), strings.Join(sortedKeys(added), ", "))
 		}
 	}
-	if roles := section(loadConfig(), "roles"); len(roles) > 0 {
-		if changed := syncAgentFiles(files.pluginRoot, roles); changed > 0 {
-			logInfo("ensure: %d agent file(s) synced with the roles profile", changed)
+	if cfg := loadConfig(); getString(cfg, "configError") == "" {
+		if roles := section(cfg, "roles"); len(roles) > 0 {
+			if changed := syncAgentFiles(files.pluginRoot, roles); changed > 0 {
+				logInfo("ensure: %d agent file(s) synced with the roles profile", changed)
+			}
 		}
 	}
 	healStatusLine()
@@ -423,7 +450,7 @@ func applyPreset(configFile string, config object, preset string) error {
 	return nil
 }
 
-func wireSettings(configDir, binary string, config object, configOk bool, configFile string, defaults object, noModel bool) error {
+func wireSettings(configDir, binary string, config object, configFile string, defaults object, noModel bool) error {
 	settingsFile := filepath.Join(configDir, "settings.json")
 	settings := readJSONStrict(settingsFile)
 	if !settings.ok {
@@ -433,59 +460,64 @@ func wireSettings(configDir, binary string, config object, configOk bool, config
 	if data == nil {
 		data = object{}
 	}
-	backup := backupFile(settingsFile)
+	chained := ""
 	previous := getString(getMap(data, "statusLine"), "command")
-	if previous != "" && !strings.Contains(previous, "guard.js") && !strings.Contains(previous, "noctis") && configOk && getString(section(config, "statusline"), "chainCommand") == "" {
-		section(config, "statusline")["chainCommand"] = previous
-		mustWriteJSON(configFile, config)
-		fmt.Println(T("install.chained", previous))
+	if previous != "" && !strings.Contains(previous, "guard.js") && !strings.Contains(previous, "noctis") && getString(section(config, "statusline"), "chainCommand") == "" {
+		statusline := section(config, "statusline")
+		statusline["chainCommand"] = previous
+		config["statusline"] = statusline
+		chained = previous
 	}
 	data["statusLine"] = object{"type": "command", "command": fmt.Sprintf(`"%s" statusline`, forwardSlashes(binary))}
-	effort := getString(section(defaults, "models"), "effort")
-	if configOk {
-		effort = orDefault(getString(section(config, "models"), "effort"), effort)
-	}
+	effort := orDefault(getString(section(config, "models"), "effort"), getString(section(defaults, "models"), "effort"))
 	env := getMap(data, "env")
 	if env == nil {
 		env = object{}
 	}
-	if configOk && getString(env, "CLAUDE_CODE_EFFORT_LEVEL") != effort {
+	if getString(env, "CLAUDE_CODE_EFFORT_LEVEL") != effort {
 		config["managedEffort"] = object{"previous": env["CLAUDE_CODE_EFFORT_LEVEL"], "set": effort}
-		mustWriteJSON(configFile, config)
 	}
 	env["CLAUDE_CODE_EFFORT_LEVEL"] = effort
 	data["env"] = env
-	if !noModel && !keepModelPattern.MatchString(getString(data, "model")) {
-		primary := getString(section(defaults, "models"), "primary")
-		if configOk {
-			primary = orDefault(getString(section(config, "models"), "primary"), primary)
-		}
-		if configOk && getString(data, "model") != primary {
+	current := getString(data, "model")
+	managed := getMap(config, "managedModel")
+	ours := managed != nil && current != "" && current == getString(managed, "set")
+	if !noModel && (ours || !keepModelPattern.MatchString(current)) {
+		primary := orDefault(getString(section(config, "models"), "primary"), getString(section(defaults, "models"), "primary"))
+		if current != primary {
 
 			previous, hadModel := data["model"]
 			if !hadModel {
 				previous = nil
 			}
+			if ours {
+				previous = managed["previous"]
+			}
 			config["managedModel"] = object{"previous": previous, "set": primary}
-			mustWriteJSON(configFile, config)
 		}
 		data["model"] = primary
 	}
 	permissionNote := ""
-	if mode := managedPermissionMode(config, configOk, configFile); mode != "" {
+	if mode := managedPermissionMode(config); mode != "" {
 		permissions := getMap(data, "permissions")
 		if permissions == nil {
 			permissions = object{}
 		}
-		if configOk && getString(permissions, "defaultMode") != mode {
+		if getString(permissions, "defaultMode") != mode {
 			config["managedPermissionPrevious"] = permissions["defaultMode"]
-			mustWriteJSON(configFile, config)
 		}
 		permissions["defaultMode"] = mode
 		data["permissions"] = permissions
 		permissionNote = T("install.permissions", mode)
 	}
+	if err := writeInstallConfig(configFile, config); err != nil {
+		return err
+	}
+	backup := backupFile(settingsFile)
 	mustWriteJSON(settingsFile, data)
+	if chained != "" {
+		fmt.Println(T("install.chained", chained))
+	}
 	if permissionNote != "" {
 		fmt.Println(permissionNote)
 	}
@@ -497,8 +529,8 @@ func wireSettings(configDir, binary string, config object, configOk bool, config
 	return nil
 }
 
-func managedPermissionMode(config object, configOk bool, configFile string) string {
-	choice := strings.ToLower(flagString("permissions"))
+func managedPermissionMode(config object) string {
+	choice := choiceOf(permissionChoices, flagString("permissions"))
 	if choice == "keep" {
 		return ""
 	}
@@ -507,15 +539,17 @@ func managedPermissionMode(config object, configOk bool, configFile string) stri
 	}
 	probe := object{"resume": object{"permissionMode": choice}}
 	mode := supportedPermissionMode(probe, claudeExecutable(), "")
-	if configOk {
-		config["managedPermissionMode"] = mode
-		mustWriteJSON(configFile, config)
-	}
+	config["managedPermissionMode"] = mode
 	return mode
 }
 
 func installInto(configDir, sourceRoot string, noModel bool, defaults object) error {
 	fmt.Println(T("install.header", configDir))
+	guardDir := filepath.Join(configDir, pluginName)
+	configFile := filepath.Join(guardDir, "config.json")
+	if _, err := readInstallConfig(configFile); err != nil {
+		return err
+	}
 	installRoot := filepath.Join(configDir, "skills", pluginName)
 	if absInstall, _ := filepath.Abs(installRoot); absInstall != sourceRoot {
 		if isInside(sourceRoot, installRoot) || isInside(installRoot, sourceRoot) {
@@ -534,19 +568,18 @@ func installInto(configDir, sourceRoot string, noModel bool, defaults object) er
 		return err
 	}
 	fmt.Println(T("install.enginePath", forwardSlashes(binary)))
-	guardDir := filepath.Join(configDir, pluginName)
 	ensureDir(guardDir)
-	configFile := filepath.Join(guardDir, "config.json")
-	config, configOk, added := mergeConfig(configFile, defaults)
-	if configOk {
-		if err := applyPreset(configFile, config, flagString("preset")); err != nil {
-			return err
-		}
-		if err := configureRoles(configFile, config, installRoot, added["roles"]); err != nil {
-			return err
-		}
+	config, added, err := mergeConfig(configFile, defaults)
+	if err != nil {
+		return err
 	}
-	if err := wireSettings(configDir, binary, config, configOk, configFile, defaults, noModel); err != nil {
+	if err := applyPreset(configFile, config, flagString("preset")); err != nil {
+		return err
+	}
+	if err := configureRoles(configFile, config, installRoot, added["roles"]); err != nil {
+		return err
+	}
+	if err := wireSettings(configDir, binary, config, configFile, defaults, noModel); err != nil {
 		return err
 	}
 	previousConfig := files.configDir
@@ -558,21 +591,34 @@ func installInto(configDir, sourceRoot string, noModel bool, defaults object) er
 	return nil
 }
 
-func uninstallFrom(configDir string) {
+func uninstallFrom(configDir string) error {
 	fmt.Println(T("install.uninstallHeader", configDir))
+	settingsFile := filepath.Join(configDir, "settings.json")
+	settings := readJSONStrict(settingsFile)
+	if !settings.ok {
+		return errors.New(T("install.uninstallBroken", settingsFile, settings.err) + "\n" + T("install.undoByHand"))
+	}
+	configFile := filepath.Join(configDir, pluginName, "config.json")
+	stored := readJSONStrict(configFile)
+	if !stored.ok {
+		return errors.New(T("install.uninstallBroken", configFile, stored.err))
+	}
+	if settings.data != nil {
+		if err := undoSetupSettings(settingsFile, settings.data, stored.data); err != nil {
+			return err
+		}
+	}
 	installRoot := filepath.Join(configDir, "skills", pluginName)
 	if statSafe(installRoot) != nil {
 		if err := os.RemoveAll(installRoot); err == nil {
 			fmt.Println(T("install.removed", installRoot))
 		}
 	}
-	settingsFile := filepath.Join(configDir, "settings.json")
-	settings := readJSONStrict(settingsFile)
-	if !settings.ok || settings.data == nil {
-		return
-	}
-	data := settings.data
-	chain := getString(section(readJSON(filepath.Join(configDir, pluginName, "config.json")), "statusline"), "chainCommand")
+	return nil
+}
+
+func undoSetupSettings(settingsFile string, data, guardConfig object) error {
+	chain := getString(section(guardConfig, "statusline"), "chainCommand")
 	statusLine := getString(getMap(data, "statusLine"), "command")
 	if strings.Contains(statusLine, "guard.js") || strings.Contains(statusLine, "noctis") {
 		if chain != "" {
@@ -581,7 +627,6 @@ func uninstallFrom(configDir string) {
 			delete(data, "statusLine")
 		}
 	}
-	guardConfig := readJSON(filepath.Join(configDir, pluginName, "config.json"))
 	if env := getMap(data, "env"); env != nil {
 		managedEffort := getMap(guardConfig, "managedEffort")
 		switch {
@@ -611,33 +656,209 @@ func uninstallFrom(configDir string) {
 			modelNote = T("install.modelRemoved")
 		}
 	}
-	mustWriteJSON(settingsFile, data)
+	if err := writeJSONAtomic(settingsFile, data); err != nil {
+		return err
+	}
 	fmt.Println(T("install.restored", modelNote))
+	return nil
 }
 
-func configTargets() []string {
-	targets := []string{}
-	for i := 0; i+1 < len(os.Args); i++ {
-		if os.Args[i] == "--config-dir" {
-			resolved, _ := filepath.Abs(os.Args[i+1])
-			targets = append(targets, resolved)
+var setupFlags = []string{"profile", "preset", "permissions", "updates", "no-model", "no-ask", "config-dir", "account", "host", "code", "research", "planning", "digest", "explore", "fallback"}
+
+var installFlags = append([]string{"source", "uninstall"}, setupFlags...)
+
+var permissionChoices = []string{"auto", "acceptEdits", "plan", "default", "keep"}
+
+var updateChoices = []string{"on", "off", "keep"}
+
+var flagChoices = map[string][]string{"permissions": permissionChoices, "updates": updateChoices}
+
+func choiceOf(choices []string, value string) string {
+	for _, choice := range choices {
+		if strings.EqualFold(strings.TrimSpace(value), choice) {
+			return choice
+		}
+	}
+	return ""
+}
+
+func accountTargets(host string) []string {
+	targets, seen := []string{}, map[string]bool{}
+	for _, name := range []string{"config-dir", "account"} {
+		for _, value := range args.values[name] {
+			if strings.TrimSpace(value) == "" {
+				continue
+			}
+			resolved, _ := filepath.Abs(expandHome(value))
+			if !seen[resolved] {
+				seen[resolved] = true
+				targets = append(targets, resolved)
+			}
 		}
 	}
 	if len(targets) == 0 {
-		if env := os.Getenv("CLAUDE_CONFIG_DIR"); env != "" {
-			resolved, _ := filepath.Abs(env)
-			targets = append(targets, resolved)
-		} else {
-			targets = append(targets, filepath.Join(homeDir(), ".claude"))
-		}
+		targets = append(targets, hostHome(host))
 	}
 	return targets
 }
 
+func checkSetupArgs(name string, allowed []string) int {
+	if problems := argProblems(allowed); len(problems) > 0 {
+		for _, problem := range problems {
+			fmt.Fprintln(os.Stderr, problem)
+		}
+		fmt.Fprintln(os.Stderr, T("args.usage", name, "--"+strings.Join(allowed, " --")))
+		return 2
+	}
+	if err := setupValueError(); err != nil {
+		fmt.Fprintf(os.Stderr, "!! %s\n", err)
+		return 1
+	}
+	return 0
+}
+
+func argProblems(allowed []string) []string {
+	known := map[string]bool{}
+	for _, name := range allowed {
+		known[name] = true
+	}
+	problems := []string{}
+	for _, name := range sortedKeys(args.present) {
+		values := args.values[name]
+		switch {
+		case !known[name]:
+			if guess := closestFlag(name, allowed); guess != "" {
+				problems = append(problems, T("args.unknownGuess", "--"+name, "--"+guess))
+			} else {
+				problems = append(problems, T("args.unknown", "--"+name))
+			}
+		case switchFlags[name]:
+			if len(values) > 0 {
+				problems = append(problems, T("args.noValue", "--"+name))
+			}
+		default:
+			for _, value := range values {
+				if problem := valueProblem(name, value); problem != "" {
+					problems = append(problems, problem)
+					break
+				}
+			}
+		}
+	}
+	for index, word := range args.positional {
+		if index == 0 {
+			continue
+		}
+		if guess := wordGuess(word, known); guess != "" {
+			problems = append(problems, T("args.strayGuess", word, guess))
+		} else {
+			problems = append(problems, T("args.stray", word))
+		}
+	}
+	return problems
+}
+
+func valueProblem(name, value string) string {
+	if strings.TrimSpace(value) == "" {
+		return T("args.needsValue", "--"+name)
+	}
+	if choices := flagChoices[name]; choices != nil && choiceOf(choices, value) == "" {
+		return T("args.badValue", "--"+name, value, strings.Join(choices, ", "))
+	}
+	return ""
+}
+
+func wordGuess(word string, known map[string]bool) string {
+	lower := strings.ToLower(strings.TrimSpace(word))
+	if roleProfiles[lower] != nil {
+		return "--profile " + lower
+	}
+	if thresholdPresets[lower] != nil {
+		return "--preset " + lower
+	}
+	if mode := choiceOf(permissionChoices, lower); mode != "" {
+		return "--permissions " + mode
+	}
+	if choice := choiceOf(updateChoices, lower); choice != "" {
+		return "--updates " + choice
+	}
+	if _, ok := hostSpecs[lower]; ok {
+		return "--host " + lower
+	}
+	if name := strings.TrimLeft(lower, "-"); known[name] {
+		return "--" + name
+	}
+	return ""
+}
+
+func closestFlag(name string, allowed []string) string {
+	lower := strings.ToLower(name)
+	started := []string{}
+	for _, candidate := range allowed {
+		if len(lower) >= 3 && strings.HasPrefix(candidate, lower) {
+			started = append(started, candidate)
+		}
+	}
+	if len(started) == 1 {
+		return started[0]
+	}
+	best, bestDistance := "", 3
+	for _, candidate := range allowed {
+		if distance := editDistance(lower, candidate); distance < bestDistance {
+			best, bestDistance = candidate, distance
+		}
+	}
+	return best
+}
+
+func editDistance(from, to string) int {
+	previous := make([]int, len(to)+1)
+	for index := range previous {
+		previous[index] = index
+	}
+	for i := 1; i <= len(from); i++ {
+		current := make([]int, len(to)+1)
+		current[0] = i
+		for j := 1; j <= len(to); j++ {
+			cost := 1
+			if from[i-1] == to[j-1] {
+				cost = 0
+			}
+			current[j] = min(previous[j]+1, current[j-1]+1, previous[j-1]+cost)
+		}
+		previous = current
+	}
+	return previous[len(to)]
+}
+
+func setupValueError() error {
+	for _, preset := range args.values["preset"] {
+		if thresholdPresets[strings.ToLower(preset)] == nil {
+			return errors.New(T("setup.unknownPreset", preset))
+		}
+	}
+	for _, profile := range args.values["profile"] {
+		if name := profileAlias(strings.ToLower(profile)); roleProfiles[name] == nil {
+			return errors.New(T("roles.unknownProfile", name))
+		}
+	}
+	for _, role := range roleNames {
+		for _, value := range args.values[role] {
+			if err := roleFlagError(role, value); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func runInstall() {
+	if code := checkSetupArgs("install", installFlags); code != 0 {
+		os.Exit(code)
+	}
 	sourceRoot := files.pluginRoot
-	if flagString("source") != "" {
-		sourceRoot, _ = filepath.Abs(flagString("source"))
+	if source := flagString("source"); source != "" {
+		sourceRoot, _ = filepath.Abs(expandHome(source))
 	}
 	defaults := readJSON(filepath.Join(sourceRoot, "config.default.json"))
 	if defaults == nil {
@@ -646,25 +867,28 @@ func runInstall() {
 	}
 	host := chooseHost()
 	if host != "claude" {
-		for _, configDir := range hostTargets(host) {
+		for _, configDir := range accountTargets(host) {
+			var err error
 			if args.present["uninstall"] {
-				uninstallHost(host, configDir)
-				continue
+				err = uninstallHost(host, configDir)
+			} else {
+				err = installHost(host, configDir, sourceRoot, defaults)
 			}
-			if err := installHost(host, configDir, sourceRoot, defaults); err != nil {
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "!! %s\n", err)
 				os.Exit(1)
 			}
 		}
 		return
 	}
-	targets := configTargets()
-	for _, configDir := range targets {
+	for _, configDir := range accountTargets("claude") {
+		var err error
 		if args.present["uninstall"] {
-			uninstallFrom(configDir)
-			continue
+			err = uninstallFrom(configDir)
+		} else {
+			err = installInto(configDir, sourceRoot, args.present["no-model"], defaults)
 		}
-		if err := installInto(configDir, sourceRoot, args.present["no-model"], defaults); err != nil {
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "!! %s\n", err)
 			os.Exit(1)
 		}
@@ -703,24 +927,14 @@ func chooseHost() string {
 	}
 }
 
-func hostTargets(host string) []string {
-	targets := []string{}
-	for i := 0; i+1 < len(os.Args); i++ {
-		if os.Args[i] == "--config-dir" {
-			resolved, _ := filepath.Abs(os.Args[i+1])
-			targets = append(targets, resolved)
-		}
-	}
-	if len(targets) == 0 {
-		targets = append(targets, hostHome(host))
-	}
-	return targets
-}
-
 func installHost(host, configDir, sourceRoot string, defaults object) error {
 	spec := hostOf(host)
 	fmt.Println(T("host.header", spec.display, configDir))
 	guardDir := filepath.Join(configDir, pluginName)
+	configFile := filepath.Join(guardDir, "config.json")
+	if _, err := readInstallConfig(configFile); err != nil {
+		return err
+	}
 	installRoot := filepath.Join(guardDir, "plugin")
 	if absInstall, _ := filepath.Abs(installRoot); absInstall != sourceRoot {
 		if isInside(sourceRoot, installRoot) || isInside(installRoot, sourceRoot) {
@@ -737,22 +951,24 @@ func installHost(host, configDir, sourceRoot string, defaults object) error {
 	}
 	fmt.Println(T("install.enginePath", forwardSlashes(binary)))
 	ensureDir(guardDir)
-	configFile := filepath.Join(guardDir, "config.json")
-	config, configOk, _ := mergeConfig(configFile, defaults)
-	if configOk {
-		config["host"] = host
-		fable := section(config, "fable")
-		switch host {
-		case "codex":
-			fable["source"] = "codex"
-		default:
-			fable["source"] = "off"
-		}
-		config["fable"] = fable
-		if err := applyPreset(configFile, config, flagString("preset")); err != nil {
-			return err
-		}
-		mustWriteJSON(configFile, config)
+	config, _, err := mergeConfig(configFile, defaults)
+	if err != nil {
+		return err
+	}
+	config["host"] = host
+	fable := section(config, "fable")
+	switch host {
+	case "codex":
+		fable["source"] = "codex"
+	default:
+		fable["source"] = "off"
+	}
+	config["fable"] = fable
+	if err := applyPreset(configFile, config, flagString("preset")); err != nil {
+		return err
+	}
+	if err := writeInstallConfig(configFile, config); err != nil {
+		return err
 	}
 	written, err := wireHostHooks(host, binary, configDir)
 	if err != nil {
@@ -782,11 +998,15 @@ func installHost(host, configDir, sourceRoot string, defaults object) error {
 	return nil
 }
 
-func uninstallHost(host, configDir string) {
+func uninstallHost(host, configDir string) error {
 	spec := hostOf(host)
 	fmt.Println(T("install.uninstallHeader", configDir))
-	for _, file := range unwireHostHooks(host, configDir) {
+	removed, err := unwireHostHooks(host, configDir)
+	for _, file := range removed {
 		fmt.Println(T("host.unwired", forwardSlashes(file)))
+	}
+	if err != nil {
+		return err
 	}
 	installRoot := filepath.Join(configDir, pluginName, "plugin")
 	if statSafe(installRoot) != nil {
@@ -795,9 +1015,13 @@ func uninstallHost(host, configDir string) {
 		}
 	}
 	fmt.Println(T("host.uninstalled", spec.display))
+	return nil
 }
 
 func runSetup() {
+	if code := checkSetupArgs("setup", setupFlags); code != 0 {
+		os.Exit(code)
+	}
 	pluginRoot := files.pluginRoot
 	defaults := readJSON(filepath.Join(pluginRoot, "config.default.json"))
 	if defaults == nil {
@@ -805,7 +1029,7 @@ func runSetup() {
 		os.Exit(1)
 	}
 	if host := chooseHost(); host != "claude" {
-		for _, configDir := range hostTargets(host) {
+		for _, configDir := range accountTargets(host) {
 			if err := installHost(host, configDir, pluginRoot, defaults); err != nil {
 				fmt.Fprintf(os.Stderr, "!! %s\n", err)
 				os.Exit(1)
@@ -813,48 +1037,55 @@ func runSetup() {
 		}
 		return
 	}
-	for _, configDir := range configTargets() {
-		fmt.Println(T("install.header", configDir))
-		binary, err := placeBinary(pluginRoot)
-		if err != nil {
+	for _, configDir := range accountTargets("claude") {
+		if err := setupInto(configDir, pluginRoot, defaults); err != nil {
 			fmt.Fprintf(os.Stderr, "!! %s\n", err)
 			os.Exit(1)
 		}
-		guardDir := filepath.Join(configDir, pluginName)
-		ensureDir(guardDir)
-		configFile := filepath.Join(guardDir, "config.json")
-		config, configOk, added := mergeConfig(configFile, defaults)
-		if configOk {
-			if err := applyPreset(configFile, config, flagString("preset")); err != nil {
-				fmt.Fprintf(os.Stderr, "!! %s\n", err)
-				os.Exit(1)
-			}
-			if err := configureRoles(configFile, config, pluginRoot, added["roles"]); err != nil {
-				fmt.Fprintf(os.Stderr, "!! %s\n", err)
-				os.Exit(1)
-			}
-		}
-		if err := wireSettings(configDir, binary, config, configOk, configFile, defaults, args.present["no-model"]); err != nil {
-			fmt.Fprintf(os.Stderr, "!! %s\n", err)
-			os.Exit(1)
-		}
-		previousConfig := files.configDir
-		files = pathsFor(configDir, pluginRoot)
-		for _, line := range doctorLines(loadConfig()) {
-			fmt.Printf("   %s\n", line)
-		}
-		files = pathsFor(previousConfig, pluginRoot)
-		if writeFailures > 0 {
-			fmt.Fprintf(os.Stderr, "!! %s\n", T("install.incomplete", writeFailures, files.errors))
-			os.Exit(1)
-		}
-		fmt.Println(T("setup.done", forwardSlashes(binary), orDefault(getString(readJSON(filepath.Join(configDir, "settings.json")), "model"), "-")))
 	}
 	if line := enableMarketplaceAutoUpdate(pluginRoot); line != "" {
 		fmt.Println(line)
 	}
 	fmt.Println(T("install.next"))
 	fmt.Println(T("install.next1"))
+}
+
+func setupInto(configDir, pluginRoot string, defaults object) error {
+	fmt.Println(T("install.header", configDir))
+	guardDir := filepath.Join(configDir, pluginName)
+	configFile := filepath.Join(guardDir, "config.json")
+	if _, err := readInstallConfig(configFile); err != nil {
+		return err
+	}
+	binary, err := placeBinary(pluginRoot)
+	if err != nil {
+		return err
+	}
+	ensureDir(guardDir)
+	config, added, err := mergeConfig(configFile, defaults)
+	if err != nil {
+		return err
+	}
+	if err := applyPreset(configFile, config, flagString("preset")); err != nil {
+		return err
+	}
+	if err := configureRoles(configFile, config, pluginRoot, added["roles"]); err != nil {
+		return err
+	}
+	if err := wireSettings(configDir, binary, config, configFile, defaults, args.present["no-model"]); err != nil {
+		return err
+	}
+	previousConfig := files.configDir
+	files = pathsFor(configDir, pluginRoot)
+	for _, line := range doctorLines(loadConfig()) {
+		fmt.Printf("   %s\n", line)
+	}
+	files = pathsFor(previousConfig, pluginRoot)
+	if writeFailures > 0 {
+		return errors.New(T("install.incomplete", writeFailures, files.errors))
+	}
+	fmt.Println(T("setup.done", forwardSlashes(binary), orDefault(getString(readJSON(filepath.Join(configDir, "settings.json")), "model"), "-")))
+	return nil
 }
 
 func marketplaceNameFor(pluginRoot string) string {
@@ -868,7 +1099,7 @@ func marketplaceNameFor(pluginRoot string) string {
 }
 
 func enableMarketplaceAutoUpdate(pluginRoot string) string {
-	if strings.ToLower(flagString("updates")) == "keep" {
+	if choice := choiceOf(updateChoices, flagString("updates")); choice == "keep" || choice == "off" {
 		return ""
 	}
 	market := marketplaceNameFor(pluginRoot)
@@ -879,7 +1110,7 @@ func enableMarketplaceAutoUpdate(pluginRoot string) string {
 	if claudePath == "" {
 		return T("update.autoFailed", market)
 	}
-	if _, err := runWithTimeout(claudeCommand(claudePath, []string{"plugin", "marketplace", "update", market, "--auto-update"}), 45*time.Second); err != nil {
+	if _, err := runWithTimeout(inGuardDir(claudeCommand(claudePath, []string{"plugin", "marketplace", "update", market, "--auto-update"})), 45*time.Second); err != nil {
 		warn("marketplace auto-update could not be enabled for %s: %v", market, err)
 		return T("update.autoFailed", market)
 	}

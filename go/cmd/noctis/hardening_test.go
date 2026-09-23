@@ -334,6 +334,82 @@ func TestAChattyAppServerLeavesNothingBehind(t *testing.T) {
 	}
 }
 
+func appServerLingers(pid int) bool {
+	if !processAlive(pid) {
+		return false
+	}
+	stat, err := os.ReadFile(filepath.Join("/proc", itoa(pid), "stat"))
+	if err != nil {
+		return true
+	}
+	end := strings.LastIndexByte(string(stat), ')')
+	return end < 0 || end+2 >= len(stat) || (stat[end+2] != 'Z' && stat[end+2] != 'X')
+}
+
+func TestACodexWrapperNeverHangsTheProbe(t *testing.T) {
+	cases := []struct {
+		mode    string
+		timeout time.Duration
+		failure string
+	}{
+		{"answer", 5 * time.Second, ""},
+		{"refuse", 5 * time.Second, "authentication required"},
+		{"silent", 2 * time.Second, "timeout"},
+		{"deaf", 5 * time.Second, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.mode, func(t *testing.T) {
+			pidFile := filepath.Join(t.TempDir(), "server.pid")
+			t.Setenv("NOCTIS_TEST_CODEX_WRAPPER", "1")
+			t.Setenv("NOCTIS_TEST_CODEX_SERVER", c.mode)
+			t.Setenv("NOCTIS_TEST_CODEX_PIDFILE", pidFile)
+			t.Cleanup(func() {
+				if pid := readPidFile(pidFile); pid > 0 && processAlive(pid) {
+					if process, err := os.FindProcess(pid); err == nil {
+						_ = process.Kill()
+					}
+				}
+			})
+			type outcome struct {
+				windows object
+				err     error
+			}
+			done := make(chan outcome, 1)
+			started := time.Now()
+			go func() {
+				windows, err := fetchCodexRateLimits(os.Args[0], c.timeout)
+				done <- outcome{windows, err}
+			}()
+			var got outcome
+			select {
+			case got = <-done:
+			case <-time.After(c.timeout + 2*time.Second):
+				t.Fatalf("the probe was still blocked %s after it started (timeout %s): the app-server the wrapper left behind holds it, and with it the hook, the sleeper or the runner", time.Since(started).Round(time.Millisecond), c.timeout)
+			}
+			switch {
+			case c.failure != "":
+				if got.err == nil || !strings.Contains(got.err.Error(), c.failure) {
+					t.Fatalf("the probe returned %v, %v; want an error naming %q", got.windows, got.err, c.failure)
+				}
+			case got.err != nil:
+				t.Fatalf("the probe failed: %v", got.err)
+			case numberOr(getMap(got.windows, "five_hour"), "used", -1) != 12 || numberOr(getMap(got.windows, "seven_day"), "used", -1) != 34:
+				t.Fatalf("the probe read the wrong windows: %v", got.windows)
+			}
+			pid := readPidFile(pidFile)
+			if pid <= 0 {
+				t.Fatalf("the wrapped app-server never recorded its pid")
+			}
+			for i := 0; i < 100 && appServerLingers(pid); i++ {
+				time.Sleep(50 * time.Millisecond)
+			}
+			if appServerLingers(pid) {
+				t.Fatalf("the app-server behind the wrapper (pid %d) is still running after the probe returned", pid)
+			}
+		})
+	}
+}
+
 func TestTheParseCacheStaysBounded(t *testing.T) {
 	dir := sandboxFiles(t)
 	parseCache = map[string]parsedFile{}

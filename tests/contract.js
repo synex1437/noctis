@@ -99,6 +99,32 @@ function checkManifestShape(entries, binaryHandlers) {
   }
 }
 
+function agentDisallowedTools(file) {
+  const text = fs.readFileSync(path.join(ROOT, 'agents', file), 'utf8');
+  const front = text.startsWith('---\n') ? text.slice(4, text.indexOf('\n---', 4)) : '';
+  const line = /^disallowedTools:(.*)$/m.exec(front);
+  return new Set(line ? line[1].split(',').map((name) => name.trim()).filter(Boolean) : []);
+}
+
+function checkPreToolUseMatcher(entries) {
+  const pre = entries.filter((entry) => entry.event === 'PreToolUse');
+  const matchers = pre.map((entry) => entry.matcher || '(none)').join(' ; ');
+  const hits = (entry, tool, anchored) => !entry.matcher || entry.matcher === '*' ||
+    new RegExp(anchored ? `^(${entry.matcher})$` : entry.matcher).test(tool);
+  for (const tool of ['Write', 'Agent', 'Task', 'WebSearch', 'WebFetch', 'Workflow']) {
+    check(`PreToolUse matcher starts the hook for ${tool}`, pre.some((entry) => hits(entry, tool, true)), matchers);
+  }
+  for (const tool of ['Edit', 'MultiEdit', 'NotebookEdit']) {
+    check(`PreToolUse matcher skips ${tool}, so an edit never waits for a process`,
+      !pre.some((entry) => hits(entry, tool, false)), matchers);
+    for (const file of ['lite.md', 'digest.md']) {
+      const disallowed = agentDisallowedTools(file);
+      check(`agents/${file} keeps ${tool} in disallowedTools, since the write policy never sees it`,
+        disallowed.has(tool), `disallowedTools: ${[...disallowed].join(', ') || '(none)'}`);
+    }
+  }
+}
+
 function binaryHandlerNames() {
   const source = fs.readFileSync(path.join(ROOT, 'go', 'cmd', 'noctis', 'hooks.go'), 'utf8');
   const table = source.slice(source.indexOf('handlers := map[string]func(object, object){'));
@@ -117,6 +143,54 @@ function runManifestEntry(entry, account, lab, input, extraEnv = {}) {
   return { command, ...result };
 }
 
+function checkLauncher() {
+  const root = fs.mkdtempSync(path.join(require('os').tmpdir(), 'noctis-launcher-'));
+  try {
+    const bin = path.join(root, 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    fs.copyFileSync(path.join(ROOT, 'bin', 'noctis'), path.join(bin, 'noctis'));
+    fs.chmodSync(path.join(bin, 'noctis'), 0o755);
+    const stub = (relative) => {
+      const file = path.join(bin, relative);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, `#!/bin/sh\necho ${relative} "$@"\n`, { mode: 0o755 });
+    };
+    for (const relative of ['linux-amd64/noctis', 'linux-arm64/noctis', 'darwin-arm64/noctis', 'darwin-amd64/noctis', 'windows-amd64/noctis.exe', 'noctis.exe']) stub(relative);
+    const fake = path.join(root, 'fake');
+    fs.mkdirSync(fake);
+    fs.writeFileSync(path.join(fake, 'uname'), '#!/bin/sh\ncase "$1" in -s) echo "$FAKE_S" ;; -m) echo "$FAKE_M" ;; esac\n', { mode: 0o755 });
+    const run = (system, machine, extra = {}, cwd = root, script = path.join(bin, 'noctis')) => spawnSync('sh', [script, 'version'], {
+      cwd,
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${fake}${path.delimiter}${process.env.PATH}`, FAKE_S: system, FAKE_M: machine, ...extra },
+    });
+    const expectations = [
+      ['Linux', 'x86_64', 'linux-amd64/noctis'],
+      ['Linux', 'aarch64', 'linux-arm64/noctis'],
+      ['Darwin', 'arm64', 'darwin-arm64/noctis'],
+      ['Darwin', 'x86_64', 'darwin-amd64/noctis'],
+      ['MINGW64_NT-10.0-26100', 'x86_64', 'windows-amd64/noctis.exe'],
+      ['MSYS_NT-10.0-26100', 'x86_64', 'windows-amd64/noctis.exe'],
+      ['CYGWIN_NT-10.0-26100', 'x86_64', 'windows-amd64/noctis.exe'],
+      ['MINGW64_NT-10.0-26100', 'aarch64', 'noctis.exe'],
+    ];
+    for (const [system, machine, expected] of expectations) {
+      const result = run(system, machine);
+      check(`launcher: ${system} ${machine} runs bin/${expected}`, result.status === 0 && result.stdout.trim() === `${expected} version`,
+        `exit ${result.status}: ${(result.stdout || '').trim()} ${(result.stderr || '').trim()}`);
+    }
+    const unsupported = run('Linux', 'armv7l');
+    check('launcher: an unsupported CPU stops with its name instead of running an amd64 binary',
+      unsupported.status === 1 && /armv7l/.test(unsupported.stderr) && !unsupported.stdout.trim(),
+      `exit ${unsupported.status}: ${(unsupported.stdout || '').trim()} ${(unsupported.stderr || '').trim()}`);
+    const cdpath = run('Linux', 'x86_64', { CDPATH: `.${path.delimiter}${root}` }, root, 'bin/noctis');
+    check('launcher: an exported CDPATH does not break the plugin root', cdpath.status === 0 && cdpath.stdout.trim() === 'linux-amd64/noctis version',
+      `exit ${cdpath.status}: ${(cdpath.stdout || '').trim()} ${(cdpath.stderr || '').trim()}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   const lab = new Lab('noctis-contract');
   await lab.startMock();
@@ -130,6 +204,7 @@ async function main() {
     check('manifest declares at least one hook', entries.length > 0);
     check('handler table was parsed out of hooks.go', handlers.size >= 10, `found ${handlers.size}`);
     checkManifestShape(entries, handlers);
+    checkPreToolUseMatcher(entries);
 
     const sampleCommand = entries[0].command.replace('${CLAUDE_PLUGIN_ROOT}', pluginRootOf(account));
     let executable = false;
@@ -241,11 +316,13 @@ async function main() {
 
     account.stopRunners();
 
+    if (process.platform !== 'win32') checkLauncher();
+
     if (failures.length > 0) {
       console.error('CONTRACT FAILED');
       for (const failure of failures) console.error(`  ✗ ${failure}`);
-      lab.stopMock();
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
     console.log(`contract: ${checks}/${checks} checks passed (${entries.length} manifest entries run as the host runs them)`);
   } finally {

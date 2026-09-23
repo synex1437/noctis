@@ -27,8 +27,9 @@ const tick = () => {
     return;
   }
   if (Date.now() / 1000 >= fireAt) {
-    fs.appendFileSync(log, JSON.stringify({ kind: 'fire', unit, at: Math.floor(Date.now() / 1000) }) + '\n');
-    spawn(command[0], command.slice(1), { detached: true, stdio: 'ignore', env: process.env }).unref();
+    const job = spawn(command[0], command.slice(1), { detached: true, stdio: 'ignore', env: process.env });
+    fs.appendFileSync(log, JSON.stringify({ kind: 'fire', unit, at: Math.floor(Date.now() / 1000), pid: job.pid }) + '\n');
+    job.unref();
     return;
   }
   setTimeout(tick, 200);

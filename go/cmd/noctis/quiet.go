@@ -119,7 +119,7 @@ func quietFastPath(input object) bool {
 		return false
 	}
 	sid := sessionKey(input)
-	if sid == "" || getString(input, "agent_id") != "" || getString(input, "agent_type") != "" {
+	if sid == "" || insideSubagent(input) {
 		return false
 	}
 	marker := readJSON(quietMarkerPath(sid))

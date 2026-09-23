@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
-const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, refreshChecksums, waitKey } = require('./harness');
+const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, waitKey } = require('./harness');
 
 const args = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -300,7 +300,6 @@ function invariants(round) {
 }
 
 async function main() {
-  refreshChecksums();
   await lab.startMock();
   acc.install();
   acc.fastClaude = true;
@@ -351,5 +350,6 @@ async function main() {
 
 main().catch((err) => {
   process.stdout.write(`monkey crashed: ${err.stack}\n`);
+  lab.stopMock();
   process.exit(1);
 });

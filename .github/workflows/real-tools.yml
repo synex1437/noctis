@@ -11,6 +11,7 @@ on:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -43,9 +44,10 @@ jobs:
           copilot --help | tee copilot.txt
           grep -q -- "--resume" copilot.txt || { echo "::error::copilot --help no longer lists --resume"; exit 1; }
       - name: Lab against the fakes (contract regression)
+        timeout-minutes: 30
         run: node tests/lab.js
       - name: Open an issue when a contract moved
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/github-script@v7
         with:
           script: |

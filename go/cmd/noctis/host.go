@@ -313,21 +313,24 @@ func withoutOurGroups(groups []any) []any {
 	return kept
 }
 
-func unwireHostHooks(host, accountDir string) []string {
+func unwireHostHooks(host, accountDir string) ([]string, error) {
 	removed := []string{}
 	switch host {
 	case "codex", "droid":
 		file := filepath.Join(accountDir, "hooks.json")
 		data := readJSONStrict(file)
-		if !data.ok || data.data == nil {
-			return removed
+		if !data.ok {
+			return removed, errors.New(T("install.uninstallBroken", file, data.err))
+		}
+		if data.data == nil {
+			return removed, nil
 		}
 		root := data.data
 		table := root
 		if host == "codex" {
 			table = getMap(root, "hooks")
 			if table == nil {
-				return removed
+				return removed, nil
 			}
 		}
 		for event, raw := range table {
@@ -342,25 +345,37 @@ func unwireHostHooks(host, accountDir string) []string {
 				table[event] = kept
 			}
 		}
-		mustWriteJSON(file, root)
+		if err := writeJSONAtomic(file, root); err != nil {
+			return removed, err
+		}
 		removed = append(removed, file)
 	case "antigravity":
 		file := filepath.Join(homeDir(), ".gemini", "config", "hooks.json")
 		if custom := os.Getenv("NOCTIS_ANTIGRAVITY_HOOKS"); custom != "" {
 			file = custom
 		}
-		if data := readJSONStrict(file); data.ok && data.data != nil && data.data[hookMarker] != nil {
+		settingsFile := filepath.Join(accountDir, "settings.json")
+		data := readJSONStrict(file)
+		if !data.ok {
+			return removed, errors.New(T("install.uninstallBroken", file, data.err))
+		}
+		settings := readJSONStrict(settingsFile)
+		if !settings.ok {
+			return removed, errors.New(T("install.uninstallBroken", settingsFile, settings.err))
+		}
+		if data.data != nil && data.data[hookMarker] != nil {
 			delete(data.data, hookMarker)
-			mustWriteJSON(file, data.data)
+			if err := writeJSONAtomic(file, data.data); err != nil {
+				return removed, err
+			}
 			removed = append(removed, file)
 		}
-		settingsFile := filepath.Join(accountDir, "settings.json")
-		if settings := readJSONStrict(settingsFile); settings.ok && settings.data != nil {
-			if strings.Contains(getString(getMap(settings.data, "statusLine"), "command"), "noctis") {
-				delete(settings.data, "statusLine")
-				mustWriteJSON(settingsFile, settings.data)
-				removed = append(removed, settingsFile)
+		if settings.data != nil && strings.Contains(getString(getMap(settings.data, "statusLine"), "command"), "noctis") {
+			delete(settings.data, "statusLine")
+			if err := writeJSONAtomic(settingsFile, settings.data); err != nil {
+				return removed, err
 			}
+			removed = append(removed, settingsFile)
 		}
 	case "copilot":
 		file := filepath.Join(accountDir, "hooks", pluginName+".json")
@@ -368,7 +383,7 @@ func unwireHostHooks(host, accountDir string) []string {
 			removed = append(removed, file)
 		}
 	}
-	return removed
+	return removed, nil
 }
 
 var rateLimitText = lazyRegexp(`(?i)rate.?limit|usage limit|quota|too many requests|\b429\b`)
@@ -517,7 +532,12 @@ func normalizeHookInput(host string, raw object) (string, object) {
 
 func translateOutput(host, event string, out object) object {
 	switch host {
-	case "claude", "codex", "droid":
+	case "claude":
+		return out
+	case "codex", "droid":
+		if specific := getMap(out, "hookSpecificOutput"); getString(specific, "hookEventName") == "PostToolBatch" {
+			specific["hookEventName"] = event
+		}
 		return out
 	case "antigravity":
 		specific := getMap(out, "hookSpecificOutput")
@@ -531,7 +551,7 @@ func translateOutput(host, event string, out object) object {
 			if cont, ok := out["continue"].(bool); ok && !cont {
 				return object{"injectSteps": []any{object{"ephemeralMessage": getString(out, "stopReason") + " Stop this turn now with a one-line status; the plugin resumes the session after the reset."}}}
 			}
-			if message := getString(out, "systemMessage"); message != "" {
+			if message := joinNotices(getString(out, "systemMessage"), getString(specific, "additionalContext")); message != "" {
 				return object{"injectSteps": []any{object{"ephemeralMessage": message}}}
 			}
 			return object{}
@@ -539,7 +559,7 @@ func translateOutput(host, event string, out object) object {
 			if cont, ok := out["continue"].(bool); ok && !cont {
 				return object{"terminationBehavior": "terminate", "injectSteps": []any{object{"ephemeralMessage": getString(out, "stopReason")}}}
 			}
-			if message := getString(out, "systemMessage"); message != "" {
+			if message := joinNotices(getString(out, "systemMessage"), getString(specific, "additionalContext")); message != "" {
 				return object{"injectSteps": []any{object{"ephemeralMessage": message}}, "terminationBehavior": ""}
 			}
 			return object{}
@@ -622,7 +642,9 @@ func fetchCodexRateLimits(exe string, timeout time.Duration) (object, error) {
 	if exe == "" {
 		return nil, errors.New("codex executable not found")
 	}
-	command := exec.Command(exe, "app-server")
+	command := inGuardDir(exec.Command(exe, "app-server"))
+	isolateTree(command)
+	command.WaitDelay = time.Second
 	stdin, err := command.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -631,13 +653,22 @@ func fetchCodexRateLimits(exe string, timeout time.Duration) (object, error) {
 	if err != nil {
 		return nil, err
 	}
-	command.Stderr = io.Discard
 	if err := command.Start(); err != nil {
 		return nil, err
 	}
 	defer func() {
-		_ = command.Process.Kill()
-		_ = command.Wait()
+		_ = stdin.Close()
+		exited := make(chan struct{})
+		go func() {
+			_ = command.Wait()
+			close(exited)
+		}()
+		select {
+		case <-exited:
+		case <-time.After(appServerExitGrace):
+			killTree(command.Process)
+			<-exited
+		}
 	}()
 	write := func(message object) error {
 		_, err := stdin.Write(append(marshalCompact(message), '\n'))
@@ -822,6 +853,33 @@ func describeHosts() string {
 	return strings.Join(lines, "\n")
 }
 
+func describeHostIDs() string {
+	lines := []string{}
+	for _, id := range hostOrder {
+		lines = append(lines, fmt.Sprintf("  %-12s %s", id, hostSpecs[id].display))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func unknownHost() string {
+	named := false
+	for _, value := range args.values["host"] {
+		if value = strings.TrimSpace(value); value == "" {
+			continue
+		}
+		named = true
+		if _, ok := hostSpecs[strings.ToLower(value)]; !ok {
+			return value
+		}
+	}
+	if env := strings.TrimSpace(os.Getenv("NOCTIS_HOST")); !named && env != "" {
+		if _, ok := hostSpecs[strings.ToLower(env)]; !ok {
+			return "NOCTIS_HOST=" + env
+		}
+	}
+	return ""
+}
+
 func parseHostChoice(answer string) string {
 	trimmed := strings.ToLower(strings.TrimSpace(answer))
 	if trimmed == "" {
@@ -832,12 +890,35 @@ func parseHostChoice(answer string) string {
 			return id
 		}
 	}
+	if len([]rune(trimmed)) < 3 {
+		return ""
+	}
+	chosen := ""
 	for _, id := range hostOrder {
-		if strings.Contains(strings.ToLower(hostSpecs[id].display), trimmed) {
-			return id
+		if startsAWord(strings.ToLower(hostSpecs[id].display), trimmed) {
+			if chosen != "" {
+				return ""
+			}
+			chosen = id
 		}
 	}
-	return ""
+	return chosen
+}
+
+func startsAWord(text, start string) bool {
+	for index := range text {
+		if index > 0 && isWordByte(text[index-1]) {
+			continue
+		}
+		if strings.HasPrefix(text[index:], start) {
+			return true
+		}
+	}
+	return false
+}
+
+func isWordByte(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z' || value >= '0' && value <= '9'
 }
 
 func hostHooksWired(host, accountDir string) (bool, string) {

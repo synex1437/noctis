@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-label="Noctis — AI coding agents that work through the night">
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-label="Noctis — a Claude Code plugin that pauses before the 5-hour or weekly usage limit and resumes after the reset">
   <title>Noctis</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
@@ -36,9 +36,9 @@
       .h1 { font-size: 56px; font-weight: 800; fill: #f2f5f9; letter-spacing: -1px; }
       .h2 { font-size: 23px; fill: #a9b3c2; }
       .brand { font-size: 15px; font-weight: 700; fill: #7f8ea3; letter-spacing: 2px; }
-      .chip { font-size: 17px; font-weight: 600; fill: #dbe2ec; }
-      .chipIcon { font-size: 17px; font-weight: 700; }
-      .foot { font-size: 14px; fill: #5f6b7d; }
+      .chip { font-size: 17px; font-weight: 500; fill: #dbe2ec; }
+      .icon { font-weight: 700; }
+      .foot { font-size: 14px; fill: #8b95a5; }
     </style>
   </defs>
 
@@ -69,25 +69,21 @@
   <text x="380" y="118" class="sans brand">NOCTIS · CLAUDE CODE · CODEX CLI · ANTIGRAVITY CLI · DROID · COPILOT CLI</text>
   <text x="378" y="184" class="sans h1">AI coding agents that work</text>
   <text x="378" y="246" class="sans h1">through the night.</text>
-  <text x="380" y="290" class="sans h2">Stops before the usage-limit wall, saves, waits, resumes — and keeps your</text>
-  <text x="380" y="320" class="sans h2">task queue moving while you sleep. In your language. No tokens spent deciding.</text>
+  <text x="380" y="290" class="sans h2">Pauses before the usage limit, waits for the reset, resumes —</text>
+  <text x="380" y="320" class="sans h2">and keeps your task queue moving while you sleep.</text>
 
-  <g class="sans">
-    <rect x="380" y="346" width="182" height="40" rx="20" fill="#121a29" stroke="#2a3548"/>
-    <text x="400" y="367" class="chipIcon" fill="#f5b544" dominant-baseline="central">⚡</text>
-    <text x="424" y="367" class="chip" dominant-baseline="central">7 ms hooks</text>
+  <g class="sans chip">
+    <rect x="380" y="346" width="197" height="40" rx="20" fill="#121a29" stroke="#2a3548"/>
+    <text x="478.5" y="367" text-anchor="middle" dominant-baseline="central"><tspan class="icon" fill="#f5b544">⚡</tspan><tspan dx="7">5–11 ms per hook</tspan></text>
 
-    <rect x="574" y="346" width="268" height="40" rx="20" fill="#121a29" stroke="#2a3548"/>
-    <text x="594" y="367" class="chipIcon" fill="#3ecf8e" dominant-baseline="central">◎</text>
-    <text x="618" y="367" class="chip" dominant-baseline="central">0 tokens per decision</text>
+    <rect x="589" y="346" width="242" height="40" rx="20" fill="#121a29" stroke="#2a3548"/>
+    <text x="710" y="367" text-anchor="middle" dominant-baseline="central"><tspan class="icon" fill="#3ecf8e">◎</tspan><tspan dx="7">0 tokens per decision</tspan></text>
 
-    <rect x="854" y="346" width="172" height="40" rx="20" fill="#121a29" stroke="#2a3548"/>
-    <text x="874" y="367" class="chipIcon" fill="#38c7d9" dominant-baseline="central">▣</text>
-    <text x="898" y="367" class="chip" dominant-baseline="central">one Go binary</text>
+    <rect x="843" y="346" width="180" height="40" rx="20" fill="#121a29" stroke="#2a3548"/>
+    <text x="933" y="367" text-anchor="middle" dominant-baseline="central"><tspan class="icon" fill="#38c7d9">▣</tspan><tspan dx="7">one Go binary</tspan></text>
 
-    <rect x="1038" y="346" width="206" height="40" rx="20" fill="#121a29" stroke="#2a3548"/>
-    <text x="1058" y="367" class="chipIcon" fill="#a78bfa" dominant-baseline="central">⊞</text>
-    <text x="1082" y="367" class="chip" dominant-baseline="central">Win · Mac · Linux</text>
+    <rect x="1035" y="346" width="205" height="40" rx="20" fill="#121a29" stroke="#2a3548"/>
+    <text x="1137.5" y="367" text-anchor="middle" dominant-baseline="central"><tspan class="icon" fill="#a78bfa">⊞</tspan><tspan dx="7">Win · Mac · Linux</tspan></text>
   </g>
 
   <text x="1228" y="404" class="sans foot" text-anchor="end">MIT</text>

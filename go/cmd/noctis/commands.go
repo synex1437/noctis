@@ -95,6 +95,9 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	}
 	lines = append(lines, T("status.router", routerText))
 	lines = append(lines, T("status.roles", describeRoles(section(cfg, "roles"))))
+	if profile := retunedProfile(section(cfg, "roles")); profile != "" {
+		lines = append(lines, T("status.roles", retunedNotice(profile)))
+	}
 	fable := readJSON(files.fable)
 	fableText := T("status.notFetched")
 	if fetched := numberOr(fable, "fetchedAt", 0); fetched > 0 {
@@ -218,58 +221,167 @@ func runCheck() {
 	os.Exit(code)
 }
 
+const (
+	sidPrefixMin    = 4
+	maxPauseMinutes = 7 * 24 * 60
+)
+
+var (
+	pauseNumber = lazyRegexp(`^\d+(?:\.\d+)?$`)
+	pauseSpan   = lazyRegexp(`^(?:\d+(?:\.\d+)?[a-z]+)+$`)
+	pausePart   = lazyRegexp(`(\d+(?:\.\d+)?)([a-z]+)`)
+	pauseUnits  = map[string]float64{
+		"m": 1, "min": 1, "mins": 1, "minute": 1, "minutes": 1,
+		"h": 60, "hr": 60, "hrs": 60, "hour": 60, "hours": 60,
+		"d": 1440, "day": 1440, "days": 1440,
+	}
+)
+
+func resolveSid(arg string, spaces ...object) (string, bool) {
+	for _, candidate := range []string{arg, safeName(arg)} {
+		for _, space := range spaces {
+			if _, exists := space[candidate]; exists {
+				return candidate, true
+			}
+		}
+	}
+	prefix := safeName(arg)
+	if len(prefix) < sidPrefixMin {
+		return arg, true
+	}
+	matched := map[string]bool{}
+	for _, space := range spaces {
+		for key := range space {
+			if strings.HasPrefix(key, prefix) {
+				matched[key] = true
+			}
+		}
+	}
+	matches := sortedKeys(matched)
+	if len(matches) > 1 {
+		fmt.Fprintln(os.Stderr, T("sid.ambiguous", arg, strings.Join(matches, ", ")))
+		return arg, false
+	}
+	if len(matches) == 1 {
+		return matches[0], true
+	}
+	return arg, true
+}
+
 func runCancel() {
 	target := flagString("sid")
 	if target == "" {
 		target = positional(1)
 	}
+	if code := cancelPending(target); code != 0 {
+		os.Exit(code)
+	}
+}
+
+func cancelPending(target string) int {
 	state := readState()
-	sids := []string{}
-	if target != "" {
-		sids = append(sids, target)
-	} else {
-		seen := map[string]bool{}
-		for _, bucket := range []string{"waits", "handedOff"} {
-			for sid := range getMap(state, bucket) {
-				if !seen[sid] {
-					seen[sid] = true
-					sids = append(sids, sid)
-				}
-			}
+	pending := []object{getMap(state, "waits"), getMap(state, "handedOff"), getMap(state, "launchFailures")}
+	found := map[string]bool{}
+	for _, bucket := range pending {
+		for sid := range bucket {
+			found[sid] = true
 		}
-		sort.Strings(sids)
 	}
-	for _, sid := range sids {
-		cancelRunner(sid, state)
+	sids := sortedKeys(found)
+	if target != "" {
+		key, unique := resolveSid(target, pending...)
+		if !unique {
+			return 2
+		}
+		if !found[key] {
+			cancelRunner(safeName(target), state)
+			fmt.Println(T("cancel.noneFor", target))
+			return 0
+		}
+		sids = []string{key}
 	}
+	if len(sids) == 0 {
+		fmt.Println(T("cancel.none"))
+		return 0
+	}
+	applied, failures := false, writeFailures
 	updateState(func(next object) {
+		applied = true
 		for _, sid := range sids {
 			delete(stateMap(next, "waits"), sid)
 			delete(stateMap(next, "handedOff"), sid)
+			delete(stateMap(next, "launchFailures"), sid)
 		}
 	})
-	if len(sids) == 0 {
-		fmt.Println(T("cancel.none"))
-		return
+	if !applied || writeFailures != failures {
+		fmt.Fprintln(os.Stderr, T("cancel.notSaved", files.errors))
+		return 1
 	}
 	shorts := []string{}
 	for _, sid := range sids {
+		cancelRunner(sid, state)
 		shorts = append(shorts, shortSid(sid))
 	}
 	fmt.Println(T("cancel.done", strings.Join(shorts, ", ")))
+	return 0
 }
 
 func runOff() {
-	minutes := 60.0
-	if value, ok := toNumber(positional(1)); ok && positional(1) != "" {
-		minutes = value
+	request := ""
+	if len(args.positional) > 1 {
+		request = strings.Join(args.positional[1:], " ")
 	}
-	if minutes < 1 {
-		minutes = 1
+	if code := pauseGuard(request); code != 0 {
+		os.Exit(code)
+	}
+}
+
+func pauseGuard(request string) int {
+	minutes, ok := pauseMinutes(request)
+	if !ok {
+		fmt.Fprintln(os.Stderr, T("off.usage"))
+		return 2
 	}
 	until := float64(nowSec()) + minutes*60
-	updateState(func(next object) { next["disabledUntil"] = until })
+	applied, failures := false, writeFailures
+	updateState(func(next object) {
+		applied = true
+		next["disabledUntil"] = until
+	})
+	if !applied || writeFailures != failures {
+		fmt.Fprintln(os.Stderr, T("off.notSaved", pluginName, files.errors))
+		return 1
+	}
 	fmt.Println(T("off.done", pluginName, formatTime(until)))
+	return 0
+}
+
+func pauseMinutes(request string) (float64, bool) {
+	text := strings.ToLower(strings.TrimSpace(request))
+	if text == "" {
+		return 60, true
+	}
+	minutes := 0.0
+	if pauseNumber.MatchString(text) {
+		minutes, _ = strconv.ParseFloat(text, 64)
+	} else {
+		compact := strings.Join(strings.Fields(text), "")
+		if !pauseSpan.MatchString(compact) {
+			return 0, false
+		}
+		for _, part := range pausePart.FindAllStringSubmatch(compact, -1) {
+			unit, known := pauseUnits[part[2]]
+			if !known {
+				return 0, false
+			}
+			value, _ := strconv.ParseFloat(part[1], 64)
+			minutes += value * unit
+		}
+	}
+	if !(minutes > 0 && minutes <= maxPauseMinutes) {
+		return 0, false
+	}
+	return math.Max(minutes, 1), true
 }
 
 func runOn() {
@@ -284,7 +396,12 @@ func runOn() {
 func runModel() {
 	cfg, state := loadConfig(), readState()
 	if sid := flagString("sid"); sid != "" {
-		fmt.Println(resolveSessionModel(cfg, state, readJSON(files.usage), sid))
+		usageFile := readJSON(files.usage)
+		key, unique := resolveSid(sid, getMap(state, "modelOverrides"), getMap(usageFile, "sessions"))
+		if !unique {
+			os.Exit(2)
+		}
+		fmt.Println(resolveSessionModel(cfg, state, usageFile, key))
 		return
 	}
 	fmt.Println(defaultModel(cfg, state))
@@ -301,6 +418,11 @@ func runCheckpointCommand() {
 	state := readState()
 	bestSid, latest := latestCheckpointFor(state, cwd, now)
 	if sid != "" {
+		key, unique := resolveSid(sid, getMap(state, "checkpoints"))
+		if !unique {
+			os.Exit(2)
+		}
+		sid = key
 		bestSid, latest = "", nil
 		if entry := toObject(getMap(state, "checkpoints")[sid]); checkpointUsable(entry, "", now) {
 			bestSid, latest = sid, entry
@@ -388,6 +510,9 @@ func doctorLines(cfg object) []string {
 	effort := getString(getMap(settings.data, "env"), "CLAUDE_CODE_EFFORT_LEVEL")
 	lines = append(lines, fixLine(effort == getString(section(cfg, "models"), "effort"), T("doctor.effort", orDefault(effort, T("doctor.none"))), "doctor.fixSetup")...)
 	lines = append(lines, fixLine(getString(settings.data, "model") != "", T("doctor.model", orDefault(getString(settings.data, "model"), T("doctor.none"))), "doctor.fixSetup")...)
+	if profile := retunedProfile(section(cfg, "roles")); profile != "" {
+		lines = append(lines, checkLine(false, retunedNotice(profile)))
+	}
 	tokenText := T("doctor.tokenYes")
 	if oauthToken() == "" {
 		tokenText = T("doctor.tokenNo", files.credentials)
@@ -424,11 +549,10 @@ func doctorLines(cfg object) []string {
 	agent := orDefault(getString(section(cfg, "router"), "agent"), "lite")
 	lines = append(lines, checkLine(statSafe(filepath.Join(installRoot, "hooks", "hooks.json")) != nil, T("doctor.pluginRoot", installRoot)))
 	lines = append(lines, checkLine(statSafe(filepath.Join(installRoot, "agents", agent+".md")) != nil, T("doctor.agent", agent)))
-	configText := files.config
-	if configError := getString(cfg, "configError"); configError != "" {
-		configText += " (" + configError + ")"
+	for _, issue := range unguardedAgentTools(cfg) {
+		lines = append(lines, checkLine(false, issue))
 	}
-	lines = append(lines, fixLine(statSafe(files.config) != nil && getString(cfg, "configError") == "", T("doctor.config", configText), "doctor.fixSetup")...)
+	lines = append(lines, doctorConfigLines(cfg)...)
 	usage := readJSON(files.usage)
 	usageAt := numberOr(usage, "updatedAt", 0)
 	usageText := T("doctor.usageNone")
@@ -450,6 +574,17 @@ func doctorLines(cfg object) []string {
 		lines = append(lines, "ℹ "+note)
 	}
 	return lines
+}
+
+func doctorConfigLines(cfg object) []string {
+	configText := files.config
+	remedy := "doctor.fixSetup"
+	configError := getString(cfg, "configError")
+	if configError != "" {
+		configText += " (" + configError + ")"
+		remedy = "doctor.fixConfig"
+	}
+	return fixLine(statSafe(files.config) != nil && configError == "", T("doctor.config", configText), remedy)
 }
 
 func runDoctor() {
@@ -495,7 +630,7 @@ func compareVersions(a, b string) int {
 }
 
 func claudeVersion(claudePath string) string {
-	output, _ := runWithTimeout(claudeCommand(claudePath, []string{"--version"}), 20*time.Second)
+	output, _ := runWithTimeout(inGuardDir(claudeCommand(claudePath, []string{"--version"})), 20*time.Second)
 	if match := versionPattern.FindStringSubmatch(string(output)); match != nil {
 		return match[1]
 	}

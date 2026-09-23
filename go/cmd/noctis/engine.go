@@ -694,11 +694,19 @@ func waitLive(wait object, now int64) bool {
 	}
 	scheduled := getMap(wait, "scheduled")
 	if getString(scheduled, "method") == "sleeper" {
-		if pid, ok := getNumber(scheduled, "pid"); ok && processAlive(int(pid)) {
+		if pid, ok := getNumber(scheduled, "pid"); ok && mayBeOurHelper(int(pid)) {
 			return true
 		}
 	}
 	return false
+}
+
+func mayBeOurHelper(pid int) bool {
+	if !processAlive(pid) {
+		return false
+	}
+	name := processName(pid)
+	return name == "" || ownHelperProcess(name)
 }
 
 func checkpointUsable(entry object, cwd string, now int64) bool {
@@ -807,7 +815,7 @@ func cancelScheduled(sid string, scheduled object) {
 }
 
 func cancelScheduledKeepingTask(sid string, scheduled object, keepTask bool) {
-	if isWindows && !keepTask && !scheduledWithoutTask(scheduled) {
+	if isWindows && !keepTask && scheduled != nil && !scheduledWithoutTask(scheduled) {
 		removeScheduledTask(taskName(sid))
 	}
 	cancelNative(sid, scheduled)
@@ -851,7 +859,12 @@ func killDetached(scheduled object, key, what string) {
 		logInfo("%s %d already gone", what, int(pid))
 		return
 	}
-	if name := processName(int(pid)); name != "" && !ownHelperProcess(name) {
+	name := processName(int(pid))
+	if name == "" {
+		warn("%s %d cannot be identified; left alone", what, int(pid))
+		return
+	}
+	if !ownHelperProcess(name) {
 		warn("%s %d is now %q, not ours; left alone", what, int(pid), name)
 		return
 	}
@@ -866,17 +879,41 @@ func ensureRunnerLauncher() string {
 	executable, _ := os.Executable()
 	content := strings.Join([]string{
 		"@echo off",
+		`@"%SystemRoot%\System32\chcp.com" 65001>nul`,
 		fmt.Sprintf(`"%s" %%*`, executable),
 		"exit /b %errorlevel%",
 		"",
 	}, "\r\n")
 	existing, _ := readFileShared(files.runnerLauncher)
 	if string(existing) != content {
-		if err := os.WriteFile(files.runnerLauncher, []byte(content), 0o644); err != nil {
+		if err := writeRunnerLauncher([]byte(content)); err != nil {
 			fail("runner launcher not written (%s): %v", files.runnerLauncher, err)
 		}
 	}
 	return files.runnerLauncher
+}
+
+func writeRunnerLauncher(content []byte) error {
+	staging := fmt.Sprintf("%s.%d.tmp", files.runnerLauncher, os.Getpid())
+	if err := os.WriteFile(staging, content, 0o644); err != nil {
+		return err
+	}
+	var err error
+	for attempt := 0; attempt < 8; attempt++ {
+		if err = renameAtomic(staging, files.runnerLauncher); err == nil {
+			return nil
+		}
+		time.Sleep(time.Duration(10+attempt*10) * time.Millisecond)
+	}
+	writeErr := os.WriteFile(files.runnerLauncher, content, 0o644)
+	if removeErr := os.Remove(staging); removeErr != nil {
+		warn("temp file left behind: %s", staging)
+	}
+	if writeErr != nil {
+		return writeErr
+	}
+	warn("atomic rename of %s failed after retries (%v); wrote in place", filepath.Base(files.runnerLauncher), err)
+	return nil
 }
 
 func scheduleWindowsTask(name string, at float64, commandArgs []string, wake bool) shellResult {
@@ -910,7 +947,7 @@ func scheduleLockFile(sid string) string {
 func scheduleRunner(cfg object, sid string, atEpoch float64) object {
 	var scheduled object
 	withFileLock(scheduleLockFile(sid), func() {
-		scheduled = scheduleRunnerLocked(cfg, sid, atEpoch)
+		scheduled = scheduleRunnerLocked(cfg, sid, atEpoch, 0)
 	})
 	return scheduled
 }
@@ -923,7 +960,7 @@ func runnerArgs(command, sid, account string, extra ...string) []string {
 	return append(arguments, extra...)
 }
 
-func scheduleRunnerLocked(cfg object, sid string, atEpoch float64) object {
+func scheduleRunnerLocked(cfg object, sid string, atEpoch, rearms float64) object {
 	now := nowSec()
 	at := math.Max(atEpoch, float64(now+15))
 	nativeAllowed := os.Getenv("NOCTIS_NO_TASKS") == ""
@@ -957,6 +994,9 @@ func scheduleRunnerLocked(cfg object, sid string, atEpoch float64) object {
 			fail("no scheduler available for %s; resume manually with claude --resume %s after %s", sid, sid, localISO(at))
 		}
 	}
+	if rearms > 0 {
+		scheduled["rearms"] = rearms
+	}
 	updateState(func(state object) {
 		if wait := getMap(getMap(state, "waits"), sid); wait != nil {
 			wait["scheduled"] = scheduled
@@ -977,23 +1017,150 @@ func inferLaunchMode(cfg object, sid string) string {
 	return "headless"
 }
 
-func registerWait(sid string, record object, cfg object) bool {
+func prepareWait(sid string, record object, cfg object) {
 	clearQuietMarker(sid)
-
-	cancelRunnerExcept(sid, readState(), getMap(record, "scheduled"))
 	if cfg != nil && getString(record, "launchMode") == "" {
 		if mode := inferLaunchMode(cfg, sid); mode != "" {
 			record["launchMode"] = mode
 		}
 	}
+	record["configDirEnv"] = os.Getenv(claudeConfigEnv)
+}
+
+func registerWait(sid string, record object, cfg object) bool {
+	prepareWait(sid, record, cfg)
+	var replaced object
+	written := false
 	updateState(func(state object) {
-		stateMap(state, "waits")[sid] = record
+		waits := stateMap(state, "waits")
+		replaced, written = getMap(waits, sid), true
+		waits[sid] = record
 	})
-	if getMap(getMap(readState(), "waits"), sid) == nil {
+	if !written || getMap(getMap(readState(), "waits"), sid) == nil {
 		fail("wait for %s could not be stored; not pausing the session", sid)
+		cancelScheduled(sid, getMap(record, "scheduled"))
 		return false
 	}
+	if previous := getMap(replaced, "scheduled"); !sameSchedule(previous, getMap(record, "scheduled")) {
+		cancelScheduled(sid, previous)
+	}
 	return true
+}
+
+const (
+	joinFreshSeconds = 120
+	joinSlackSeconds = 2
+)
+
+func sameReset(current object, window string, until float64) bool {
+	return current != nil && getString(current, "window") == window && math.Abs(numberOr(current, "until", 0)-until) <= joinSlackSeconds
+}
+
+func joinableWait(current object, window string, until float64) bool {
+	return sameReset(current, window, until) && float64(nowSec())-numberOr(current, "startedAt", 0) < joinFreshSeconds
+}
+
+func sameWait(record object, startedAt float64, holder string) bool {
+	return record != nil && numberOr(record, "startedAt", -1) == startedAt && getString(record, "holder") == holder
+}
+
+func claimWait(kind, sid string, record object, cfg object) (object, bool) {
+	prepareWait(sid, record, cfg)
+	var current object
+	joined := false
+	updateState(func(state object) {
+		waits := stateMap(state, "waits")
+		current = getMap(waits, sid)
+		joined = kind != "prompt" && joinableWait(current, getString(record, "window"), numberOr(record, "until", 0))
+		if !joined {
+			waits[sid] = record
+		}
+	})
+	if joined {
+		return current, true
+	}
+	stored := getMap(getMap(readState(), "waits"), sid)
+	if !sameWait(stored, numberOr(current, "startedAt", -1), getString(current, "holder")) {
+		cancelScheduled(sid, getMap(current, "scheduled"))
+	}
+	if stored == nil {
+		fail("wait for %s could not be stored; not pausing the session", sid)
+		return nil, false
+	}
+	return record, false
+}
+
+type waitHold struct {
+	watch     *waitWatch
+	owned     bool
+	cancelled bool
+	stop      string
+}
+
+func holdWait(kind, sid string, cfg object, wait *waitPlan, resumeAt float64, held object, owned bool) waitHold {
+	for {
+		startedAt, holder, heldResumeAt := numberOr(held, "startedAt", -1), getString(held, "holder"), numberOr(held, "resumeAt", resumeAt)
+		epoch := math.Max(resumeAt, heldResumeAt)
+		watch := newWaitWatch(cfg, sid, owned)
+		watch.startedAt = startedAt
+		reached := sleepUntilEvery(epoch, watch.tickSeconds(), func() bool {
+			if current := getMap(getMap(readState(), "waits"), sid); current != nil && !sameWait(current, startedAt, holder) {
+				return true
+			}
+			return watch.tick()
+		})
+		ended := reached || watch.early || watch.dataBack
+		var current, scheduled object
+		updateState(func(next object) {
+			waits := stateMap(next, "waits")
+			current = getMap(waits, sid)
+			mine := sameWait(current, startedAt, holder)
+			if !owned || (current != nil && !mine) || (mine && !ended) {
+				return
+			}
+			if mine {
+				scheduled = getMap(current, "scheduled")
+				delete(waits, sid)
+			}
+			if entry := getMap(getMap(next, "checkpoints"), sid); entry != nil {
+				entry["consumed"] = true
+			}
+		})
+		mine := sameWait(current, startedAt, holder)
+		if mine && !ended {
+			continue
+		}
+		if current == nil || mine {
+			cancelScheduled(sid, scheduled)
+			hold := waitHold{watch: watch, owned: owned}
+			if current == nil && !ended {
+				if owned {
+					hold.cancelled = true
+				} else if float64(nowSec()) >= heldResumeAt {
+					sleepUntil(epoch, nil)
+				}
+			}
+			return hold
+		}
+		if !sameReset(current, wait.window, wait.until) || !getBool(current, "inHook", false) {
+			journal(sid, kind, "wait-replaced", hitLabel(wait), object{"window": getString(current, "window")})
+			logInfo("in-hook wait for %s was replaced by a %s pause it cannot wait out; stopping", sid, getString(current, "window"))
+			return waitHold{watch: watch, stop: T("wait.saved", orDefault(getString(current, "label"), wait.label), formatNumber(numberOr(current, "used", wait.used)), formatTime(numberOr(current, "resumeAt", resumeAt)), "")}
+		}
+		journal(sid, kind, "join-wait", hitLabel(wait), object{"window": wait.window})
+		held, owned = current, false
+	}
+}
+
+func joinWait(kind, sid string, cfg object, wait *waitPlan, current object, resumeAt float64, inHook bool, now int64) waitOutcome {
+	journal(sid, kind, "join-wait", hitLabel(wait), object{"window": wait.window})
+	if !inHook || !getBool(current, "inHook", false) {
+		return waitOutcome{stop: T("wait.saved", wait.label, formatNumber(wait.used), formatTime(numberOr(current, "resumeAt", resumeAt)), "")}
+	}
+	if hold := holdWait(kind, sid, cfg, wait, resumeAt, current, false); hold.stop != "" {
+		return waitOutcome{stop: hold.stop}
+	}
+	return waitOutcome{notice: T("wait.resumed", wait.label, formatNumber(wait.used), durationText(float64(nowSec()-now)))}
 }
 
 func clearWait(sid string, state object) {
@@ -1061,12 +1228,20 @@ func notify(cfg object, title, body string) {
 
 func persistModelSwitch(cfg object, fableResetsAt float64, now int64) {
 	models := section(cfg, "models")
-	if settingsModel() != getString(models, "fallback") {
-		setSettingsModel(getString(models, "fallback"))
+	fallback := getString(models, "fallback")
+	replaced := settingsModel()
+	if replaced != fallback {
+		setSettingsModel(fallback)
 	}
 	previousEffort := setSettingsEffort(getString(getMap(section(cfg, "roles"), "fallback"), "effort"))
 	updateState(func(state object) {
-		switched := object{"at": float64(now), "from": getString(models, "primary"), "to": getString(models, "fallback"), "fableResetsAt": fableResetsAt}
+		switched := object{"at": float64(now), "from": orDefault(replaced, getString(models, "primary")), "to": fallback, "fableResetsAt": fableResetsAt}
+		if earlier := getMap(state, "modelSwitched"); earlier != nil && replaced == fallback {
+			switched["from"] = orDefault(getString(earlier, "from"), getString(switched, "from"))
+			if previousEffort == "" {
+				previousEffort = getString(earlier, "effortWas")
+			}
+		}
 		if previousEffort != "" {
 			switched["effortWas"] = previousEffort
 		}
@@ -1082,13 +1257,34 @@ func hookSleeping(wait object) bool {
 	return getBool(wait, "inHook", false) || numberOr(wait, "waking", 0) > 0
 }
 
+func holderAlive(wait object) bool {
+	id, _, _ := strings.Cut(getString(wait, "holder"), "-")
+	pid, err := strconv.Atoi(id)
+	if err != nil || !processAlive(pid) {
+		return false
+	}
+	if float64(nowSec())-numberOr(wait, "heartbeat", 0) < heartbeatFreshSeconds {
+		return true
+	}
+	return pid != os.Getpid() && ownHelperProcess(processName(pid))
+}
+
 func releaseInterruptedWait(sid string, state object) {
-	rescheduleStrandedWaits(state)
+	clearDeadHandoffs(state)
+	dropInterruptedWait(sid, state)
+	rearmStrandedWaits(state)
+}
+
+func dropInterruptedWait(sid string, state object) {
 	wait := getMap(getMap(state, "waits"), sid)
 	if wait == nil || getMap(getMap(state, "handedOff"), sid) != nil {
 		return
 	}
 	if !hookSleeping(wait) {
+		return
+	}
+	if holderAlive(wait) {
+		logInfo("in-hook wait for %s is still held by live hook %s; left alone", sid, getString(wait, "holder"))
 		return
 	}
 	now := float64(nowSec())
@@ -1157,27 +1353,106 @@ func clearDeadHandoffs(state object) {
 	}
 }
 
+const (
+	runnerOverdueSeconds = 600
+	strandedRearmLimit   = 3
+)
+
 func rescheduleStrandedWaits(state object) {
 	clearDeadHandoffs(state)
+	rearmStrandedWaits(state)
+}
+
+func rearmStrandedWaits(state object) {
+	thorough := strings.EqualFold(activeEvent, "SessionStart")
+	var cfg object
 	for sid, raw := range getMap(state, "waits") {
 		record := toObject(raw)
-		if record == nil || getBool(record, "inHook", false) || getMap(record, "scheduled") != nil {
+		if record == nil || getMap(getMap(state, "handedOff"), sid) != nil || strandedBecause(sid, record, nowSec(), thorough) == "" {
 			continue
 		}
-		if getMap(getMap(state, "handedOff"), sid) != nil {
-			continue
+		if cfg == nil {
+			cfg = loadConfig()
 		}
-		if float64(nowSec())-numberOr(record, "startedAt", 0) < schedulingGraceSeconds {
-			continue
-		}
-		resumeAt := numberOr(record, "resumeAt", 0)
-		if resumeAt <= 0 {
-			continue
-		}
-		journal(sid, "repair", "reschedule", "wait had no runner", object{"resumeAt": resumeAt})
-		warn("wait for %s had no runner (an interrupted hook); rescheduling", sid)
-		scheduleRunner(loadConfig(), sid, resumeAt)
+		rearmStrandedWait(cfg, sid, record, thorough)
 	}
+}
+
+func strandedBecause(sid string, record object, now int64, thorough bool) string {
+	if numberOr(record, "resumeAt", 0) <= 0 || float64(now)-numberOr(record, "startedAt", 0) < schedulingGraceSeconds {
+		return ""
+	}
+	if hookSleeping(record) && float64(now)-math.Max(numberOr(record, "heartbeat", 0), numberOr(record, "waking", 0)) < heartbeatFreshSeconds {
+		return ""
+	}
+	scheduled := getMap(record, "scheduled")
+	if scheduled == nil {
+		if hookSleeping(record) {
+			return "its hook died before scheduling a runner"
+		}
+		return "no runner was scheduled"
+	}
+	if numberOr(scheduled, "rearms", 0) >= strandedRearmLimit {
+		return ""
+	}
+	at := numberOr(scheduled, "at", 0)
+	overdue := at > 0 && float64(now)-at > runnerOverdueSeconds
+	switch getString(scheduled, "method") {
+	case "sleeper":
+		pid, ok := getNumber(scheduled, "pid")
+		switch {
+		case !ok || pid <= 0:
+		case !processAlive(int(pid)):
+			return "its sleeper is gone"
+		case thorough:
+			if name := processName(int(pid)); name != "" && !ownHelperProcess(name) {
+				return fmt.Sprintf("its sleeper pid now runs %q", name)
+			}
+		}
+	case "systemd":
+		if overdue {
+			return "its runner is overdue"
+		}
+	case "launchd":
+		label := getString(scheduled, "label")
+		if !launchdJobOf(sid, label) {
+			label = launchdLabel(sid)
+		}
+		if overdue && statSafe(launchdPlist(label)) != nil {
+			return "its runner is overdue"
+		}
+	case "task":
+		if overdue && thorough {
+			return "its runner is overdue"
+		}
+	}
+	return ""
+}
+
+func rearmStrandedWait(cfg object, sid string, seen object, thorough bool) {
+	withFileLock(scheduleLockFile(sid), func() {
+		state := readState()
+		record := getMap(getMap(state, "waits"), sid)
+		if getMap(getMap(state, "handedOff"), sid) != nil || !sameWait(record, numberOr(seen, "startedAt", -1), getString(seen, "holder")) {
+			return
+		}
+		reason := strandedBecause(sid, record, nowSec(), thorough)
+		if reason == "" {
+			return
+		}
+		scheduled := getMap(record, "scheduled")
+		resumeAt := numberOr(record, "resumeAt", 0)
+		at := resumeAt
+		if getBool(record, "inHook", false) {
+			at += math.Max(0, numberOr(section(cfg, "wait"), "builtinGraceSeconds", 0))
+		}
+		if numberOr(record, "waking", 0) > 0 {
+			at += math.Max(60, numberOr(section(cfg, "wake"), "graceSeconds", 300))
+		}
+		journal(sid, "repair", "reschedule", reason, object{"resumeAt": resumeAt})
+		warn("wait for %s: %s; rescheduling", sid, reason)
+		scheduleRunnerLocked(cfg, sid, math.Max(at, numberOr(scheduled, "at", 0)), numberOr(scheduled, "rearms", 0)+1)
+	})
 }
 
 type waitOutcome struct {
@@ -1212,6 +1487,45 @@ func permissionModeOf(input object) string {
 	return ""
 }
 
+const (
+	hookBudgetSlackSeconds = 30
+	minInHookBudgetSeconds = 90
+)
+
+var hookBudgets = map[string]map[string]float64{
+	"claude": {
+		"SessionStart": 20, "SessionEnd": 10, "UserPromptSubmit": 21600, "PreToolUse": 21600, "PostToolBatch": 21600, "StopFailure": 21600,
+		"Notification": 20, "PostModelSwitch": 10, "TaskCreated": 10, "TaskCompleted": 10, "PostToolUse": 15, "Stop": 21600,
+	},
+	"codex":       {"SessionStart": 20, "SessionEnd": 3, "UserPromptSubmit": 21600, "PreToolUse": 20, "PostToolUse": 21600, "Stop": 60},
+	"droid":       {"SessionStart": 20, "SessionEnd": 10, "UserPromptSubmit": 21600, "PreToolUse": 20, "PostToolUse": 21600, "Stop": 60},
+	"antigravity": {"PreToolUse": 20, "PreInvocation": 21600, "PostInvocation": 21600, "Stop": 60},
+	"copilot":     {"sessionStart": 20, "sessionEnd": 10, "userPromptSubmitted": 21600, "preToolUse": 20, "agentStop": 60, "errorOccurred": 20},
+}
+
+func hookBudget(host, event string) (float64, bool) {
+	for name, seconds := range hookBudgets[host] {
+		if strings.EqualFold(name, event) {
+			return seconds, true
+		}
+	}
+	return 0, false
+}
+
+func waitsInHook(waitCfg object, learnedCap, remaining float64) bool {
+	limit := math.Max(1, numberOr(waitCfg, "maxInHookMinutes", 0)) * 60
+	if learnedCap > 0 {
+		limit = math.Min(limit, math.Max(60, learnedCap-60))
+	}
+	if budget, known := hookBudget(activeHost, activeEvent); known {
+		if budget < minInHookBudgetSeconds {
+			return false
+		}
+		limit = math.Min(limit, budget-hookBudgetSlackSeconds)
+	}
+	return remaining <= limit
+}
+
 func enforceWait(kind string, input object, cfg object, result decision) waitOutcome {
 	now := nowSec()
 	sid := sessionKey(input)
@@ -1219,20 +1533,9 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 	waitCfg := section(cfg, "wait")
 	resumeAt := wait.until + math.Max(0, numberOr(waitCfg, "resetMarginSeconds", 0))
 	learnedCap := numberOr(readState(), "hookCapSeconds", 0)
-	inHookLimit := math.Max(1, numberOr(waitCfg, "maxInHookMinutes", 0)) * 60
-	if learnedCap > 0 {
-		inHookLimit = math.Min(inHookLimit, math.Max(60, learnedCap-60))
-	}
-	inHook := resumeAt-float64(now) <= inHookLimit
-	if current := getMap(getMap(readState(), "waits"), sid); kind != "prompt" && current != nil && getString(current, "window") == wait.window && numberOr(current, "until", 0) == wait.until && float64(now)-numberOr(current, "startedAt", 0) < 120 {
-
-		journal(sid, kind, "join-wait", hitLabel(wait), object{"window": wait.window})
-		if inHook && getBool(current, "inHook", false) {
-			joined := newWaitWatch(cfg, sid, false)
-			sleepUntilEvery(numberOr(current, "resumeAt", resumeAt), joined.tickSeconds(), joined.tick)
-			return waitOutcome{notice: T("wait.resumed", wait.label, formatNumber(wait.used), durationText(float64(nowSec()-now)))}
-		}
-		return waitOutcome{stop: T("wait.saved", wait.label, formatNumber(wait.used), formatTime(numberOr(current, "resumeAt", resumeAt)), "")}
+	inHook := waitsInHook(waitCfg, learnedCap, resumeAt-float64(now))
+	if current := getMap(getMap(readState(), "waits"), sid); kind != "prompt" && joinableWait(current, wait.window, wait.until) {
+		return joinWait(kind, sid, cfg, wait, current, resumeAt, inHook, now)
 	}
 	reasonLine := T("wait.reason", wait.label, formatNumber(wait.used), hitLabel(wait), formatTime(wait.until))
 	checkpoint := buildCheckpoint(input, reasonLine, result.model, cfg)
@@ -1245,6 +1548,7 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 		"until": wait.until, "resumeAt": resumeAt, "inHook": inHook, "cwd": getString(input, "cwd"),
 		"transcript": getString(input, "transcript_path"), "checkpoint": checkpoint, "queuedPrompt": queuedPrompt,
 		"startedAt": float64(now), "heartbeat": float64(now), "permissionMode": permissionModeOf(input),
+		"holder": strconv.Itoa(os.Getpid()) + "-" + strconv.FormatInt(time.Now().UnixNano(), 36),
 	}
 	recordTree(cfg, record, getString(input, "cwd"))
 	runnerAt := resumeAt
@@ -1252,28 +1556,39 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 		runnerAt += math.Max(0, numberOr(waitCfg, "builtinGraceSeconds", 0))
 	}
 
-	if !registerWait(sid, record, cfg) {
+	stored, joined := claimWait(kind, sid, record, cfg)
+	if stored == nil {
 		journal(sid, kind, "pause-failed", reasonLine, object{"window": wait.window, "used": wait.used})
 		return waitOutcome{notice: T("wait.notStored", pluginName)}
+	}
+	if joined {
+		return joinWait(kind, sid, cfg, wait, stored, resumeAt, inHook, now)
 	}
 	scheduled := scheduleRunner(cfg, sid, runnerAt)
 	record["scheduled"] = scheduled
 	updateState(func(next object) {
-		if current := getMap(getMap(next, "waits"), sid); current != nil {
+		if current := getMap(getMap(next, "waits"), sid); sameWait(current, float64(now), getString(record, "holder")) {
 			current["scheduled"] = scheduled
 		}
 	})
 	journal(sid, kind, "pause", reasonLine, object{"inHook": inHook, "resumeAt": resumeAt, "hit": wait.hit, "window": wait.window, "used": wait.used})
 	logInfo("wait (%s) for %s: %s; inHook=%t; checkpoint=%s", kind, sid, reasonLine, inHook, orDefault(checkpoint, "none"))
 	if inHook {
-		watch := newWaitWatch(cfg, sid, true)
-		sleepUntilEvery(resumeAt, watch.tickSeconds(), watch.tick)
-		clearWaitAndConsume(sid, nil)
+		hold := holdWait(kind, sid, cfg, wait, resumeAt, record, true)
+		watch := hold.watch
 		switch {
-		case watch.cancelled:
+		case hold.stop != "":
+			return waitOutcome{stop: hold.stop}
+		case hold.cancelled:
 			journal(sid, kind, "wait-cancelled", hitLabel(wait), nil)
 			logInfo("in-hook wait for %s cancelled; continuing", sid)
 			return waitOutcome{notice: T("wait.cancelled", wait.label)}
+		case !hold.owned:
+			return waitOutcome{notice: T("wait.resumed", wait.label, formatNumber(wait.used), durationText(float64(nowSec()-now)))}
+		case watch.dataBack:
+			journal(sid, kind, "data-back", hitLabel(wait), object{"waited": float64(nowSec() - now)})
+			notify(cfg, pluginName, T("wait.dataReady", wait.label, T("wait.readyTail")))
+			logInfo("in-hook wait for %s ended: fresh %s data shows room", sid, wait.window)
 		case watch.early && (wait.until <= 0 || float64(nowSec()) < wait.until):
 			journal(sid, kind, "early-reset", hitLabel(wait), object{"waited": float64(nowSec() - now)})
 			notify(cfg, pluginName, T("wait.earlyResetNotify", wait.label))
@@ -1338,7 +1653,6 @@ func handleFableHit(kind string, input object, cfg object, result decision) stri
 	recordTree(cfg, record, getString(input, "cwd"))
 	record["scheduled"] = scheduleRunner(cfg, sid, float64(now+20))
 	if !registerWait(sid, record, cfg) {
-		cancelRunner(sid, readState())
 		return T("wait.notStored", pluginName)
 	}
 	return T("scoped.savedRelaunch", label, formatNumber(fableUsed), fallback)
@@ -1359,13 +1673,14 @@ func maybeRevertDefaultModel(cfg object, state object, usage usageView, now int6
 		return ""
 	}
 	models := section(cfg, "models")
-	if settingsModel() == getString(models, "fallback") {
-		setSettingsModel(getString(models, "primary"))
+	target := orDefault(getString(switched, "from"), getString(models, "primary"))
+	if settingsModel() == orDefault(getString(switched, "to"), getString(models, "fallback")) {
+		setSettingsModel(target)
 	}
 	setSettingsEffort(getString(switched, "effortWas"))
 	updateState(func(next object) { next["modelSwitched"] = nil })
-	logInfo("fable window cleared: default model reverted to primary")
-	return T("scoped.reverted", scopedLabel(cfg), getString(models, "primary"))
+	logInfo("fable window cleared: default model reverted to %s", target)
+	return T("scoped.reverted", scopedLabel(cfg), target)
 }
 
 func recordHookPulse(state object, now int64) {

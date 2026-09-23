@@ -4,30 +4,38 @@
     "name": "synex"
   },
   "metadata": {
-    "description": "Keeps long Claude Code jobs running unattended: usage-limit guard (checkpoint, wait, alarm, auto-resume), scoped-model fallback, research router to a cheaper subagent, queue mode with priorities and GitHub issues, dynamic-workflow rescue, roles profile, 14 languages; also runs inside Codex CLI, Antigravity CLI, Factory Droid and Copilot CLI. Native Go binary, zero dependencies."
+    "description": "Runs long Claude Code jobs overnight within your usage limits: pauses just before the 5-hour or weekly limit, resumes the same session after the reset (or relaunches it days later) and works through a TASKS.md queue. Also runs in Codex CLI, Antigravity CLI, Droid and Copilot CLI."
   },
   "plugins": [
     {
       "name": "noctis",
       "source": "./",
-      "description": "Keeps long Claude Code jobs running unattended: usage-limit guard (checkpoint, wait, alarm, auto-resume), scoped-model fallback, research router to a cheaper subagent, queue mode with priorities and GitHub issues, dynamic-workflow rescue, roles profile, 14 languages; also runs inside Codex CLI, Antigravity CLI, Factory Droid and Copilot CLI. Native Go binary, zero dependencies.",
-      "version": "5.5.5",
+      "description": "Runs long Claude Code jobs overnight within your usage limits: pauses just before the 5-hour or weekly limit, resumes the same session after the reset (or relaunches it days later) and works through a TASKS.md queue. Also runs in Codex CLI, Antigravity CLI, Droid and Copilot CLI.",
+      "version": "7.0.0",
       "author": {
         "name": "synex"
       },
       "category": "productivity",
       "keywords": [
+        "claude-code",
+        "claude-code-plugin",
         "usage-limit",
-        "auto-resume",
         "rate-limit",
-        "queue",
-        "router",
+        "5-hour-limit",
+        "weekly-limit",
+        "auto-resume",
+        "auto-continue",
+        "overnight",
+        "unattended",
+        "task-queue",
+        "checkpoint",
         "statusline",
-        "ralph",
-        "codex",
-        "antigravity",
-        "droid",
-        "copilot"
+        "hooks",
+        "scheduler",
+        "codex-cli",
+        "copilot-cli",
+        "antigravity-cli",
+        "factory-droid"
       ]
     }
   ]

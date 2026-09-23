@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,11 +18,12 @@ import (
 )
 
 type window struct {
-	used      float64
-	resetsAt  float64
-	burst     float64
-	staleness float64
-	projected float64
+	used       float64
+	resetsAt   float64
+	burst      float64
+	staleness  float64
+	projected  float64
+	reportedAt float64
 }
 
 type usageView struct {
@@ -276,8 +276,10 @@ func currentUsageIn(now int64, guardDir string) usageView {
 		var history []any
 		if useOauth {
 			history = historyList(oauthHistory, key)
+			win.reportedAt = at
 		} else {
 			history = historyList(statusHistory, key)
+			win.reportedAt = math.Min(at, numberOr(raw, "at", 0))
 		}
 		win.burst = burstFor(history, resetsAt, now)
 		win.staleness = math.Max(0, float64(now)-at)
@@ -309,7 +311,7 @@ func oauthToken() string {
 		return token
 	}
 	credentials := readJSON(files.credentials)
-	if credentials == nil && runtime.GOOS == "darwin" {
+	if credentials == nil && isDarwin {
 		credentials = keychainCredentials()
 	}
 	oauth := getMap(credentials, "claudeAiOauth")
@@ -323,8 +325,38 @@ func oauthToken() string {
 	return token
 }
 
+const claudeSecureStorageEnv = "CLAUDE_SECURESTORAGE_CONFIG_DIR"
+
+func keychainServiceFor(dir string) string {
+	if dir == "" {
+		return "Claude Code-credentials"
+	}
+	return "Claude Code-credentials-" + sha256Of([]byte(dir))[:8]
+}
+
+func keychainServiceName() string {
+	raw := os.Getenv(claudeConfigEnv)
+	envDir := raw
+	if envDir == "" {
+		envDir = filepath.Join(homeDir(), ".claude")
+	}
+	if absolute, err := filepath.Abs(envDir); err == nil && sameDir(absolute, files.configDir) {
+		if secure, set := os.LookupEnv(claudeSecureStorageEnv); set {
+			return keychainServiceFor(secure)
+		}
+		if raw != "" {
+			return keychainServiceFor(raw)
+		}
+	}
+	var wait object
+	if sid := flagString("sid"); sid != "" {
+		wait = getMap(getMap(readState(), "waits"), sid)
+	}
+	return keychainServiceFor(relaunchConfigDir(wait))
+}
+
 func keychainCredentials() object {
-	output, err := runWithTimeout(exec.Command("security", "find-generic-password", "-s", "Claude Code-credentials", "-w"), 5*time.Second)
+	output, err := runWithTimeout(exec.Command("security", "find-generic-password", "-s", keychainServiceName(), "-w"), 5*time.Second)
 	if err != nil {
 		return nil
 	}

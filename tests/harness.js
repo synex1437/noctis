@@ -87,8 +87,8 @@ function isAlive(pid) {
   }
 }
 
-function refreshChecksums() {
-  const binDir = path.join(SOURCE_ROOT, 'bin');
+function refreshChecksums(root = SOURCE_ROOT) {
+  const binDir = path.join(root, 'bin');
   const lines = [];
   const walk = (dir, prefix) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -134,7 +134,6 @@ class Lab {
     const binary = process.platform === 'win32' ? 'noctis.exe' : 'noctis';
     const wanted = [
       path.join('bin', platform, binary),
-      path.join('bin', 'SHA256SUMS'),
       path.join('bin', 'noctis'),
       path.join('hooks', 'hooks.json'),
       path.join('scripts', 'notify.ps1'),
@@ -156,6 +155,7 @@ class Lab {
       const from = path.join(SOURCE_ROOT, dir);
       if (fs.existsSync(from)) fs.cpSync(from, path.join(this.sourceRoot, dir), { recursive: true });
     }
+    refreshChecksums(this.sourceRoot);
     this.snapshotBinary = path.join(this.sourceRoot, 'bin', platform, binary);
   }
 
@@ -198,13 +198,15 @@ class Lab {
       if (name === 'codex') {
         lines.push(
           'if [ "$1" = "app-server" ]; then',
-          '  while IFS= read -r line; do',
-          '    case "$line" in',
-          "      *'\"method\":\"initialize\"'*) echo '{\"id\":0,\"result\":{\"userAgent\":\"fake\",\"platformFamily\":\"unix\",\"platformOs\":\"linux\"}}' ;;",
-          "      *'account/rateLimits/read'*) cat \"$NOCTIS_LAB_CODEX_LIMITS\"; echo; exit 0 ;;",
-          '    esac',
-          '  done',
-          '  exit 0',
+          '  (',
+          '    while IFS= read -r line; do',
+          '      case "$line" in',
+          "        *'\"method\":\"initialize\"'*) echo '{\"id\":0,\"result\":{\"userAgent\":\"fake\",\"platformFamily\":\"unix\",\"platformOs\":\"linux\"}}' ;;",
+          "        *'account/rateLimits/read'*) cat \"$NOCTIS_LAB_CODEX_LIMITS\"; echo ;;",
+          '      esac',
+          '    done',
+          '  )',
+          '  exit $?',
           'fi',
         );
       }
@@ -224,7 +226,8 @@ class Lab {
       fs.writeFileSync(path.join(this.binDir, 'claude.cmd'), [
         '@echo off',
         'if "%~1"=="--help" (echo   --permission-mode ^<mode^>  (choices: "acceptEdits", "bypassPermissions", "default", "plan", "auto")& exit /b 0)',
-        'echo FAKE_CLAUDE args=[%*] HANDOFF=%NOCTIS_HANDOFF% CONFIG=%CLAUDE_CONFIG_DIR% EFFORT=%CLAUDE_CODE_EFFORT_LEVEL%>> "%NOCTIS_LAB_CALLS%"',
+        'if defined CLAUDE_CONFIG_DIR (set "NOCTIS_LAB_CONFIG_SET=yes") else (set "NOCTIS_LAB_CONFIG_SET=")',
+        'echo FAKE_CLAUDE args=[%*] HANDOFF=%NOCTIS_HANDOFF% CONFIG=%CLAUDE_CONFIG_DIR% EFFORT=%CLAUDE_CODE_EFFORT_LEVEL% CHILD=%CLAUDE_CODE_CHILD_SESSION% CONFIG_SET=%NOCTIS_LAB_CONFIG_SET%>> "%NOCTIS_LAB_CALLS%"',
         'if "%NOCTIS_LAB_FAST%"=="" ping -n 2 127.0.0.1 >nul',
         'exit /b 0',
         '',
@@ -235,7 +238,7 @@ class Lab {
     fs.writeFileSync(script, [
       '#!/usr/bin/env sh',
       'if [ "$1" = "--help" ]; then printf \'  --permission-mode <mode>  (choices: "acceptEdits", "bypassPermissions", "default", "plan", "auto")\\n\'; exit 0; fi',
-      'echo "FAKE_CLAUDE args=[$*] HANDOFF=$NOCTIS_HANDOFF CONFIG=$CLAUDE_CONFIG_DIR EFFORT=$CLAUDE_CODE_EFFORT_LEVEL" >> "$NOCTIS_LAB_CALLS"',
+      'echo "FAKE_CLAUDE args=[$*] HANDOFF=$NOCTIS_HANDOFF CONFIG=$CLAUDE_CONFIG_DIR EFFORT=$CLAUDE_CODE_EFFORT_LEVEL CHILD=$CLAUDE_CODE_CHILD_SESSION CONFIG_SET=${CLAUDE_CONFIG_DIR+yes}" >> "$NOCTIS_LAB_CALLS"',
       '[ -z "$NOCTIS_LAB_FAST" ] && sleep 1',
       'exit 0',
       '',
@@ -332,16 +335,17 @@ class Lab {
     fs.rmSync(this.callsFile, { force: true });
   }
 
-  account(name) {
-    return new Account(this, name);
+  account(name, options) {
+    return new Account(this, name, options);
   }
 }
 
 class Account {
-  constructor(lab, name) {
+  constructor(lab, name, { defaultHome = false } = {}) {
     this.lab = lab;
     this.name = name;
-    this.dir = path.join(lab.root, name);
+    this.home = defaultHome ? path.join(lab.root, name) : null;
+    this.dir = defaultHome ? path.join(this.home, '.claude') : path.join(lab.root, name);
     fs.mkdirSync(this.dir, { recursive: true });
     this.guardDir = path.join(this.dir, PLUGIN_NAME);
     this.guard = path.join(this.dir, 'skills', PLUGIN_NAME, 'bin', 'noctis');
@@ -382,18 +386,27 @@ class Account {
       NOCTIS_LAB_CALLS: this.lab.callsFile,
       NOCTIS_PLUGIN_ROOT: path.dirname(path.dirname(this.guard)),
       NOCTIS_LANG: 'tr',
-      ...extra,
     };
+    if (this.home) {
+      delete env.CLAUDE_CONFIG_DIR;
+      env.HOME = this.home;
+      env.USERPROFILE = this.home;
+    }
+    Object.assign(env, extra);
     if (this.timeOffset) env.NOCTIS_TIME_OFFSET = String(this.timeOffset);
     if (this.manualSchedule) env.NOCTIS_NO_SCHEDULE = '1';
     if (this.fastClaude) env.NOCTIS_LAB_FAST = '1';
     return env;
   }
 
-  install(mutateConfig) {
+  install(mutateConfig, { asShipped = false } = {}) {
     const result = spawnSync(process.env.NOCTIS_BINARY || this.lab.snapshotBinary || sourceBinary(), ['install', '--source', this.lab.sourceRoot || SOURCE_ROOT, '--config-dir', this.dir], { encoding: 'utf8', env: this.env() });
     if (result.status !== 0) throw new Error(`install failed: ${result.stderr}`);
     writeJson(path.join(this.dir, '.credentials.json'), { claudeAiOauth: { accessToken: this.token, expiresAt: Date.now() + 30 * 86400000 } });
+    if (!asShipped) {
+      const settingsFile = path.join(this.dir, 'settings.json');
+      writeJson(settingsFile, { ...readJson(settingsFile), model: 'fable' });
+    }
     this.setConfig((config) => {
       config.wait.resetMarginSeconds = 1;
       config.wait.builtinGraceSeconds = 2;
@@ -403,6 +416,7 @@ class Account {
       config.resume.mode = 'headless';
       config.wake.sameSession = false;
       config.usage.multiSessionMax = false;
+      if (!asShipped) codeOnFable(config);
       if (mutateConfig) mutateConfig(config);
     });
   }
@@ -547,7 +561,7 @@ class Account {
     }
     let stopped = 0;
     for (const pid of pids) {
-      if (!isAlive(pid)) continue;
+      if (pid === process.pid || !isAlive(pid)) continue;
       try {
         process.kill(pid, 'SIGKILL');
       } catch {
@@ -569,6 +583,13 @@ class Account {
   }
 }
 
+function codeOnFable(config) {
+  config.roles = { ...config.roles, profile: 'custom', code: { model: 'fable', effort: 'max' }, planning: { model: 'fable' } };
+  config.models.primary = 'fable';
+  config.router.subagentModels = { ...config.router.subagentModels, Plan: 'fable' };
+  config.managedModel = { ...config.managedModel, set: 'fable' };
+}
+
 const RESERVED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 function waitKey(sid) {
   const raw = sid === undefined || sid === null || sid === '' ? 'unknown' : String(sid);
@@ -577,4 +598,4 @@ function waitKey(sid) {
 }
 
 module.exports = {
-  refreshChecksums, PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, Account, sleep, nowSec, readJson, writeJson, isAlive, waitKey };
+  refreshChecksums, PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, Account, sleep, nowSec, readJson, writeJson, isAlive, processTable, waitKey };

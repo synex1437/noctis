@@ -33,12 +33,17 @@ func workflowCfg(cfg object) object {
 	return section(cfg, "workflow")
 }
 
-func workflowAdvice(cfg object, subject string) string {
+func workflowAdvice(cfg object, subject string, usage usageView) string {
 	roles := section(cfg, "roles")
+	state, now := readState(), nowSec()
 	spec := func(role, fallback string) string {
 		entry := getMap(roles, role)
 		model := orDefault(getString(entry, "model"), fallback)
-		if effort := getString(entry, "effort"); effort != "" {
+		effort := appliedEffort(role, object{"model": model, "effort": getString(entry, "effort")})
+		if safe := scopedSafeModel(cfg, state, usage, model, now); safe != model {
+			model, effort = safe, appliedEffort("fallback", object{"model": safe, "effort": getString(getMap(roles, "fallback"), "effort")})
+		}
+		if effort != "" {
 			return model + " (effort " + effort + ")"
 		}
 		return model
@@ -47,14 +52,18 @@ func workflowAdvice(cfg object, subject string) string {
 	return fmt.Sprintf(`[noctis] %s looks like a fan-out task: run it as a dynamic workflow (ultracode) instead of working item by item — one agent per unit, results verified before they are reported, size guideline %s. Agent models: code-writing agents → %s; read-only analysis and review agents → %s; discovery/search agents → %s; test runs and other noisy verification → %s. Give parallel editors isolated copies (worktrees) so their edits never collide, and keep the run's script path: if the run is interrupted, relaunch that same script (completed agents return saved results) rather than starting a new run.`, subject, size, spec("code", getString(section(cfg, "models"), "primary")), spec("research", "opus"), spec("explore", "haiku"), spec("digest", "haiku"))
 }
 
+func workflowAdvisable(cfg object, result decision) bool {
+	if !getBool(workflowCfg(cfg), "suggest", true) || result.wait != nil || result.warnWindow != nil || result.fableHit {
+		return false
+	}
+	return gateWorkflowLaunch(cfg, result) == ""
+}
+
 func suggestWorkflow(cfg object, prompt string, result decision) string {
-	if !getBool(workflowCfg(cfg), "suggest", true) || !looksLikeFanOut(prompt) {
+	if !looksLikeFanOut(prompt) || !workflowAdvisable(cfg, result) {
 		return ""
 	}
-	if result.wait != nil || result.warnWindow != nil || result.fableHit {
-		return ""
-	}
-	return workflowAdvice(cfg, "This request")
+	return workflowAdvice(cfg, "This request", result.usage)
 }
 
 func recordWorkflowLaunch(sid string, input object, now int64) {
@@ -66,20 +75,59 @@ func recordWorkflowLaunch(sid string, input object, now int64) {
 		}
 	}
 	updateState(func(state object) {
-		runs := getList(stateMap(state, "workflows"), sid)
-		runs = append(runs, summary)
-		if len(runs) > 3 {
-			runs = runs[len(runs)-3:]
+		launches, agents := []any{}, []any{}
+		for _, raw := range getList(stateMap(state, "workflows"), sid) {
+			if getString(toObject(raw), "agent") != "" {
+				agents = append(agents, raw)
+			} else {
+				launches = append(launches, raw)
+			}
 		}
-		stateMap(state, "workflows")[sid] = runs
+		launches = append(launches, summary)
+		if len(launches) > 3 {
+			launches = launches[len(launches)-3:]
+		}
+		stateMap(state, "workflows")[sid] = append(launches, agents...)
 	})
 }
 
-func workflowRuns(state object, sid string) []string {
+func agentCutOffs(state object, sid string) []object {
+	records := []object{}
+	for _, raw := range getList(getMap(state, "workflows"), sid) {
+		if record := toObject(raw); getString(record, "agent") != "" {
+			records = append(records, record)
+		}
+	}
+	return records
+}
+
+func cutOffLines(state object, sid string) []string {
+	lines := []string{}
+	for _, record := range agentCutOffs(state, sid) {
+		name := strings.TrimSpace(getString(record, "agentType") + " agent " + getString(record, "agent"))
+		at := formatTime(numberOr(record, "at", 0))
+		if getBool(record, "stopped", false) {
+			lines = append(lines, fmt.Sprintf("%s — stopped by the usage limit at %s; its result is partial", name, at))
+		} else {
+			lines = append(lines, fmt.Sprintf("%s — told at %s to wrap up before the usage limit; its result may be partial", name, at))
+		}
+	}
+	return lines
+}
+
+func cutOffNote(state object, sid string) string {
+	lines := cutOffLines(state, sid)
+	if len(lines) == 0 {
+		return ""
+	}
+	return "[noctis] The usage limit cut agents of this session short, so redo their unfinished part instead of trusting a saved result: " + strings.Join(lines, "; ") + "."
+}
+
+func workflowLaunches(state object, sid string) []string {
 	lines := []string{}
 	for _, raw := range getList(getMap(state, "workflows"), sid) {
 		run := toObject(raw)
-		if run == nil {
+		if run == nil || getString(run, "agent") != "" {
 			continue
 		}
 		label := orDefault(getString(run, "name"), orDefault(getString(run, "script_path"), orDefault(getString(run, "scriptPath"), orDefault(getString(run, "path"), orDefault(getString(run, "workflow"), "")))))
@@ -95,12 +143,19 @@ func workflowRuns(state object, sid string) []string {
 	return lines
 }
 
+func workflowRuns(state object, sid string) []string {
+	return append(workflowLaunches(state, sid), cutOffLines(state, sid)...)
+}
+
 func workflowResumeNote(state object, sid string) string {
-	runs := workflowRuns(state, sid)
-	if len(runs) == 0 {
-		return ""
+	notes := []string{}
+	if runs := workflowLaunches(state, sid); len(runs) > 0 {
+		notes = append(notes, "[noctis] A dynamic workflow was running in this session ("+strings.Join(runs, "; ")+"). If it did not finish, relaunch it with the same script so completed agents return their saved results; never start it over as a new run, and do not redo work its agents already completed.")
 	}
-	return "[noctis] A dynamic workflow was running in this session (" + strings.Join(runs, "; ") + "). If it did not finish, relaunch it with the same script so completed agents return their saved results; never start it over as a new run, and do not redo work its agents already completed."
+	if note := cutOffNote(state, sid); note != "" {
+		notes = append(notes, note)
+	}
+	return strings.Join(notes, " ")
 }
 
 func gateWorkflowLaunch(cfg object, result decision) string {

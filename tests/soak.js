@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { Lab, sleep, readJson, writeJson, refreshChecksums } = require('./harness');
+const { Lab, sleep, readJson, writeJson } = require('./harness');
 
 const options = { days: 7, seed: 1, sessionsPerDay: 4, turns: 6, hard: 0 };
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -56,6 +56,7 @@ const stats = {
   queueContinues: 0,
   stuckStops: 0,
   subagentGates: 0,
+  subagentStops: 0,
   overloadStorms: 0,
   overloadRetries: 0,
   overloadGiveups: 0,
@@ -154,6 +155,29 @@ function parseOutput(text) {
 }
 
 const MAX_OVERSHOOT = 4;
+
+const NEAR_EDGE = 8;
+
+function pastLimit(acc) {
+  const { five, week } = acc.truth;
+  return five.used >= THRESHOLDS.five || week.used >= THRESHOLDS.week || five.used >= 100 || week.used >= 100;
+}
+
+function nearLimit(acc) {
+  const { five, week } = acc.truth;
+  return five.used >= THRESHOLDS.five - NEAR_EDGE || week.used >= THRESHOLDS.week - NEAR_EDGE;
+}
+
+function subagentLimited(out) {
+  const specific = out.hookSpecificOutput || {};
+  return specific.permissionDecision === 'deny' && /^\[noctis\] .* usage is /.test(specific.permissionDecisionReason || '');
+}
+
+function expectedSubagentLimit(acc, out, mainPaused) {
+  if (!subagentLimited(out)) return false;
+  if (pastLimit(acc) || mainPaused) return true;
+  return nearLimit(acc) && /reached early at the current burn rate/.test(out.hookSpecificOutput.permissionDecisionReason);
+}
 
 function applyCall(acc, session, cost) {
   const truth = acc.truth;
@@ -309,7 +333,10 @@ async function runTurn(acc, session) {
       else stats.anomalies.push(`routed prompt but WebSearch allowed ${acc.name}/${session.sid}`);
     }
     const subagent = parseOutput(timedHook(acc, { hook_event_name: 'PreToolUse', session_id: session.sid, agent_id: 'lite-1', agent_type: 'noctis:lite', tool_name: 'WebSearch', tool_input: {} }));
-    if (subagent.hookSpecificOutput) stats.anomalies.push(`subagent search denied ${acc.name}/${session.sid}`);
+    if (subagent.hookSpecificOutput) {
+      if (subagentLimited(subagent) && pastLimit(acc)) stats.subagentStops += 1;
+      else stats.anomalies.push(`subagent search denied ${acc.name}/${session.sid} at five=${acc.truth.five.used.toFixed(1)} week=${acc.truth.week.used.toFixed(1)}: ${subagent.hookSpecificOutput.permissionDecisionReason || ''}`);
+    }
   }
   applyCall(acc, session, callCost());
   emitStatusline(acc, session);
@@ -349,7 +376,7 @@ async function runTurn(acc, session) {
     session.transcript = transcriptFor(acc, fresh);
   }
   if (rng() < 0.03 && acc.truth.five.used < 85 && acc.truth.week.used < 85 && acc.truth.fable.used < 85) {
-    timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error_type: 'rate_limit', error_message: 'Rate limit exceeded' });
+    timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error: 'rate_limit', error_details: '429 Too Many Requests', last_assistant_message: 'API Error: Rate limit reached' });
     const wait = acc.state().waits[session.sid];
     if (!wait || wait.window !== 'unknown') stats.anomalies.push(`transient 429 misclassified as ${wait && wait.window} ${acc.name}/${session.sid}`);
     if (acc.settingsModel() === 'opus' && !acc.state().modelSwitched) stats.anomalies.push(`transient 429 switched model ${acc.name}`);
@@ -472,7 +499,7 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       let previousDelay = 0;
       for (let i = 0; i < rounds; i += 1) {
         const type = rng() < 0.5 ? 'overloaded' : 'server_error';
-        timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error_type: type });
+        timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error: type });
         const wait = acc.state().waits[session.sid];
         if (!wait || wait.overload !== true || wait.window !== 'unknown') {
           anomaly(`overload not recorded as backoff ${acc.name}/${session.sid}: ${JSON.stringify(wait)}`);
@@ -506,7 +533,7 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       stats.overloadStorms += 1;
       let gaveUp = false;
       for (let i = 0; i < 40 && !gaveUp; i += 1) {
-        timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error_type: 'overloaded' });
+        timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error: 'overloaded' });
         const wait = acc.state().waits[session.sid];
         if (!wait) {
           gaveUp = true;
@@ -701,7 +728,12 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       for (let i = 0; i < 4; i += 1) spawns.push(acc.hookPromise({ hook_event_name: 'PreToolUse', session_id: session.sid, agent_id: `p${i}`, agent_type: 'general-purpose', tool_name: 'Write', tool_input: { file_path: path.join(lab.projectDir, `out${i}.md`) } }));
       spawns.push(acc.hookPromise({ hook_event_name: 'PostToolBatch', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript }));
       const outputs = await Promise.all(spawns);
-      if (outputs.slice(0, 4).some((out) => out)) stats.anomalies.push(`general-purpose subagent write blocked ${acc.name}/${session.sid}`);
+      const mainBatch = parseOutput(outputs[4]);
+      const mainPaused = mainBatch.continue === false && /⏸/.test(mainBatch.stopReason || '');
+      const blocked = outputs.slice(0, 4).filter(Boolean);
+      const unexpected = blocked.filter((out) => !expectedSubagentLimit(acc, parseOutput(out), mainPaused));
+      stats.subagentStops += blocked.length - unexpected.length;
+      if (unexpected.length) stats.anomalies.push(`general-purpose subagent write blocked ${acc.name}/${session.sid} at five=${acc.truth.five.used.toFixed(1)} week=${acc.truth.week.used.toFixed(1)}: ${unexpected[0].slice(0, 200)}`);
       break;
     }
     default:
@@ -785,7 +817,7 @@ async function marathonTurn(acc, session, turn, accounts) {
     if (!blackout) emitStatusline(acc, session);
   }
   if (rng() < 0.03 && acc.truth.five.used < 85 && acc.truth.week.used < 85) {
-    timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error_type: 'rate_limit' });
+    timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error: 'rate_limit' });
     stats.transient429 += 1;
     queueResume(acc, session);
     return 'stopped';
@@ -875,7 +907,6 @@ async function runMarathonDay(accounts, day) {
 }
 
 async function main() {
-  refreshChecksums();
   await lab.startMock();
   const sloppy = (i) => {
     const box = i < 20 ? 'x' : ' ';
@@ -942,6 +973,7 @@ async function main() {
     chaosInjections: stats.chaos,
     stateRecoveries: stats.recoveries,
     subagentGates: stats.subagentGates,
+    subagentStops: stats.subagentStops,
     overloadStorms: stats.overloadStorms,
     overloadRetries: stats.overloadRetries,
     overloadGiveups: stats.overloadGiveups,
@@ -998,5 +1030,6 @@ async function main() {
 
 main().catch((err) => {
   process.stderr.write(`${err.stack}\n`);
-  process.exitCode = 1;
+  lab.stopMock();
+  process.exit(1);
 });

@@ -3,27 +3,32 @@
 ## Build
 
 ```sh
-cd go && go build -trimpath -ldflags="-s -w" -o ../bin/noctis ./cmd/noctis
+cd go && CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o ../bin/$(go env GOOS)-$(go env GOARCH)/noctis ./cmd/noctis
 ```
 
-Go 1.22, standard library only — no new dependencies, please. `gofmt -l ./cmd/noctis` must print nothing and `go vet ./...` must be clean.
+On Windows the output file is `noctis.exe`. `bin/noctis` is the POSIX launcher script and `bin/noctis.exe` a copy of the windows-amd64 binary — never build over `bin/noctis` (`tests/hygiene.js` fails). A build that changes a binary leaves `bin/SHA256SUMS` stale, and no suite fixes that for you: run `node -e "require('./tests/harness.js').refreshChecksums()"`, or, if you do not mean to ship binaries, `git checkout -- bin/` before committing.
+
+Go 1.22+ compiles it; binaries you commit must be built with the Go version in `.github/workflows/ci.yml` (1.24.7) and exactly CI's flags, or the "Committed binaries must match the source" step fails. Standard library only — no new dependencies, please. `gofmt -l ./cmd/noctis` (in `go/`) must print nothing and `go vet ./...` must be clean.
 
 ## Test
 
-Tests are black-box: Node drives the real binary with a fake `claude`, a fake usage API and compressed time.
+Most suites are black-box: Node drives the real binary with stand-ins for `claude`, `codex`, `agy`, `droid`, `copilot` and `gh`, a fake usage API and compressed time; `go test` covers the decision core directly. What each suite asks and what the latest run measured: [docs/TESTING.md](docs/TESTING.md).
 
 ```sh
-node tests/contract.js                     # runs every hook the way the host declares it, ~1 min
-node tests/chaos.js                        # network/disk/migration failures, ~2 min
+(cd go && go test ./...)                   # unit tests, fuzz seed corpora, dead-code guards
+node tests/contract.js                     # runs every hook the way the host declares it, seconds
+node tests/chaos.js                        # network/disk/migration failures, ~15 s
                                            #   (add NOCTIS_CHAOS_FULL_DISK=/path/to/a/small/mount
                                            #    for the real ENOSPC case; skipped without it)
-node tests/lab.js                          # 503 checks, ~5 min
+node tests/scheduler.js                    # the OS scheduler this platform really uses, ~1 min
+node tests/lab.js                          # the black-box lab (count: see docs/TESTING.md), a few minutes
 node tests/torrent.js                      # thousands of parallel jobs: does the guard ever leak,
                                            #   and what does it cost per hook? ~10 min
 node tests/monkey.js --seed 7 --rounds 400  # the chaos user: random order, broken files, killed processes
 node tests/hygiene.js                      # control bytes, invisible spaces, checksums, versions
 node tests/soak.js --days 3 --hard 1       # chaos soak: corrupted files, outages, SIGKILLed hooks, clock jumps
 node tests/soak.js --days 7                # normal multi-day soak
+node tests/coverage.js                     # statement coverage of the lab plus go test (linux/amd64 only)
 ```
 
 The soak invariant is the contract: no model call above 100 %, no leaked locks or temp files, no session without a resume path, no `fatal`. A change that needs a new rule needs a lab check for it.
@@ -31,9 +36,22 @@ The soak invariant is the contract: no model call above 100 %, no leaked locks o
 ## Rules of the engine
 
 - Decisions are deterministic. No LLM calls, nothing on the hot path that costs tokens or waits on the network (the OAuth poll is single-flight and rate-limited).
-- Everything user-facing goes through the message catalog (`messages.go`: `en` and `tr` with identical keys and format verbs; `lang.go`: the person-facing subset for the other twelve languages, falling back to English). Directives sent to Claude stay English.
-- Every enforcement path must have an `observe`-mode `would-*` journal entry and a `noctis why` reason.
-- Shipping binaries: rebuild all six targets (see `go/README.md`), copy `bin/windows-amd64/noctis.exe` to `bin/noctis.exe`, regenerate `bin/SHA256SUMS` (`cd bin && for f in noctis.exe */noctis*; do sha256sum "$f"; done > SHA256SUMS`). The engine refuses to place a binary that does not match that manifest, so a local build without this step will say so on the next session start; the test harnesses regenerate it themselves.
+- Everything user-facing goes through the message catalog (`messages.go`: `en` and `tr` with identical keys and format verbs; `lang.go`: the other twelve languages, each complete, generated from `i18n/*.json`). Directives sent to Claude stay English.
+- Every enforcement path must have an `observe`-mode `would-*` journal entry and a `noctis why` reason. (Three paths do not follow this yet: the lite/digest write limits apply in observe mode too and are not journaled, and the `model` reset after `model_not_found` and the issue closing of `queue.github.closeOnDone` still act in observe mode, journaled as `model-unavailable` and `close-issue`.)
+- Nothing may make Claude Code install packages into the plugin: `tests/hygiene.js` fails on a `package.json` at the root next to a `package-lock.json`, `npm-shrinkwrap.json`, `bun.lock` or `bun.lockb`.
+- Every job of a workflow that runs the suites sets `timeout-minutes`, so a suite that hangs cannot hold a runner for six hours; `tests/hygiene.js` checks it.
+- Shipping binaries: rebuild all six targets the way CI does, with the Go version in `ci.yml`, then regenerate `bin/SHA256SUMS` with the same code CI uses (a hand-written `sha256sum` loop easily misses the `bin/noctis` launcher or orders the lines differently, and CI compares the file byte for byte):
+
+  ```sh
+  for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+    GOOS=${target%/*} GOARCH=${target#*/}; ext=""; [ "$GOOS" = windows ] && ext=".exe"
+    (cd go && CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -buildvcs=false -ldflags="-s -w" -o ../bin/$GOOS-$GOARCH/noctis$ext ./cmd/noctis)
+  done
+  cp bin/windows-amd64/noctis.exe bin/noctis.exe
+  node -e "require('./tests/harness.js').refreshChecksums()"
+  ```
+
+  The engine checks a binary against that manifest whenever it places one in a plugin folder without `go/` — a clone install made by `noctis install` or `scripts/install.*`, and `ensure` or `setup` run from such a folder — and refuses a mismatch; inside a source checkout (`go/go.mod` present) it uses the binary as is. A marketplace install counts as a checkout here, because Claude Code's copy of the plugin carries `go/go.mod`: it keeps the `bin/noctis` launcher, so on macOS and Linux every hook goes through `sh`. The test suites never rewrite the manifest: each lab checksums its own snapshot of the tree, so a local build runs as it is, and `tests/hygiene.js` reports the manifest as stale until you regenerate it or restore `bin/` (`tests/coverage.js` swaps in an instrumented binary and restores both on exit).
 
 ## Pull requests
 

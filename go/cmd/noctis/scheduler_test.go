@@ -387,3 +387,223 @@ func TestAnAbandonedScheduleLockIsSweptAway(t *testing.T) {
 		t.Fatalf("a schedule lock a live process is holding was swept away")
 	}
 }
+
+func sandboxLaunchd(t *testing.T, config object) (string, *[]recordedCommand) {
+	t.Helper()
+	files.pluginRoot = sandboxFiles(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("NOCTIS_NO_TASKS", "")
+	t.Setenv("XPC_SERVICE_NAME", "")
+	recorded := withFakeScheduler(t, nil)
+	scheduleBackendOverride = "launchd"
+	t.Cleanup(func() { scheduleBackendOverride = "" })
+	previous := args
+	t.Cleanup(func() { args = previous })
+	mustWriteJSON(files.config, config)
+	return filepath.Join(home, "Library", "LaunchAgents"), recorded
+}
+
+func firedByLaunchd(t *testing.T, sid, label string) {
+	t.Helper()
+	t.Setenv("XPC_SERVICE_NAME", label)
+	args = parseArgs(runnerArgs("resume", sid, files.configDir))
+}
+
+func bootedOut(recorded []recordedCommand, agents, label string) bool {
+	for _, entry := range recorded {
+		joined := strings.Join(entry.args, " ")
+		if strings.Contains(joined, " bootout ") && strings.HasSuffix(joined, "/"+label) {
+			return true
+		}
+		if strings.Contains(joined, " unload ") && strings.HasSuffix(joined, filepath.Join(agents, label+".plist")) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestLaunchdRunnerDoesNotBootOutItsOwnJob(t *testing.T) {
+	agents, recorded := sandboxLaunchd(t, object{"resume": object{"mode": "none"}, "alarm": object{"enabled": false}})
+	sid := "mac-fable"
+	now := float64(nowSec())
+	updateState(func(state object) {
+		stateMap(state, "waits")[sid] = object{"kind": "fable", "window": "fable", "until": now, "resumeAt": now + 20, "startedAt": now}
+	})
+	label := getString(scheduleRunner(loadConfig(), sid, now+20), "label")
+	plist := filepath.Join(agents, label+".plist")
+	if label == "" || statSafe(plist) == nil {
+		t.Fatalf("no launchd job was registered to fire: label %q", label)
+	}
+
+	firedByLaunchd(t, sid, label)
+	before := len(*recorded)
+	runResume()
+
+	if bootedOut((*recorded)[before:], agents, label) {
+		t.Fatalf("the runner launchd started booted its own job %s out; launchd answers that with SIGTERM before anything is resumed: %v", label, (*recorded)[before:])
+	}
+	if statSafe(plist) != nil {
+		t.Fatalf("the fired job's plist is still in LaunchAgents; the next login would load it again")
+	}
+	if getMap(getMap(readState(), "waits"), sid) != nil {
+		t.Fatalf("the runner never got as far as closing the wait")
+	}
+}
+
+func TestLaunchdRunnerThatReschedulesRegistersANewJob(t *testing.T) {
+	config := testConfig()
+	config["resume"] = object{"mode": "none"}
+	config["alarm"] = object{"enabled": false}
+	agents, recorded := sandboxLaunchd(t, config)
+	sid := "mac-five-hour"
+	now := float64(nowSec())
+	mustWriteJSON(files.usage, object{"updatedAt": now,
+		"five_hour": object{"used": float64(96), "resetsAt": now + 3600},
+		"seven_day": object{"used": float64(10), "resetsAt": now + 3*86400}})
+	updateState(func(state object) {
+		stateMap(state, "waits")[sid] = object{"kind": "batch", "window": "five_hour", "until": now, "resumeAt": now + 60, "startedAt": now}
+	})
+	fired := getString(scheduleRunner(loadConfig(), sid, now+60), "label")
+
+	firedByLaunchd(t, sid, fired)
+	before := len(*recorded)
+	runResume()
+
+	if bootedOut((*recorded)[before:], agents, fired) {
+		t.Fatalf("the runner booted its own job %s out while rescheduling: %v", fired, (*recorded)[before:])
+	}
+	scheduled := getMap(getMap(getMap(readState(), "waits"), sid), "scheduled")
+	next := getString(scheduled, "label")
+	if getString(scheduled, "method") != "launchd" || next == "" || next == fired {
+		t.Fatalf("the runner did not register a job of its own for the new deadline: %v (the fired job is %s)", scheduled, fired)
+	}
+	bootstrapped, found := findCommand((*recorded)[before:], "bootstrap")
+	if !found || !strings.HasSuffix(strings.Join(bootstrapped.args, " "), filepath.Join(agents, next+".plist")) {
+		t.Fatalf("the new job %s was not bootstrapped: %v", next, (*recorded)[before:])
+	}
+	if statSafe(filepath.Join(agents, fired+".plist")) != nil {
+		t.Fatalf("the fired job's plist was left in LaunchAgents")
+	}
+	if statSafe(filepath.Join(agents, next+".plist")) == nil {
+		t.Fatalf("the new job has no plist in LaunchAgents")
+	}
+}
+
+func TestLaunchdRunnerWithoutAWaitDoesNotBootOutItsOwnJob(t *testing.T) {
+	agents, recorded := sandboxLaunchd(t, object{})
+	sid := "mac-done"
+	now := float64(nowSec())
+	updateState(func(state object) {
+		stateMap(state, "waits")[sid] = object{"kind": "fable", "resumeAt": now + 20, "startedAt": now}
+	})
+	label := getString(scheduleRunner(loadConfig(), sid, now+20), "label")
+	updateState(func(state object) { delete(stateMap(state, "waits"), sid) })
+
+	firedByLaunchd(t, sid, label)
+	before := len(*recorded)
+	runResume()
+
+	if bootedOut((*recorded)[before:], agents, label) {
+		t.Fatalf("a runner that found no wait booted its own job %s out: %v", label, (*recorded)[before:])
+	}
+	if statSafe(filepath.Join(agents, label+".plist")) != nil {
+		t.Fatalf("the fired job's plist is still in LaunchAgents")
+	}
+}
+
+func TestCancellingALaunchdWaitBootsOutItsJob(t *testing.T) {
+	agents, recorded := sandboxLaunchd(t, object{})
+	sid := "mac-cancel"
+	updateState(func(state object) { stateMap(state, "waits")[sid] = liveWait(3600) })
+	label := getString(scheduleRunner(loadConfig(), sid, float64(nowSec()+3600)), "label")
+
+	clearWait(sid, nil)
+
+	if !bootedOut(*recorded, agents, label) {
+		t.Fatalf("cancelling the wait left launchd job %s loaded: %v", label, *recorded)
+	}
+	if statSafe(filepath.Join(agents, label+".plist")) != nil {
+		t.Fatalf("cancelling the wait left the plist behind")
+	}
+}
+
+func TestLaunchdSchedulingRetiresEveryEarlierJobOfTheSession(t *testing.T) {
+	agents, recorded := sandboxLaunchd(t, object{})
+	sid := "mac-stale"
+	ensureDir(agents)
+	legacy, stale := launchdLabel(sid), launchdLabel(sid)+".1700000000"
+	other := launchdLabel("another-session") + ".1700000000"
+	for _, label := range []string{legacy, stale, other} {
+		if err := os.WriteFile(filepath.Join(agents, label+".plist"), []byte("<plist/>"), 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	updateState(func(state object) { stateMap(state, "waits")[sid] = liveWait(3600) })
+
+	fresh := getString(scheduleRunner(loadConfig(), sid, float64(nowSec()+3600)), "label")
+
+	for _, label := range []string{legacy, stale} {
+		if !bootedOut(*recorded, agents, label) || statSafe(filepath.Join(agents, label+".plist")) != nil {
+			t.Fatalf("an earlier job of this session, %s, is still loaded next to the new one: %v", label, *recorded)
+		}
+	}
+	if bootedOut(*recorded, agents, other) || statSafe(filepath.Join(agents, other+".plist")) == nil {
+		t.Fatalf("another session's job was booted out")
+	}
+	if fresh == "" || statSafe(filepath.Join(agents, fresh+".plist")) == nil {
+		t.Fatalf("the new job has no plist in LaunchAgents: %q", fresh)
+	}
+}
+
+func TestCancellingNeverTouchesAJobThatIsNotThisSessions(t *testing.T) {
+	agents, recorded := sandboxLaunchd(t, object{})
+	home := filepath.Dir(filepath.Dir(agents))
+	ensureDir(agents)
+	foreign := filepath.Join(agents, "com.apple.Finder.plist")
+	victim := filepath.Join(home, "victim.plist")
+	for _, file := range []string{foreign, victim} {
+		if err := os.WriteFile(file, []byte("<plist/>"), 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	for sid, label := range map[string]string{
+		"mac-foreign":   "com.apple.Finder",
+		"mac-traversal": launchdLabel("mac-traversal") + "./../../../victim",
+	} {
+		updateState(func(state object) {
+			wait := liveWait(3600)
+			wait["scheduled"] = object{"method": "launchd", "label": label}
+			stateMap(state, "waits")[sid] = wait
+		})
+		clearWait(sid, nil)
+	}
+
+	if bootedOut(*recorded, agents, "com.apple.Finder") || statSafe(foreign) == nil {
+		t.Fatalf("a label from state.json that is not this session's booted out another agent: %v", *recorded)
+	}
+	if statSafe(victim) == nil {
+		t.Fatalf("a label from state.json reached a file outside LaunchAgents")
+	}
+	for _, entry := range *recorded {
+		if strings.Contains(strings.Join(entry.args, " "), "..") {
+			t.Fatalf("a label from state.json reached launchctl unchecked: %v", entry.args)
+		}
+	}
+}
+
+func TestLaunchdJobLabelNeverReusesTheRunningJobsLabel(t *testing.T) {
+	sandboxFiles(t)
+	at := float64(nowSec() + 600)
+	t.Setenv("XPC_SERVICE_NAME", "")
+	plain := launchdJobLabel("s1", at)
+	if !launchdJobOf("s1", plain) || launchdJobOf("s2", plain) {
+		t.Fatalf("label %q is not recognised as s1's job alone", plain)
+	}
+
+	t.Setenv("XPC_SERVICE_NAME", plain)
+	if again := launchdJobLabel("s1", at); again == plain || !launchdJobOf("s1", again) {
+		t.Fatalf("a job scheduled from inside job %s reused its label (%s); launchd refuses to bootstrap a label that is still loaded", plain, again)
+	}
+}

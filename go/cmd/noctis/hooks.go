@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 var needsCodePattern = lazyRegexp(`NEEDS_CODE`)
@@ -29,6 +30,89 @@ func digestAgentType(cfg object) string {
 
 func digestEnabled(cfg object) bool {
 	return getBool(section(cfg, "router"), "digest", true)
+}
+
+var unhookedFileTools = []string{"Edit", "MultiEdit", "NotebookEdit"}
+
+type agentToolRules struct {
+	restricted bool
+	tools      map[string]bool
+	disallowed map[string]bool
+}
+
+func (rules agentToolRules) mayCall(tool string) bool {
+	return (!rules.restricted || rules.tools[tool]) && !rules.disallowed[tool]
+}
+
+func addAgentTools(into map[string]bool, list string) {
+	list, _, _ = strings.Cut(list, " #")
+	for _, entry := range strings.Split(strings.Trim(strings.TrimSpace(list), "[]"), ",") {
+		name, _, _ := strings.Cut(entry, "(")
+		if name = strings.Trim(strings.TrimSpace(name), `"'`); name != "" {
+			into[name] = true
+		}
+	}
+}
+
+func readAgentToolRules(file string) (agentToolRules, bool) {
+	content, err := os.ReadFile(file)
+	if err != nil {
+		return agentToolRules{}, false
+	}
+	text := strings.ReplaceAll(strings.TrimPrefix(string(content), "\uFEFF"), "\r\n", "\n")
+	front, _, closed := strings.Cut(strings.TrimPrefix(text, "---\n"), "\n---")
+	if !strings.HasPrefix(text, "---\n") || !closed {
+		return agentToolRules{}, false
+	}
+	rules := agentToolRules{tools: map[string]bool{}, disallowed: map[string]bool{}}
+	var into map[string]bool
+	for _, line := range strings.Split(front, "\n") {
+		if item, isItem := strings.CutPrefix(strings.TrimSpace(line), "- "); isItem && into != nil {
+			addAgentTools(into, item)
+			continue
+		}
+		key, value, _ := strings.Cut(line, ":")
+		switch strings.TrimRight(key, " \t") {
+		case "tools":
+			into = rules.tools
+		case "disallowedTools":
+			into = rules.disallowed
+		default:
+			into = nil
+			continue
+		}
+		addAgentTools(into, value)
+	}
+	rules.restricted = len(rules.tools) > 0 && !rules.tools["*"]
+	return rules, true
+}
+
+func unguardedAgentTools(cfg object) []string {
+	if files.pluginRoot == "" {
+		return nil
+	}
+	issues := []string{}
+	agents := []string{liteAgentType(cfg), digestAgentType(cfg)}
+	for i, agent := range agents {
+		if i > 0 && agent == agents[0] {
+			continue
+		}
+		file := "agents/" + strings.TrimPrefix(agent, pluginName+":") + ".md"
+		rules, ok := readAgentToolRules(filepath.Join(files.pluginRoot, filepath.FromSlash(file)))
+		if !ok {
+			continue
+		}
+		open := []string{}
+		for _, tool := range unhookedFileTools {
+			if rules.mayCall(tool) {
+				open = append(open, tool)
+			}
+		}
+		if len(open) > 0 {
+			issues = append(issues, T("selfcheck.agentTools", file, strings.Join(open, ", ")))
+		}
+	}
+	return issues
 }
 
 func selfCheckIssues(cfg object) []string {
@@ -54,8 +138,14 @@ func selfCheckIssues(cfg object) []string {
 	if unguarded := unguardedWindows(cfg); len(unguarded) > 0 {
 		issues = append(issues, T("selfcheck.threshold", strings.Join(unguarded, ", ")))
 	}
+	if host.agents {
+		issues = append(issues, unguardedAgentTools(cfg)...)
+	}
 	if paidCreditsAllowed(cfg) {
 		issues = append(issues, T("credits.allowed"))
+	}
+	if profile := retunedProfile(section(cfg, "roles")); profile != "" {
+		issues = append(issues, retunedNotice(profile))
 	}
 	if getString(section(cfg, "fable"), "source") == "oauth" && oauthToken() == "" {
 		issues = append(issues, T("selfcheck.token", scopedLabel(cfg)))
@@ -92,11 +182,15 @@ func onSessionStart(input, cfg object) {
 	}
 	output := object{}
 	contexts := []string{}
-	queueNotice, queueNoticeKey := "", ""
+	queueNotice, queueNoticeKey, cutOffSid := "", "", ""
 	if source == "startup" || source == "clear" {
 		if checkpointSid, checkpoint := latestCheckpointFor(state, cwd, now); checkpoint != nil {
 			consumeCheckpoint(checkpointSid)
 			contexts = append(contexts, T("session.checkpoint", pluginName, formatTime(numberOr(checkpoint, "at", 0)), getString(checkpoint, "path"), checkpointSid))
+			if note := cutOffNote(readState(), checkpointSid); note != "" {
+				contexts = append(contexts, note)
+				cutOffSid = checkpointSid
+			}
 		}
 	}
 	if queuePath := queueFileFor(cfg, cwd, sid); queuePath != "" {
@@ -178,6 +272,9 @@ func onSessionStart(input, cfg object) {
 		return
 	}
 	emit(output)
+	if cutOffSid != "" {
+		forgetCutOffs(cutOffSid)
+	}
 }
 
 func releaseClearedSession(newSid, cwd string, now int64) {
@@ -271,6 +368,40 @@ func joinNotices(parts ...string) string {
 	return strings.Join(kept, " ")
 }
 
+var controlSkills = map[string]bool{"pause": true, "resume": true, "setup": true, "status": true}
+
+func controlCommand(prompt string) string {
+	fields := strings.Fields(prompt)
+	if len(fields) == 0 {
+		return ""
+	}
+	if name, found := strings.CutPrefix(fields[0], "/"+pluginName+":"); found && controlSkills[name] {
+		return fields[0]
+	}
+	return ""
+}
+
+func onControlPrompt(input, cfg object, result decision, command string) {
+	sid := sessionKey(input)
+	facts := usageFacts(result.usage)
+	if ceiling := ceilingHit(cfg, result.usage); ceiling != nil {
+		if observed(sid, "UserPromptSubmit", "block-control-prompt", command+": "+hitLabel(ceiling), facts) {
+			return
+		}
+		journal(sid, "UserPromptSubmit", "block-control-prompt", command+": "+hitLabel(ceiling), facts)
+		logInfo("%s refused for %s at the credit ceiling: %s %s%%", command, sid, ceiling.window, formatNumber(ceiling.used))
+		emit(object{"decision": "block", "reason": "⏸ " + T("wait.reason", ceiling.label, formatNumber(ceiling.used), hitLabel(ceiling), formatTime(ceiling.until))})
+		return
+	}
+	if result.wait != nil {
+		journal(sid, "UserPromptSubmit", "control-prompt", command+": "+hitLabel(result.wait), facts)
+		logInfo("%s for %s passes the pause point: %s %s%%", command, sid, result.wait.window, formatNumber(result.wait.used))
+	}
+	if !observing && result.notice != "" {
+		emit(object{"systemMessage": result.notice})
+	}
+}
+
 func onUserPromptSubmit(input, cfg object) {
 	now := nowSec()
 	sid := sessionKey(input)
@@ -297,6 +428,10 @@ func onUserPromptSubmit(input, cfg object) {
 		emit(object{"decision": "block", "reason": handleFableHit("prompt", input, cfg, result)})
 		return
 	}
+	if command := controlCommand(getString(input, "prompt")); command != "" {
+		onControlPrompt(input, cfg, result, command)
+		return
+	}
 	output := object{}
 	systemMessage, waitContext := "", ""
 	if result.wait != nil {
@@ -309,7 +444,9 @@ func onUserPromptSubmit(input, cfg object) {
 			return
 		}
 		systemMessage = outcome.notice
-		waitContext = outcome.context
+		waitContext = withCutOffNote(sid, outcome.context)
+	} else if promptFromPlugin {
+		forgetCutOffs(sid)
 	}
 	contexts := []string{}
 	if waitContext != "" {
@@ -390,6 +527,52 @@ func pinnedSubagentModel(cfg, input object) string {
 	return getString(getMap(section(cfg, "router"), "subagentModels"), requested)
 }
 
+func scopedFallbackFor(cfg object, model string) string {
+	host := currentHost()
+	scoped := scopedModelPattern(cfg)
+	fallback := getString(section(cfg, "models"), "fallback")
+	if !host.agents || !host.modelSwitch || model == "" || !scoped.MatchString(model) || fallback == "" || scoped.MatchString(fallback) || !validThreshold(scopedThresholdValue(cfg)) {
+		return ""
+	}
+	return fallback
+}
+
+func scopedQuotaOut(cfg, state object, usage usageView, now int64) bool {
+	threshold := scopedThreshold(cfg)
+	if usage.fable != nil && usage.fable.used >= threshold {
+		return true
+	}
+	switched := getMap(state, "modelSwitched")
+	if switched == nil || float64(now) >= numberOr(switched, "fableResetsAt", 0) {
+		return false
+	}
+	return usage.fable == nil || usage.fable.used >= threshold/2
+}
+
+func scopedSafeModel(cfg, state object, usage usageView, model string, now int64) string {
+	if fallback := scopedFallbackFor(cfg, model); fallback != "" && scopedQuotaOut(cfg, state, usage, now) {
+		return fallback
+	}
+	return model
+}
+
+func subagentFallback(cfg object, model string) (string, usageView) {
+	if scopedFallbackFor(cfg, model) == "" {
+		return model, usageView{}
+	}
+	now := nowSec()
+	usage := currentUsage(now)
+	maxAge := -1.0
+	if usage.fable != nil && usage.fable.used >= scopedThreshold(cfg)-nearEdgeBand {
+		maxAge = nearEdgePollNormal
+	}
+	before := numberOr(readJSON(files.fable), "fetchedAt", 0)
+	if after := refreshFable(cfg, now, "fable-subagent", maxAge, false); numberOr(after, "fetchedAt", 0) != before {
+		usage = currentUsage(now)
+	}
+	return scopedSafeModel(cfg, readState(), usage, model, now), usage
+}
+
 func onAgentSpawn(input, cfg, state object, now int64) {
 	sid := sessionKey(input)
 	if guardPaused(cfg, state, now) {
@@ -404,7 +587,8 @@ func onAgentSpawn(input, cfg, state object, now int64) {
 		emit(object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": handleFableHit("prompt", input, cfg, result)}})
 		return
 	}
-	output := object{}
+	systemMessage := ""
+	specific := object{}
 	if result.wait != nil {
 		if observed(sid, "PreToolUse", "pause", hitLabel(result.wait), usageFacts(result.usage)) {
 			return
@@ -414,20 +598,40 @@ func onAgentSpawn(input, cfg, state object, now int64) {
 			emit(object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": outcome.stop}})
 			return
 		}
-		if outcome.notice != "" {
-			output["systemMessage"] = outcome.notice
+		systemMessage = outcome.notice
+		if context := withCutOffNote(sid, outcome.context); context != "" {
+			specific["additionalContext"] = context
 		}
 	}
-	if model := pinnedSubagentModel(cfg, input); model != "" {
-		requested := firstString(getMap(input, "tool_input"), "subagent_type", "agent")
-		if observed(sid, "PreToolUse", "pin-subagent-model", requested+" → "+model, nil) {
+	toolInput := getMap(input, "tool_input")
+	requested := orDefault(firstString(toolInput, "subagent_type", "agent"), getString(input, "tool_name"))
+	model := pinnedSubagentModel(cfg, input)
+	action, reason, facts := "pin-subagent-model", requested+" → "+model, object(nil)
+	target := orDefault(getString(toolInput, "model"), model)
+	if safe, usage := subagentFallback(cfg, target); safe != target {
+		model, action, facts = safe, "subagent-fallback", usageFacts(usage)
+		reason = fmt.Sprintf("%s: %s → %s, the %s quota is out", requested, target, safe, scopedLabel(cfg))
+	}
+	if model != "" {
+		if observed(sid, "PreToolUse", action, reason, facts) {
 			return
 		}
-		updated := cloneObject(getMap(input, "tool_input"))
+		updated := cloneObject(toolInput)
 		updated["model"] = model
-		output["hookSpecificOutput"] = object{"hookEventName": "PreToolUse", "permissionDecision": "allow", "updatedInput": updated}
-		journal(sid, "PreToolUse", "pin-subagent-model", requested+" → "+model, nil)
-		logInfo("subagent %s pinned to %s for %s", requested, model, sid)
+		specific["permissionDecision"], specific["updatedInput"] = "allow", updated
+		journal(sid, "PreToolUse", action, reason, facts)
+		logInfo("subagent model for %s: %s (%s)", sid, reason, action)
+	}
+	if observing {
+		return
+	}
+	output := object{}
+	if len(specific) > 0 {
+		specific["hookEventName"] = "PreToolUse"
+		output["hookSpecificOutput"] = specific
+	}
+	if systemMessage = joinNotices(systemMessage, result.notice); systemMessage != "" {
+		output["systemMessage"] = systemMessage
 	}
 	if len(output) > 0 {
 		emit(output)
@@ -436,6 +640,15 @@ func onAgentSpawn(input, cfg, state object, now int64) {
 
 func textExtensionList() string {
 	return strings.Join(sortedKeys(textExtensions), " ")
+}
+
+func insideSubagent(input object) bool {
+	return getString(input, "agent_id") != "" || (activeHost != "claude" && getString(input, "agent_type") != "")
+}
+
+func runsAsAgent(input object, full string) bool {
+	name := getString(input, "agent_type")
+	return name == full || name == strings.TrimPrefix(full, pluginName+":")
 }
 
 func agentWritePolicy(input, cfg object) {
@@ -449,30 +662,226 @@ func agentWritePolicy(input, cfg object) {
 		filePath = getString(toolInput, "notebook_path")
 	}
 
-	agentType := getString(input, "agent_type")
-	matches := func(full string) bool {
-		return agentType == full || agentType == strings.TrimPrefix(full, pluginName+":")
-	}
 	switch {
-	case matches(liteAgentType(cfg)):
+	case runsAsAgent(input, liteAgentType(cfg)):
 		if textExtensions[strings.ToLower(filepath.Ext(filePath))] {
 			return
 		}
 		logInfo("lite agent write denied: %s", orDefault(filePath, "(no path)"))
 		emit(object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": fmt.Sprintf("The lite agent may only write text documents (%s); code and config files belong to the main model. Return the content in your answer instead.", textExtensionList())}})
-	case matches(digestAgentType(cfg)):
+	case runsAsAgent(input, digestAgentType(cfg)):
 		logInfo("digest agent write denied: %s", orDefault(filePath, "(no path)"))
 		emit(object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "The digest agent only runs commands and summarizes output; it never writes files. Return the digest in your answer."}})
 	}
 }
 
-func onPreToolUse(input, cfg object) {
-	if getString(input, "agent_id") != "" || getString(input, "agent_type") != "" {
-		agentWritePolicy(input, cfg)
+var reportTools = map[string]bool{"SubagentHandback": true, "StructuredOutput": true}
+
+const cutOffAgentsKept = 32
+
+func deliveringReport(input object) bool {
+	calls := getList(input, "tool_calls")
+	for _, raw := range calls {
+		if !reportTools[getString(toObject(raw), "tool_name")] {
+			return false
+		}
+	}
+	return len(calls) > 0
+}
+
+func subagentLimit(cfg object, now int64) decision {
+	usage := currentUsage(now)
+	edge := nearEdge(cfg, usage)
+	if edge || float64(now)-usage.updatedAt > usageStaleSeconds(cfg) {
+		maxAge := -1.0
+		if edge {
+			maxAge = edgePollSeconds(cfg, usage)
+		}
+		refreshFable(cfg, now, "subagent", maxAge, false)
+		usage = currentUsage(now)
+	}
+	return evaluate(cfg, usage, "", 0, false)
+}
+
+func subagentLimitReason(wait, ceiling *waitPlan) string {
+	resume := "The session continues after the reset at " + formatTime(wait.until) + "."
+	if ceiling != nil {
+		return fmt.Sprintf("[noctis] %s usage is %s%%, at the paid-credit ceiling (%s%%): past it the account pays for the overflow in usage credits, so this agent stops now. %s", ceiling.label, formatNumber(ceiling.used), formatNumber(ceiling.threshold), resume)
+	}
+	point := formatNumber(wait.threshold) + "%"
+	if wait.used < wait.threshold {
+		point += ", reached early at the current burn rate"
+	}
+	return fmt.Sprintf("[noctis] %s usage is %s%% (pause point %s): start no new work. Return what you have the way you normally deliver your report, and name what is unfinished. %s", wait.label, formatNumber(wait.used), point, resume)
+}
+
+func shownLimit(wait, ceiling *waitPlan) *waitPlan {
+	if ceiling != nil {
+		return ceiling
+	}
+	return wait
+}
+
+func denySubagentTool(input, cfg object) bool {
+	if !currentHost().agents {
+		return false
+	}
+	now := nowSec()
+	if guardPaused(cfg, readState(), now) {
+		return false
+	}
+	result := subagentLimit(cfg, now)
+	toolName := getString(input, "tool_name")
+	reason, what := "", ""
+	switch ceiling := ceilingHit(cfg, result.usage); {
+	case result.wait != nil:
+		reason, what = subagentLimitReason(result.wait, ceiling), hitLabel(shownLimit(result.wait, ceiling))
+	case toolName == "Workflow":
+		reason, what = gateWorkflowLaunch(cfg, result), orDefault(hitLabelOrWarn(result), "fan-out headroom")
+	}
+	if reason == "" {
+		return false
+	}
+	sid := sessionKey(input)
+	facts := usageFacts(result.usage)
+	if observed(sid, "PreToolUse", "deny-subagent-tool", toolName+": "+what, facts) {
+		return false
+	}
+	journal(sid, "PreToolUse", "deny-subagent-tool", toolName+": "+what, facts)
+	logInfo("subagent %s of %s: %s denied (%s)", getString(input, "agent_id"), sid, toolName, what)
+	emit(object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason}})
+	return true
+}
+
+func agentWarned(state object, sid, agent string, now int64) bool {
+	for _, record := range agentCutOffs(state, sid) {
+		if getString(record, "agent") == agent && numberOr(record, "until", 0) > float64(now) {
+			return true
+		}
+	}
+	return false
+}
+
+func recordCutOff(sid, agent, agentType string, until float64, stopped bool, now int64) {
+	updateState(func(state object) {
+		record := object{"agent": agent, "agentType": agentType}
+		kept := []any{}
+		for _, raw := range getList(stateMap(state, "workflows"), sid) {
+			entry := toObject(raw)
+			name := getString(entry, "agent")
+			switch {
+			case entry == nil:
+			case name == agent:
+				if numberOr(entry, "until", 0) > float64(now) {
+					record = entry
+				}
+			case name != "" && numberOr(entry, "until", 0)+stateEntryTTLSeconds < float64(now):
+			default:
+				kept = append(kept, entry)
+			}
+		}
+		if agentType != "" {
+			record["agentType"] = agentType
+		}
+		record["at"], record["stopped"] = float64(now), stopped || getBool(record, "stopped", false)
+		record["until"] = math.Max(numberOr(record, "until", 0), until)
+		kept = append(kept, record)
+		excess := -cutOffAgentsKept
+		for _, raw := range kept {
+			if getString(toObject(raw), "agent") != "" {
+				excess++
+			}
+		}
+		trimmed := []any{}
+		for _, raw := range kept {
+			if excess > 0 && getString(toObject(raw), "agent") != "" {
+				excess--
+				continue
+			}
+			trimmed = append(trimmed, raw)
+		}
+		stateMap(state, "workflows")[sid] = trimmed
+	})
+}
+
+func forgetCutOffs(sid string) {
+	if len(agentCutOffs(readState(), sid)) == 0 {
 		return
 	}
+	updateState(func(state object) {
+		kept := []any{}
+		for _, raw := range getList(stateMap(state, "workflows"), sid) {
+			if getString(toObject(raw), "agent") == "" {
+				kept = append(kept, raw)
+			}
+		}
+		if len(kept) == 0 {
+			delete(stateMap(state, "workflows"), sid)
+			return
+		}
+		stateMap(state, "workflows")[sid] = kept
+	})
+}
+
+func withCutOffNote(sid, context string) string {
+	note := cutOffNote(readState(), sid)
+	if note == "" {
+		return context
+	}
+	forgetCutOffs(sid)
+	if context == "" {
+		return note
+	}
+	return context + "\n" + note
+}
+
+func onSubagentBatch(input, cfg object) {
+	if !currentHost().agents || deliveringReport(input) {
+		return
+	}
+	now := nowSec()
+	state := readState()
+	if guardPaused(cfg, state, now) {
+		return
+	}
+	result := subagentLimit(cfg, now)
+	wait := result.wait
+	if wait == nil {
+		return
+	}
+	sid, agent, agentType := sessionKey(input), getString(input, "agent_id"), getString(input, "agent_type")
+	who := strings.TrimSpace(agentType + " " + agent)
+	facts := usageFacts(result.usage)
+	if ceiling := ceilingHit(cfg, result.usage); ceiling != nil || agentWarned(state, sid, agent, now) {
+		shown := shownLimit(wait, ceiling)
+		if observed(sid, "PostToolBatch", "stop-subagent", who+": "+hitLabel(shown), facts) {
+			return
+		}
+		recordCutOff(sid, agent, agentType, wait.until, true, now)
+		journal(sid, "PostToolBatch", "stop-subagent", who+": "+hitLabel(shown), facts)
+		warn("subagent %s of %s stopped: %s at %s%%", who, sid, shown.window, formatNumber(shown.used))
+		emit(object{"continue": false, "stopReason": "⏸ " + T("wait.reason", shown.label, formatNumber(shown.used), hitLabel(shown), formatTime(shown.until))})
+		return
+	}
+	if observed(sid, "PostToolBatch", "warn-subagent", who+": "+hitLabel(wait), facts) {
+		return
+	}
+	recordCutOff(sid, agent, agentType, wait.until, false, now)
+	journal(sid, "PostToolBatch", "warn-subagent", who+": "+hitLabel(wait), facts)
+	logInfo("subagent %s of %s told to wrap up: %s at %s%%", who, sid, wait.window, formatNumber(wait.used))
+	emit(object{"hookSpecificOutput": object{"hookEventName": "PostToolBatch", "additionalContext": subagentLimitReason(wait, nil) + " Any tool call other than delivering that report ends this agent."}})
+}
+
+func onPreToolUse(input, cfg object) {
 	toolName := getString(input, "tool_name")
+	if insideSubagent(input) {
+		if !denySubagentTool(input, cfg) {
+			agentWritePolicy(input, cfg)
+		}
+		return
+	}
 	if fileTools[toolName] {
+		agentWritePolicy(input, cfg)
 		return
 	}
 	now := nowSec()
@@ -484,6 +893,9 @@ func onPreToolUse(input, cfg object) {
 	}
 	if toolName == "Workflow" {
 		onWorkflowLaunch(input, cfg, state, now, sid)
+		return
+	}
+	if runsAsAgent(input, liteAgentType(cfg)) {
 		return
 	}
 	route := getMap(getMap(state, "routes"), sid)
@@ -574,7 +986,7 @@ func onStop(input, cfg object) {
 	}
 	clearOverload(state, sid)
 	queuePath := queueFileFor(cfg, getString(input, "cwd"), sid)
-	if queuePath == "" {
+	if queuePath == "" || !queueTrusted(cfg, queuePath) {
 		return
 	}
 	queueLabel := filepath.Base(queuePath)
@@ -656,6 +1068,7 @@ func onStop(input, cfg object) {
 		emit(object{"systemMessage": handleFableHit("batch", input, cfg, result)})
 		return
 	}
+	systemMessage, waitContext := "", ""
 	if result.wait != nil {
 		if observed(sid, "Stop", "pause", hitLabel(result.wait), usageFacts(result.usage)) {
 			return
@@ -665,6 +1078,7 @@ func onStop(input, cfg object) {
 			emit(object{"systemMessage": outcome.stop})
 			return
 		}
+		systemMessage, waitContext = outcome.notice, withCutOffNote(sid, outcome.context)
 	}
 	if observed(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), nil) {
 		return
@@ -681,8 +1095,8 @@ func onStop(input, cfg object) {
 	if snapshot.blocked > 0 {
 		blockedNote = fmt.Sprintf(" %d item(s) wait on unfinished dependencies and are not eligible yet.", snapshot.blocked)
 	}
-	if len(snapshot.items) > 0 && currentHost().agents && getBool(workflowCfg(cfg), "suggest", true) && looksLikeFanOut(snapshot.items[0]) && result.warnWindow == nil {
-		blockedNote += " " + workflowAdvice(cfg, "The next item")
+	if len(snapshot.items) > 0 && currentHost().agents && looksLikeFanOut(snapshot.items[0]) && workflowAdvisable(cfg, result) {
+		blockedNote += " " + workflowAdvice(cfg, "The next item", result.usage)
 	}
 	if snapshot.plain {
 		blockedNote += " This list has no checkboxes: first rewrite every open item as \"- [ ] …\" (finished ones as \"- [x] …\") so progress can be tracked, then continue."
@@ -691,11 +1105,151 @@ func onStop(input, cfg object) {
 	if isAutoQueue(queuePath) {
 		where = queuePath
 	}
-	emit(object{"decision": "block", "reason": fmt.Sprintf("[noctis] Queue continues: %d open in %s. Take the next eligible item%s (priority and (after …) dependencies already applied), finish it completely, mark it done in the file, then move to the following one.%s Do not stop or ask for confirmation; decide yourself.", snapshot.total, where, nextItem, blockedNote)})
+	reason := fmt.Sprintf("[noctis] Queue continues: %d open in %s. Take the next eligible item%s (priority and (after …) dependencies already applied), finish it completely, mark it done in the file, then move to the following one.%s Do not stop or ask for confirmation; decide yourself.", snapshot.total, where, nextItem, blockedNote)
+	if waitContext != "" {
+		reason = waitContext + "\n" + reason
+	}
+	output := object{"decision": "block", "reason": reason}
+	if systemMessage = joinNotices(systemMessage, result.notice); systemMessage != "" {
+		output["systemMessage"] = systemMessage
+	}
+	emit(output)
+}
+
+var shellTools = map[string]bool{"Bash": true, "PowerShell": true}
+
+var platformBinDir = lazyRegexp(`^[a-z0-9]+-[a-z0-9]+/$`)
+
+type shellWord struct {
+	text   string
+	quoted bool
+}
+
+func ownCommandsOnly(input object) bool {
+	calls := getList(input, "tool_calls")
+	for _, raw := range calls {
+		call := toObject(raw)
+		if !shellTools[getString(call, "tool_name")] || !runsOwnBinaryOnly(getString(getMap(call, "tool_input"), "command")) {
+			return false
+		}
+	}
+	return len(calls) > 0
+}
+
+func runsOwnBinaryOnly(command string) bool {
+	segments, ok := shellSegments(command)
+	if !ok || len(segments) == 0 {
+		return false
+	}
+	for _, words := range segments {
+		if !words[0].quoted && words[0].text == "&" {
+			words = words[1:]
+		}
+		if len(words) == 0 || !ownBinary(words[0]) {
+			return false
+		}
+		for _, word := range words[1:] {
+			if !plainArgument(word) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func shellSegments(command string) ([][]shellWord, bool) {
+	if strings.IndexFunc(command, func(r rune) bool {
+		return (r < ' ' && r != '\t' && r != '\n' && r != '\r') || r == 0x7f || r == '`' || (r >= 0x2018 && r <= 0x201f)
+	}) >= 0 {
+		return nil, false
+	}
+	segments, words := [][]shellWord{}, []shellWord{}
+	flush := func() {
+		if len(words) > 0 {
+			segments, words = append(segments, words), []shellWord{}
+		}
+	}
+	for i := 0; i < len(command); {
+		switch c := command[i]; {
+		case c == ' ' || c == '\t':
+			i++
+		case c == '\n' || c == '\r' || c == ';':
+			flush()
+			i++
+		case strings.HasPrefix(command[i:], "&&") || strings.HasPrefix(command[i:], "||"):
+			flush()
+			i += 2
+		case c == '"' || c == '\'':
+			end := strings.IndexByte(command[i+1:], c)
+			if end < 0 {
+				return nil, false
+			}
+			words = append(words, shellWord{text: command[i+1 : i+1+end], quoted: true})
+			i += end + 2
+			if i < len(command) && !wordEnds(command[i:]) {
+				return nil, false
+			}
+		default:
+			start := i
+			for i < len(command) && !wordEnds(command[i:]) {
+				if command[i] == '"' || command[i] == '\'' {
+					return nil, false
+				}
+				i++
+			}
+			words = append(words, shellWord{text: command[start:i]})
+		}
+	}
+	flush()
+	return segments, true
+}
+
+func wordEnds(rest string) bool {
+	return strings.IndexByte(" \t\n\r;", rest[0]) >= 0 || strings.HasPrefix(rest, "&&") || strings.HasPrefix(rest, "||")
+}
+
+func plainArgument(word shellWord) bool {
+	if word.quoted {
+		return !strings.HasSuffix(word.text, `\`) && strings.IndexFunc(word.text, func(r rune) bool { return r < ' ' || r == '$' }) < 0
+	}
+	if word.text == "2>&1" {
+		return true
+	}
+	return strings.IndexFunc(word.text, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune(`-_.,:=/\~`, r)
+	}) < 0
+}
+
+func ownBinary(word shellWord) bool {
+	root := strings.TrimRight(strings.ReplaceAll(files.pluginRoot, `\`, "/"), "/")
+	tail, rooted := word.text, false
+	for _, placeholder := range []string{"${CLAUDE_PLUGIN_ROOT}", "$CLAUDE_PLUGIN_ROOT", "$env:CLAUDE_PLUGIN_ROOT"} {
+		if rest, found := strings.CutPrefix(tail, placeholder); found {
+			tail, rooted = rest, true
+			break
+		}
+	}
+	if root == "" || !plainArgument(shellWord{text: tail, quoted: word.quoted}) {
+		return false
+	}
+	path := strings.ReplaceAll(tail, `\`, "/")
+	if rooted {
+		path = root + path
+	}
+	prefix := root + "/bin/"
+	if len(path) <= len(prefix) || !strings.EqualFold(path[:len(prefix)], prefix) {
+		return false
+	}
+	dir, name := "", strings.ToLower(path[len(prefix):])
+	if slash := strings.LastIndexByte(name, '/'); slash >= 0 {
+		dir, name = name[:slash+1], name[slash+1:]
+	}
+	return (name == pluginName || name == pluginName+".exe") && (dir == "" || platformBinDir.MatchString(dir))
 }
 
 func onPostToolBatch(input, cfg object) {
-	if getString(input, "agent_id") != "" || getString(input, "agent_type") != "" {
+	if insideSubagent(input) {
+		onSubagentBatch(input, cfg)
 		return
 	}
 	now := nowSec()
@@ -714,8 +1268,11 @@ func onPostToolBatch(input, cfg object) {
 		emit(object{"continue": false, "stopReason": handleFableHit("batch", input, cfg, result)})
 		return
 	}
-	systemMessage := ""
-	if result.wait != nil {
+	systemMessage, waitContext := "", ""
+	if result.wait != nil && ownCommandsOnly(input) && ceilingHit(cfg, result.usage) == nil {
+		journal(sid, "PostToolBatch", "control-batch", hitLabel(result.wait), usageFacts(result.usage))
+		logInfo("batch of %s commands only for %s passes the pause point: %s %s%%", pluginName, sid, result.wait.window, formatNumber(result.wait.used))
+	} else if result.wait != nil {
 		if observed(sid, "PostToolBatch", "pause", hitLabel(result.wait), usageFacts(result.usage)) {
 			return
 		}
@@ -724,14 +1281,21 @@ func onPostToolBatch(input, cfg object) {
 			emit(object{"continue": false, "stopReason": outcome.stop})
 			return
 		}
-		systemMessage = outcome.notice
+		systemMessage, waitContext = outcome.notice, withCutOffNote(sid, outcome.context)
 	}
 	if observing {
 		return
 	}
 	systemMessage = joinNotices(systemMessage, result.notice)
+	output := object{}
+	if waitContext != "" {
+		output["hookSpecificOutput"] = object{"hookEventName": "PostToolBatch", "additionalContext": waitContext}
+	}
 	if systemMessage != "" {
-		emit(object{"systemMessage": systemMessage})
+		output["systemMessage"] = systemMessage
+	}
+	if len(output) > 0 {
+		emit(output)
 	}
 
 	stateStamp := fileStamp(files.state)
@@ -785,7 +1349,8 @@ func onStopFailure(input, cfg object) {
 	now := nowSec()
 	sid := sessionKey(input)
 	state := readState()
-	errorType := getString(input, "error_type")
+	errorType := firstString(input, "error_type", "error")
+	errorText := joinNotices(getString(input, "error_message"), getString(input, "last_assistant_message"), getString(input, "error_details"))
 	if errorType == "model_not_found" {
 		healUnavailableModel(cfg, sid)
 		return
@@ -813,7 +1378,7 @@ func onStopFailure(input, cfg object) {
 	result := decide(cfg, state, input, now, decideOptions{force: true, noProbe: true})
 	usage := result.usage
 
-	hint := limitHint(getString(input, "error_message"), scopedLabel(cfg), usage)
+	hint := limitHint(errorText, scopedLabel(cfg), usage)
 	nearCap := func(win *window) bool { return win != nil && win.used >= culpritFloor }
 	weeklyCulprit := hint == "seven_day" || (hint == "" && nearCap(usage.sevenDay) && (!nearCap(usage.fiveHour) || usage.sevenDay.resetsAt > usage.fiveHour.resetsAt))
 	fiveCulprit := hint == "five_hour" || (hint == "" && nearCap(usage.fiveHour))
@@ -876,7 +1441,7 @@ func onStopFailure(input, cfg object) {
 			notify(cfg, pluginName, T("overload.notify", errorType, formatTime(resumeAt)))
 		}
 	} else {
-		journal(sid, "StopFailure", "schedule-resume", label, object{"resumeAt": resumeAt, "wake": wakeable, "window": getString(record, "window"), "hint": hint, "message": truncateText(getString(input, "error_message"), 160)})
+		journal(sid, "StopFailure", "schedule-resume", label, object{"resumeAt": resumeAt, "wake": wakeable, "window": getString(record, "window"), "hint": hint, "message": truncateText(errorText, 160)})
 		warn("rate_limit StopFailure for %s: culprit=%s resumeAt=%s wake=%t", sid, getString(record, "window"), localISO(resumeAt), wakeable)
 		if getString(record, "window") == "unknown" {
 			notify(cfg, pluginName, T("stopfailure.transient", formatTime(resumeAt)))
@@ -944,7 +1509,7 @@ func wakeSameSession(cfg object, sid string, record object, resumeAt float64) {
 		logInfo("wake %s: builtin auto-continue already fired", sid)
 		return
 	}
-	if getString(record, "window") != "unknown" {
+	if getString(record, "window") != "unknown" || getBool(record, "overload", false) {
 		check := decide(cfg, state, object{"session_id": sid, "cwd": getString(record, "cwd"), "transcript_path": getString(record, "transcript")}, nowSec(), decideOptions{force: true, noProbe: true})
 		if check.wait != nil && check.wait.until > float64(nowSec()+120) {
 			logInfo("wake %s: limit still active (%s %s%%), leaving it to the runner", sid, check.wait.label, formatNumber(check.wait.used))
@@ -1045,7 +1610,7 @@ func onTaskEvent(input, _ object) {
 }
 
 func onPostToolUse(input, cfg object) {
-	if !agentTools[getString(input, "tool_name")] || getString(input, "agent_id") != "" || getString(input, "agent_type") != "" {
+	if !agentTools[getString(input, "tool_name")] || insideSubagent(input) {
 		return
 	}
 	toolInput := getMap(input, "tool_input")
@@ -1114,13 +1679,55 @@ func emitFallback() {
 	}
 }
 
+func copilotEventName(raw object) string {
+	has := func(key string) bool {
+		_, ok := raw[key]
+		return ok
+	}
+	switch {
+	case has("stopReason"):
+		if has("agentId") || has("agentName") {
+			return "subagentStop"
+		}
+		return "agentStop"
+	case has("errorContext"):
+		if getBool(raw, "recoverable", true) {
+			return ""
+		}
+		return "errorOccurred"
+	case has("toolName"):
+		switch {
+		case has("toolResult"):
+			return "postToolUse"
+		case has("error"):
+			return "postToolUseFailure"
+		}
+		return "preToolUse"
+	case has("prompt"):
+		if has("transformedPrompt") {
+			return "userPromptTransformed"
+		}
+		return "userPromptSubmitted"
+	case has("reason"):
+		return "sessionEnd"
+	case has("source") || has("initialPrompt"):
+		return "sessionStart"
+	}
+	return ""
+}
+
 func runHook() {
 	raw := readStdinJSON()
-	activeEvent = getString(raw, "hook_event_name")
 	if os.Getenv("NOCTIS_DEBUG_HOOKS") != "" {
 
 		_ = appendRotating(filepath.Join(files.guardDir, "hooks-debug.log"), localISO(float64(nowSec()))+" "+activeHost+" "+string(marshalCompact(raw)))
 	}
+	if activeHost == "copilot" && getString(raw, "hook_event_name") == "" {
+		if event := copilotEventName(raw); event != "" {
+			raw["hook_event_name"] = event
+		}
+	}
+	activeEvent = getString(raw, "hook_event_name")
 	event, input := normalizeHookInput(activeHost, raw)
 	if input == nil {
 		input = object{}

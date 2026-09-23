@@ -4,9 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPowerShellQuotingSurvivesQuotes(t *testing.T) {
@@ -189,6 +192,14 @@ func TestHostChoiceAcceptsWhatPeopleActuallyType(t *testing.T) {
 		"GitHub Copilot CLI":       "copilot",
 		"antigravity":              "antigravity",
 		"Antigravity CLI (Google)": "antigravity",
+		"fac":                      "droid",
+		"git":                      "copilot",
+		"open":                     "codex",
+		"goo":                      "antigravity",
+		"anti":                     "antigravity",
+		"codex cli":                "codex",
+		"github copilot":           "copilot",
+		"claude code":              "claude",
 	}
 	for answer, want := range cases {
 		if got := parseHostChoice(answer); got != want {
@@ -207,9 +218,35 @@ func TestHostChoiceAcceptsWhatPeopleActuallyType(t *testing.T) {
 		}
 	}
 
-	for _, nonsense := range []string{"99", "emacs", "!!"} {
-		if got := parseHostChoice(nonsense); got != "" && got != "claude" {
+	for _, nonsense := range []string{"99", "emacs", "!!", "x", "n", "y", "g", "o", "i", "e", "c", "cli", "code"} {
+		if got := parseHostChoice(nonsense); got != "" {
 			t.Errorf("parseHostChoice(%q) = %q; unrecognised input must not pick a host", nonsense, got)
+		}
+	}
+}
+
+func TestInputFromAPipeOrAFileIsNeverAskedAQuestion(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	defer writer.Close()
+	answers := filepath.Join(t.TempDir(), "answers.txt")
+	if err := os.WriteFile(answers, []byte("2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(answers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	saved := os.Stdin
+	t.Cleanup(func() { os.Stdin = saved })
+	for name, input := range map[string]*os.File{"a pipe": reader, "a file": file} {
+		os.Stdin = input
+		if stdinIsTerminal() {
+			t.Errorf("stdin from %s was taken for a terminal; install and setup ask only someone at a keyboard, and piped or redirected input means no question", name)
 		}
 	}
 }
@@ -330,5 +367,227 @@ func TestTheScheduledTaskCommandSurvivesTheQuotesCmdStrips(t *testing.T) {
 		if want := strings.Join(tc.args, " "); rest != want {
 			t.Errorf("%s: the launcher would be handed %q, want %q", tc.name, rest, want)
 		}
+	}
+}
+
+func chdirUntilCleanup(t *testing.T, dir string) {
+	t.Helper()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(previous) })
+}
+
+func plantedName(name string) string {
+	if isWindows {
+		return name + ".cmd"
+	}
+	return name
+}
+
+func writeScript(t *testing.T, file, body string) string {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return file
+}
+
+func plantExecutable(t *testing.T, file string) string {
+	t.Helper()
+	return writeScript(t, file, "exit 0\n")
+}
+
+func resolvesTo(first, second string) bool {
+	a, aErr := os.Stat(first)
+	b, bErr := os.Stat(second)
+	return aErr == nil && bErr == nil && os.SameFile(a, b)
+}
+
+func TestTheLookupNeverSettlesForACopyInTheWorkingDirectory(t *testing.T) {
+	work, trusted := t.TempDir(), t.TempDir()
+	chdirUntilCleanup(t, work)
+	planted := plantExecutable(t, filepath.Join(work, plantedName("zzfake")))
+	nested := plantExecutable(t, filepath.Join(work, "bin", plantedName("zznested")))
+	wanted := plantExecutable(t, filepath.Join(trusted, plantedName("zzfake")))
+	plain := plantExecutable(t, filepath.Join(trusted, plantedName("zzplain")))
+	list, system := string(os.PathListSeparator), os.Getenv("PATH")
+	cases := []struct{ name, path string }{
+		{"only absolute entries on PATH", trusted + list + system},
+		{". and bin ahead of the absolute entries", "." + list + "bin" + list + trusted + list + system},
+	}
+	for _, tc := range cases {
+		t.Setenv("PATH", tc.path)
+		if got := locateExecutable("zzfake"); !filepath.IsAbs(got) || !resolvesTo(got, wanted) {
+			t.Errorf("%s: zzfake resolved to %q; want the copy PATH names (%q), never the one in the working directory (%q)", tc.name, got, wanted, planted)
+		}
+		if got := locateExecutable("zzplain"); !filepath.IsAbs(got) || !resolvesTo(got, plain) {
+			t.Errorf("%s: zzplain resolved to %q, want the absolute %q", tc.name, got, plain)
+		}
+	}
+	t.Setenv("PATH", "bin"+list+system)
+	if got := locateExecutable("zznested"); got != "" {
+		t.Errorf("zznested resolved to %q; it exists only under the relative PATH entry bin (%q)", got, nested)
+	}
+}
+
+func TestTheFinderFallbackSkipsTheWorkingDirectory(t *testing.T) {
+	work, trusted := t.TempDir(), t.TempDir()
+	chdirUntilCleanup(t, work)
+	planted := plantExecutable(t, filepath.Join(work, plantedName("zzfake")))
+	wanted := plantExecutable(t, filepath.Join(trusted, plantedName("zzfake")))
+	list := string(os.PathListSeparator)
+	t.Setenv("PATH", "."+list+trusted+list+os.Getenv("PATH"))
+	if got := probeExecutable("zzfake"); got != "" && (!filepath.IsAbs(got) || !resolvesTo(got, wanted)) {
+		t.Errorf("the finder fallback answered %q; only %q may come back, never the copy in the working directory (%q)", got, wanted, planted)
+	}
+	for _, line := range []string{"zzfake", filepath.Join(".", "zzfake"), planted, filepath.Join(strings.ToUpper(work), plantedName("zzfake"))} {
+		if outsideWorkingDir(line) {
+			t.Errorf("a finder line %q counts as outside the working directory", line)
+		}
+	}
+	alias := filepath.Join(trusted, "alias")
+	if os.Symlink(work, alias) == nil && outsideWorkingDir(filepath.Join(alias, plantedName("zzfake"))) {
+		t.Errorf("a path through a link to the working directory counts as outside it")
+	}
+	if !outsideWorkingDir(wanted) {
+		t.Errorf("%q lies outside the working directory but was refused", wanted)
+	}
+}
+
+func TestClaudeIsNeverTakenFromTheWorkingDirectory(t *testing.T) {
+	work, home := t.TempDir(), t.TempDir()
+	chdirUntilCleanup(t, work)
+	planted := []string{plantExecutable(t, filepath.Join(work, plantedName("claude")))}
+	for _, relative := range []string{filepath.Join(".local", "bin", "claude"), filepath.Join(".local", "bin", "claude.exe"), filepath.Join("npm", "claude.cmd"), filepath.Join("Programs", "claude", "claude.exe")} {
+		planted = append(planted, plantExecutable(t, filepath.Join(work, relative)))
+	}
+	check := func(when string) {
+		t.Helper()
+		got := claudeExecutable()
+		if got == "" {
+			return
+		}
+		if !filepath.IsAbs(got) {
+			t.Errorf("%s: claude resolved to the relative path %q", when, got)
+		}
+		for _, file := range planted {
+			if resolvesTo(got, file) {
+				t.Errorf("%s: claude resolved to %q, the copy planted in the working directory", when, got)
+			}
+		}
+	}
+	homes := []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA"}
+	for _, variable := range homes {
+		t.Setenv(variable, home)
+	}
+	t.Setenv("PATH", "."+string(os.PathListSeparator)+os.Getenv("PATH"))
+	check("with . on PATH")
+	for _, variable := range homes {
+		t.Setenv(variable, "")
+	}
+	t.Setenv("PATH", home)
+	check("with no home directory and nothing on PATH")
+}
+
+func TestTheLookupRefusesTheWorkingDirectoryWhereGoWouldAllowIt(t *testing.T) {
+	work, trusted := t.TempDir(), t.TempDir()
+	chdirUntilCleanup(t, work)
+	planted := plantExecutable(t, filepath.Join(work, plantedName("zzfake")))
+	plantExecutable(t, filepath.Join(work, "bin", plantedName("zzfake")))
+	wanted := plantExecutable(t, filepath.Join(trusted, plantedName("zzfake")))
+	list, system := string(os.PathListSeparator), os.Getenv("PATH")
+	cases := []struct{ name, godebug, path string }{
+		{"execerrdot=0 lets LookPath answer from . with no error", "execerrdot=0", "." + list + trusted + list + system},
+		{"the working directory is listed by its absolute path after bin", "", "bin" + list + work + list + trusted + list + system},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GODEBUG", tc.godebug)
+			t.Setenv("PATH", tc.path)
+			if got := locateExecutable("zzfake"); !filepath.IsAbs(got) || !resolvesTo(got, wanted) {
+				t.Errorf("zzfake resolved to %q; want the copy PATH names (%q), never one in the working directory (%q)", got, wanted, planted)
+			}
+		})
+	}
+}
+
+func TestProbesNeverRunAnInterpreterPlantedInTheProject(t *testing.T) {
+	sandboxFiles(t)
+	work, trusted := t.TempDir(), t.TempDir()
+	marker := filepath.Join(t.TempDir(), "planted-ran")
+	t.Setenv("NOCTIS_TEST_PLANTED", marker)
+	chdirUntilCleanup(t, work)
+	host := filepath.Join(trusted, plantedName("claude"))
+	if isWindows {
+		writeScript(t, host, "@zznode %*\r\n")
+		writeScript(t, filepath.Join(work, "zznode.cmd"), "@echo planted>\"%NOCTIS_TEST_PLANTED%\"\r\n")
+	} else {
+		writeScript(t, host, "#!/usr/bin/env zznode\n")
+		writeScript(t, filepath.Join(work, "zznode"), "#!/bin/sh\n: > \"$NOCTIS_TEST_PLANTED\"\n")
+	}
+	list := string(os.PathListSeparator)
+	t.Setenv("PATH", "."+list+trusted+list+os.Getenv("PATH"))
+	ran := func() bool {
+		_, err := os.Stat(marker)
+		return err == nil
+	}
+	control := exec.Command(host, "--version")
+	control.Dir = work
+	_ = control.Run()
+	if !ran() {
+		t.Fatalf("%s started in the project folder never reached the zznode planted there, so nothing below would be proven", host)
+	}
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	if got := claudeExecutable(); !resolvesTo(got, host) {
+		t.Fatalf("claude resolved to %q, want the trusted %q", got, host)
+	}
+	probes := []struct {
+		name string
+		run  func()
+	}{
+		{"codex app-server (usage refresh from the hooks)", func() { _, _ = fetchCodexRateLimits(host, 5*time.Second) }},
+		{"claude --help (permission mode probe in setup)", func() { supportedPermissionMode(object{"resume": object{"permissionMode": "auto"}}, host, "") }},
+		{"claude --version (selftest)", func() { claudeVersion(host) }},
+		{"claude plugin marketplace update (setup)", func() {
+			enableMarketplaceAutoUpdate(filepath.Join(trusted, "plugins", "cache", "zzmarket", pluginName, "1.0.0"))
+		}},
+	}
+	for _, probe := range probes {
+		probe.run()
+		if ran() {
+			t.Errorf("%s ran the zznode planted in the project folder", probe.name)
+			_ = os.Remove(marker)
+		}
+	}
+}
+
+func TestTheChainedStatusLineIgnoresACommandPlantedInTheProject(t *testing.T) {
+	work, trusted := t.TempDir(), t.TempDir()
+	marker := filepath.Join(t.TempDir(), "planted-ran")
+	t.Setenv("NOCTIS_TEST_PLANTED", marker)
+	chdirUntilCleanup(t, work)
+	if isWindows {
+		writeScript(t, filepath.Join(work, "zzchain.cmd"), "@echo planted>\"%NOCTIS_TEST_PLANTED%\"\r\n")
+		writeScript(t, filepath.Join(trusted, "zzchain.cmd"), "@echo trusted\r\n")
+	} else {
+		writeScript(t, filepath.Join(work, "zzchain"), "#!/bin/sh\n: > \"$NOCTIS_TEST_PLANTED\"\n")
+		writeScript(t, filepath.Join(trusted, "zzchain"), "#!/bin/sh\necho trusted\n")
+	}
+	t.Setenv("PATH", trusted+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if got := runChain("zzchain", []byte("{}")); got != "trusted" {
+		t.Errorf("the chained status line printed %q; want the copy on PATH to answer %q", got, "trusted")
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Errorf("the chained status line ran the zzchain planted in the project folder")
 	}
 }

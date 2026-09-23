@@ -146,6 +146,8 @@ const server = http.createServer((request, response) => {
   response.end(JSON.stringify({ five_hour: null, seven_day: null, limits }));
 });
 
+process.on('disconnect', () => process.exit(0));
+
 server.listen(0, '127.0.0.1', () => {
   fs.writeFileSync(portFile, String(server.address().port));
 });
