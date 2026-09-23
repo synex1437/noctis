@@ -920,8 +920,12 @@ func scheduleWindowsTask(name string, at float64, commandArgs []string, wake boo
 	return runPowershell(windowsTaskScript(name, at, commandArgs, wake), 45*time.Second)
 }
 
+func windowsShellArgument(line string) string {
+	return `/d /s /c "` + line + `"`
+}
+
 func windowsTaskArgument(launcher string, commandArgs []string) string {
-	return fmt.Sprintf(`/d /s /c ""%s" %s"`, launcher, strings.Join(commandArgs, " "))
+	return windowsShellArgument(`"` + launcher + `" ` + strings.Join(commandArgs, " "))
 }
 
 func windowsTaskScript(name string, at float64, commandArgs []string, wake bool) string {

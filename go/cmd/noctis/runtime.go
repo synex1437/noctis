@@ -350,7 +350,7 @@ func runStatusline() {
 func runChain(chain string, input []byte) string {
 	var command *exec.Cmd
 	if isWindows {
-		command = exec.Command("cmd.exe", "/d", "/s", "/c", chain)
+		command = windowsShell(chain)
 		command.Env = append(os.Environ(), "NoDefaultCurrentDirectoryInExePath=1")
 	} else {
 		command = exec.Command("sh", "-c", chain)
@@ -445,7 +445,7 @@ func claudeExecutable() string {
 }
 
 func windowsQuote(arg string) string {
-	if !windowsQuoteNeeded.MatchString(arg) {
+	if arg != "" && !windowsQuoteNeeded.MatchString(arg) {
 		return arg
 	}
 	escaped := backslashQuote.ReplaceAllString(arg, `$1$1\"`)
@@ -453,13 +453,17 @@ func windowsQuote(arg string) string {
 	return `"` + escaped + `"`
 }
 
+func windowsCommandLine(program string, arguments []string) string {
+	parts := []string{windowsQuote(program)}
+	for _, arg := range arguments {
+		parts = append(parts, windowsQuote(arg))
+	}
+	return strings.Join(parts, " ")
+}
+
 func claudeCommand(claudePath string, claudeArgs []string) *exec.Cmd {
 	if isWindows && strings.HasSuffix(strings.ToLower(claudePath), ".cmd") {
-		parts := []string{windowsQuote(claudePath)}
-		for _, arg := range claudeArgs {
-			parts = append(parts, windowsQuote(arg))
-		}
-		return exec.Command("cmd.exe", "/d", "/s", "/c", strings.Join(parts, " "))
+		return windowsShell(windowsCommandLine(claudePath, claudeArgs))
 	}
 	return exec.Command(claudePath, claudeArgs...)
 }
