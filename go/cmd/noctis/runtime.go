@@ -19,6 +19,7 @@ var (
 	trailingBackslash  = lazyRegexp(`(\\+)$`)
 	backslashQuote     = lazyRegexp(`(\\*)"`)
 	permissionAuto     = lazyRegexp(`permission-mode[\s\S]{0,600}?["' ]auto["',)\s]`)
+	permissionManual   = lazyRegexp(`permission-mode[\s\S]{0,600}?["' ]manual["',)\s]`)
 	promptScrub        = lazyRegexp(`["%^]`)
 	whitespaceRun      = lazyRegexp(`\s+`)
 	scriptExtension    = lazyRegexp(`(?i)\.(exe|cmd)$`)
@@ -486,11 +487,16 @@ func supportedPermissionMode(cfg object, claudePath, inherited string) string {
 	if !knownPermModes[requested] {
 		return "acceptEdits"
 	}
-	if requested != "auto" {
+	if requested != "auto" && requested != "manual" {
 		return requested
 	}
 	output, _ := runWithTimeout(inGuardDir(claudeCommand(claudePath, []string{"--help"})), 20*time.Second)
-	if permissionAuto.Match(output) {
+	switch {
+	case requested == "manual" && permissionManual.Match(output):
+		return "manual"
+	case requested == "manual":
+		return "default"
+	case permissionAuto.Match(output):
 		return "auto"
 	}
 	return "acceptEdits"
