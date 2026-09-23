@@ -995,7 +995,7 @@ func scheduleRunnerLocked(cfg object, sid string, atEpoch, rearms float64) objec
 			scheduled = object{"method": "sleeper", "pid": float64(pid), "at": at}
 		} else {
 			scheduled = object{"method": "manual", "at": at}
-			fail("no scheduler available for %s; resume manually with claude --resume %s after %s", sid, sid, localISO(at))
+			fail("no scheduler available for %s; resume manually with %s after %s", sid, hostResumeCommand(currentHost().id, sid), localISO(at))
 		}
 	}
 	if rearms > 0 {

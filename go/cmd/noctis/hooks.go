@@ -186,7 +186,7 @@ func onSessionStart(input, cfg object) {
 	if source == "startup" || source == "clear" {
 		if checkpointSid, checkpoint := latestCheckpointFor(state, cwd, now); checkpoint != nil {
 			consumeCheckpoint(checkpointSid)
-			contexts = append(contexts, T("session.checkpoint", pluginName, formatTime(numberOr(checkpoint, "at", 0)), getString(checkpoint, "path"), checkpointSid))
+			contexts = append(contexts, T("session.checkpoint", pluginName, formatTime(numberOr(checkpoint, "at", 0)), getString(checkpoint, "path"), hostResumeCommand(currentHost().id, checkpointSid)))
 			if note := cutOffNote(readState(), checkpointSid); note != "" {
 				contexts = append(contexts, note)
 				cutOffSid = checkpointSid
