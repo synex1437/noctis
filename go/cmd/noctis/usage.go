@@ -496,6 +496,15 @@ func payloadWindow(entry object, resetsAt any) (object, bool) {
 	return nil, false
 }
 
+func knownUsageShape(payload object) bool {
+	for _, key := range []string{"limits", "five_hour", "seven_day", "seven_day_fable"} {
+		if _, found := payload[key]; found {
+			return true
+		}
+	}
+	return false
+}
+
 func parseUsagePayload(payload object, scoped *regexp.Regexp) object {
 	parsed := object{}
 	buckets := []string{}
@@ -649,6 +658,16 @@ func refreshFable(cfg object, now int64, reason string, maxAge float64, ignoreBa
 		return next
 	}
 	payload, _ := raw.(object)
+	if !knownUsageShape(payload) {
+		next := cloneObject(cached)
+		next["error"] = "unexpected-shape"
+		next["backoffUntil"] = float64(now + 600)
+		mustWriteJSON(files.fable, next)
+		if getString(cached, "error") != "unexpected-shape" {
+			warn("fable refresh (%s): the usage endpoint answered in a shape noctis does not know; the last reading is kept and the next try is in 10 minutes", reason)
+		}
+		return next
+	}
 	parsed := parseUsagePayload(payload, scopedModelPattern(cfg))
 	history := getMap(cached, "history")
 	if history == nil {
