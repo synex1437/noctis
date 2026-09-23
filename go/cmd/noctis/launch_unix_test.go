@@ -33,7 +33,7 @@ func fakeClaudeRecorder(t *testing.T) string {
 func headlessRelaunchSees(t *testing.T, launch launchSpec) string {
 	t.Helper()
 	record := fakeClaudeRecorder(t)
-	if !launchClaude(object{"resume": object{"mode": "headless"}}, launch) {
+	if !launchClaude(object{"resume": object{"mode": "headless"}}, launch).started {
 		t.Fatal("the headless relaunch did not run")
 	}
 	content, err := os.ReadFile(record)
@@ -91,7 +91,7 @@ func TestHeadlessRelaunchStartsClaudeWithoutTheHookSessionMarkers(t *testing.T) 
 	home := relaunchSandbox(t)
 	record, _ := fakeEnvRecorder(t, "claude")
 	inheritHookSessionMarkers(t)
-	if !launchClaude(object{"resume": object{"mode": "headless"}}, launchSpec{sid: "s1", cwd: home, mode: "headless"}) {
+	if !launchClaude(object{"resume": object{"mode": "headless"}}, launchSpec{sid: "s1", cwd: home, mode: "headless"}).started {
 		t.Fatal("the headless relaunch did not run")
 	}
 	env := recordedEnv(t, record)
@@ -109,7 +109,7 @@ func TestTerminalRelaunchStartsClaudeWithoutTheHookSessionMarkers(t *testing.T) 
 	record, _ := fakeEnvRecorder(t, "claude")
 	inheritHookSessionMarkers(t)
 	t.Setenv("NOCTIS_NO_TERMINAL", "")
-	if !launchClaude(object{"resume": object{"mode": "window", "terminal": "sh {script}"}}, launchSpec{sid: "s1", cwd: home}) {
+	if !launchClaude(object{"resume": object{"mode": "window", "terminal": "sh {script}"}}, launchSpec{sid: "s1", cwd: home}).started {
 		t.Fatal("the terminal relaunch did not run")
 	}
 	env := recordedEnv(t, record)
@@ -126,7 +126,7 @@ func TestHostRelaunchStartsTheAgentWithoutTheHookSessionMarkers(t *testing.T) {
 	home := relaunchSandbox(t)
 	record, codex := fakeEnvRecorder(t, "codex")
 	inheritHookSessionMarkers(t)
-	if !launchHostSession(object{}, hostOf("codex"), codex, launchSpec{sid: "thr_1", cwd: home}) {
+	if !launchHostSession(object{}, hostOf("codex"), codex, launchSpec{sid: "thr_1", cwd: home}).started {
 		t.Fatal("the host relaunch did not run")
 	}
 	env := recordedEnv(t, record)
@@ -159,7 +159,7 @@ func TestAWindowThatPausesAgainIsRelaunchedWhileItsFirstRunnerStillWatchesIt(t *
 	bin := t.TempDir()
 	calls, gate, open := filepath.Join(bin, "calls.log"), filepath.Join(bin, "gate"), filepath.Join(bin, "open")
 	t.Setenv("NOCTIS_TEST_CALLS", calls)
-	writeScript(t, filepath.Join(bin, "claude"), "#!/bin/sh\nprintf '%s %s\\n' \"$$\" \"$*\" >> \"$NOCTIS_TEST_CALLS\"\nwhile :; do sleep 1; done\n")
+	writeScript(t, filepath.Join(bin, "claude"), "#!/bin/sh\nprintf '%s %s\\n' \"$$\" \"$*\" >> \"$NOCTIS_TEST_CALLS\"\n"+promptLine+"\nwhile :; do sleep 1; done\n")
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	terminal := "(while [ -f " + shellQuote(gate) + " ] && [ ! -f " + shellQuote(open) + " ]; do sleep 0.1; done; sh {script}) >/dev/null 2>&1 &"
 	mustWriteJSON(files.config, object{"resume": object{"mode": "window", "terminal": terminal, "prompt": "carry on"}, "alarm": object{"enabled": false}})
@@ -174,6 +174,7 @@ func TestAWindowThatPausesAgainIsRelaunchedWhileItsFirstRunnerStillWatchesIt(t *
 
 	cwd := t.TempDir()
 	transcript := quietTranscript(t, cwd, float64(nowSec()-3600))
+	t.Setenv("NOCTIS_TEST_TRANSCRIPT", transcript)
 	pause := func(startedAt float64) object {
 		return object{"kind": "fable", "window": "fable", "label": "Fable", "until": startedAt, "resumeAt": startedAt + 20, "startedAt": startedAt,
 			"cwd": cwd, "transcript": transcript, "launchMode": "window", "modelOverride": "claude-sonnet-5", "queuedPrompt": ""}
@@ -356,7 +357,7 @@ func terminalRuns(t *testing.T, calls string) (runs []string, recorded bool) {
 
 func TestATerminalThatStaysInTheForegroundKeepsTheSessionAndRecordsItWhileItRuns(t *testing.T) {
 	home, _, calls := terminalSandbox(t)
-	if !launchClaude(object{"resume": object{"mode": "window", "terminal": "sh {script}"}}, launchSpec{sid: "fg1", cwd: home, prompt: "carry on"}) {
+	if !launchClaude(object{"resume": object{"mode": "window", "terminal": "sh {script}"}}, launchSpec{sid: "fg1", cwd: home, prompt: "carry on"}).started {
 		t.Fatal("the window relaunch reported failure")
 	}
 	runs, recorded := terminalRuns(t, calls)
@@ -372,7 +373,7 @@ func TestATerminalThatFailsAtOnceFallsBackToHeadlessWithoutWaiting(t *testing.T)
 	home, bin, calls := terminalSandbox(t)
 	writeStub(t, bin, "x-terminal-emulator", "#!/bin/sh\nexit 1\n")
 	started := time.Now()
-	if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: "fail1", cwd: home, prompt: "carry on"}) {
+	if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: "fail1", cwd: home, prompt: "carry on"}).started {
 		t.Fatal("the headless fallback did not run")
 	}
 	if elapsed := time.Since(started); elapsed > launchPidTimeout {
@@ -386,7 +387,7 @@ func TestATerminalThatFailsAtOnceFallsBackToHeadlessWithoutWaiting(t *testing.T)
 func TestATerminalThatForksAndReturnsIsRecorded(t *testing.T) {
 	home, bin, calls := terminalSandbox(t)
 	writeStub(t, bin, "x-terminal-emulator", "#!/bin/sh\nshift\n\"$@\" </dev/null >/dev/null 2>&1 &\nexit 0\n")
-	if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: "fork1", cwd: home, prompt: "carry on"}) {
+	if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: "fork1", cwd: home, prompt: "carry on"}).started {
 		t.Fatal("the window relaunch reported failure")
 	}
 	runs, recorded := terminalRuns(t, calls)
@@ -409,7 +410,7 @@ func TestXfceTerminalIsHandedTheLauncherAsACommandLineItAccepts(t *testing.T) {
 		"exit 1",
 		"",
 	}, "\n"))
-	if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: "xfce1", cwd: home, prompt: "carry on"}) {
+	if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: "xfce1", cwd: home, prompt: "carry on"}).started {
 		t.Fatal("the window relaunch reported failure")
 	}
 	if runs, recorded := terminalRuns(t, calls); len(runs) != 1 || strings.HasPrefix(runs[0], "-p ") || !recorded {

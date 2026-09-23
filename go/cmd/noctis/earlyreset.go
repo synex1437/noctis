@@ -76,6 +76,9 @@ func roomReported(cfg object, sid string, record object, usage usageView, now in
 }
 
 func earlyRelease(cfg object, sid string, record object, poll, relaunch bool) string {
+	if getString(record, "hit") == "relaunch" {
+		return ""
+	}
 	now := nowSec()
 	pollEvery := earlyResetPollSeconds(cfg)
 	if poll && pollEvery > 0 && currentHost().limits {

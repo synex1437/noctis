@@ -516,7 +516,13 @@ type launchSpec struct {
 	configDir      string
 }
 
-func launchClaude(cfg object, launch launchSpec) bool {
+type launchResult struct {
+	started   bool
+	window    bool
+	exitError bool
+}
+
+func launchClaude(cfg object, launch launchSpec) launchResult {
 	resume := section(cfg, "resume")
 	mode := orDefault(launch.mode, getString(resume, "mode"))
 	host := currentHost()
@@ -524,7 +530,7 @@ func launchClaude(cfg object, launch launchSpec) bool {
 	if claudePath == "" {
 		notify(cfg, pluginName, T("launch.noClaude"))
 		fail("launch aborted: %s executable not found", host.exe)
-		return false
+		return launchResult{}
 	}
 	if host.id != "claude" {
 
@@ -533,7 +539,7 @@ func launchClaude(cfg object, launch launchSpec) bool {
 	if launch.cwd == "" || statSafe(launch.cwd) == nil {
 		notify(cfg, pluginName, T("launch.noCwd", launch.cwd))
 		fail("launch aborted: cwd missing %s", launch.cwd)
-		return false
+		return launchResult{}
 	}
 	permissionMode := supportedPermissionMode(cfg, claudePath, launch.permissionMode)
 	effort := getString(section(cfg, "models"), "effort")
@@ -543,10 +549,10 @@ func launchClaude(cfg object, launch launchSpec) bool {
 	closePreviousLaunch(cfg, launch.sid, getMap(getMap(readState(), "waits"), launch.sid))
 	if mode == "window" {
 		if isWindows {
-			return launchInWindowsTerminal(cfg, launch, claudePath, claudeArgs, env, effort)
+			return launchResult{started: launchInWindowsTerminal(cfg, launch, claudePath, claudeArgs, env, effort), window: true}
 		}
 		if launchInDesktopTerminal(cfg, launch, claudePath, claudeArgs, effort) {
-			return true
+			return launchResult{started: true, window: true}
 		}
 	}
 	if info := statSafe(files.resumeLog); info != nil && info.Size() > logMaxBytes {
@@ -555,7 +561,7 @@ func launchClaude(cfg object, launch launchSpec) bool {
 	logFile, err := os.OpenFile(files.resumeLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		fail("resume log unavailable: %v", err)
-		return false
+		return launchResult{}
 	}
 	defer logFile.Close()
 	command := claudeCommand(claudePath, append([]string{"-p"}, claudeArgs...))
@@ -565,17 +571,17 @@ func launchClaude(cfg object, launch launchSpec) bool {
 	if err := command.Run(); err != nil {
 		warn("headless session ended with status %v", err)
 		_, isExit := err.(*exec.ExitError)
-		return isExit
+		return launchResult{started: isExit, exitError: isExit}
 	}
 	logInfo("headless session ended normally")
-	return true
+	return launchResult{started: true}
 }
 
-func launchHostSession(cfg object, host hostSpec, exe string, launch launchSpec) bool {
+func launchHostSession(cfg object, host hostSpec, exe string, launch launchSpec) launchResult {
 	if launch.cwd == "" || statSafe(launch.cwd) == nil {
 		notify(cfg, pluginName, T("launch.noCwd", launch.cwd))
 		fail("launch aborted: cwd missing %s", launch.cwd)
-		return false
+		return launchResult{}
 	}
 	arguments := hostLaunchArgs(host.id, cfg, launch, "", "")
 	if info := statSafe(files.resumeLog); info != nil && info.Size() > logMaxBytes {
@@ -584,7 +590,7 @@ func launchHostSession(cfg object, host hostSpec, exe string, launch launchSpec)
 	logFile, err := os.OpenFile(files.resumeLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		fail("resume log unavailable: %v", err)
-		return false
+		return launchResult{}
 	}
 	defer logFile.Close()
 	logInfo("launching %s (headless) sid=%s cwd=%s", host.exe, launch.sid, launch.cwd)
@@ -595,10 +601,10 @@ func launchHostSession(cfg object, host hostSpec, exe string, launch launchSpec)
 	if err := command.Run(); err != nil {
 		warn("%s session ended with status %v", host.exe, err)
 		_, isExit := err.(*exec.ExitError)
-		return isExit
+		return launchResult{started: isExit, exitError: isExit}
 	}
 	logInfo("%s session ended normally", host.exe)
-	return true
+	return launchResult{started: true}
 }
 
 func sessionActiveAfter(wait object, epoch float64) bool {
@@ -643,6 +649,35 @@ func carriesToolResult(content []any) bool {
 		}
 	}
 	return false
+}
+
+func relaunchAnswered(wait object, since float64) (answered, known bool) {
+	lines, ok := tailLines(getString(wait, "transcript"), transcriptTailBytes)
+	for i := len(lines) - 1; ok && i >= 0; i-- {
+		entry, parsed := parseTranscriptLine(lines[i])
+		if !parsed {
+			continue
+		}
+		known = true
+		at, err := time.Parse(time.RFC3339Nano, entry.timestamp)
+		if err == nil && float64(at.UnixMilli())/1000 > since && entry.entryType == "assistant" && !entry.apiError && !entry.sidechain {
+			return true, true
+		}
+	}
+	return false, known
+}
+
+func relaunchDidNothing(wait object, start time.Time, result launchResult) bool {
+	since := float64(start.UnixMilli()) / 1000
+	quick := time.Since(start) < launchQuickExit
+	if result.window {
+		return quick && !sessionActiveAfter(wait, since)
+	}
+	if !result.exitError {
+		return false
+	}
+	answered, known := relaunchAnswered(wait, since)
+	return !answered && (known || quick)
 }
 
 func waitContinued(wait object) bool {
@@ -936,15 +971,45 @@ func resumeWait(sid, release string) {
 	}
 	journal(sid, "resume", "launch", model, object{"mode": orDefault(launchMode, getString(resume, "mode"))})
 	updateState(func(next object) { delete(stateMap(next, "launchFailures"), sid) })
-	if !launchClaude(cfg, launchSpec{sid: sid, model: model, prompt: prompt, cwd: getString(wait, "cwd"), mode: launchMode, permissionMode: getString(wait, "permissionMode"), configDir: relaunchConfigDir(wait)}) {
-		journal(sid, "resume", "launch-failed", model, nil)
-		notify(cfg, pluginName, T("launch.failed", shortSid(sid), sid))
-		fail("runner %s: automatic relaunch failed; resume manually with claude --resume %s", sid, sid)
-
-		updateState(func(next object) {
-			stateMap(next, "launchFailures")[sid] = object{"at": float64(nowSec()), "model": model}
-		})
+	launchStart := time.Now()
+	result := launchClaude(cfg, launchSpec{sid: sid, model: model, prompt: prompt, cwd: getString(wait, "cwd"), mode: launchMode, permissionMode: getString(wait, "permissionMode"), configDir: relaunchConfigDir(wait)})
+	if !result.started {
+		reportLaunchFailure(cfg, sid, model)
+		return
 	}
+	if !relaunchDidNothing(wait, launchStart, result) {
+		return
+	}
+	attempts := int(numberOr(wait, "launchAttempts", 0)) + 1
+	journal(sid, "resume", "launch-no-progress", model, object{"attempt": float64(attempts)})
+	if attempts >= stopFailureMaxAttempts {
+		fail("runner %s: the relaunch ended %d times without the session answering", sid, attempts)
+		reportLaunchFailure(cfg, sid, model)
+		return
+	}
+	ended := float64(nowSec() + 1)
+	retryAt := ended + retryDelaySeconds(cfg, attempts)
+	if !rescheduleOwnWait(sid, startedAt, func(record object) {
+		record["launchAttempts"], record["hit"], record["inHook"] = float64(attempts), "relaunch", false
+		record["startedAt"], record["until"], record["resumeAt"] = ended, ended, retryAt
+		delete(record, "waking")
+		delete(record, "wakeAttemptedAt")
+		delete(record, "earlyTriggeredAt")
+	}) {
+		leaveReplacedWait(sid)
+		return
+	}
+	scheduleRunner(cfg, sid, retryAt)
+	warn("runner %s: the relaunch ended without the session answering; retry %d at %s", sid, attempts, localISO(retryAt))
+}
+
+func reportLaunchFailure(cfg object, sid, model string) {
+	journal(sid, "resume", "launch-failed", model, nil)
+	notify(cfg, pluginName, T("launch.failed", shortSid(sid), sid))
+	fail("runner %s: automatic relaunch failed; resume manually with claude --resume %s", sid, sid)
+	updateState(func(next object) {
+		stateMap(next, "launchFailures")[sid] = object{"at": float64(nowSec()), "model": model}
+	})
 }
 
 func runSleeper() {

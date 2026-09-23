@@ -15,6 +15,7 @@ import (
 const (
 	launchStartTimeout = 20 * time.Second
 	launchMaxWait      = 7 * 24 * time.Hour
+	launchQuickExit    = 30 * time.Second
 )
 
 var (

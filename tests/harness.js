@@ -240,6 +240,7 @@ class Lab {
       'if [ "$1" = "--help" ]; then printf \'  --permission-mode <mode>  (choices: "acceptEdits", "bypassPermissions", "default", "plan", "auto")\\n\'; exit 0; fi',
       'echo "FAKE_CLAUDE args=[$*] HANDOFF=$NOCTIS_HANDOFF CONFIG=$CLAUDE_CONFIG_DIR EFFORT=$CLAUDE_CODE_EFFORT_LEVEL CHILD=$CLAUDE_CODE_CHILD_SESSION CONFIG_SET=${CLAUDE_CONFIG_DIR+yes}" >> "$NOCTIS_LAB_CALLS"',
       '[ -z "$NOCTIS_LAB_FAST" ] && sleep 1',
+      '[ -n "$NOCTIS_LAB_ANSWER" ] && printf \'{"type":"assistant","timestamp":"%s","message":{"role":"assistant","content":[{"type":"text","text":"Resumed."}]}}\\n\' "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" >> "$NOCTIS_LAB_ANSWER"',
       'exit 0',
       '',
     ].join('\n'));
