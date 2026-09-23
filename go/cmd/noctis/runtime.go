@@ -606,6 +606,56 @@ func sessionActiveAfter(wait object, epoch float64) bool {
 	return info != nil && float64(info.ModTime().UnixMilli())/1000 > epoch
 }
 
+func sessionContinuedAfter(wait object, epoch float64) bool {
+	lines, ok := tailLines(getString(wait, "transcript"), transcriptTailBytes)
+	parsedAny := false
+	for i := len(lines) - 1; ok && i >= 0; i-- {
+		entry, parsed := parseTranscriptLine(lines[i])
+		if !parsed {
+			continue
+		}
+		parsedAny = true
+		at, err := time.Parse(time.RFC3339Nano, entry.timestamp)
+		if err != nil || float64(at.UnixMilli())/1000 <= epoch || entry.sidechain || entry.isMeta || entry.isCompact {
+			continue
+		}
+		switch entry.entryType {
+		case "assistant":
+			if !entry.apiError {
+				return true
+			}
+		case "user":
+			if !carriesToolResult(entry.content) && strings.TrimSpace(joinText(entry.content)) != "" {
+				return true
+			}
+		}
+	}
+	if !parsedAny {
+		return sessionActiveAfter(wait, epoch+pauseSettleSeconds)
+	}
+	return false
+}
+
+func carriesToolResult(content []any) bool {
+	for _, raw := range content {
+		if getString(toObject(raw), "type") == "tool_result" {
+			return true
+		}
+	}
+	return false
+}
+
+func waitContinued(wait object) bool {
+	until := numberOr(wait, "until", 0)
+	switch kind := getString(wait, "kind"); {
+	case kind == "fable":
+		return false
+	case kind == "stopfailure" && until <= numberOr(wait, "startedAt", 0)+1:
+		return sessionContinuedAfter(wait, until)
+	}
+	return sessionActiveAfter(wait, until)
+}
+
 func mergeInto(target, source object) {
 	for key, value := range source {
 		target[key] = value
@@ -713,7 +763,7 @@ func resumeWait(sid, release string) {
 		return
 	}
 	kind := getString(wait, "kind")
-	if kind != "fable" && sessionActiveAfter(wait, numberOr(wait, "until", 0)) {
+	if waitContinued(wait) {
 		clearWaitAndConsume(sid, state)
 		logInfo("runner %s: transcript changed after reset, session already continued", sid)
 		return

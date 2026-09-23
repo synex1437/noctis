@@ -85,6 +85,7 @@ type transcriptEntry struct {
 	isMeta    bool
 	isCompact bool
 	sidechain bool
+	apiError  bool
 	content   []any
 }
 
@@ -103,6 +104,7 @@ func parseTranscriptLine(line string) (transcriptEntry, bool) {
 		isMeta:    getBool(raw, "isMeta", false),
 		isCompact: getBool(raw, "isCompactSummary", false),
 		sidechain: getBool(raw, "isSidechain", false),
+		apiError:  getBool(raw, "isApiErrorMessage", false),
 	}
 	switch content := message["content"].(type) {
 	case []any:
