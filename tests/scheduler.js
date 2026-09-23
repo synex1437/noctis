@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { Lab, sleep, IS_WINDOWS } = require('./harness.js');
+const { Lab, sleep, IS_WINDOWS, readJson } = require('./harness.js');
 
 let checks = 0;
 const failures = [];
@@ -148,6 +148,122 @@ async function scenarioCancelStopsTheTimer(lab) {
   await sleep(2000);
   check('cancel: the cancelled timer did not fire',
     !readLog(logFile).some((e) => e.kind === 'fire'));
+}
+
+async function eventually(condition, seconds) {
+  const deadline = Date.now() + seconds * 1000;
+  while (Date.now() < deadline) {
+    if (condition()) return true;
+    await sleep(500);
+  }
+  return condition();
+}
+
+function guardLog(account) {
+  try {
+    return fs.readFileSync(path.join(account.guardDir, 'guard.log'), 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+function newOverloadAccount(lab, name, logFile) {
+  const account = newAccount(lab, name);
+  account.install((config) => {
+    config.wait.maxInHookMinutes = 1;
+    config.overload = { ...config.overload, baseSeconds: 5, maxSeconds: 5 };
+  });
+  account.useOwnToken();
+  installStubs(lab, logFile, ['systemd-run', 'systemctl']);
+  return account;
+}
+
+function parkOverloaded(account, sid, sessionPercent, extraEnv) {
+  account.setOwnLimits(limitsAt(sessionPercent, 600));
+  account.statusline(sid, 'claude-fable-5-1', sessionPercent, nowSec() + 600, 10, nowSec() + 3 * 86400);
+  account.hook({
+    hook_event_name: 'StopFailure', session_id: sid, error_type: 'overloaded',
+    cwd: account.lab.projectDir, transcript_path: account.transcript,
+  }, extraEnv);
+  return ((account.state().waits || {})[sid] || {}).scheduled || {};
+}
+
+const scheduledUnits = (logFile) => readLog(logFile).filter((e) => e.kind === 'schedule').map((e) => e.unit);
+const serviceStops = (logFile) => readLog(logFile).filter((e) => e.kind === 'stop-service' || e.kind === 'terminate');
+
+async function scenarioSystemdRunnerReschedulesItself(lab) {
+  const logFile = path.join(lab.root, 'scheduler-reschedule.jsonl');
+  const account = newOverloadAccount(lab, 'systemd-reschedule', logFile);
+  const extraEnv = { NOCTIS_SCHEDULER_LOG: logFile, NOCTIS_NO_TASKS: '' };
+
+  const parked = parkOverloaded(account, 'sysC', 96, extraEnv);
+  check('reschedule: the overloaded session is parked on a systemd timer', parked.method === 'systemd',
+    JSON.stringify(parked));
+
+  const moved = await eventually(() => {
+    const wait = (account.state().waits || {}).sysC;
+    return Boolean(wait && wait.scheduled && wait.scheduled.unit && wait.scheduled.unit !== parked.unit);
+  }, 90);
+  const units = scheduledUnits(logFile);
+  const wait = (account.state().waits || {}).sysC;
+  check('reschedule: the timer fired while the 5-hour limit was still active',
+    readLog(logFile).some((e) => e.kind === 'fire' && e.unit === parked.unit), lastLog(account));
+  check('reschedule: nothing stopped the service the runner runs in', serviceStops(logFile).length === 0,
+    JSON.stringify(serviceStops(logFile)));
+  check('reschedule: the runner put a timer of its own in place for the reset',
+    moved && units.length === 2 && units[1] !== units[0], `${units.join(', ')} — ${lastLog(account)}`);
+  check('reschedule: the wait names that timer and the 5-hour window',
+    Boolean(wait && wait.scheduled && wait.scheduled.unit === units[1] && wait.window === 'five_hour'),
+    JSON.stringify(wait && { window: wait.window, scheduled: wait.scheduled }));
+
+  account.run(['cancel', '--sid', 'sysC'], undefined, extraEnv);
+  check('reschedule: cancelling stops the new timer by name',
+    readLog(logFile).some((e) => e.kind === 'stop' && e.unit === units[1]));
+}
+
+async function scenarioSystemdRelaunchPausesAgain(lab) {
+  const logFile = path.join(lab.root, 'scheduler-relaunch.jsonl');
+  const account = newOverloadAccount(lab, 'systemd-relaunch', logFile);
+  const sessionBin = path.join(lab.root, 'relaunch-bin');
+  fs.mkdirSync(sessionBin, { recursive: true });
+  fs.copyFileSync(path.join(__dirname, 'stubs', 'relaunched-claude.js'), path.join(sessionBin, 'claude'));
+  fs.chmodSync(path.join(sessionBin, 'claude'), 0o755);
+  const answer = path.join(lab.root, 'relaunch-hook.json');
+  const extraEnv = {
+    NOCTIS_SCHEDULER_LOG: logFile, NOCTIS_NO_TASKS: '',
+    PATH: `${sessionBin}${path.delimiter}${lab.binDir}${path.delimiter}${process.env.PATH}`,
+    NOCTIS_LAB_RELAUNCH: JSON.stringify({
+      noctis: account.engine()[0], sid: 'sysD', cwd: lab.projectDir, transcript: lab.transcript,
+      resetIn: 600, limitsFile: account.ownLimitsFile(), out: answer,
+    }),
+  };
+
+  const parked = parkOverloaded(account, 'sysD', 30, extraEnv);
+  check('relaunch: the overloaded session is parked on a systemd timer', parked.method === 'systemd',
+    JSON.stringify(parked));
+
+  const answered = await eventually(() => fs.existsSync(answer), 90);
+  const ended = await eventually(() => guardLog(account).includes('headless session ended'), 30);
+  const units = scheduledUnits(logFile);
+  const wait = (account.state().waits || {}).sysD;
+  const hook = answered ? readJson(answer) : null;
+  check('relaunch: the timer relaunched the session headless',
+    lab.calls().some((line) => line.includes('--resume sysD')), `${JSON.stringify(lab.calls().slice(-2))} — ${lastLog(account)}`);
+  check('relaunch: the relaunched session reached its limit again and its hook paused it',
+    Boolean(hook && String(hook.stdout).includes('"continue":false')),
+    hook ? JSON.stringify(hook).slice(0, 300) : 'the hook never answered; it was killed');
+  check('relaunch: nothing stopped the service the session runs in', serviceStops(logFile).length === 0,
+    JSON.stringify(serviceStops(logFile)));
+  check('relaunch: the runner saw its session through to the end', ended, lastLog(account));
+  check('relaunch: a timer for the next reset exists, under a unit of its own',
+    units.length === 2 && units[1] !== units[0], units.join(', '));
+  check('relaunch: the new wait names that timer',
+    Boolean(wait && wait.scheduled && wait.scheduled.method === 'systemd' && wait.scheduled.unit === units[1]),
+    JSON.stringify(wait && wait.scheduled));
+
+  account.run(['cancel', '--sid', 'sysD'], undefined, extraEnv);
+  check('relaunch: cancelling stops the new timer by name',
+    readLog(logFile).some((e) => e.kind === 'stop' && e.unit === units[1]));
 }
 
 async function scenarioLaunchdFiresAndResumes(lab) {
@@ -441,6 +557,8 @@ async function main() {
     } else {
       await scenarioSystemdFiresAndResumes(lab);
       await scenarioCancelStopsTheTimer(lab);
+      await scenarioSystemdRunnerReschedulesItself(lab);
+      await scenarioSystemdRelaunchPausesAgain(lab);
       scenarioLaunchdPlistIsValid(lab);
     }
   } finally {

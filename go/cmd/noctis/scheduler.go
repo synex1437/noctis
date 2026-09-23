@@ -60,6 +60,23 @@ func systemdUnit(sid string) string {
 	return "noctis-" + hashKey(files.configDir+"|"+sid)
 }
 
+func systemdJobUnit(sid string, at float64) string {
+	unit := systemdUnit(sid) + "-" + strconv.FormatInt(int64(at), 10)
+	if ownSystemdUnit(unit) {
+		unit += "-" + strconv.Itoa(os.Getpid())
+	}
+	return unit
+}
+
+func ownSystemdUnit(unit string) bool {
+	return unit != "" && os.Getenv(systemdUnitEnv) == unit
+}
+
+func systemdJobOf(sid, unit string) bool {
+	suffix, found := strings.CutPrefix(unit, systemdUnit(sid))
+	return found && strings.Trim(suffix, "-0123456789") == ""
+}
+
 func commandAvailable(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
@@ -184,6 +201,8 @@ func systemdRunArgs(unit, executable string, commandArgs []string, at float64, w
 	arguments := []string{
 		"--user", "--quiet", "--collect",
 		"--unit=" + unit,
+		"--setenv=" + systemdUnitEnv + "=" + unit,
+		"--property=KillMode=process",
 		"--on-calendar=" + moment.Format("2006-01-02 15:04:05"),
 		"--timer-property=AccuracySec=1s",
 	}
@@ -198,8 +217,8 @@ func scheduleSystemd(sid string, at float64, commandArgs []string, wake bool) (o
 	if err != nil {
 		return nil, false
 	}
-	unit := systemdUnit(sid)
-	_, _ = runScheduler(exec.Command("systemctl", "--user", "stop", unit+".timer", unit+".service"), 10*time.Second)
+	cancelSystemd(systemdUnit(sid) + "*")
+	unit := systemdJobUnit(sid, at)
 	_, err = runScheduler(exec.Command("systemd-run", systemdRunArgs(unit, executable, commandArgs, at, wake)...), 15*time.Second)
 	if err != nil && wake {
 
@@ -213,9 +232,8 @@ func scheduleSystemd(sid string, at float64, commandArgs []string, wake bool) (o
 	return object{"method": "systemd", "unit": unit, "at": at}, true
 }
 
-func cancelSystemd(sid string) {
-	unit := systemdUnit(sid)
-	_, _ = runScheduler(exec.Command("systemctl", "--user", "stop", unit+".timer", unit+".service"), 10*time.Second)
+func cancelSystemd(unit string) {
+	_, _ = runScheduler(exec.Command("systemctl", "--user", "stop", unit+".timer"), 10*time.Second)
 }
 
 func scheduleNative(backend, sid string, at float64, commandArgs []string, wake bool) (object, bool) {
@@ -237,7 +255,11 @@ func cancelNative(sid string, scheduled object) {
 		}
 		cancelLaunchd(label)
 	case "systemd":
-		cancelSystemd(sid)
+		unit := getString(scheduled, "unit")
+		if !systemdJobOf(sid, unit) {
+			unit = systemdUnit(sid)
+		}
+		cancelSystemd(unit)
 	}
 }
 
@@ -264,7 +286,7 @@ func runSchedulePreview() {
 		fmt.Print(launchdPlistBody(launchdJobLabel(sid, at), executable, commandArgs, at, files.guardDir))
 	case "systemd":
 		fmt.Println(strings.Join(append([]string{"systemd-run"},
-			systemdRunArgs(systemdUnit(sid), executable, commandArgs, at, wake)...), " "))
+			systemdRunArgs(systemdJobUnit(sid, at), executable, commandArgs, at, wake)...), " "))
 	case "task":
 		fmt.Println(windowsTaskScript(taskName(sid), at, runnerArgs("resume", sid, `"`+files.configDir+`"`), wake))
 	default:
