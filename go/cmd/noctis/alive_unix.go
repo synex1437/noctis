@@ -3,7 +3,9 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,18 +15,37 @@ import (
 	"time"
 )
 
+func validPid(pid int) bool {
+	return pid > 0 && pid <= math.MaxInt32
+}
+
 func processAlive(pid int) bool {
-	if pid <= 0 {
+	if !validPid(pid) {
 		return false
 	}
-	err := syscall.Kill(pid, 0)
-	if err == nil {
-		return true
+	if err := syscall.Kill(pid, 0); err != nil && !errors.Is(err, syscall.EPERM) {
+		return false
 	}
-	return errors.Is(err, syscall.EPERM)
+	return !processExited(pid)
+}
+
+func processExited(pid int) bool {
+	stat, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return false
+	}
+	end := bytes.LastIndexByte(stat, ')')
+	if end < 0 || end+2 >= len(stat) {
+		return false
+	}
+	state := stat[end+2]
+	return state == 'Z' || state == 'X'
 }
 
 func processName(pid int) string {
+	if !validPid(pid) {
+		return ""
+	}
 	if _, err := os.Stat("/proc/self/comm"); err == nil {
 		id := strconv.Itoa(pid)
 		status, err := os.ReadFile(filepath.Join("/proc", id, "status"))
