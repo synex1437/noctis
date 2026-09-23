@@ -296,3 +296,123 @@ func TestAWindowThatPausesAgainIsRelaunchedWhileItsFirstRunnerStillWatchesIt(t *
 		}
 	}
 }
+
+func terminalSandbox(t *testing.T) (home, bin, calls string) {
+	t.Helper()
+	home = relaunchSandbox(t)
+	bin = t.TempDir()
+	for _, tool := range []string{"sh", "rm", "sleep", "grep"} {
+		found, err := exec.LookPath(tool)
+		if err != nil {
+			t.Fatalf("%s is not on PATH: %v", tool, err)
+		}
+		if err := os.Symlink(found, filepath.Join(bin, tool)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	calls = filepath.Join(bin, "calls.log")
+	t.Setenv("NOCTIS_TEST_CALLS", calls)
+	t.Setenv("NOCTIS_TEST_STATE", files.state)
+	t.Setenv("PATH", bin)
+	t.Setenv("DISPLAY", ":9")
+	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("NOCTIS_NO_TERMINAL", "")
+	previousPid, previousPoll := launchPidTimeout, launchPollInterval
+	launchPidTimeout, launchPollInterval = 4*time.Second, 50*time.Millisecond
+	t.Cleanup(func() { launchPidTimeout, launchPollInterval = previousPid, previousPoll })
+	writeStub(t, bin, "claude", strings.Join([]string{
+		"#!/bin/sh",
+		`printf 'run %s\n' "$*" >> "$NOCTIS_TEST_CALLS"`,
+		"sleep 2",
+		`if grep -Eq '"how": *"(terminal|window)"' "$NOCTIS_TEST_STATE"; then echo recorded >> "$NOCTIS_TEST_CALLS"; else echo unrecorded >> "$NOCTIS_TEST_CALLS"; fi`,
+		"",
+	}, "\n"))
+	return home, bin, calls
+}
+
+func writeStub(t *testing.T, dir, name, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func terminalRuns(t *testing.T, calls string) (runs []string, recorded bool) {
+	t.Helper()
+	content, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatalf("the fake claude never ran: %v", err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(content)), "\n") {
+		switch {
+		case strings.HasPrefix(line, "run "):
+			runs = append(runs, strings.TrimPrefix(line, "run "))
+		case line == "recorded":
+			recorded = true
+		}
+	}
+	return runs, recorded
+}
+
+func TestATerminalThatStaysInTheForegroundKeepsTheSessionAndRecordsItWhileItRuns(t *testing.T) {
+	home, _, calls := terminalSandbox(t)
+	if !launchClaude(object{"resume": object{"mode": "window", "terminal": "sh {script}"}}, launchSpec{sid: "fg1", cwd: home, prompt: "carry on"}) {
+		t.Fatal("the window relaunch reported failure")
+	}
+	runs, recorded := terminalRuns(t, calls)
+	if len(runs) != 1 || strings.HasPrefix(runs[0], "-p ") {
+		t.Fatalf("expected exactly one interactive run in the window, claude ran %q", runs)
+	}
+	if !recorded {
+		t.Fatal("the window's claude ran without a launch record: the runner was still blocked on the terminal opener, so a later relaunch could not close this window")
+	}
+}
+
+func TestATerminalThatFailsAtOnceFallsBackToHeadlessWithoutWaiting(t *testing.T) {
+	home, bin, calls := terminalSandbox(t)
+	writeStub(t, bin, "x-terminal-emulator", "#!/bin/sh\nexit 1\n")
+	started := time.Now()
+	if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: "fail1", cwd: home, prompt: "carry on"}) {
+		t.Fatal("the headless fallback did not run")
+	}
+	if elapsed := time.Since(started); elapsed > launchPidTimeout {
+		t.Fatalf("a terminal that exited 1 at once kept the runner waiting %s", elapsed)
+	}
+	if runs, _ := terminalRuns(t, calls); len(runs) != 1 || !strings.HasPrefix(runs[0], "-p ") {
+		t.Fatalf("expected one headless run after the terminal failed, claude ran %q", runs)
+	}
+}
+
+func TestATerminalThatForksAndReturnsIsRecorded(t *testing.T) {
+	home, bin, calls := terminalSandbox(t)
+	writeStub(t, bin, "x-terminal-emulator", "#!/bin/sh\nshift\n\"$@\" </dev/null >/dev/null 2>&1 &\nexit 0\n")
+	if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: "fork1", cwd: home, prompt: "carry on"}) {
+		t.Fatal("the window relaunch reported failure")
+	}
+	runs, recorded := terminalRuns(t, calls)
+	if len(runs) != 1 || strings.HasPrefix(runs[0], "-p ") || !recorded {
+		t.Fatalf("expected one recorded interactive run, claude ran %q (recorded=%t)", runs, recorded)
+	}
+}
+
+func TestXfceTerminalIsHandedTheLauncherAsACommandLineItAccepts(t *testing.T) {
+	if isDarwin {
+		t.Skip("macOS opens Terminal.app, not an X terminal")
+	}
+	home, bin, calls := terminalSandbox(t)
+	writeStub(t, bin, "xfce4-terminal", strings.Join([]string{
+		"#!/bin/sh",
+		`case "$1" in`,
+		`-x) shift; exec "$@" ;;`,
+		`-e) command="$2"; shift 2; if [ "$#" -gt 0 ]; then echo "xfce4-terminal: unknown option $1" >&2; exit 1; fi; exec sh -c "$command" ;;`,
+		"esac",
+		"exit 1",
+		"",
+	}, "\n"))
+	if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: "xfce1", cwd: home, prompt: "carry on"}) {
+		t.Fatal("the window relaunch reported failure")
+	}
+	if runs, recorded := terminalRuns(t, calls); len(runs) != 1 || strings.HasPrefix(runs[0], "-p ") || !recorded {
+		t.Fatalf("xfce4-terminal did not run the launcher: claude ran %q (recorded=%t)", runs, recorded)
+	}
+}
