@@ -2148,8 +2148,10 @@ async function scenarioVisibleRelaunch(acc) {
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'vr1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('visible relaunch: wait parked', Boolean(acc.state().waits.vr1), true);
   const previous = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
+  const [engine] = acc.engine();
+  const watcher = spawn(engine, ['hook'], { stdio: ['pipe', 'ignore', 'ignore'], env: acc.env() });
   acc.editState((state) => {
-    state.launched.vr1 = { pid: previous.pid, at: now - 3600, how: 'terminal' };
+    state.launched.vr1 = { pid: previous.pid, at: now - 3600, how: 'terminal', runner: watcher.pid };
     state.waits.vr1.resumeAt = now - 5;
     state.waits.vr1.until = now - 10;
   });
@@ -2190,6 +2192,7 @@ async function scenarioVisibleRelaunch(acc) {
   check('visible relaunch: launch record and wait cleared afterwards', acc.state().launched.vr1 === undefined && acc.state().waits.vr1 === undefined, true);
   check('visible relaunch: no launcher files left behind', fs.existsSync(path.join(acc.guardDir, 'launches')) ? fs.readdirSync(path.join(acc.guardDir, 'launches')).filter((name) => name.startsWith('vr1')) : [], []);
   try { previous.kill(); } catch {}
+  try { watcher.kill(); } catch {}
   const stranger = spawn('sleep', ['30'], { stdio: 'ignore' });
   await sleep(200);
   acc.editState((strangerState) => {

@@ -173,12 +173,12 @@ func TestAppleScriptEscape(t *testing.T) {
 }
 
 func TestLooksLikeSessionProcessNames(t *testing.T) {
-	for _, name := range []string{"claude", "node", "/usr/bin/node", "powershell.exe", "bash", "CMD.EXE", "  node  ", "/usr/local/bin/node --inspect"} {
+	for _, name := range []string{"claude", "claude.exe", "node", "/usr/bin/node", "CMD.EXE", "  node  ", "/usr/local/bin/node --inspect"} {
 		if !looksLikeSessionName(name) {
 			t.Errorf("%q should be recognised as a session process", name)
 		}
 	}
-	for _, name := range []string{"sshd", "ssh", "fish", "dockerd", "python3", "systemd", "chrome", "", "nodemon", "bashful"} {
+	for _, name := range []string{"sshd", "ssh", "fish", "dockerd", "python3", "systemd", "chrome", "", "nodemon", "bashful", "bash", "sh", "zsh", "powershell.exe", "pwsh", "conhost.exe", "WindowsTerminal.exe", "wt.exe"} {
 		if looksLikeSessionName(name) {
 			t.Errorf("%q must not be mistaken for a session process", name)
 		}

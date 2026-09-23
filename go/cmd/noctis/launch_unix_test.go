@@ -416,3 +416,15 @@ func TestXfceTerminalIsHandedTheLauncherAsACommandLineItAccepts(t *testing.T) {
 		t.Fatalf("xfce4-terminal did not run the launcher: claude ran %q (recorded=%t)", runs, recorded)
 	}
 }
+
+func TestAPreviousWindowPidThatIsNowAShellIsNotClosed(t *testing.T) {
+	relaunchSandbox(t)
+	runner, shell := idleRunner(t), startHelper(t, "sh", "-c", "while :; do sleep 1; done")
+	updateState(func(state object) {
+		stateMap(state, "launched")["sh1"] = object{"pid": float64(shell.pid), "at": float64(nowSec() - 3600), "how": "terminal", "runner": float64(runner.pid)}
+	})
+	closePreviousLaunch(object{}, "sh1", nil)
+	if shell.endsWithin(500 * time.Millisecond) {
+		t.Fatal("the recorded window pid is now a shell, which a relaunch window never is (the launcher execs claude), and it was killed")
+	}
+}
