@@ -3,17 +3,24 @@
 package main
 
 import (
+	"math"
 	"syscall"
 	"unsafe"
 )
 
+const processQueryLimitedInformation = 0x1000
+
+func validPid(pid int) bool {
+	return pid > 0 && uint64(pid) <= math.MaxUint32
+}
+
 func processAlive(pid int) bool {
-	if pid <= 0 {
+	if !validPid(pid) {
 		return false
 	}
-	handle, err := syscall.OpenProcess(syscall.PROCESS_QUERY_INFORMATION, false, uint32(pid))
+	handle, err := syscall.OpenProcess(processQueryLimitedInformation, false, uint32(pid))
 	if err != nil {
-		return false
+		return err == syscall.ERROR_ACCESS_DENIED
 	}
 	defer syscall.CloseHandle(handle)
 	var code uint32
@@ -24,7 +31,7 @@ func processAlive(pid int) bool {
 }
 
 func processName(pid int) string {
-	if pid <= 0 {
+	if !validPid(pid) {
 		return ""
 	}
 	snapshot, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPPROCESS, 0)

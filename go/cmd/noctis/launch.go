@@ -157,6 +157,9 @@ func ownHelperProcess(name string) bool {
 }
 
 func terminateProcess(pid int) error {
+	if !validPid(pid) {
+		return fmt.Errorf("pid %d is outside the range a process can have", pid)
+	}
 	if isWindows {
 		_, err := runWithTimeout(exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/T", "/F"), 10*time.Second)
 		return err
