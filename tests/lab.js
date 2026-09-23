@@ -2134,19 +2134,28 @@ async function scenarioVisibleRelaunch(acc) {
   if (IS_WINDOWS) return;
   const now = nowSec();
   const fakeTerminal = path.join(acc.lab.binDir, 'x-terminal-emulator');
-  fs.writeFileSync(fakeTerminal, ['#!/usr/bin/env sh', '# runs the launcher like a terminal tab would: detached, in the background', 'shift', 'nohup sh "$@" >/dev/null 2>&1 &', 'exit 0', ''].join('\n'));
+  fs.writeFileSync(fakeTerminal, ['#!/usr/bin/env sh', '# runs the launcher like a terminal tab would: detached, in the background', 'shift', 'nohup "$@" >/dev/null 2>&1 &', 'exit 0', ''].join('\n'));
   fs.chmodSync(fakeTerminal, 0o755);
   acc.setConfig((config) => {
     config.wait.maxInHookMinutes = 0;
+    config.resume.mode = 'window';
   });
+  const sessionTranscript = (sid) => {
+    const file = path.join(acc.dir, 'projects', `${sid}.jsonl`);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.copyFileSync(TRANSCRIPT, file);
+    return file;
+  };
+  const vr1Transcript = sessionTranscript('vr1');
   mock.limits = [
     { kind: 'session', percent: 94, resets_at: new Date((now + 900) * 1000).toISOString() },
     { kind: 'weekly_all', percent: 20, resets_at: new Date((now + 3 * 86400) * 1000).toISOString() },
   ];
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
   acc.statusline('vr1', 'claude-fable-5-1', 94, now + 900, 20, now + 3 * 86400);
-  acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'vr1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
+  acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'vr1', cwd: PROJECT_DIR, transcript_path: vr1Transcript });
   check('visible relaunch: wait parked', Boolean(acc.state().waits.vr1), true);
+  check('visible relaunch: the session that rendered a status line is resumed in a window', (acc.state().waits.vr1 || {}).launchMode, 'window');
   const previous = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
   const [engine] = acc.engine();
   const watcher = spawn(engine, ['hook'], { stdio: ['pipe', 'ignore', 'ignore'], env: acc.env() });
@@ -2156,7 +2165,7 @@ async function scenarioVisibleRelaunch(acc) {
     state.waits.vr1.until = now - 10;
   });
   const old = new Date(Date.now() - 3600000);
-  fs.utimesSync(TRANSCRIPT, old, old);
+  fs.utimesSync(vr1Transcript, old, old);
   mock.limits = [
     { kind: 'session', percent: 3, resets_at: new Date((now + 18000) * 1000).toISOString() },
     { kind: 'weekly_all', percent: 20, resets_at: new Date((now + 3 * 86400) * 1000).toISOString() },
@@ -2166,7 +2175,7 @@ async function scenarioVisibleRelaunch(acc) {
   const wasFast = acc.fastClaude;
   acc.fastClaude = false; 
   acc.timeOffset = 30; 
-  const runner = acc.runPromise(['resume', '--sid', 'vr1', '--account', acc.dir], null, { NOCTIS_NO_TERMINAL: '', DISPLAY: ':9', ...HOOK_SESSION_MARKERS });
+  const runner = acc.runPromise(['resume', '--sid', 'vr1', '--account', acc.dir], null, { NOCTIS_NO_TERMINAL: '', DISPLAY: ':9', NOCTIS_LAB_ANSWER: vr1Transcript, ...HOOK_SESSION_MARKERS });
   let moved = '';
   for (let i = 0; i < 40 && !moved; i += 1) {
     await sleep(100);
@@ -2176,7 +2185,7 @@ async function scenarioVisibleRelaunch(acc) {
   await runner;
   acc.fastClaude = wasFast;
   acc.timeOffset = 0;
-  check('visible relaunch: claude ran through the terminal launcher', callsLog().some((line) => line.includes('--resume vr1') && line.includes('HANDOFF=vr1')), true);
+  check('visible relaunch: claude ran through the terminal launcher', callsLog().some((line) => line.includes('--resume vr1') && line.includes('HANDOFF=vr1') && !line.includes('args=[-p ')), true);
   check('visible relaunch: the window\'s claude runs without the Claude session markers the runner inherited from the hook', (callsLog().find((line) => line.includes('--resume vr1')) || '').includes(' CHILD= '), true);
   await new Promise((resolve) => {
     if (previous.exitCode !== null || previous.signalCode !== null) return resolve();
@@ -2193,6 +2202,32 @@ async function scenarioVisibleRelaunch(acc) {
   check('visible relaunch: no launcher files left behind', fs.existsSync(path.join(acc.guardDir, 'launches')) ? fs.readdirSync(path.join(acc.guardDir, 'launches')).filter((name) => name.startsWith('vr1')) : [], []);
   try { previous.kill(); } catch {}
   try { watcher.kill(); } catch {}
+  const vr4Transcript = sessionTranscript('vr4');
+  mock.limits = [
+    { kind: 'session', percent: 94, resets_at: new Date((now + 900) * 1000).toISOString() },
+    { kind: 'weekly_all', percent: 20, resets_at: new Date((now + 3 * 86400) * 1000).toISOString() },
+  ];
+  fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
+  acc.statusline('vr4', 'claude-fable-5-1', 94, now + 900, 20, now + 3 * 86400);
+  acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'vr4', cwd: PROJECT_DIR, transcript_path: vr4Transcript });
+  acc.editState((state) => {
+    state.waits.vr4.resumeAt = now - 5;
+    state.waits.vr4.until = now - 10;
+  });
+  fs.utimesSync(vr4Transcript, old, old);
+  mock.limits = [
+    { kind: 'session', percent: 3, resets_at: new Date((now + 18000) * 1000).toISOString() },
+    { kind: 'weekly_all', percent: 20, resets_at: new Date((now + 3 * 86400) * 1000).toISOString() },
+  ];
+  fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
+  resetCalls();
+  acc.timeOffset = 30;
+  await acc.runPromise(['resume', '--sid', 'vr4', '--account', acc.dir], null, { NOCTIS_NO_TERMINAL: '', DISPLAY: ':9', ...HOOK_SESSION_MARKERS });
+  acc.timeOffset = 0;
+  const retried = acc.state().waits.vr4 || {};
+  check('visible relaunch: a window whose claude closed at once without touching the session is retried, not taken for a resume', callsLog().some((line) => line.includes('--resume vr4') && !line.includes('args=[-p ')) && retried.launchAttempts === 1 && retried.hit === 'relaunch', true);
+  check('visible relaunch: and the retry is journaled', acc.run(['why', '--last', '6']).includes('launch-no-progress'), true);
+  acc.run(['cancel', 'vr4']);
   const stranger = spawn('sleep', ['30'], { stdio: 'ignore' });
   await sleep(200);
   acc.editState((strangerState) => {
@@ -2209,8 +2244,11 @@ async function scenarioVisibleRelaunch(acc) {
   acc.run(['resume', '--sid', 'vr3', '--account', acc.dir]);
   check('visible relaunch: a launch record older than any wait is ignored', true, true);
   fs.unlinkSync(fakeTerminal);
+  fs.rmSync(vr1Transcript, { force: true });
+  fs.rmSync(vr4Transcript, { force: true });
   acc.setConfig((config) => {
     config.wait.maxInHookMinutes = 330;
+    config.resume.mode = 'headless';
   });
   mock.limits = [];
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
