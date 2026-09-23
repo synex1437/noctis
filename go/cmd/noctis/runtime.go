@@ -504,6 +504,9 @@ func promptDigest(text string) string {
 func sanitizePrompt(text string) string {
 	value := whitespaceRun.ReplaceAllString(promptScrub.ReplaceAllString(text, "'"), " ")
 	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, "-") {
+		value = "Continue. " + value
+	}
 	if runes := []rune(value); len(runes) > 4000 {
 		return string(runes[:4000])
 	}

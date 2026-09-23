@@ -649,7 +649,7 @@ func hostLaunchArgs(host string, cfg object, launch launchSpec, effort, permissi
 	extra := relaunchExtraArgs(host, resume, launch.sid)
 	switch host {
 	case "codex":
-		return append(append([]string{"exec", "resume", launch.sid, "--skip-git-repo-check"}, extra...), launch.prompt)
+		return append(append([]string{"exec", "resume", launch.sid, "--skip-git-repo-check"}, extra...), "--", launch.prompt)
 	case "antigravity":
 		return append(append([]string{"--conversation", launch.sid, "--output-format", "text"}, extra...), "-p", launch.prompt)
 	case "droid":
@@ -667,7 +667,7 @@ func hostLaunchArgs(host string, cfg object, launch launchSpec, effort, permissi
 	if getBool(resume, "remoteControl", false) {
 		claudeArgs = append(claudeArgs, "--remote-control")
 	}
-	return append(claudeArgs, launch.prompt)
+	return append(claudeArgs, "--", launch.prompt)
 }
 
 func fetchCodexRateLimits(exe string, timeout time.Duration) (object, error) {
