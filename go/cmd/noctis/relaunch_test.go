@@ -184,9 +184,13 @@ type helperProcess struct {
 
 func startHelper(t *testing.T, name string, arguments ...string) helperProcess {
 	t.Helper()
-	command := exec.Command(name, arguments...)
+	return startCommand(t, exec.Command(name, arguments...))
+}
+
+func startCommand(t *testing.T, command *exec.Cmd) helperProcess {
+	t.Helper()
 	if err := command.Start(); err != nil {
-		t.Fatalf("helper %s: %v", name, err)
+		t.Fatalf("helper %s: %v", command.Path, err)
 	}
 	helper := helperProcess{pid: command.Process.Pid, command: command, exited: make(chan struct{})}
 	go func() {
@@ -221,10 +225,18 @@ func (helper helperProcess) endsWithin(timeout time.Duration) bool {
 
 func idleRunner(t *testing.T) helperProcess {
 	t.Helper()
-	if isWindows {
-		return startHelper(t, "ping", "-n", "300", "127.0.0.1")
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
 	}
-	return startHelper(t, "sleep", "300")
+	command := exec.Command(executable, "-test.run=^TestThreadedStandIn$")
+	command.Env = append(os.Environ(), "NOCTIS_TEST_THREADED_STAND_IN=1")
+	stdin, err := command.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stdin.Close() })
+	return startCommand(t, command)
 }
 
 func idleWindow(t *testing.T) helperProcess {
@@ -232,7 +244,23 @@ func idleWindow(t *testing.T) helperProcess {
 	if isWindows {
 		return startHelper(t, "cmd.exe", "/d", "/c", "ping", "-n", "300", "127.0.0.1")
 	}
-	return startHelper(t, "sh", "-c", "while :; do sleep 1; done")
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return startHelper(t, standInNamed(t, sleep, "claude"), "300")
+}
+
+func goneRunner(t *testing.T) int {
+	t.Helper()
+	command := exec.Command("sh", "-c", "exit 0")
+	if isWindows {
+		command = exec.Command("cmd.exe", "/d", "/c", "exit 0")
+	}
+	if err := command.Run(); err != nil {
+		t.Fatal(err)
+	}
+	return command.Process.Pid
 }
 
 func takeoverSandbox(t *testing.T) string {
@@ -336,7 +364,7 @@ func TestResumeTakesOverFromARunnerWatchingAnOlderWindow(t *testing.T) {
 		cwd := t.TempDir()
 		transcript := quietTranscript(t, cwd, t0)
 		handoff := object{"at": t0 + tc.handoffAt, "model": "claude-opus-5", "mode": "window", "pid": float64(runner.pid)}
-		launched := object{"pid": float64(window.pid), "at": t0 + tc.launchedAt, "how": "terminal"}
+		launched := object{"pid": float64(window.pid), "at": t0 + tc.launchedAt, "how": "terminal", "runner": float64(runner.pid)}
 		updateState(func(state object) {
 			stateMap(state, "handedOff")[sid] = cloneObject(handoff)
 			if tc.window {
@@ -423,7 +451,7 @@ func TestTheStatusLineResumesAPauseWhoseHandOffOnlyWatchesAnEarlierWindow(t *tes
 		updateState(func(state object) {
 			stateMap(state, "handedOff")[sid] = object{"at": t0 + tc.handoffAt, "model": "claude-opus-5", "mode": "window", "pid": float64(runner.pid)}
 			if tc.window {
-				stateMap(state, "launched")[sid] = object{"pid": float64(window.pid), "at": t0, "how": "terminal"}
+				stateMap(state, "launched")[sid] = object{"pid": float64(window.pid), "at": t0, "how": "terminal", "runner": float64(runner.pid)}
 			}
 			stateMap(state, "waits")[sid] = object{"kind": "batch", "window": "five_hour", "label": "5h", "used": float64(95), "threshold": float64(92), "hit": "threshold",
 				"startedAt": t0 + 60, "until": now + 3600, "resumeAt": now + 3600, "cwd": cwd, "transcript": transcript, "scheduled": object{"method": "manual", "at": now + 3600}}
@@ -454,10 +482,10 @@ func TestAFableRelaunchClosesTheWindowItsOwnPauseLeftIdle(t *testing.T) {
 	}
 	for index, tc := range cases {
 		sid := fmt.Sprintf("fb%d", index+1)
-		window := idleWindow(t)
+		runner, window := idleRunner(t), idleWindow(t)
 		transcript := quietTranscript(t, t.TempDir(), tc.lastWrite)
 		updateState(func(state object) {
-			stateMap(state, "launched")[sid] = object{"pid": float64(window.pid), "at": now - 7200, "how": "terminal"}
+			stateMap(state, "launched")[sid] = object{"pid": float64(window.pid), "at": now - 7200, "how": "terminal", "runner": float64(runner.pid)}
 		})
 
 		closePreviousLaunch(object{}, sid, object{"kind": "fable", "startedAt": tc.startedAt, "transcript": transcript})
@@ -572,5 +600,42 @@ func TestARunnerReleasesOnlyItsOwnHandOffAndPause(t *testing.T) {
 	state = readState()
 	if getMap(getMap(state, "handedOff"), sid) != nil || getMap(getMap(state, "waits"), sid) != nil {
 		t.Fatalf("the runner left its own hand-off or pause behind: %v / %v", getMap(getMap(state, "handedOff"), sid), getMap(getMap(state, "waits"), sid))
+	}
+}
+
+func TestAPreviousWindowIsClosedOnlyWhileTheRunnerThatOpenedItStillWatchesIt(t *testing.T) {
+	relaunchSandbox(t)
+	now := float64(nowSec())
+	cases := []struct {
+		name   string
+		runner func() float64
+		closed bool
+	}{
+		{"its runner is alive and ours", func() float64 { return float64(idleRunner(t).pid) }, true},
+		{"its runner is gone, so the pid may belong to something else now", func() float64 { return float64(goneRunner(t)) }, false},
+		{"the record names no runner", func() float64 { return 0 }, false},
+		{"its runner pid now runs another program", func() float64 { return float64(idleWindow(t).pid) }, false},
+	}
+	for index, tc := range cases {
+		sid := fmt.Sprintf("pw%d", index+1)
+		window := idleWindow(t)
+		record := object{"pid": float64(window.pid), "at": now - 3*86400, "how": "terminal"}
+		if runner := tc.runner(); runner > 0 {
+			record["runner"] = runner
+		}
+		updateState(func(state object) { stateMap(state, "launched")[sid] = record })
+
+		closePreviousLaunch(object{}, sid, nil)
+
+		wait := 500 * time.Millisecond
+		if tc.closed {
+			wait = 5 * time.Second
+		}
+		if closed := window.endsWithin(wait); closed != tc.closed {
+			t.Fatalf("%s: the recorded window was closed: %v, want %v", tc.name, closed, tc.closed)
+		}
+		if record := getMap(getMap(readState(), "launched"), sid); record != nil {
+			t.Fatalf("%s: the launch record stayed behind: %v", tc.name, record)
+		}
 	}
 }

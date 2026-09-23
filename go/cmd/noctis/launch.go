@@ -56,7 +56,7 @@ func waitForPid(pid int) {
 
 func recordLaunch(sid string, pid int, how string) {
 	updateState(func(state object) {
-		stateMap(state, "launched")[sid] = object{"pid": float64(pid), "at": float64(nowSec()), "how": how}
+		stateMap(state, "launched")[sid] = object{"pid": float64(pid), "at": float64(nowSec()), "how": how, "runner": float64(os.Getpid())}
 	})
 }
 
@@ -90,7 +90,10 @@ func closePreviousLaunch(cfg object, sid string, wait object) {
 	if pid <= 0 || pid == os.Getpid() || !processAlive(pid) {
 		return
 	}
-
+	if runner := int(numberOr(record, "runner", 0)); !processAlive(runner) || !ownHelperProcess(processName(runner)) {
+		logInfo("launch record for %s names pid %d, but the runner that watched it (%d) is gone, so the pid may belong to another program now; leaving it alone", sid, pid, runner)
+		return
+	}
 	if age := float64(nowSec()) - numberOr(record, "at", 0); age < 0 || age > launchMaxWait.Seconds() {
 		logInfo("launch record for %s is %ds old; not closing pid %d", sid, int(age), pid)
 		return
@@ -113,9 +116,7 @@ func closePreviousLaunch(cfg object, sid string, wait object) {
 
 var sessionProcessNames = map[string]bool{
 	"claude": true, "node": true, "node.exe": true, "codex": true, "agy": true, "droid": true,
-	"copilot": true, "powershell": true, "powershell.exe": true, "pwsh": true, "pwsh.exe": true,
-	"cmd.exe": true, "conhost.exe": true, "windowsterminal.exe": true, "wt.exe": true,
-	"sh": true, "bash": true, "zsh": true, "dash": true, "claude.exe": true, "codex.exe": true,
+	"copilot": true, "cmd.exe": true, "claude.exe": true, "codex.exe": true,
 }
 
 func looksLikeSessionName(raw string) bool {
