@@ -154,8 +154,6 @@ Priorities and dependencies:
 | A threshold is edited into nonsense | The shipped default guards that window instead, and `noctis status`, `noctis doctor` and the next session all name the threshold. Set it to `0`, `null` or `false` to leave a window unguarded on purpose; it still stops at 100 %. |
 | A new version is published | With marketplace auto-update on, Claude Code downloads it and the next session says `⬆ noctis <new> was downloaded (this session still runs <current>): run /reload-plugins` once. Otherwise a one-line notice names the version and the command. |
 
-**Known problem on Linux with systemd.** All schedules of a session share one systemd unit, and scheduling stops that unit's service first. So a runner that has to schedule itself again — the limit is still active when it fires, or there is still no usage data — stops itself before the new timer exists, and a session it relaunched headless is stopped with it at that session's next pause. The wait is kept and re-armed at the next prompt, status-line refresh or session start; until then nothing resumes it. Where that matters, start Claude Code with `NOCTIS_NO_TASKS=1`, which schedules with the background sleeper instead (it does not survive a reboot).
-
 <p align="center"><img src="docs/flow.svg" alt="One tool turn through the guard: signals feed the hooks, deterministic rules pick an outcome" width="100%"></p>
 
 </details>

@@ -20,6 +20,8 @@ const argv = process.argv.slice(2);
 let unit = null;
 let calendar = null;
 const properties = [];
+const serviceProperties = [];
+const environment = {};
 let at = 0;
 for (; at < argv.length; at++) {
   const arg = argv[at];
@@ -28,6 +30,19 @@ for (; at < argv.length; at++) {
   if (arg.startsWith('--unit=')) { unit = arg.slice('--unit='.length); continue; }
   if (arg.startsWith('--on-calendar=')) { calendar = arg.slice('--on-calendar='.length); continue; }
   if (arg.startsWith('--timer-property=')) { properties.push(arg.slice('--timer-property='.length)); continue; }
+  if (arg.startsWith('--property=')) {
+    const property = arg.slice('--property='.length);
+    if (!/^[A-Za-z]+=\S+$/.test(property)) die('systemd-run: not a Key=Value property: ' + property);
+    serviceProperties.push(property);
+    continue;
+  }
+  if (arg.startsWith('--setenv=')) {
+    const assignment = arg.slice('--setenv='.length);
+    const cut = assignment.indexOf('=');
+    if (cut <= 0) die('systemd-run: --setenv needs NAME=VALUE: ' + assignment);
+    environment[assignment.slice(0, cut)] = assignment.slice(cut + 1);
+    continue;
+  }
   die('systemd-run: unrecognised option ' + arg);
 }
 const command = argv.slice(at);
@@ -46,7 +61,7 @@ if (!Number.isFinite(fireAt) || fireAt <= 0) die('systemd-run: unusable fire tim
 
 const priorEntries = fs.readFileSync(log, 'utf8').split('\n').filter(Boolean).length;
 record({
-  kind: 'schedule', unit, calendar, fireAt, properties, command,
+  kind: 'schedule', unit, calendar, fireAt, properties, serviceProperties, environment, command,
   wake: properties.includes('WakeSystem=true'),
 });
 
@@ -55,6 +70,7 @@ const timer = spawn(process.execPath, [__dirname + '/fire.js'], {
   stdio: 'ignore',
   env: {
     ...process.env,
+    ...environment,
     NOCTIS_STUB_UNIT: unit,
     NOCTIS_STUB_FIRE_AT: String(fireAt),
     NOCTIS_STUB_COMMAND: JSON.stringify(command),

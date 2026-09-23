@@ -18,6 +18,7 @@ const (
 	pluginName              = "noctis"
 	handoffEnv              = "NOCTIS_HANDOFF"
 	claudeConfigEnv         = "CLAUDE_CONFIG_DIR"
+	systemdUnitEnv          = "NOCTIS_UNIT"
 	tailLineWindowBytes     = 64 * 1024
 	logMaxBytes             = 512 * 1024
 	transcriptTailBytes     = 256 * 1024

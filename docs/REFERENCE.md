@@ -162,7 +162,7 @@ Install for another tool from the zip or clone: `./scripts/install.sh --host cod
 | `*.lock` | `state`, `usage`, `fable`, `settings`, `schedule-<hash>` |
 | `noctis-bundle-<time>.zip` | `noctis report --bundle` without a file name |
 
-Outside that folder: `<account>/settings.json.bak-<time>` (setup and install back up `settings.json` before they change it), `<account>/skills/noctis/` (a clone install), and, only while a resume is pending, the Task Scheduler task `Noctis-<hash>`, `~/Library/LaunchAgents/com.synex.noctis.<hash>.<epoch>.plist` (one per scheduled resume) or the systemd user unit `noctis-<hash>`.
+Outside that folder: `<account>/settings.json.bak-<time>` (setup and install back up `settings.json` before they change it), `<account>/skills/noctis/` (a clone install), and, only while a resume is pending, the Task Scheduler task `Noctis-<hash>`, `~/Library/LaunchAgents/com.synex.noctis.<hash>.<epoch>.plist` (one per scheduled resume) or the systemd user unit `noctis-<hash>-<epoch>` (one per scheduled resume).
 
 ## Tests
 
@@ -170,4 +170,4 @@ What each suite asks, what CI runs and what the latest run measured: [docs/TESTI
 
 ## Limits
 
-Usage data comes from Claude Code's official `statusLine` payload (`rate_limits`, Claude Code ≥ 2.1.251) and from the undocumented OAuth usage endpoint, which supplies the scoped bucket and backs up the 5-hour and weekly windows when status-line data is stale — keep an eye on `errors.log` after Claude Code updates; `selftest` reports the tested version range. Same-session wake relies on `asyncRewake`, which is documented as observational; the scheduled relaunch covers the case where it stops working. Hooks cannot type `/clear`; compaction stays with Claude Code. On Linux with systemd, all schedules of a session share the unit `noctis-<hash>` and scheduling stops its service first, so a runner that has to schedule itself again (the limit still active when it fires, no usage data yet, the waiting hook still alive) stops itself before the new timer exists, and a session it relaunched headless is stopped with it at that session's next pause; the wait is kept and re-armed at the next prompt, status-line refresh or session start. `NOCTIS_NO_TASKS=1` in Claude Code's environment avoids systemd and uses the background sleeper.
+Usage data comes from Claude Code's official `statusLine` payload (`rate_limits`, Claude Code ≥ 2.1.251) and from the undocumented OAuth usage endpoint, which supplies the scoped bucket and backs up the 5-hour and weekly windows when status-line data is stale — keep an eye on `errors.log` after Claude Code updates; `selftest` reports the tested version range. Same-session wake relies on `asyncRewake`, which is documented as observational; the scheduled relaunch covers the case where it stops working. Hooks cannot type `/clear`; compaction stays with Claude Code.

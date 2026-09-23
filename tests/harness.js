@@ -362,8 +362,12 @@ class Account {
     writeJson(path.join(this.dir, '.credentials.json'), { claudeAiOauth: { accessToken: this.token, expiresAt: Date.now() + 30 * 86400000 } });
   }
 
+  ownLimitsFile() {
+    return path.join(this.lab.mockDir, `limits-${this.token.replace(/[^A-Za-z0-9-]/g, '_')}.json`);
+  }
+
   setOwnLimits(limits) {
-    writeJson(path.join(this.lab.mockDir, `limits-${this.token.replace(/[^A-Za-z0-9-]/g, '_')}.json`), limits);
+    writeJson(this.ownLimitsFile(), limits);
   }
 
   env(extra = {}) {

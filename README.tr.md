@@ -154,8 +154,6 @@ Biçimin tamamı bu. Claude ilk açık maddeyi alır, bitince `- [x]` işaretler
 | Bir eşik geçersiz bir değere ayarlanır | O pencereyi yerleşik varsayılan eşik korur; `noctis status`, `noctis doctor` ve sonraki oturum geçersiz eşiği adıyla bildirir, `config.json`'daki değeri sizin düzeltmeniz gerekir. Bir pencereyi bilerek korumasız bırakmak için eşiği `0`, `null` ya da `false` yapın; yine de %100'de durur. |
 | Yeni sürüm yayımlanır | Marketplace otomatik güncellemesi açıksa Claude Code onu indirir ve sonraki oturum bir kez `⬆ noctis <yeni> indirildi (bu oturum hâlâ <mevcut> çalıştırıyor): geçmek için /reload-plugins çalıştır` der. Değilse tek satırlık bir bildirim sürümü ve komutu söyler. |
 
-**Linux'ta systemd ile bilinen sorun.** Bir oturumun bütün zamanlamaları tek bir systemd birimini paylaşır ve her zamanlama önce o birimin servisini durdurur. Bu yüzden kendini yeniden zamanlaması gereken bir runner — tetiklendiğinde limit hâlâ doluysa ya da kullanım verisi hâlâ yoksa — yeni zamanlayıcı kurulmadan kendini durdurur; pencere açmadan yeniden başlattığı bir oturum da o oturumun bir sonraki duraklamasında onunla birlikte durur. Bekleme kaydı korunur ve sonraki istemde, durum çubuğu yenilemesinde ya da oturum açılışında yeniden kurulur; o zamana kadar onu hiçbir şey sürdürmez. Bunun önemli olduğu yerde Claude Code'u `NOCTIS_NO_TASKS=1` ile başlatın: zamanlamayı o zaman arka plandaki sleeper yapar (bilgisayar yeniden başlayınca o da kaybolur).
-
 <p align="center"><img src="docs/flow.svg" alt="Korumadan geçen tek bir araç turu: sinyaller hook'lara girer, deterministik kurallar sonucu seçer" width="100%"></p>
 
 </details>

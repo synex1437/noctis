@@ -270,7 +270,6 @@ func TestAStopFailureWhoseWaitCannotBeStoredStopsItsTimer(t *testing.T) {
 	scheduleBackendOverride = "systemd"
 	t.Cleanup(func() { scheduleBackendOverride = "" })
 	sid := "stopfailure-timer"
-	unit := systemdUnit(sid)
 	message := stopFailureMessage(t, object{"session_id": sid, "cwd": dir, "error_type": "rate_limit"})
 	if want := T("wait.notStored", pluginName); message != want {
 		t.Fatalf("a StopFailure whose wait could not be stored said %q, want %q", message, want)
@@ -280,15 +279,16 @@ func TestAStopFailureWhoseWaitCannotBeStoredStopsItsTimer(t *testing.T) {
 		commands = append(commands, strings.Join(entry.args, " "))
 	}
 	started := -1
+	armed := ""
 	for index, command := range commands {
-		if strings.HasPrefix(command, "systemd-run ") && strings.Contains(command, " --unit="+unit+" ") {
-			started = index
+		if name := armedUnit(command); name != "" && systemdJobOf(sid, name) {
+			started, armed = index, name
 		}
 	}
 	if started < 0 {
 		t.Fatalf("the retry was not scheduled as the session's systemd timer: ran %q", commands)
 	}
-	stop := "systemctl --user stop " + unit + ".timer " + unit + ".service"
+	stop := "systemctl --user stop " + armed + ".timer"
 	stopped := false
 	for _, command := range commands[started+1:] {
 		stopped = stopped || command == stop
@@ -820,7 +820,7 @@ func TestClaimingAWaitStopsOnlyTheRunnerOfTheWaitItReplaces(t *testing.T) {
 	stops := func() int {
 		count := 0
 		for _, entry := range *recorded {
-			if strings.Join(entry.args, " ") == "systemctl --user stop "+unit+".timer "+unit+".service" {
+			if strings.Join(entry.args, " ") == "systemctl --user stop "+unit+".timer" {
 				count++
 			}
 		}
@@ -879,11 +879,23 @@ func toolHookAside(sid, cwd string, cfg object, plan *waitPlan, deciding time.Du
 func unitStops(recorded []recordedCommand, unit string) int {
 	count := 0
 	for _, entry := range recorded {
-		if strings.Join(entry.args, " ") == "systemctl --user stop "+unit+".timer "+unit+".service" {
+		if strings.Join(entry.args, " ") == "systemctl --user stop "+unit+".timer" {
 			count++
 		}
 	}
 	return count
+}
+
+func armedUnit(command string) string {
+	if !strings.HasPrefix(command, "systemd-run ") {
+		return ""
+	}
+	for _, field := range strings.Fields(command) {
+		if name, found := strings.CutPrefix(field, "--unit="); found {
+			return name
+		}
+	}
+	return ""
 }
 
 func TestAToolHookBesideASiblingSleepingOnTheSameResetJoinsItsWait(t *testing.T) {
@@ -911,12 +923,13 @@ func TestAToolHookBesideASiblingSleepingOnTheSameResetJoinsItsWait(t *testing.T)
 	if actionCount(actions, "pause") != 1 || actionCount(actions, "join-wait") != 1 || hasAction(actions, "wait-cancelled") || hasAction(actions, "wait-replaced") {
 		t.Fatalf("a tool hook that ran beside a sibling sleeping on the same reset did not join its wait: %v", actions)
 	}
-	armed, stopped := 0, 0
+	armed, stopped, unit := 0, 0, ""
 	for _, entry := range *recorded {
 		switch command := strings.Join(entry.args, " "); {
-		case strings.HasPrefix(command, "systemd-run "):
+		case armedUnit(command) != "":
 			armed++
-		case armed > 0 && command == "systemctl --user stop "+systemdUnit(sid)+".timer "+systemdUnit(sid)+".service":
+			unit = armedUnit(command)
+		case armed > 0 && command == "systemctl --user stop "+unit+".timer":
 			stopped++
 		}
 	}
@@ -1312,7 +1325,7 @@ func TestAPauseAtTheLimitAnswersLongBeforeAShortHookTimesOut(t *testing.T) {
 			}
 			armed := 0
 			for _, entry := range *recorded {
-				if strings.HasPrefix(strings.Join(entry.args, " "), "systemd-run ") && strings.Contains(strings.Join(entry.args, " "), " --unit="+systemdUnit(sid)+" ") {
+				if name := armedUnit(strings.Join(entry.args, " ")); name != "" && systemdJobOf(sid, name) {
 					armed++
 				}
 			}
@@ -1637,7 +1650,7 @@ func TestAnOverdueRunnerIsRearmedOnlyAFewTimesInARow(t *testing.T) {
 	armed := func() int {
 		count := 0
 		for _, entry := range *recorded {
-			if command := strings.Join(entry.args, " "); strings.HasPrefix(command, "systemd-run ") && strings.Contains(command, " --unit="+unit+" ") {
+			if name := armedUnit(strings.Join(entry.args, " ")); name != "" && systemdJobOf(sid, name) {
 				count++
 			}
 		}

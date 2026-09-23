@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -195,16 +196,22 @@ func TestSystemdFailureIsReportedNotSwallowed(t *testing.T) {
 func TestSystemdStopsTheOldUnitBeforeScheduling(t *testing.T) {
 
 	recorded := withFakeScheduler(t, nil)
-	scheduleSystemd("s1", float64(time.Now().Add(time.Hour).Unix()), []string{"resume"}, false)
-	if len(*recorded) < 2 {
+	scheduled, ok := scheduleSystemd("s1", float64(time.Now().Add(time.Hour).Unix()), []string{"resume"}, false)
+	if !ok || len(*recorded) < 2 {
 		t.Fatalf("expected a stop before the schedule, got %v", *recorded)
 	}
 	if !strings.Contains(strings.Join((*recorded)[0].args, " "), "stop") {
 		t.Fatalf("the first command was not a stop: %v", (*recorded)[0].args)
 	}
-	cancelSystemd("s1")
-	if stop, found := findCommand(*recorded, "stop"); !found || !strings.Contains(strings.Join(stop.args, " "), ".timer") {
-		t.Fatalf("cancel did not stop the timer unit: %v", *recorded)
+	for _, target := range systemctlStops(*recorded) {
+		if !strings.HasPrefix(target, systemdUnit("s1")) || !strings.HasSuffix(target, ".timer") {
+			t.Fatalf("scheduling stopped %s; only this session's timers may go, never a service, which may be the runner doing the scheduling", target)
+		}
+	}
+	before := len(*recorded)
+	cancelNative("s1", scheduled)
+	if stopped := systemctlStops((*recorded)[before:]); len(stopped) != 1 || stopped[0] != getString(scheduled, "unit")+".timer" {
+		t.Fatalf("cancel did not stop exactly the recorded timer %s.timer: %v", getString(scheduled, "unit"), stopped)
 	}
 }
 
@@ -605,5 +612,256 @@ func TestLaunchdJobLabelNeverReusesTheRunningJobsLabel(t *testing.T) {
 	t.Setenv("XPC_SERVICE_NAME", plain)
 	if again := launchdJobLabel("s1", at); again == plain || !launchdJobOf("s1", again) {
 		t.Fatalf("a job scheduled from inside job %s reused its label (%s); launchd refuses to bootstrap a label that is still loaded", plain, again)
+	}
+}
+
+func sandboxSystemd(t *testing.T, config object) *[]recordedCommand {
+	t.Helper()
+	files.pluginRoot = sandboxFiles(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("NOCTIS_NO_TASKS", "")
+	t.Setenv("NOCTIS_UNIT", "")
+	recorded := withFakeScheduler(t, nil)
+	scheduleBackendOverride = "systemd"
+	t.Cleanup(func() { scheduleBackendOverride = "" })
+	previous := args
+	t.Cleanup(func() { args = previous })
+	mustWriteJSON(files.config, config)
+	return recorded
+}
+
+func firedBySystemd(t *testing.T, sid, unit string) {
+	t.Helper()
+	t.Setenv("NOCTIS_UNIT", unit)
+	args = parseArgs(runnerArgs("resume", sid, files.configDir))
+}
+
+func systemctlStops(recorded []recordedCommand) []string {
+	targets := []string{}
+	for _, entry := range recorded {
+		if len(entry.args) < 3 || filepath.Base(entry.args[0]) != "systemctl" {
+			continue
+		}
+		for index, arg := range entry.args {
+			if arg == "stop" {
+				targets = append(targets, entry.args[index+1:]...)
+				break
+			}
+		}
+	}
+	return targets
+}
+
+func stoppedAService(recorded []recordedCommand) (string, bool) {
+	for _, target := range systemctlStops(recorded) {
+		if !strings.HasSuffix(target, ".timer") {
+			return target, true
+		}
+	}
+	return "", false
+}
+
+func TestSystemdRescheduleDoesNotStopTheRunnersOwnService(t *testing.T) {
+	recorded := sandboxSystemd(t, object{})
+	sid := "linux-runner"
+	now := float64(nowSec())
+	updateState(func(state object) { stateMap(state, "waits")[sid] = liveWait(60) })
+	fired := getString(scheduleRunner(loadConfig(), sid, now+60), "unit")
+	if fired == "" {
+		t.Fatalf("no systemd unit was recorded for the first schedule: %v", *recorded)
+	}
+
+	t.Setenv("NOCTIS_UNIT", fired)
+	before := len(*recorded)
+	next := getString(scheduleRunner(loadConfig(), sid, now+3600), "unit")
+
+	if service, stopped := stoppedAService((*recorded)[before:]); stopped {
+		t.Fatalf("rescheduling from inside %s.service stopped %s; systemd answers with SIGTERM to the runner, the session it relaunched and this very process: %v", fired, service, (*recorded)[before:])
+	}
+	if !slices.Contains(systemctlStops((*recorded)[before:]), fired+".timer") {
+		t.Fatalf("the timer the wait recorded, %s.timer, was not stopped before the new one was made: %v", fired, (*recorded)[before:])
+	}
+	if next == "" || next == fired {
+		t.Fatalf("the new timer reuses the running unit's name %q; systemd-run refuses a unit that is still loaded", next)
+	}
+	if _, created := findCommand((*recorded)[before:], "--unit="+next); !created {
+		t.Fatalf("no timer was created under %s: %v", next, (*recorded)[before:])
+	}
+	if stored := getMap(getMap(getMap(readState(), "waits"), sid), "scheduled"); getString(stored, "unit") != next {
+		t.Fatalf("the wait does not record the new unit %s: %v", next, stored)
+	}
+}
+
+func TestSystemdRunnerThatReschedulesDoesNotStopItsOwnService(t *testing.T) {
+	config := testConfig()
+	config["resume"] = object{"mode": "none"}
+	config["alarm"] = object{"enabled": false}
+	recorded := sandboxSystemd(t, config)
+	sid := "linux-five-hour"
+	now := float64(nowSec())
+	mustWriteJSON(files.usage, object{"updatedAt": now,
+		"five_hour": object{"used": float64(96), "resetsAt": now + 3600},
+		"seven_day": object{"used": float64(10), "resetsAt": now + 3*86400}})
+	updateState(func(state object) {
+		stateMap(state, "waits")[sid] = object{"kind": "batch", "window": "five_hour", "until": now, "resumeAt": now + 60, "startedAt": now}
+	})
+	fired := getString(scheduleRunner(loadConfig(), sid, now+60), "unit")
+
+	firedBySystemd(t, sid, fired)
+	before := len(*recorded)
+	runResume()
+
+	if service, stopped := stoppedAService((*recorded)[before:]); stopped {
+		t.Fatalf("the runner systemd started as %s.service stopped %s while rescheduling; it dies before systemd-run and the wait keeps a timer that already fired: %v", fired, service, (*recorded)[before:])
+	}
+	scheduled := getMap(getMap(getMap(readState(), "waits"), sid), "scheduled")
+	next := getString(scheduled, "unit")
+	if getString(scheduled, "method") != "systemd" || next == "" || next == fired {
+		t.Fatalf("the runner did not make a timer of its own for the new deadline: %v (the fired unit is %s)", scheduled, fired)
+	}
+	if _, created := findCommand((*recorded)[before:], "--unit="+next); !created {
+		t.Fatalf("the new timer %s was never handed to systemd-run: %v", next, (*recorded)[before:])
+	}
+}
+
+func TestSystemdRunnerThatClosesItsWaitDoesNotStopItsOwnService(t *testing.T) {
+	recorded := sandboxSystemd(t, object{"resume": object{"mode": "none"}, "alarm": object{"enabled": false}})
+	sid := "linux-fable"
+	now := float64(nowSec())
+	updateState(func(state object) {
+		stateMap(state, "waits")[sid] = object{"kind": "fable", "window": "fable", "until": now, "resumeAt": now + 20, "startedAt": now}
+	})
+	fired := getString(scheduleRunner(loadConfig(), sid, now+20), "unit")
+
+	firedBySystemd(t, sid, fired)
+	before := len(*recorded)
+	runResume()
+
+	if service, stopped := stoppedAService((*recorded)[before:]); stopped {
+		t.Fatalf("the runner systemd started as %s.service stopped %s before it closed the wait; systemd kills it and the wait outlives it: %v", fired, service, (*recorded)[before:])
+	}
+	if getMap(getMap(readState(), "waits"), sid) != nil {
+		t.Fatalf("the runner never got as far as closing the wait")
+	}
+}
+
+func TestSystemdRunnerWithoutAWaitStopsNothing(t *testing.T) {
+	recorded := sandboxSystemd(t, object{})
+	sid := "linux-done"
+	now := float64(nowSec())
+	updateState(func(state object) {
+		stateMap(state, "waits")[sid] = object{"kind": "fable", "resumeAt": now + 20, "startedAt": now}
+	})
+	fired := getString(scheduleRunner(loadConfig(), sid, now+20), "unit")
+	updateState(func(state object) { delete(stateMap(state, "waits"), sid) })
+
+	firedBySystemd(t, sid, fired)
+	before := len(*recorded)
+	runResume()
+
+	if stopped := systemctlStops((*recorded)[before:]); len(stopped) > 0 {
+		t.Fatalf("a runner that found no wait stopped %v; its own timer was one-shot and is gone, its service is itself, and any other timer of the session belongs to a wait that may be registering right now", stopped)
+	}
+}
+
+func TestCancellingASystemdWaitStopsOnlyItsTimer(t *testing.T) {
+	recorded := sandboxSystemd(t, object{})
+	sid := "linux-cancel"
+	updateState(func(state object) { stateMap(state, "waits")[sid] = liveWait(3600) })
+	unit := getString(scheduleRunner(loadConfig(), sid, float64(nowSec()+3600)), "unit")
+	before := len(*recorded)
+
+	clearWait(sid, nil)
+
+	stopped := systemctlStops((*recorded)[before:])
+	if !slices.Contains(stopped, unit+".timer") {
+		t.Fatalf("cancelling the wait left timer %s.timer running: %v", unit, stopped)
+	}
+	if service, found := stoppedAService((*recorded)[before:]); found {
+		t.Fatalf("cancelling a wait stopped %s; a running service is a runner that already fired, and its claim on the wait already fails: %v", service, stopped)
+	}
+}
+
+func stopMatches(patterns []string, unit string) bool {
+	for _, pattern := range patterns {
+		if matched, _ := filepath.Match(pattern, unit); matched {
+			return true
+		}
+	}
+	return false
+}
+
+func TestSystemdSchedulingRetiresEveryEarlierTimerOfTheSession(t *testing.T) {
+	sandboxFiles(t)
+	recorded := withFakeScheduler(t, nil)
+	sid := "linux-stale"
+	if _, ok := scheduleSystemd(sid, float64(nowSec()+3600), []string{"resume"}, false); !ok {
+		t.Fatalf("scheduling failed: %v", *recorded)
+	}
+
+	stopped := systemctlStops(*recorded)
+	for _, earlier := range []string{systemdUnit(sid), systemdUnit(sid) + "-1700000000", systemdUnit(sid) + "-1700000000-4242"} {
+		if !stopMatches(stopped, earlier+".timer") {
+			t.Fatalf("an earlier timer of this session, %s.timer, is left to fire next to the new one: %v", earlier, stopped)
+		}
+		if stopMatches(stopped, earlier+".service") {
+			t.Fatalf("scheduling stopped %s.service, which may be the runner doing the scheduling: %v", earlier, stopped)
+		}
+	}
+	for _, foreign := range []string{systemdUnit("another-session") + "-1700000000", systemdUnit("another-session"), "dbus"} {
+		if stopMatches(stopped, foreign+".timer") || stopMatches(stopped, foreign+".service") {
+			t.Fatalf("scheduling this session stopped %s: %v", foreign, stopped)
+		}
+	}
+}
+
+func TestCancellingNeverStopsASystemdUnitThatIsNotThisSessions(t *testing.T) {
+	recorded := sandboxSystemd(t, object{})
+	for sid, unit := range map[string]string{
+		"linux-foreign": "dbus",
+		"linux-other":   systemdUnit("another-session") + "-1700000000",
+		"linux-glob":    systemdUnit("linux-glob") + "-*",
+		"linux-option":  "--all",
+	} {
+		updateState(func(state object) {
+			wait := liveWait(3600)
+			wait["scheduled"] = object{"method": "systemd", "unit": unit}
+			stateMap(state, "waits")[sid] = wait
+		})
+		before := len(*recorded)
+		clearWait(sid, nil)
+		if stopped := systemctlStops((*recorded)[before:]); len(stopped) != 1 || stopped[0] != systemdUnit(sid)+".timer" {
+			t.Fatalf("a unit name from state.json that is not %s's, %q, reached systemctl: %v", sid, unit, stopped)
+		}
+	}
+}
+
+func TestSystemdJobUnitNeverReusesTheRunningUnitsName(t *testing.T) {
+	sandboxFiles(t)
+	at := float64(nowSec() + 600)
+	t.Setenv("NOCTIS_UNIT", "")
+	plain := systemdJobUnit("s1", at)
+	if plain == systemdUnit("s1") || !systemdJobOf("s1", plain) || systemdJobOf("s2", plain) {
+		t.Fatalf("unit %q is not a per-schedule unit recognised as s1's alone", plain)
+	}
+	if later := systemdJobUnit("s1", at+60); later == plain {
+		t.Fatalf("two deadlines of one session share the unit %s; a running runner keeps that name busy", plain)
+	}
+
+	t.Setenv("NOCTIS_UNIT", plain)
+	if again := systemdJobUnit("s1", at); again == plain || !systemdJobOf("s1", again) {
+		t.Fatalf("a timer made from inside %s.service reused its name (%s); systemd-run refuses a unit that is still loaded", plain, again)
+	}
+}
+
+func TestSystemdRunArgsTellTheRunnerItsUnitAndSpareWhatItsSessionStarts(t *testing.T) {
+	arguments := systemdRunArgs("noctis-abc-1700000000", "/opt/noctis", []string{"resume", "--sid", "s1"}, float64(time.Now().Add(time.Hour).Unix()), false)
+	executableAt := indexOf(arguments, "/opt/noctis")
+	for _, want := range []string{"--setenv=NOCTIS_UNIT=noctis-abc-1700000000", "--property=KillMode=process"} {
+		if at := indexOf(arguments, want); at < 0 || at > executableAt {
+			t.Fatalf("%s is missing or comes after the command, where systemd-run would hand it to noctis: %v", want, arguments)
+		}
 	}
 }
