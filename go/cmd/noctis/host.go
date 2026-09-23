@@ -609,12 +609,44 @@ func hostDefaultOutput(host, event string) object {
 	return nil
 }
 
+func bypassFlag(host, arg string) (bypass, takesValue bool) {
+	name, _, hasValue := strings.Cut(arg, "=")
+	switch host + " " + name {
+	case "claude --dangerously-skip-permissions", "claude --allow-dangerously-skip-permissions",
+		"codex --dangerously-bypass-approvals-and-sandbox", "copilot --allow-all-tools", "droid --skip-permissions-unsafe":
+		return true, false
+	case "claude --permission-mode", "droid --auto":
+		return true, !hasValue
+	}
+	return false, false
+}
+
+func relaunchExtraArgs(host string, resume object, sid string) []string {
+	configured := getList(resume, "extraArgs")
+	extra, dropped := []string{}, []string{}
+	for index := 0; index < len(configured); index++ {
+		arg := fmt.Sprint(configured[index])
+		bypass, takesValue := bypassFlag(host, arg)
+		if !bypass {
+			extra = append(extra, arg)
+			continue
+		}
+		dropped = append(dropped, arg)
+		if takesValue && index+1 < len(configured) {
+			index++
+			dropped = append(dropped, fmt.Sprint(configured[index]))
+		}
+	}
+	if len(dropped) > 0 {
+		warn("resume.extraArgs: %s dropped from the relaunch; unattended permissions come from the resume settings, never from extra arguments", strings.Join(dropped, " "))
+		journal(sid, "resume", "extra-arg-dropped", strings.Join(dropped, " "), nil)
+	}
+	return extra
+}
+
 func hostLaunchArgs(host string, cfg object, launch launchSpec, effort, permissionMode string) []string {
 	resume := section(cfg, "resume")
-	extra := []string{}
-	for _, raw := range getList(resume, "extraArgs") {
-		extra = append(extra, fmt.Sprint(raw))
-	}
+	extra := relaunchExtraArgs(host, resume, launch.sid)
 	switch host {
 	case "codex":
 		return append(append([]string{"exec", "resume", launch.sid, "--skip-git-repo-check"}, extra...), launch.prompt)
