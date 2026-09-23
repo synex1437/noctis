@@ -152,6 +152,7 @@ func scheduleLaunchd(sid string, at float64, commandArgs []string) (object, bool
 		return nil, false
 	}
 	cancelLaunchdJobs(sid)
+	bootOutStrandedLaunchdJobs(sid)
 	label := launchdJobLabel(sid, at)
 	plist := launchdPlistBody(label, executable, commandArgs, at, files.guardDir)
 	path := launchdPlist(label)
@@ -194,6 +195,37 @@ func cancelLaunchdJobs(sid string) {
 	for _, label := range launchdJobsOf(sid) {
 		cancelLaunchd(label)
 	}
+}
+
+func bootOutLaunchdJob(label string) {
+	if _, err := runScheduler(exec.Command("launchctl", "bootout", "gui/"+currentUID()+"/"+label), 15*time.Second); err != nil {
+		_, _ = runScheduler(exec.Command("launchctl", "remove", label), 15*time.Second)
+	}
+}
+
+func bootOutStrandedLaunchdJobs(sid string) {
+	listing, err := runScheduler(exec.Command("launchctl", "list"), 15*time.Second)
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(listing), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 3 || fields[0] != "-" || ownLaunchdJob(fields[2]) || !launchdJobOf(sid, fields[2]) || statSafe(launchdPlist(fields[2])) != nil {
+			continue
+		}
+		logInfo("launchd job %s is still loaded without a plist after it ran; booting it out", fields[2])
+		bootOutLaunchdJob(fields[2])
+	}
+}
+
+func bootOutFinishedLaunchdJob(sid string) {
+	label := os.Getenv("XPC_SERVICE_NAME")
+	if !launchdJobOf(sid, label) {
+		return
+	}
+	_ = os.Remove(launchdPlist(label))
+	logInfo("launchd job %s has done its resume; booting it out so it cannot fire again", label)
+	bootOutLaunchdJob(label)
 }
 
 func systemdRunArgs(unit, executable string, commandArgs []string, at float64, wake bool) []string {

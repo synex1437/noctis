@@ -709,7 +709,9 @@ func readyNotice(wait object, release string, now int64, tail string) string {
 }
 
 func runResume() {
-	resumeWait(flagString("sid"), flagString("release"))
+	sid := flagString("sid")
+	resumeWait(sid, flagString("release"))
+	bootOutFinishedLaunchdJob(sid)
 }
 
 func liveRunner(handoff object) int {

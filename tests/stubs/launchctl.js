@@ -95,6 +95,39 @@ function stopJob(unit) {
   }
 }
 
+function loadedJobs() {
+  const jobs = new Map();
+  for (const line of fs.readFileSync(log, 'utf8').split('\n').filter(Boolean)) {
+    const entry = JSON.parse(line);
+    if (entry.kind === 'schedule') jobs.set(entry.unit, null);
+    if (entry.kind === 'stop') jobs.delete(entry.unit);
+    if (entry.kind === 'fire' && jobs.has(entry.unit)) jobs.set(entry.unit, entry.pid);
+  }
+  return jobs;
+}
+
+const running = (pid) => {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+if (argv[0] === 'list') {
+  const lines = ['PID\tStatus\tLabel'];
+  for (const [unit, pid] of loadedJobs()) lines.push(`${running(pid) ? pid : '-'}\t0\t${unit}`);
+  process.stdout.write(lines.join('\n') + '\n');
+  process.exit(0);
+}
+
+if (argv[0] === 'remove') {
+  stopJob(String(argv[1] || ''));
+  process.exit(0);
+}
+
 if (argv[0] === 'bootout') {
   const target = String(argv[1] || '');
   stopJob(target.slice(target.lastIndexOf('/') + 1));

@@ -306,6 +306,14 @@ async function scenarioLaunchdFiresAndResumes(lab) {
   }
 
   await waitForTheSessionToComeBack(lab, account, 'macA', logFile, 'launchd');
+
+  let bootedOut = false;
+  for (let i = 0; i < 40 && !bootedOut; i += 1) {
+    bootedOut = readLog(logFile).some((e) => e.kind === 'stop' && e.unit === label);
+    if (!bootedOut) await sleep(250);
+  }
+  check('launchd: the job that ran the resume booted itself out once it was done, so it cannot fire again next year',
+    bootedOut, readLog(logFile).filter((e) => e.kind !== 'schedule').map((e) => `${e.kind}:${e.unit}`).join(', '));
 }
 
 async function scenarioCancelStopsTheAgent(lab) {
