@@ -14,8 +14,11 @@ import (
 
 const (
 	launchStartTimeout = 20 * time.Second
-	launchPidTimeout   = 60 * time.Second
 	launchMaxWait      = 7 * 24 * time.Hour
+)
+
+var (
+	launchPidTimeout   = 60 * time.Second
 	launchPollInterval = 2 * time.Second
 )
 
@@ -344,23 +347,42 @@ func launchInDesktopTerminal(cfg object, launch launchSpec, claudePath string, c
 	case isDarwin:
 		opener = exec.Command("osascript", "-e", `tell application "Terminal" to do script "sh `+appleScriptEscape(script)+`"`, "-e", `tell application "Terminal" to activate`)
 	case os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != "":
-		for _, candidate := range [][]string{{"x-terminal-emulator", "-e"}, {"gnome-terminal", "--"}, {"konsole", "-e"}, {"xfce4-terminal", "-e"}, {"kitty"}, {"alacritty", "-e"}, {"wezterm", "start", "--"}} {
+		for _, candidate := range [][]string{{"x-terminal-emulator", "-e"}, {"gnome-terminal", "--"}, {"konsole", "-e"}, {"xfce4-terminal", "-x"}, {"kitty"}, {"alacritty", "-e"}, {"wezterm", "start", "--"}} {
 			if locateExecutable(candidate[0]) != "" {
 				opener = exec.Command(candidate[0], append(candidate[1:], "sh", script)...)
 				break
 			}
 		}
 	}
-	if opener == nil {
-		return false
-	}
-	if _, err := runWithTimeout(opener, 15*time.Second); err != nil {
-		warn("terminal window could not be opened (%v); running headless", err)
-		return false
-	}
-	if !waitForFile(pidFile, launchPidTimeout) {
-		warn("terminal opened but the session did not start; running headless")
+	if opener == nil || !openTerminal(opener, pidFile) {
 		return false
 	}
 	return waitForLaunchedSession(launch.sid, pidFile, "terminal")
+}
+
+func openTerminal(opener *exec.Cmd, pidFile string) bool {
+	configureDetached(opener)
+	if err := opener.Start(); err != nil {
+		warn("terminal window could not be opened (%v); running headless", err)
+		return false
+	}
+	exited := make(chan error, 1)
+	go func() { exited <- opener.Wait() }()
+	deadline := time.Now().Add(launchPidTimeout)
+	for statSafe(pidFile) == nil {
+		if time.Now().After(deadline) {
+			warn("terminal opened but the session did not start; running headless")
+			return false
+		}
+		select {
+		case err := <-exited:
+			exited = nil
+			if err != nil && !waitForFile(pidFile, 500*time.Millisecond) {
+				warn("terminal window could not be opened (%v); running headless", err)
+				return false
+			}
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+	return true
 }
