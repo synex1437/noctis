@@ -98,6 +98,12 @@ func importedIssueTitle(issue object) string {
 	return strings.TrimSpace(strings.ReplaceAll(getString(issue, "title"), "\n", " "))
 }
 
+func disarmedTitle(title string) string {
+	title = queuePriority.ReplaceAllString(title, "[P$1]")
+	title = queueAfter.ReplaceAllString(title, "[after $1]")
+	return queueTag.ReplaceAllString(title, "$1")
+}
+
 func titledAs(text, title string) bool {
 	tail, found := strings.CutPrefix(text, title)
 	if !found || (tail != "" && tail[0] != ' ' && tail[0] != '\t') {
@@ -236,14 +242,15 @@ func runQueue() {
 		if issue == nil || !ok {
 			continue
 		}
-		id, title := issueID{repo: repo, number: formatNumber(number)}, importedIssueTitle(issue)
+		id, original := issueID{repo: repo, number: formatNumber(number)}, importedIssueTitle(issue)
+		title := disarmedTitle(original)
 		if known[id.ref()] {
 			continue
 		}
 		known[id.ref()] = true
 		present := false
 		for _, item := range bare[id.number] {
-			if titledAs(item.text, title) {
+			if titledAs(item.text, title) || titledAs(item.text, original) {
 				fileLines[item.line] = fileLines[item.line][:item.hash] + repo + fileLines[item.line][item.hash:]
 				qualified++
 				present = true
