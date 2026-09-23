@@ -644,6 +644,20 @@ func relaunchExtraArgs(host string, resume object, sid string) []string {
 	return extra
 }
 
+func hostResumeCommand(host, sid string) string {
+	switch host {
+	case "codex":
+		return "codex resume " + sid
+	case "antigravity":
+		return "agy --conversation " + sid
+	case "droid":
+		return "droid exec --session-id " + sid
+	case "copilot":
+		return "copilot --resume=" + sid
+	}
+	return "claude --resume " + sid
+}
+
 func hostLaunchArgs(host string, cfg object, launch launchSpec, effort, permissionMode string) []string {
 	resume := section(cfg, "resume")
 	extra := relaunchExtraArgs(host, resume, launch.sid)

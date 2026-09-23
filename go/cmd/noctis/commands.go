@@ -149,7 +149,7 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	if failures := getMap(state, "launchFailures"); len(failures) > 0 {
 		for _, sid := range sortedKeys(failures) {
 			entry := toObject(failures[sid])
-			lines = append(lines, T("status.launchFailed", shortSid(sid), formatTime(numberOr(entry, "at", 0)), sid))
+			lines = append(lines, T("status.launchFailed", shortSid(sid), formatTime(numberOr(entry, "at", 0)), hostResumeCommand(currentHost().id, sid)))
 		}
 	}
 	handoffs := getMap(state, "handedOff")

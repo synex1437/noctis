@@ -877,7 +877,7 @@ func resumeWait(sid, release string) {
 					leaveReplacedWait(sid)
 					return
 				}
-				notify(cfg, pluginName, T("runner.noData", shortSid(sid), sid))
+				notify(cfg, pluginName, T("runner.noData", shortSid(sid), hostResumeCommand(currentHost().id, sid)))
 				fail("runner %s: giving up after %d attempts without usage data", sid, attempts)
 				return
 			}
@@ -1014,8 +1014,9 @@ func resumeWait(sid, release string) {
 
 func reportLaunchFailure(cfg object, sid, model string) {
 	journal(sid, "resume", "launch-failed", model, nil)
-	notify(cfg, pluginName, T("launch.failed", shortSid(sid), sid))
-	fail("runner %s: automatic relaunch failed; resume manually with claude --resume %s", sid, sid)
+	manual := hostResumeCommand(currentHost().id, sid)
+	notify(cfg, pluginName, T("launch.failed", shortSid(sid), manual))
+	fail("runner %s: automatic relaunch failed; resume manually with %s", sid, manual)
 	updateState(func(next object) {
 		stateMap(next, "launchFailures")[sid] = object{"at": float64(nowSec()), "model": model}
 	})
