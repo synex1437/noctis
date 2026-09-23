@@ -189,7 +189,6 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 	withFileLock(files.usageLock, func() {
 		previous := readUsageForUpdate()
 		next := cloneObject(previous)
-		next["updatedAt"] = float64(now)
 		version := getString(input, "version")
 		if version == "" {
 			version = orDefault(getString(previous, "version"), fallbackClaudeVersion)
@@ -202,7 +201,8 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 		}
 		next["history"] = history
 		limits := getMap(input, "rate_limits")
-		offered, parsed := 0, 0
+		offered, stored := 0, 0
+		unusable := []string{}
 		for _, key := range []string{"five_hour", "seven_day"} {
 			win := getMap(limits, key)
 			if win == nil {
@@ -214,11 +214,9 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 			if !okUsed || !okReset {
 				continue
 			}
-			parsed++
-
 			used, sane := sanePercent(rawUsed)
 			if !sane || !saneResetTime(resetsAt, now) {
-				warn("status line reported an unusable %s window (used=%v resets_at=%v); ignored", key, rawUsed, win["resets_at"])
+				unusable = append(unusable, fmt.Sprintf("%s used=%v resets_at=%v", key, rawUsed, win["resets_at"]))
 				continue
 			}
 			origin, reportedAt := reporter, float64(now)
@@ -229,14 +227,18 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 			}
 			next[key] = object{"used": used, "resetsAt": resetsAt, "sid": origin, "at": reportedAt}
 			appendHistory(history, key, used, resetsAt, now)
+			stored++
 		}
-
-		if offered > 0 && parsed == 0 {
-			next["updatedAt"] = numberOr(previous, "updatedAt", 0)
-			if float64(now)-numberOr(getMap(readState(), "notified"), "statuslineShape", 0) > 86400 {
-				updateState(func(state object) { stateMap(state, "notified")["statuslineShape"] = float64(now) })
-				warn("the status line payload has %d usage window(s) this version cannot read; usage is coming from the API instead — the plugin may need an update", offered)
+		if stored > 0 {
+			next["updatedAt"] = float64(now)
+		}
+		if unread := offered - stored; unread > 0 && float64(now)-numberOr(getMap(readState(), "notified"), "statuslineShape", 0) > 86400 {
+			updateState(func(state object) { stateMap(state, "notified")["statuslineShape"] = float64(now) })
+			detail := ""
+			if len(unusable) > 0 {
+				detail = " (" + strings.Join(unusable, "; ") + ")"
 			}
+			warn("the status line payload has %d usage window(s) this version cannot read%s; those windows come from the API instead — the plugin may need an update", unread, detail)
 		}
 		if getString(input, "session_id") != "" {
 			sid = sessionKey(input)
