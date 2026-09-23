@@ -26,7 +26,7 @@ Claude Code ──statusLine JSON (her asistan mesajı)──▶ noctis statusli
 Görev Zamanlayıcı / launchd / systemd ──▶ noctis resume --sid X --account D [--host codex|antigravity|droid|copilot]
    ├─ limit hâlâ aktif → yeniden planla
    ├─ oturum bu arada devam etmiş (transcript mtime > reset / dahili auto-continue) → hiçbir şey yapma
-   └─ alarm + claude --resume X --model <m> --effort max --permission-mode <pm> "<prompt>"  (yeni pencere)
+   └─ alarm + claude --resume X --model <m> --effort max --permission-mode <pm> -- "<prompt>"  (yeni pencere)
 
 Codex CLI / Antigravity CLI / Droid / Copilot CLI ──hook dosyaları──▶ aynı `noctis hook --host <araç>` ──▶ host.go çevirir ──▶ aynı karar motoru
 ```
