@@ -408,7 +408,7 @@ func fetchOauthUsage(token, version string) fetchResult {
 	request.Header.Set("anthropic-beta", "oauth-2025-04-20")
 	request.Header.Set("User-Agent", "claude-code/"+version)
 	request.Header.Set("Accept", "application/json")
-	client := &http.Client{Timeout: fetchTimeout}
+	client := &http.Client{Timeout: fetchTimeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	sentAt := nowSec()
 	started := time.Now()
 	response, err := client.Do(request)
