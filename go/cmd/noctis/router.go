@@ -1,11 +1,15 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 	"time"
 )
+
+const codingTailMaxBytes = 16 * codingTailBytes
 
 type wordMatcher struct {
 	pattern *lazyRe
@@ -31,6 +35,7 @@ func (matcher wordMatcher) find(text string) (string, bool) {
 
 var (
 	urlPattern        = lazyRegexp(`(?i)\bhttps?://\S+|\bwww\.\S+`)
+	codeURLPattern    = lazyRegexp(`(?i)\bhttps?://(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[(?:0{0,4}:){2,7}0{0,4}1?\]|(?:[\w.-]+|\[[\da-f:.]+\]):\d{2,5})\.*(?:[^\w.@-]|$)|(?:\bhttps?://(?:www\.)?|\bwww\.)(?:github\.com|[\w-]+\.ghe\.com|gitlab\.com|bitbucket\.org)/(?:[\w.-]+/){2,}(?:pulls?|pull-requests|merge_requests|issues|commits?|compare|blob|blame|tree|src|actions|runs|pipelines|-)\.*(?:[^\w.-]|$)|\bhttps?://[\w.-]+/(?:[\w.-]+/){2,}-/(?:merge_requests|issues|commits?|compare|blob|blame|tree|pipelines|jobs)/\w`)
 	codePathPattern   = lazyRegexp(`(?i)(^|[\s"'(])(\.{1,2}[\\/]|[A-Za-z]:\\|~[\\/]|src[\\/]|lib[\\/]|/(usr|etc|home|opt|var)/)|\.(js|mjs|cjs|ts|tsx|jsx|py|java|kt|go|rs|c|cc|cpp|h|hpp|cs|php|rb|swift|scala|sql|sh|bash|zsh|ps1|bat|cmd|json|ya?ml|toml|xml|html?|css|scss|md|txt|env|lock|ini|cfg|csv|ipynb|dockerfile|exe|dll)\b`)
 	codeSymbolPattern = lazyRegexp("`|[{};]|=>|==|!=|->|</|#include|\\bdef |\\bconst |\\blet |\\bvar |\\bimport |\\bpublic |\\bprivate |\\bstatic ")
 	codeWords         = newWordMatcher(
@@ -109,30 +114,44 @@ func parseTranscriptLine(line string) (transcriptEntry, bool) {
 }
 
 func recentCodingActivity(transcriptPath string, now int64) bool {
-	lines, ok := tailLines(transcriptPath, codingTailBytes)
-	if !ok {
+	info, err := os.Stat(transcriptPath)
+	if errors.Is(err, fs.ErrNotExist) {
 		return false
 	}
-	for i := len(lines) - 1; i >= 0; i-- {
-		entry, parsed := parseTranscriptLine(lines[i])
-		if !parsed || entry.entryType != "assistant" {
-			continue
+	if err != nil || info.IsDir() {
+		return true
+	}
+	for _, budget := range []int64{codingTailBytes, codingTailMaxBytes} {
+		content, cut, err := readTailBytes(transcriptPath, info.Size(), budget)
+		if err != nil {
+			warn("transcript tail unreadable: %v", err)
+			return true
 		}
-		if at, err := time.Parse(time.RFC3339Nano, entry.timestamp); err == nil && float64(now)-float64(at.Unix()) > codingActivityWindow {
-			return false
-		}
-		for _, block := range entry.content {
-			blockMap, _ := block.(object)
-			if getString(blockMap, "type") != "tool_use" {
+		lines := strings.Split(string(dropPartialFirstLine(content, cut)), "\n")
+		for i := len(lines) - 1; i >= 0; i-- {
+			entry, parsed := parseTranscriptLine(lines[i])
+			if !parsed || entry.entryType != "assistant" {
 				continue
 			}
-			name := getString(blockMap, "name")
-			if fileTools[name] || name == "Bash" {
-				return true
+			if at, err := time.Parse(time.RFC3339Nano, entry.timestamp); err == nil && float64(now)-float64(at.Unix()) > codingActivityWindow {
+				return false
+			}
+			for _, block := range entry.content {
+				blockMap, _ := block.(object)
+				if getString(blockMap, "type") != "tool_use" {
+					continue
+				}
+				name := getString(blockMap, "name")
+				if fileTools[name] || name == "Bash" {
+					return true
+				}
 			}
 		}
+		if !cut {
+			return false
+		}
 	}
-	return false
+	return true
 }
 
 func classifyPrompt(cfg object, learned object, prompt, transcriptPath string, now int64) verdict {
@@ -155,7 +174,7 @@ func classifyPrompt(cfg object, learned object, prompt, transcriptPath string, n
 		return verdict{reason: "continuation"}
 	}
 	withoutURLs := stripURLs(text)
-	if codeSymbolPattern.MatchString(withoutURLs) || codePathPattern.MatchString(withoutURLs) {
+	if codeURLPattern.MatchString(text) || codeSymbolPattern.MatchString(withoutURLs) || codePathPattern.MatchString(withoutURLs) {
 		return verdict{reason: "code-signal"}
 	}
 	if _, found := codeWords.find(withoutURLs); found && !coldSessionResearch(withoutURLs, transcriptPath, now) {

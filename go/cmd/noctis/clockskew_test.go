@@ -26,9 +26,16 @@ func TestFetchStampsTheRequestOnThePluginClock(t *testing.T) {
 	defer func(previous int64) { timeOffset = previous }(timeOffset)
 	timeOffset = -90
 
-	result := fetchOauthUsage("token", "1.0")
-	if result.err != "" {
-		t.Fatalf("fetch failed: %s", result.err)
+	var result fetchResult
+	for attempt := 0; attempt < 50; attempt++ {
+		before := time.Now().Unix()
+		result = fetchOauthUsage("token", "1.0")
+		if result.err != "" {
+			t.Fatalf("fetch failed: %s", result.err)
+		}
+		if time.Now().Unix() == before {
+			break
+		}
 	}
 	if drift := result.sentAt - nowSec(); drift < -5 || drift > 5 {
 		t.Fatalf("sentAt must be taken from the plugin clock, not the wall clock: sentAt %d, plugin now %d", result.sentAt, nowSec())

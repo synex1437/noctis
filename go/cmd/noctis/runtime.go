@@ -221,12 +221,13 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 				warn("status line reported an unusable %s window (used=%v resets_at=%v); ignored", key, rawUsed, win["resets_at"])
 				continue
 			}
-			origin := reporter
+			origin, reportedAt := reporter, float64(now)
 			if previousWin := getMap(previous, key); multiSessionMax && previousWin != nil && getString(previousWin, "sid") != "" && getString(previousWin, "sid") != reporter && numberOr(previousWin, "resetsAt", -1) == resetsAt && numberOr(previousWin, "used", 0) > used {
 				used = numberOr(previousWin, "used", 0)
 				origin = getString(previousWin, "sid")
+				reportedAt = numberOr(previousWin, "at", 0)
 			}
-			next[key] = object{"used": used, "resetsAt": resetsAt, "sid": origin}
+			next[key] = object{"used": used, "resetsAt": resetsAt, "sid": origin, "at": reportedAt}
 			appendHistory(history, key, used, resetsAt, now)
 		}
 
@@ -348,6 +349,7 @@ func runChain(chain string, input []byte) string {
 	var command *exec.Cmd
 	if isWindows {
 		command = exec.Command("cmd.exe", "/d", "/s", "/c", chain)
+		command.Env = append(os.Environ(), "NoDefaultCurrentDirectoryInExePath=1")
 	} else {
 		command = exec.Command("sh", "-c", chain)
 	}
@@ -360,13 +362,43 @@ func runChain(chain string, input []byte) string {
 }
 
 func locateExecutable(name string) string {
-	if found, err := exec.LookPath(name); err == nil && found != "" {
-		if absolute, absErr := filepath.Abs(found); absErr == nil {
-			return absolute
-		}
+	found, err := exec.LookPath(name)
+	if err == nil && filepath.IsAbs(found) {
 		return found
 	}
+	if found != "" {
+		return lookPathOutsideWorkingDir(name)
+	}
 	return probeExecutable(name)
+}
+
+func lookPathOutsideWorkingDir(name string) string {
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if !filepath.IsAbs(dir) {
+			continue
+		}
+		if found, err := exec.LookPath(filepath.Join(dir, name)); err == nil && outsideWorkingDir(found) {
+			return found
+		}
+	}
+	return ""
+}
+
+func outsideWorkingDir(file string) bool {
+	if !filepath.IsAbs(file) {
+		return false
+	}
+	dir := filepath.Dir(file)
+	cwd, cwdErr := os.Getwd()
+	here, hereErr := os.Stat(".")
+	there, thereErr := os.Stat(dir)
+	if cwdErr != nil || hereErr != nil || thereErr != nil {
+		return false
+	}
+	if relative, err := filepath.Rel(cwd, dir); err == nil && relative == "." {
+		return false
+	}
+	return !os.SameFile(here, there)
 }
 
 func probeExecutable(name string) string {
@@ -377,7 +409,7 @@ func probeExecutable(name string) string {
 	output, _ := runWithTimeout(exec.Command(finder, name), 5*time.Second)
 	lines := []string{}
 	for _, line := range strings.Split(strings.ReplaceAll(string(output), "\r\n", "\n"), "\n") {
-		if trimmed := strings.TrimSpace(line); trimmed != "" {
+		if trimmed := strings.TrimSpace(line); trimmed != "" && outsideWorkingDir(trimmed) {
 			lines = append(lines, trimmed)
 		}
 	}
@@ -403,7 +435,7 @@ func claudeExecutable() string {
 		candidates = []string{filepath.Join(homeDir(), ".local", "bin", "claude"), "/usr/local/bin/claude", "/opt/homebrew/bin/claude"}
 	}
 	for _, candidate := range candidates {
-		if statSafe(candidate) != nil {
+		if filepath.IsAbs(candidate) && statSafe(candidate) != nil {
 			return candidate
 		}
 	}
@@ -430,6 +462,12 @@ func claudeCommand(claudePath string, claudeArgs []string) *exec.Cmd {
 	return exec.Command(claudePath, claudeArgs...)
 }
 
+func inGuardDir(command *exec.Cmd) *exec.Cmd {
+	ensureDir(files.guardDir)
+	command.Dir = files.guardDir
+	return command
+}
+
 func supportedPermissionMode(cfg object, claudePath, inherited string) string {
 	requested := orDefault(getString(section(cfg, "resume"), "permissionMode"), "acceptEdits")
 	if requested == "inherit" {
@@ -445,7 +483,7 @@ func supportedPermissionMode(cfg object, claudePath, inherited string) string {
 	if requested != "auto" {
 		return requested
 	}
-	output, _ := runWithTimeout(claudeCommand(claudePath, []string{"--help"}), 20*time.Second)
+	output, _ := runWithTimeout(inGuardDir(claudeCommand(claudePath, []string{"--help"})), 20*time.Second)
 	if permissionAuto.Match(output) {
 		return "auto"
 	}
@@ -473,6 +511,7 @@ type launchSpec struct {
 	cwd            string
 	mode           string
 	permissionMode string
+	configDir      string
 }
 
 func launchClaude(cfg object, launch launchSpec) bool {
@@ -497,7 +536,7 @@ func launchClaude(cfg object, launch launchSpec) bool {
 	permissionMode := supportedPermissionMode(cfg, claudePath, launch.permissionMode)
 	effort := getString(section(cfg, "models"), "effort")
 	claudeArgs := hostLaunchArgs("claude", cfg, launch, effort, permissionMode)
-	env := append(os.Environ(), "CLAUDE_CONFIG_DIR="+files.configDir, "CLAUDE_CODE_EFFORT_LEVEL="+effort, handoffEnv+"="+launch.sid)
+	env := relaunchEnv(launch, effort)
 	logInfo("launching claude (%s) model=%s mode=%s cwd=%s", mode, launch.model, permissionMode, launch.cwd)
 	closePreviousLaunch(cfg, launch.sid, getMap(getMap(readState(), "waits"), launch.sid))
 	if mode == "window" {
@@ -548,7 +587,7 @@ func launchHostSession(cfg object, host hostSpec, exe string, launch launchSpec)
 	defer logFile.Close()
 	logInfo("launching %s (headless) sid=%s cwd=%s", host.exe, launch.sid, launch.cwd)
 	command := exec.Command(exe, arguments...)
-	command.Env = append(os.Environ(), handoffEnv+"="+launch.sid, "NOCTIS_HOST="+host.id)
+	command.Env = hostRelaunchEnv(host, launch)
 	command.Dir = launch.cwd
 	command.Stdout, command.Stderr = logFile, logFile
 	if err := command.Run(); err != nil {
@@ -571,8 +610,49 @@ func mergeInto(target, source object) {
 	}
 }
 
+func readyNotice(wait object, release string, now int64, tail string) string {
+	if release != "reset" && dataPause(wait) && float64(now) < numberOr(wait, "until", 0) {
+		return T("wait.dataReady", getString(wait, "label"), tail)
+	}
+	return T("wait.ready", getString(wait, "label"), tail)
+}
+
 func runResume() {
-	sid := flagString("sid")
+	resumeWait(flagString("sid"), flagString("release"))
+}
+
+func liveRunner(handoff object) int {
+	pid := int(numberOr(handoff, "pid", 0))
+	if pid == os.Getpid() || !processAlive(pid) {
+		return 0
+	}
+	return pid
+}
+
+func handoffHeldFor(state object, sid string, startedAt float64) int {
+	if runner := liveRunner(getMap(getMap(state, "handedOff"), sid)); runner > 0 && !handoffWatchesEarlierWindow(state, sid, startedAt) {
+		return runner
+	}
+	return 0
+}
+
+func leaveSessionToItsRunner(sid string) {
+	journal(sid, "resume", "skip-launch", "another runner is already resuming this session", nil)
+	logInfo("runner %s: another runner already holds the session; not launching twice", sid)
+}
+
+func releaseHandoff(sid string, startedAt float64) {
+	updateState(func(next object) {
+		if int(numberOr(getMap(getMap(next, "handedOff"), sid), "pid", 0)) == os.Getpid() {
+			delete(stateMap(next, "handedOff"), sid)
+		}
+		if record := getMap(getMap(next, "waits"), sid); record != nil && numberOr(record, "startedAt", -1) == startedAt {
+			delete(stateMap(next, "waits"), sid)
+		}
+	})
+}
+
+func resumeWait(sid, release string) {
 	if sid == "" {
 		fmt.Fprintln(os.Stderr, "usage: noctis resume --sid <session-id> [--account <config-dir>]")
 		return
@@ -586,13 +666,13 @@ func runResume() {
 	}
 	if wait == nil {
 
-		cancelLaunchd(sid)
+		cancelLaunchdJobs(sid)
 		cancelSystemd(sid)
 		logInfo("runner %s: no wait record (already completed or cancelled)", sid)
 		return
 	}
 	if getString(getMap(wait, "scheduled"), "method") == "launchd" {
-		cancelLaunchd(sid)
+		cancelLaunchdJobs(sid)
 	}
 	auto := getMap(getMap(state, "autoResume"), sid)
 	if getString(auto, "type") == "quota_auto_resume_fired" && numberOr(auto, "at", 0) >= numberOr(wait, "startedAt", 0) {
@@ -626,6 +706,10 @@ func runResume() {
 		}
 		warn("runner %s: hook heartbeat still fresh after %d checks, treating as stuck", sid, checks-1)
 	}
+	if handoffHeldFor(readState(), sid, numberOr(wait, "startedAt", 0)) > 0 {
+		leaveSessionToItsRunner(sid)
+		return
+	}
 	kind := getString(wait, "kind")
 	if kind != "fable" && sessionActiveAfter(wait, numberOr(wait, "until", 0)) {
 		clearWaitAndConsume(sid, state)
@@ -633,6 +717,7 @@ func runResume() {
 		return
 	}
 	resume := section(cfg, "resume")
+	ready := ""
 	if kind != "fable" && currentHost().limits {
 
 		result := decide(cfg, state, object{"session_id": sid, "cwd": getString(wait, "cwd"), "transcript_path": getString(wait, "transcript")}, now, decideOptions{force: true})
@@ -642,6 +727,7 @@ func runResume() {
 			updateState(func(next object) {
 				if record := getMap(getMap(next, "waits"), sid); record != nil {
 					record["until"], record["resumeAt"], record["label"], record["window"] = plan.until, resumeAt, plan.label, plan.window
+					record["hit"], record["used"], record["threshold"] = plan.hit, plan.used, plan.threshold
 
 					record["startedAt"] = float64(now)
 					delete(record, "earlyTriggeredAt")
@@ -671,11 +757,11 @@ func runResume() {
 			warn("runner %s: no usage data, retry %d at %s", sid, attempts, localISO(retryAt))
 			return
 		}
-		tail := T("wait.readyTail")
 		if getString(resume, "mode") == "none" {
-			tail = T("wait.readyNone")
+			notify(cfg, pluginName, readyNotice(wait, release, now, T("wait.readyNone")))
+		} else {
+			ready = readyNotice(wait, release, now, T("wait.readyTail"))
 		}
-		notify(cfg, pluginName, T("wait.ready", getString(wait, "label"), tail))
 	}
 	if getString(resume, "mode") == "none" {
 		clearWait(sid, state)
@@ -683,6 +769,9 @@ func runResume() {
 	}
 	if wakeAt := numberOr(wait, "wakeAttemptedAt", 0); wakeAt > 0 && sessionActiveAfter(wait, wakeAt) {
 		clearWaitAndConsume(sid, state)
+		if ready != "" {
+			notify(cfg, pluginName, ready)
+		}
 		journal(sid, "resume", "skip-launch", "same-session wake succeeded", nil)
 		logInfo("runner %s: same-session wake already continued the session", sid)
 		return
@@ -690,7 +779,7 @@ func runResume() {
 	model := orDefault(getString(wait, "modelOverride"), resolveSessionModel(cfg, readState(), readJSON(files.usage), sid))
 	queuePath := queueFileFor(cfg, getString(wait, "cwd"), sid)
 	prompt := orDefault(getString(wait, "queuedPrompt"), getString(resume, "prompt"))
-	if queuePath != "" {
+	if queuePath != "" && queueTrusted(cfg, queuePath) {
 		listName := filepath.Base(queuePath)
 		if isAutoQueue(queuePath) {
 			listName = queuePath
@@ -716,18 +805,18 @@ func runResume() {
 	}
 	prompt = sanitizePrompt(prompt)
 	startedAt := numberOr(wait, "startedAt", 0)
-	claimed := false
+	claimed, watcher := false, 0
 	updateState(func(next object) {
 
-		if other := getMap(stateMap(next, "handedOff"), sid); other != nil && processAlive(int(numberOr(other, "pid", 0))) && int(numberOr(other, "pid", 0)) != os.Getpid() {
+		if handoffHeldFor(next, sid, startedAt) > 0 {
 			return
 		}
 		if record := getMap(getMap(next, "waits"), sid); record == nil || numberOr(record, "startedAt", -1) != startedAt {
 
 			return
 		}
-		claimed = true
-		stateMap(next, "handedOff")[sid] = object{"at": float64(nowSec()), "model": model, "mode": getString(resume, "mode"), "pid": float64(os.Getpid())}
+		claimed, watcher = true, liveRunner(getMap(getMap(next, "handedOff"), sid))
+		stateMap(next, "handedOff")[sid] = object{"at": float64(nowSec()), "model": model, "mode": getString(resume, "mode"), "pid": float64(os.Getpid()), "waitStartedAt": startedAt}
 		stateMap(next, "resumePrompts")[sid] = object{"hash": promptDigest(prompt), "at": float64(nowSec())}
 		stateMap(next, "modelOverrides")[sid] = object{"model": model, "at": float64(nowSec())}
 		if checkpoint := getMap(getMap(next, "checkpoints"), sid); checkpoint != nil {
@@ -738,23 +827,24 @@ func runResume() {
 		}
 	})
 	if !claimed {
-		journal(sid, "resume", "skip-launch", "another runner is already resuming this session", nil)
-		logInfo("runner %s: another runner already holds the session; not launching twice", sid)
+		leaveSessionToItsRunner(sid)
 		return
 	}
-	defer updateState(func(next object) {
-		delete(stateMap(next, "handedOff"), sid)
-		if record := getMap(getMap(next, "waits"), sid); record != nil && numberOr(record, "startedAt", -1) == startedAt {
-			delete(stateMap(next, "waits"), sid)
-		}
-	})
+	defer releaseHandoff(sid, startedAt)
+	if watcher > 0 {
+		journal(sid, "resume", "take-over", fmt.Sprintf("runner %d only watches the window it opened before this pause", watcher), nil)
+		logInfo("runner %s: runner %d only watches the window it opened before this pause; taking the session over", sid, watcher)
+	}
+	if ready != "" {
+		notify(cfg, pluginName, ready)
+	}
 	launchMode := getString(wait, "launchMode")
 	if launchMode == "none" {
 		launchMode = ""
 	}
 	journal(sid, "resume", "launch", model, object{"mode": orDefault(launchMode, getString(resume, "mode"))})
 	updateState(func(next object) { delete(stateMap(next, "launchFailures"), sid) })
-	if !launchClaude(cfg, launchSpec{sid: sid, model: model, prompt: prompt, cwd: getString(wait, "cwd"), mode: launchMode, permissionMode: getString(wait, "permissionMode")}) {
+	if !launchClaude(cfg, launchSpec{sid: sid, model: model, prompt: prompt, cwd: getString(wait, "cwd"), mode: launchMode, permissionMode: getString(wait, "permissionMode"), configDir: relaunchConfigDir(wait)}) {
 		journal(sid, "resume", "launch-failed", model, nil)
 		notify(cfg, pluginName, T("launch.failed", shortSid(sid), sid))
 		fail("runner %s: automatic relaunch failed; resume manually with claude --resume %s", sid, sid)
@@ -775,6 +865,7 @@ func runSleeper() {
 	cfg := loadConfig()
 	watch := newWaitWatch(cfg, sid, false)
 	watch.pollEvery = earlyResetPollSeconds(cfg)
+	watch.relaunch = true
 	if !currentHost().limits {
 		watch.pollEvery = 0
 	}
@@ -792,13 +883,19 @@ func runSleeper() {
 	if watch.early {
 		journal(sid, "sleeper", "early-reset", "window cleared ahead of schedule", nil)
 		logInfo("sleeper %s: window cleared ahead of schedule; resuming now", sid)
-		runResume()
+		resumeWait(sid, "reset")
+		return
+	}
+	if watch.dataBack {
+		journal(sid, "sleeper", "data-back", "fresh usage data shows room", nil)
+		logInfo("sleeper %s: fresh usage data shows room; resuming now", sid)
+		resumeWait(sid, "data")
 		return
 	}
 	if watching {
 		return
 	}
-	runResume()
+	resumeWait(sid, "")
 }
 
 func retryDelaySeconds(cfg object, attempt int) float64 {

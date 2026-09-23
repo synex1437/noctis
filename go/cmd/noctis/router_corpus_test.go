@@ -1,6 +1,14 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+)
 
 type routerCase struct {
 	kind   string
@@ -60,6 +68,37 @@ var routerCorpus = []routerCase{
 	{"code", "optimize the image loading on the home page"},
 	{"code", "research the best approach to implement caching in our api"},
 	{"code", "look into the best way to migrate our database to postgres"},
+	{"code", "look at https://github.com/org/repo/pull/34 and tell me what you think"},
+	{"code", "why does http://localhost:8080/api/users return 500"},
+	{"code", "http://127.0.0.1:3000/login sayfası boş geliyor"},
+	{"code", "https://github.com/org/repo/blob/main/src/auth.js neden böyle yazılmış"},
+	{"code", "check https://github.com/foo/bar/actions/runs/123 and tell me why it failed"},
+	{"code", "https://gitlab.com/team/app/-/merge_requests/9 üzerinde ne değişmiş"},
+	{"code", "http://[::1]:3000/login sayfası boş geliyor"},
+	{"code", "http://[::1]/login sayfası boş geliyor"},
+	{"code", "the dashboard stays blank at http://localhost:5173, why"},
+	{"code", "phpmyadmin never opens at http://localhost."},
+	{"code", "http://127.0.0.1/admin boş sayfa veriyor"},
+	{"code", "why is http://0.0.0.0/ blank in the browser"},
+	{"code", "https://bitbucket.org/team/app/pull-requests/12 bu değişiklik ne yapıyor"},
+	{"code", "https://bitbucket.org/team/app/src/main/app.py neden böyle yazılmış"},
+	{"code", "https://bitbucket.org/team/app/pipelines/results/41 neden kırmızı"},
+	{"code", "https://github.com/org/repo/blame/main/lib/auth.js bu satırı kim değiştirmiş"},
+	{"code", "https://github.com/org/repo/runs/987 neden kırmızı"},
+	{"code", "what is going on in https://github.com/org/repo/issues."},
+	{"code", "www.github.com/org/repo/pull/34 neden kapatıldı"},
+	{"code", "http://192.168.1.20:8080/ açılmıyor neden"},
+	{"code", "http://host.docker.internal:3000 cevap vermiyor"},
+	{"code", "http://my_api:8080/health 503 dönüyor neden"},
+	{"code", "http://localhost:3000が真っ白になる"},
+	{"code", "https://github.com/org/repo/pull/34の変更を説明して"},
+	{"code", "http://[::]:8080 açılmıyor neden"},
+	{"code", "http://[::]/ boş sayfa veriyor"},
+	{"code", "http://[0:0:0:0:0:0:0:1]/login sayfası boş geliyor"},
+	{"code", "http://[fe80::1]:3000/ neden bağlanmıyor"},
+	{"code", "https://git.company.com/team/app/-/merge_requests/9 üzerinde ne değişmiş"},
+	{"code", "https://gitlab.example.org/group/sub/app/-/jobs/456 neden kırmızı"},
+	{"code", "https://octo.ghe.com/org/repo/pull/34 bu değişiklik ne yapıyor"},
 	{"neutral", "devam et"},
 	{"neutral", "continue"},
 	{"neutral", "evet lütfen"},
@@ -108,6 +147,35 @@ func TestACodeWordDoesNotPinResearchToTheExpensiveModelInAColdSession(t *testing
 	}
 }
 
+func TestALinkToWebContentStillRoutesAsResearch(t *testing.T) {
+	cfg := object{"router": object{"enabled": true}}
+	for _, prompt := range []string{
+		"https://example.com/whitepaper.pdf bunu özetle ve ana fikirleri çıkar",
+		"summarize this long article for me: https://news.example.org/a/b",
+		"Şu yazıyı özetle https://example.com/a/b.html",
+		"http://localhost.example.com/guide bunu özetle",
+		"summarize this talk for me https://example.com?t=10:30",
+		"https://github.com/awesome/treesitter-list bunu özetle",
+		"https://github.com/org/repo/wiki/Treehouse-Guide bunu özetle",
+		"https://github.com/features/actions neler sunuyor",
+		"https://news.example.jpの記事を10:30までに要約して",
+		"https://example.cn的文章在10:30前总结一下",
+		"https://example.com\u3000の記事を10:30までに要約して",
+		"https://example.com,10:30 bunu özetle lütfen",
+		"「https://example.jp」の記事を10:30までに要約して",
+		"https://github.com/org/repoのスター数/issues数の推移を調べて",
+		"https://github.com/org/repo的star数/issues数趋势帮我查一下",
+		"https://www.example.gov/web/guest/-/jobs/ bu ilanları özetle",
+	} {
+		if result := classifyPrompt(cfg, nil, prompt, "", nowSec()); !result.route || result.reason != "url" {
+			t.Errorf("a link to web content no longer routes as research (%s): %q", result.reason, prompt)
+		}
+	}
+	if result := classifyPrompt(cfg, nil, "lite: https://github.com/org/repo/pull/34 bunu özetle", "", nowSec()); !result.route || result.reason != "forced" {
+		t.Errorf("lite: no longer forces a pull request link to the lite agent (%s)", result.reason)
+	}
+}
+
 func TestTheWritingSignalNeverBeatsACodeWord(t *testing.T) {
 	cfg := object{"router": object{"enabled": true}}
 	for _, prompt := range []string{
@@ -118,5 +186,139 @@ func TestTheWritingSignalNeverBeatsACodeWord(t *testing.T) {
 		if classifyPrompt(cfg, nil, prompt, "", nowSec()).route {
 			t.Errorf("a writing word pulled a coding prompt away from the main model: %q", prompt)
 		}
+	}
+}
+
+func sessionTurn(kind string, at int64, blocks ...object) object {
+	content := make([]any, 0, len(blocks))
+	for _, block := range blocks {
+		content = append(content, block)
+	}
+	return object{"type": kind, "timestamp": time.Unix(at, 0).UTC().Format("2006-01-02T15:04:05.000Z"), "message": object{"role": kind, "content": content}}
+}
+
+func sessionTranscript(t *testing.T, turns ...object) string {
+	t.Helper()
+	var body strings.Builder
+	for _, turn := range turns {
+		line, err := json.Marshal(turn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body.Write(line)
+		body.WriteByte('\n')
+	}
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	if err := os.WriteFile(path, []byte(body.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func editTurns(at int64) []object {
+	return []object{
+		sessionTurn("assistant", at, object{"type": "tool_use", "id": "toolu_edit", "name": "Edit", "input": object{"file_path": "/work/app/worker.go", "old_string": "sync.Mutex", "new_string": "chan struct{}"}}),
+		sessionTurn("user", at+1, object{"type": "tool_result", "tool_use_id": "toolu_edit", "content": "The file /work/app/worker.go has been updated."}),
+	}
+}
+
+func longThinking(at int64) object {
+	return sessionTurn("assistant", at, object{"type": "thinking", "thinking": strings.Repeat("weighing the mutex against a channel for the worker pool. ", 1300)})
+}
+
+var promptsThatNeedTheSessionsCode = []string{
+	"compare these two functions and tell me which one is faster",
+	"what is the best way to handle errors in this codebase",
+	"investigate the memory leak in the worker",
+}
+
+func TestALargeTranscriptLineDoesNotMakeACodingSessionLookCold(t *testing.T) {
+	now := nowSec()
+	turns := []object{sessionTurn("user", now-600, object{"type": "text", "text": "the worker pool stalls under load, make it faster"})}
+	turns = append(turns, editTurns(now-180)...)
+	turns = append(turns, longThinking(now-120), sessionTurn("assistant", now-60, object{"type": "text", "text": "The pool now hands work over a channel."}))
+	path := sessionTranscript(t, turns...)
+	if info, err := os.Stat(path); err != nil || info.Size() <= codingTailBytes {
+		t.Fatalf("the fixture must be larger than the %d byte tail (%v)", codingTailBytes, err)
+	}
+	if !recentCodingActivity(path, now) {
+		t.Error("an Edit three minutes ago was missed because a long thinking block came after it")
+	}
+	cfg := object{"router": object{"enabled": true}}
+	for _, prompt := range promptsThatNeedTheSessionsCode {
+		if result := classifyPrompt(cfg, nil, prompt, path, now); result.route {
+			t.Errorf("a question about the code being edited went to the lite agent (%s/%s): %q", result.reason, result.signal, prompt)
+		}
+	}
+}
+
+func TestCodingHiddenPastTheLargestTailStillCountsAsCoding(t *testing.T) {
+	now := nowSec()
+	turns := []object{sessionTurn("user", now-900, object{"type": "text", "text": "the worker pool stalls under load, make it faster"})}
+	turns = append(turns, editTurns(now-800)...)
+	for i := int64(0); i < 20; i++ {
+		turns = append(turns, longThinking(now-700+i*30))
+	}
+	path := sessionTranscript(t, turns...)
+	if info, err := os.Stat(path); err != nil || info.Size() <= codingTailMaxBytes {
+		t.Fatalf("the fixture must be larger than the whole scan budget (%v)", err)
+	}
+	if !recentCodingActivity(path, now) {
+		t.Error("a session whose last 45 minutes do not fit the scan was read as one that touched no file")
+	}
+}
+
+func TestASessionThatStoppedCodingLongAgoStillRoutesResearch(t *testing.T) {
+	now := nowSec()
+	cfg := object{"router": object{"enabled": true}}
+	turns := []object{sessionTurn("user", now-3300, object{"type": "text", "text": "the worker pool stalls under load, make it faster"})}
+	turns = append(turns, editTurns(now-3000)...)
+	turns = append(turns, longThinking(now-120), sessionTurn("assistant", now-60, object{"type": "text", "text": "Here is the history you asked about."}))
+	stale := sessionTranscript(t, turns...)
+	if recentCodingActivity(stale, now) {
+		t.Error("an Edit fifty minutes ago, behind a long thinking block, still counted as coding")
+	}
+	if result := classifyPrompt(cfg, nil, "Investigate the history of the Ottoman navy", stale, now); !result.route || result.reason != "investigate" {
+		t.Errorf("research in a session that stopped coding long ago stayed on the main model (%s)", result.reason)
+	}
+	var old []object
+	for i := int64(0); i < 20; i++ {
+		old = append(old, longThinking(now-7200+i*30))
+	}
+	if long := sessionTranscript(t, append(old, sessionTurn("assistant", now-3600, object{"type": "text", "text": "Done for today."}))...); recentCodingActivity(long, now) {
+		t.Error("a long transcript that went quiet an hour ago counted as coding")
+	}
+	quiet := sessionTranscript(t, sessionTurn("user", now-30, object{"type": "text", "text": "merhaba"}))
+	if recentCodingActivity(quiet, now) {
+		t.Error("a transcript with no tool call at all counted as coding")
+	}
+}
+
+func TestATranscriptThatCannotBeReadCountsAsCodingButAMissingOneDoesNot(t *testing.T) {
+	sandboxFiles(t)
+	dir := t.TempDir()
+	if recentCodingActivity(filepath.Join(dir, "absent.jsonl"), nowSec()) {
+		t.Error("a transcript that does not exist yet counted as coding")
+	}
+	if !recentCodingActivity(dir, nowSec()) {
+		t.Error("a transcript path that cannot be read as a file counted as a session that touched no file")
+	}
+}
+
+func TestATranscriptWithoutReadPermissionCountsAsCoding(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("file modes do not stop this user from reading")
+	}
+	sandboxFiles(t)
+	now := nowSec()
+	path := sessionTranscript(t, sessionTurn("assistant", now-3600, object{"type": "text", "text": "Done for today."}))
+	if recentCodingActivity(path, now) {
+		t.Fatal("the readable fixture must read as a cold session")
+	}
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+	if !recentCodingActivity(path, now) {
+		t.Error("a transcript this user may not read counted as a session that touched no file")
 	}
 }

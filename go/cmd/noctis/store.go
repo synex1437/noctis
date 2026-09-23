@@ -17,6 +17,7 @@ import (
 const (
 	pluginName              = "noctis"
 	handoffEnv              = "NOCTIS_HANDOFF"
+	claudeConfigEnv         = "CLAUDE_CONFIG_DIR"
 	tailLineWindowBytes     = 64 * 1024
 	logMaxBytes             = 512 * 1024
 	transcriptTailBytes     = 256 * 1024
@@ -54,7 +55,8 @@ const (
 	nearEdgePollClose       = 15
 	blindAfterSeconds       = 60
 	fetchTimeout            = 5 * time.Second
-	pluginVersion           = "5.5.5"
+	appServerExitGrace      = time.Second
+	pluginVersion           = "7.0.0"
 	codingActivityWindow    = 45 * 60
 	codingTailBytes         = 64 * 1024
 	longTextSummaryChars    = 1200
@@ -142,22 +144,31 @@ var (
 type parsedArgs struct {
 	positional []string
 	flags      map[string]string
+	values     map[string][]string
 	present    map[string]bool
 }
 
+var switchFlags = map[string]bool{"help": true, "h": true, "json": true, "skip-task": true, "watch": true, "uninstall": true, "no-model": true, "no-ask": true}
+
 func parseArgs(argv []string) parsedArgs {
-	out := parsedArgs{flags: map[string]string{}, present: map[string]bool{}}
+	out := parsedArgs{flags: map[string]string{}, values: map[string][]string{}, present: map[string]bool{}}
 	for i := 0; i < len(argv); i++ {
 		arg := argv[i]
 		if !strings.HasPrefix(arg, "--") {
 			out.positional = append(out.positional, arg)
 			continue
 		}
-		name := arg[2:]
+		name, value, given := strings.Cut(arg[2:], "=")
 		out.present[name] = true
-		if i+1 < len(argv) && !strings.HasPrefix(argv[i+1], "--") {
-			out.flags[name] = argv[i+1]
+		if !given && !switchFlags[name] && i+1 < len(argv) && !strings.HasPrefix(argv[i+1], "--") {
+			value, given = argv[i+1], true
 			i++
+		}
+		if given {
+			out.flags[name] = value
+		}
+		if given || !switchFlags[name] {
+			out.values[name] = append(out.values[name], value)
 		}
 	}
 	return out
@@ -165,6 +176,15 @@ func parseArgs(argv []string) parsedArgs {
 
 func flagString(name string) string {
 	return args.flags[name]
+}
+
+func firstFlagValue(name string) string {
+	for _, value := range args.values[name] {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func positional(index int) string {
@@ -220,7 +240,10 @@ func initPaths() {
 		executable = resolved
 	}
 	pluginRoot := resolvePluginRoot(executable)
-	configDir := flagString("account")
+	configDir := expandHome(flagString("account"))
+	if configDir == "" {
+		configDir = expandHome(firstFlagValue("config-dir"))
+	}
 	if configDir == "" {
 		if host := hostFromArgs(); host != "" && host != "claude" {
 			configDir = hostHome(host)

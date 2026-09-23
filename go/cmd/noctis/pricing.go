@@ -17,6 +17,7 @@ var builtinPrices = []struct {
 	{"mythos-5-1", modelPrice{10, 50, 12.5, 0.25}},
 	{"fable-5", modelPrice{10, 50, 12.5, 1}},
 	{"mythos-5", modelPrice{10, 50, 12.5, 1}},
+	{"opus-5-5", modelPrice{4, 20, 5, 0.2}},
 	{"opus-5", modelPrice{5, 25, 6.25, 0.5}},
 	{"opus-4-8", modelPrice{5, 25, 6.25, 0.5}},
 	{"opus-4-7", modelPrice{5, 25, 6.25, 0.5}},

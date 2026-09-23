@@ -19,10 +19,37 @@ var frontmatterLine = lazyRegexp(`(?m)^(model|effort):[^\n]*\n`)
 
 var roleProfiles = map[string]object{
 	"noctis": {
+		"code":     object{"model": "opus", "effort": "max"},
+		"research": object{"model": "opus", "effort": "xhigh"},
+		"planning": object{"model": "opus"},
+		"digest":   object{"model": "haiku"},
+		"explore":  object{"model": "haiku"},
+		"fallback": object{"model": "opus", "effort": "max"},
+	},
+	"balanced": {
+		"code":     object{"model": "opus", "effort": "high"},
+		"research": object{"model": "opus", "effort": "medium"},
+		"planning": object{"model": "opus"},
+		"digest":   object{"model": "haiku"},
+		"explore":  object{"model": "haiku"},
+		"fallback": object{"model": "opus", "effort": "high"},
+	},
+	"economy": {
+		"code":     object{"model": "opus", "effort": "low"},
+		"research": object{"model": "sonnet", "effort": "high"},
+		"planning": object{"model": "opus"},
+		"digest":   object{"model": "haiku"},
+		"explore":  object{"model": "haiku"},
+		"fallback": object{"model": "opus", "effort": "low"},
+	},
+}
+
+var retiredProfiles = map[string]object{
+	"noctis": {
 		"code":     object{"model": "fable", "effort": "max"},
 		"research": object{"model": "opus", "effort": "xhigh"},
 		"planning": object{"model": "fable"},
-		"digest":   object{"model": "haiku", "effort": "high"},
+		"digest":   object{"model": "haiku"},
 		"explore":  object{"model": "haiku"},
 		"fallback": object{"model": "opus", "effort": "max"},
 	},
@@ -30,35 +57,57 @@ var roleProfiles = map[string]object{
 		"code":     object{"model": "opus", "effort": "high"},
 		"research": object{"model": "sonnet", "effort": "high"},
 		"planning": object{"model": "opus"},
-		"digest":   object{"model": "haiku", "effort": "medium"},
+		"digest":   object{"model": "haiku"},
 		"explore":  object{"model": "haiku"},
 		"fallback": object{"model": "sonnet"},
 	},
 	"economy": {
 		"code":     object{"model": "sonnet", "effort": "high"},
-		"research": object{"model": "haiku", "effort": "high"},
+		"research": object{"model": "haiku"},
 		"planning": object{"model": "opus"},
-		"digest":   object{"model": "haiku", "effort": "low"},
+		"digest":   object{"model": "haiku"},
 		"explore":  object{"model": "haiku"},
 		"fallback": object{"model": "haiku"},
 	},
 }
 
+func modelTakesEffort(model string) bool {
+	return modelFamily(model) != "haiku"
+}
+
+func appliedEffort(role string, spec object) string {
+	if effortlessRoles[role] || !modelTakesEffort(getString(spec, "model")) {
+		return ""
+	}
+	return getString(spec, "effort")
+}
+
+func roleFlagError(role, value string) error {
+	parts := strings.SplitN(strings.TrimSpace(value), ":", 2)
+	if strings.TrimSpace(parts[0]) == "" {
+		return errors.New(T("roles.badValue", role, value))
+	}
+	if len(parts) == 2 && !validEfforts[strings.ToLower(strings.TrimSpace(parts[1]))] {
+		return errors.New(T("roles.badEffort", role, parts[1]))
+	}
+	return nil
+}
+
 func parseRoleFlag(role, value string) (object, error) {
+	if err := roleFlagError(role, value); err != nil {
+		return nil, err
+	}
 	parts := strings.SplitN(strings.TrimSpace(value), ":", 2)
 	model := strings.TrimSpace(parts[0])
-	if model == "" {
-		return nil, errors.New(T("roles.badValue", role, value))
-	}
 	spec := object{"model": model}
 	if len(parts) == 2 {
 		effort := strings.ToLower(strings.TrimSpace(parts[1]))
-		if !validEfforts[effort] {
-			return nil, errors.New(T("roles.badEffort", role, parts[1]))
-		}
-		if effortlessRoles[role] {
+		switch {
+		case effortlessRoles[role]:
 			fmt.Println("  " + T("roles.effortIgnored", T("roles."+role), effort))
-		} else {
+		case !modelTakesEffort(model):
+			fmt.Println("  " + T("roles.modelNoEffort", T("roles."+role), model, effort))
+		default:
 			spec["effort"] = effort
 		}
 	}
@@ -184,22 +233,20 @@ func withEffort(model, effort string) object {
 func sameRoles(a, b object) bool {
 	for _, role := range roleNames {
 		left, right := getMap(a, role), getMap(b, role)
-		if getString(left, "model") != getString(right, "model") || getString(left, "effort") != getString(right, "effort") {
+		if getString(left, "model") != getString(right, "model") || appliedEffort(role, left) != appliedEffort(role, right) {
 			return false
 		}
 	}
 	return true
 }
 
-func stdinIsTerminal() bool {
-	info, err := os.Stdin.Stat()
-	if err != nil || info.Mode()&os.ModeCharDevice == 0 {
-		return false
+func retunedProfile(roles object) string {
+	name := profileAlias(strings.ToLower(getString(roles, "profile")))
+	earlier, known := retiredProfiles[name]
+	if !known || !sameRoles(earlier, roles) || sameRoles(roleProfiles[name], roles) {
+		return ""
 	}
-	if devNull, err := os.Stat(os.DevNull); err == nil && os.SameFile(info, devNull) {
-		return false
-	}
-	return true
+	return name
 }
 
 func applyRoles(configFile string, config object, roles object) {
@@ -212,11 +259,9 @@ func applyRoles(configFile string, config object, roles object) {
 	if fallback := getMap(roles, "fallback"); fallback != nil {
 		models["fallback"] = orDefault(getString(fallback, "model"), getString(models, "fallback"))
 	}
-	if family := modelFamily(getString(models, "primary")); family != "" {
-
-		models["scopedPattern"] = family
-		models["scopedLabel"] = strings.ToUpper(family[:1]) + family[1:]
-	}
+	family := scopedFamily(getString(models, "primary"))
+	models["scopedPattern"] = family
+	models["scopedLabel"] = strings.ToUpper(family[:1]) + family[1:]
 	config["models"] = models
 	router := section(config, "router")
 	pinned := getMap(router, "subagentModels")
@@ -244,7 +289,14 @@ func modelFamily(model string) string {
 	return ""
 }
 
-func describeRoles(roles object) string {
+func scopedFamily(model string) string {
+	if family := modelFamily(model); family == "fable" || family == "mythos" {
+		return family
+	}
+	return "fable"
+}
+
+func roleSummary(roles object, label func(string) string) string {
 	parts := []string{}
 	for _, role := range roleNames {
 		spec := getMap(roles, role)
@@ -252,12 +304,20 @@ func describeRoles(roles object) string {
 			continue
 		}
 		text := getString(spec, "model")
-		if effort := getString(spec, "effort"); effort != "" {
+		if effort := appliedEffort(role, spec); effort != "" {
 			text += "/" + effort
 		}
-		parts = append(parts, T("roles."+role)+"="+text)
+		parts = append(parts, label(role)+"="+text)
 	}
-	return orDefault(getString(roles, "profile"), "custom") + ": " + strings.Join(parts, " · ")
+	return strings.Join(parts, " · ")
+}
+
+func describeRoles(roles object) string {
+	return orDefault(getString(roles, "profile"), "custom") + ": " + roleSummary(roles, func(role string) string { return T("roles." + role) })
+}
+
+func retunedNotice(profile string) string {
+	return T("roles.retuned", profile, pluginVersion, roleSummary(roleProfiles[profile], func(role string) string { return role }), profile)
 }
 
 func syncAgentFiles(pluginRoot string, roles object) int {
@@ -284,7 +344,7 @@ func syncAgentFiles(pluginRoot string, roles object) int {
 		rest := text[4+end+1:]
 		stripped := frontmatterLine.ReplaceAllString(front, "")
 		lines := "model: " + getString(spec, "model") + "\n"
-		if effort := getString(spec, "effort"); effort != "" {
+		if effort := appliedEffort(role, spec); effort != "" {
 			lines += "effort: " + effort + "\n"
 		}
 		next := strings.TrimSuffix(stripped, "\n") + "\n" + lines + rest

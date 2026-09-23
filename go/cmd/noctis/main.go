@@ -90,7 +90,7 @@ func main() {
 		}
 	}()
 	args = parseArgs(os.Args[1:])
-	if args.present["help"] || args.present["h"] || positional(0) == "help" {
+	if helpAsked() {
 		initPaths()
 		setLocale(loadConfig())
 		runHelp()
@@ -102,10 +102,30 @@ func main() {
 	setLocale(cfg)
 	setMode(cfg)
 	command = dispatchCommand()
-	if run, ok := ported[command]; ok {
-		run()
-		return
+	run, ok := ported[command]
+	if !ok {
+		fmt.Fprintln(os.Stderr, T("unknownCommand", command, strings.Join(sortedKeys(ported), ", ")))
+		os.Exit(1)
 	}
-	fmt.Fprintln(os.Stderr, T("unknownCommand", command, strings.Join(sortedKeys(ported), ", ")))
-	os.Exit(1)
+	if host := unknownHost(); host != "" && !startedByHost[command] {
+		fmt.Fprintln(os.Stderr, T("host.unknown", host))
+		fmt.Fprintln(os.Stderr, T("host.choices"))
+		fmt.Fprintln(os.Stderr, describeHostIDs())
+		os.Exit(2)
+	}
+	run()
+}
+
+var startedByHost = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "ensure": true, "release-check": true, "webhook": true, "selftest-mark": true, "state-write": true}
+
+func helpAsked() bool {
+	if args.present["help"] || args.present["h"] || positional(0) == "help" {
+		return true
+	}
+	for _, word := range args.positional {
+		if word == "-h" || word == "-help" {
+			return true
+		}
+	}
+	return false
 }

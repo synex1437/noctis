@@ -1,10 +1,20 @@
 #!/bin/sh
-# Fallback launcher shipped in the repo so exec-form hooks work right after a marketplace install.
-# The first `noctis ensure` / `noctis setup` run replaces this file with the real bin/<os>-<arch>/noctis.
-root=$(cd "$(dirname "$0")/.." && pwd)
-case "$(uname -s)" in Darwin) os=darwin ;; *) os=linux ;; esac
-case "$(uname -m)" in arm64|aarch64) arch=arm64 ;; *) arch=amd64 ;; esac
-binary="$root/bin/$os-$arch/noctis"
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ext=
+case "$(uname -s)" in
+  Darwin) os=darwin ;;
+  MINGW*|MSYS*|CYGWIN*) os=windows ext=.exe ;;
+  *) os=linux ;;
+esac
+case "$(uname -m)" in
+  x86_64|amd64) arch=amd64 ;;
+  arm64|aarch64) arch=arm64 ;;
+  *) echo "noctis: no build for this CPU ($(uname -m)); builds exist for amd64 and arm64" >&2; exit 1 ;;
+esac
+binary="$root/bin/$os-$arch/noctis$ext"
+if [ ! -f "$binary" ] && [ "$os" = windows ] && [ -f "$root/bin/noctis.exe" ]; then
+  binary="$root/bin/noctis.exe"
+fi
 if [ ! -f "$binary" ]; then
   echo "noctis: no binary for $os-$arch at $binary" >&2
   exit 1

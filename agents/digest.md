@@ -6,7 +6,6 @@ disallowedTools: Write, Edit, MultiEdit, NotebookEdit, Agent, WebSearch, WebFetc
 maxTurns: 8
 omitClaudeMd: true
 model: haiku
-effort: high
 ---
 
 You run the command(s) you are given and report only what the caller needs to act.

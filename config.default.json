@@ -14,7 +14,7 @@
   "roles": {
     "profile": "noctis",
     "code": {
-      "model": "fable",
+      "model": "opus",
       "effort": "max"
     },
     "research": {
@@ -22,11 +22,10 @@
       "effort": "xhigh"
     },
     "planning": {
-      "model": "fable"
+      "model": "opus"
     },
     "digest": {
-      "model": "haiku",
-      "effort": "high"
+      "model": "haiku"
     },
     "explore": {
       "model": "haiku"
@@ -37,7 +36,7 @@
     }
   },
   "models": {
-    "primary": "fable",
+    "primary": "opus",
     "fallback": "opus",
     "effort": "max",
     "scopedPattern": "fable",
@@ -52,7 +51,7 @@
     "digestAgent": "digest",
     "subagentModels": {
       "Explore": "haiku",
-      "Plan": "fable"
+      "Plan": "opus"
     }
   },
   "fable": {

@@ -70,6 +70,7 @@ if (argv[0] === 'bootstrap' || argv[0] === 'load') {
     stdio: 'ignore',
     env: {
       ...process.env,
+      XPC_SERVICE_NAME: plist.label,
       NOCTIS_STUB_UNIT: plist.label,
       NOCTIS_STUB_FIRE_AT: String(fireAt),
       NOCTIS_STUB_COMMAND: JSON.stringify(plist.args),
@@ -80,15 +81,29 @@ if (argv[0] === 'bootstrap' || argv[0] === 'load') {
   process.exit(0);
 }
 
+function stopJob(unit) {
+  record({ kind: 'stop', unit });
+  const running = fs.readFileSync(log, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line))
+    .filter((entry) => entry.kind === 'fire' && entry.unit === unit && entry.pid);
+  for (const entry of running) {
+    record({ kind: 'terminate', unit, pid: entry.pid });
+    try {
+      process.kill(-entry.pid, 'SIGTERM');
+    } catch (error) {
+      record({ kind: 'terminate-failed', unit, pid: entry.pid, why: error.code });
+    }
+  }
+}
+
 if (argv[0] === 'bootout') {
   const target = String(argv[1] || '');
-  record({ kind: 'stop', unit: target.slice(target.lastIndexOf('/') + 1) });
+  stopJob(target.slice(target.lastIndexOf('/') + 1));
   process.exit(0);
 }
 
 if (argv[0] === 'unload') {
   const plistPath = String(argv[argv.length - 1] || '');
-  record({ kind: 'stop', unit: path.basename(plistPath, '.plist') });
+  stopJob(path.basename(plistPath, '.plist'));
   process.exit(0);
 }
 

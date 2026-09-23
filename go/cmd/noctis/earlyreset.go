@@ -12,6 +12,7 @@ const (
 	sleepFarTickSeconds = 60
 	earlyResetDrop      = 10
 	earlyResetMaxAgeMul = 2
+	pauseSettleSeconds  = 60
 )
 
 func earlyResetPollSeconds(cfg object) float64 {
@@ -49,7 +50,32 @@ func windowClearedAt(usage usageView, windowKey string, threshold, startedAt, ma
 	return win.used <= threshold-earlyResetDrop
 }
 
-func earlyResetSeen(cfg object, record object, poll bool) bool {
+func dataPause(record object) bool {
+	hit := getString(record, "hit")
+	return hit == "blind" || hit == "projection"
+}
+
+func quietSincePause(record object) bool {
+	info := statSafe(getString(record, "transcript"))
+	return info != nil && float64(info.ModTime().UnixMilli())/1000 <= numberOr(record, "startedAt", 0)+pauseSettleSeconds
+}
+
+func roomReported(cfg object, sid string, record object, usage usageView, now int64) bool {
+	win := usage.byKey(getString(record, "window"))
+	if win == nil || win.reportedAt < numberOr(record, "startedAt", float64(now)) || float64(now)-win.reportedAt > blindAfterSeconds {
+		return false
+	}
+	state := readState()
+	usageFile := readJSON(files.usage)
+	context, hasContext := getNumber(getMap(getMap(usageFile, "sessions"), sid), "context")
+	if evaluate(cfg, usage, resolveSessionModel(cfg, state, usageFile, sid), context, hasContext).wait != nil {
+		return false
+	}
+	_, _, over := dailyBudgetStatus(cfg, state, usage, now)
+	return !over || !getBool(section(cfg, "budget"), "hardStop", false)
+}
+
+func earlyRelease(cfg object, sid string, record object, poll, relaunch bool) string {
 	now := nowSec()
 	pollEvery := earlyResetPollSeconds(cfg)
 	if poll && pollEvery > 0 && currentHost().limits {
@@ -63,7 +89,15 @@ func earlyResetSeen(cfg object, record object, poll bool) bool {
 	if pollEvery > 0 {
 		maxAge = pollEvery*earlyResetMaxAgeMul + 60
 	}
-	return windowClearedAt(currentUsage(now), getString(record, "window"), threshold, numberOr(record, "startedAt", float64(now)), maxAge, numberOr(record, "until", 0))
+	usage := currentUsage(now)
+	reference := math.Min(threshold, numberOr(record, "used", threshold))
+	if windowClearedAt(usage, getString(record, "window"), reference, numberOr(record, "startedAt", float64(now)), maxAge, numberOr(record, "until", 0)) {
+		return "reset"
+	}
+	if dataPause(record) && (!relaunch || quietSincePause(record)) && roomReported(cfg, sid, record, usage, now) {
+		return "data"
+	}
+	return ""
 }
 
 func sleepUntil(epoch float64, onTick func() bool) bool {
@@ -118,6 +152,8 @@ type waitWatch struct {
 	startedAt float64
 	cancelled bool
 	early     bool
+	dataBack  bool
+	relaunch  bool
 	heartbeat bool
 }
 
@@ -152,8 +188,12 @@ func (w *waitWatch) tick() bool {
 	if poll {
 		w.lastPoll = now
 	}
-	if earlyResetSeen(w.cfg, record, poll) {
+	switch earlyRelease(w.cfg, w.sid, record, poll, w.relaunch) {
+	case "reset":
 		w.early = true
+		return true
+	case "data":
+		w.dataBack = true
 		return true
 	}
 	return false
@@ -180,10 +220,11 @@ func triggerEarlyResumes(cfg object) {
 		if record == nil || hookSleeping(record) || numberOr(record, "earlyTriggeredAt", 0) > 0 {
 			continue
 		}
-		if getMap(getMap(state, "handedOff"), sid) != nil {
+		if getMap(getMap(state, "handedOff"), sid) != nil && !handoffWatchesEarlierWindow(state, sid, numberOr(record, "startedAt", 0)) {
 			continue
 		}
-		if !earlyResetSeen(cfg, record, false) {
+		reason := earlyRelease(cfg, sid, record, false, true)
+		if reason == "" {
 			continue
 		}
 		claimed := false
@@ -196,8 +237,13 @@ func triggerEarlyResumes(cfg object) {
 		if !claimed {
 			continue
 		}
-		journal(sid, "statusline", "early-reset", getString(record, "label"), nil)
-		logInfo("early reset seen for %s (%s); resuming ahead of schedule", sid, getString(record, "label"))
-		detachedSelf(runnerArgs("resume", sid, files.configDir))
+		if reason == "data" {
+			journal(sid, "statusline", "data-back", getString(record, "label"), nil)
+			logInfo("fresh usage data shows room for %s (%s); resuming ahead of schedule", sid, getString(record, "label"))
+		} else {
+			journal(sid, "statusline", "early-reset", getString(record, "label"), nil)
+			logInfo("early reset seen for %s (%s); resuming ahead of schedule", sid, getString(record, "label"))
+		}
+		detachedSelf(runnerArgs("resume", sid, files.configDir, "--release", reason))
 	}
 }

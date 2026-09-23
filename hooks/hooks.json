@@ -61,7 +61,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "WebSearch|WebFetch|Agent|Task|Workflow|Write|Edit|MultiEdit|NotebookEdit",
+        "matcher": "WebSearch|WebFetch|Agent|Task|Workflow|Write",
         "hooks": [
           {
             "type": "command",

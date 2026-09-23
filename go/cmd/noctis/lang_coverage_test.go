@@ -189,6 +189,22 @@ func TestEveryLanguageIsComplete(t *testing.T) {
 	}
 }
 
+func TestTheWorkspaceNoteStatesFactsInsteadOfOrders(t *testing.T) {
+	orders := map[string]bool{"run": true, "re-read": true, "reread": true, "read": true, "check": true, "stop": true, "continue": true, "do": true, "don't": true, "make": true, "use": true, "please": true, "always": true, "never": true}
+	clauses := regexp.MustCompile(`[.:;,()!]`)
+	for lang, table := range catalogTable() {
+		note := strings.TrimSpace(strings.TrimPrefix(table["workspace.context"], "[noctis]"))
+		if !strings.Contains(note, "git status differs from the checkpoint") {
+			t.Errorf("%s: the workspace note must say what changed, got %q", lang, note)
+		}
+		for _, clause := range clauses.Split(note, -1) {
+			if words := strings.Fields(strings.ToLower(clause)); len(words) > 0 && orders[words[0]] {
+				t.Errorf("%s: the workspace note reaches Claude next to tool results, where text framed as a command can trip its prompt-injection defenses; %q opens a clause with %q", lang, note, words[0])
+			}
+		}
+	}
+}
+
 func catalogTable() map[string]map[string]string {
 	table := map[string]map[string]string{}
 	for lang, entries := range baseTable() {

@@ -7,6 +7,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -15,8 +16,44 @@ func launchdLabel(sid string) string {
 	return "com.synex.noctis." + hashKey(files.configDir+"|"+sid)
 }
 
-func launchdPlist(sid string) string {
-	return filepath.Join(homeDir(), "Library", "LaunchAgents", launchdLabel(sid)+".plist")
+func launchdJobLabel(sid string, at float64) string {
+	label := launchdLabel(sid) + "." + strconv.FormatInt(int64(at), 10)
+	if ownLaunchdJob(label) {
+		label += "." + strconv.Itoa(os.Getpid())
+	}
+	return label
+}
+
+func ownLaunchdJob(label string) bool {
+	return label != "" && os.Getenv("XPC_SERVICE_NAME") == label
+}
+
+func launchdJobOf(sid, label string) bool {
+	suffix, found := strings.CutPrefix(label, launchdLabel(sid))
+	return found && strings.Trim(suffix, ".0123456789") == ""
+}
+
+func launchAgentsDir() string {
+	return filepath.Join(homeDir(), "Library", "LaunchAgents")
+}
+
+func launchdPlist(label string) string {
+	return filepath.Join(launchAgentsDir(), label+".plist")
+}
+
+func launchdJobsOf(sid string) []string {
+	entries, err := os.ReadDir(launchAgentsDir())
+	if err != nil {
+		return nil
+	}
+	labels := []string{}
+	for _, entry := range entries {
+		label, isPlist := strings.CutSuffix(entry.Name(), ".plist")
+		if isPlist && launchdJobOf(sid, label) {
+			labels = append(labels, label)
+		}
+	}
+	return labels
 }
 
 func systemdUnit(sid string) string {
@@ -97,8 +134,10 @@ func scheduleLaunchd(sid string, at float64, commandArgs []string) (object, bool
 	if err != nil {
 		return nil, false
 	}
-	plist := launchdPlistBody(launchdLabel(sid), executable, commandArgs, at, files.guardDir)
-	path := launchdPlist(sid)
+	cancelLaunchdJobs(sid)
+	label := launchdJobLabel(sid, at)
+	plist := launchdPlistBody(label, executable, commandArgs, at, files.guardDir)
+	path := launchdPlist(label)
 	ensureDir(filepath.Dir(path))
 	if err := os.WriteFile(path, []byte(plist), 0o600); err != nil {
 		warn("launchd plist write failed: %v", err)
@@ -112,20 +151,32 @@ func scheduleLaunchd(sid string, at float64, commandArgs []string) (object, bool
 			return nil, false
 		}
 	}
-	return object{"method": "launchd", "label": launchdLabel(sid), "at": at}, true
+	return object{"method": "launchd", "label": label, "at": at}, true
 }
 
-func cancelLaunchd(sid string) {
-	path := launchdPlist(sid)
+func cancelLaunchd(label string) {
+	path := launchdPlist(label)
+	if ownLaunchdJob(label) {
+		if os.Remove(path) == nil {
+			logInfo("launchd job %s is this process: plist removed, job left to finish", label)
+		}
+		return
+	}
 	if statSafe(path) == nil {
 		return
 	}
 	domain := "gui/" + currentUID()
-	if _, err := runScheduler(exec.Command("launchctl", "bootout", domain+"/"+launchdLabel(sid)), 15*time.Second); err != nil {
+	if _, err := runScheduler(exec.Command("launchctl", "bootout", domain+"/"+label), 15*time.Second); err != nil {
 		_, _ = runScheduler(exec.Command("launchctl", "unload", path), 15*time.Second)
 	}
 
 	_ = os.Remove(path)
+}
+
+func cancelLaunchdJobs(sid string) {
+	for _, label := range launchdJobsOf(sid) {
+		cancelLaunchd(label)
+	}
 }
 
 func systemdRunArgs(unit, executable string, commandArgs []string, at float64, wake bool) []string {
@@ -180,7 +231,11 @@ func scheduleNative(backend, sid string, at float64, commandArgs []string, wake 
 func cancelNative(sid string, scheduled object) {
 	switch getString(scheduled, "method") {
 	case "launchd":
-		cancelLaunchd(sid)
+		label := getString(scheduled, "label")
+		if !launchdJobOf(sid, label) {
+			label = launchdLabel(sid)
+		}
+		cancelLaunchd(label)
 	case "systemd":
 		cancelSystemd(sid)
 	}
@@ -206,7 +261,7 @@ func runSchedulePreview() {
 
 	switch backend {
 	case "launchd":
-		fmt.Print(launchdPlistBody(launchdLabel(sid), executable, commandArgs, at, files.guardDir))
+		fmt.Print(launchdPlistBody(launchdJobLabel(sid, at), executable, commandArgs, at, files.guardDir))
 	case "systemd":
 		fmt.Println(strings.Join(append([]string{"systemd-run"},
 			systemdRunArgs(systemdUnit(sid), executable, commandArgs, at, wake)...), " "))

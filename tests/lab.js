@@ -5,13 +5,16 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { spawn, spawnSync } = require('child_process');
-const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, isAlive, refreshChecksums } = require('./harness');
+const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, isAlive, processTable } = require('./harness');
 const PLUGIN_VERSION = readJson(path.join(SOURCE_ROOT, '.claude-plugin', 'plugin.json')).version;
+const REPO_SUMS = path.join(SOURCE_ROOT, 'bin', 'SHA256SUMS');
+const repoSumsAtStart = fingerprint(REPO_SUMS);
 
 const lab = new Lab('noctis-lab');
 const LAB_ROOT = lab.root;
 const PROJECT_DIR = lab.projectDir;
 const TRANSCRIPT = lab.transcript;
+const HOOK_SESSION_MARKERS = { CLAUDECODE: '1', CLAUDE_CODE_SESSION_ID: 'lab-hook-session', CLAUDE_CODE_CHILD_SESSION: '1', CLAUDE_CODE_SESSION_ATTENDED: '1', CLAUDE_PID: String(process.pid) };
 const results = [];
 
 const mock = {
@@ -50,6 +53,14 @@ function canonical(value) {
   return JSON.stringify(value);
 }
 
+function fingerprint(file) {
+  try {
+    return `${fs.statSync(file).mtimeMs} ${fs.readFileSync(file, 'utf8')}`;
+  } catch {
+    return null;
+  }
+}
+
 function callsLog() {
   return lab.calls();
 }
@@ -76,6 +87,11 @@ async function callsMatching(fragment, seconds = 60) {
 async function anyCall(seconds = 60) {
   for (let i = 0; i < seconds * 2 && !callsLog().length; i += 1) await sleep(500);
   return callsLog();
+}
+
+async function webhooksMatching(since, pattern, seconds = 20) {
+  for (let i = 0; i < seconds * 4 && !lab.webhooks().slice(since).some((hook) => pattern.test(hook.body)); i += 1) await sleep(250);
+  return lab.webhooks().slice(since);
 }
 
 async function scenarioBaseline(acc) {
@@ -231,6 +247,37 @@ async function scenarioWorkspaceGuard(acc) {
   acc.statusline('wg2', 'claude-fable-5-1', 93, nowSec() + 3, 23, now + 3 * 86400);
   const quiet = await acc.hookPromise({ hook_event_name: 'UserPromptSubmit', session_id: 'wg2', cwd: repo, transcript_path: TRANSCRIPT, prompt: 'keep going with a.txt' });
   check('workspace guard: silent when nothing changed', !quiet.includes('additionalContext') && quiet.includes('devam ediliyor'), true);
+  const waitThroughAnEdit = async (sid, event, newFile) => {
+    acc.statusline(sid, 'claude-fable-5-1', 93, nowSec() + 3, 23, now + 3 * 86400);
+    const hook = acc.hookAsync({ session_id: sid, cwd: repo, transcript_path: TRANSCRIPT, ...event });
+    let out = '';
+    hook.stdout.on('data', (chunk) => {
+      out += chunk;
+    });
+    const closed = new Promise((resolve) => hook.on('close', resolve));
+    await waitRecord(acc, sid);
+    fs.writeFileSync(path.join(repo, newFile), 'appeared while it waited\n');
+    await closed;
+    try {
+      return JSON.parse(out);
+    } catch {
+      return {};
+    }
+  };
+  const batch = await waitThroughAnEdit('wg4', { hook_event_name: 'PostToolBatch' }, 'b.txt');
+  const batchSpecific = batch.hookSpecificOutput || {};
+  check('workspace guard: PostToolBatch tells the user', String(batch.systemMessage).includes('çalışma ağacı değişti'), true);
+  check('workspace guard: PostToolBatch tells the model to re-check', batchSpecific.hookEventName === 'PostToolBatch' && String(batchSpecific.additionalContext).includes('git status differs from the checkpoint'), true);
+  const agent = await waitThroughAnEdit('wg5', { hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: { subagent_type: 'Explore', prompt: 'map a.txt' } }, 'c.txt');
+  const agentSpecific = agent.hookSpecificOutput || {};
+  check('workspace guard: an Agent spawn after the wait keeps its model pin and tells the model to re-check', agentSpecific.permissionDecision === 'allow' && (agentSpecific.updatedInput || {}).model === 'haiku' && String(agentSpecific.additionalContext).includes('git status differs from the checkpoint') && String(agent.systemMessage).includes('çalışma ağacı değişti'), true);
+  fs.writeFileSync(path.join(repo, 'TASKS.md'), '# q\n- [ ] first item\n- [ ] second item\n');
+  acc.run(['queue', 'trust', '--file', path.join(repo, 'TASKS.md')]);
+  const stop = await waitThroughAnEdit('wg6', { hook_event_name: 'Stop', stop_hook_active: false }, 'd.txt');
+  check('workspace guard: Stop tells the user it waited and the tree changed', String(stop.systemMessage).includes('beklendi') && String(stop.systemMessage).includes('çalışma ağacı değişti'), true);
+  check('workspace guard: Stop puts the re-check note in the reason Claude reads, then continues the queue', stop.decision === 'block' && String(stop.reason).includes('git status differs from the checkpoint') && String(stop.reason).includes('Queue continues: 2 open'), true);
+  acc.run(['queue', 'untrust', '--file', path.join(repo, 'TASKS.md')]);
+  for (const file of ['b.txt', 'c.txt', 'd.txt', 'TASKS.md']) fs.rmSync(path.join(repo, file), { force: true });
   acc.setConfig((config) => {
     config.wait.workspaceGuard = false;
   });
@@ -289,13 +336,56 @@ async function scenarioKilledHookRecovery(acc) {
   const old = new Date(Date.now() - 3600000);
   fs.utimesSync(TRANSCRIPT, old, old);
   acc.statusline('s2', 'claude-opus-5', 5, now + 7200, 23, now + 3 * 86400);
-  acc.run(['resume', '--sid', 's2', '--account', acc.dir]);
+  acc.run(['resume', '--sid', 's2', '--account', acc.dir], undefined, HOOK_SESSION_MARKERS);
   const calls = callsLog();
   check('runner relaunched dead session', calls.length, 1);
   check('relaunch keeps account', calls[0] && calls[0].includes(`CONFIG=${acc.dir}`), true);
   check('relaunch marks handoff env', calls[0] && calls[0].includes('HANDOFF=s2'), true);
   check('relaunch effort max', calls[0] && calls[0].includes('--effort max'), true);
+  check('relaunch drops the Claude session markers the runner inherited from the hook', calls[0] && calls[0].includes(' CHILD= '), true);
   check('handoff released', Object.keys(acc.state().handedOff).length, 0);
+}
+
+async function scenarioDefaultInstallRelaunch() {
+  const acc = lab.account('defaultHome', { defaultHome: true });
+  acc.install();
+  acc.fastClaude = true;
+  acc.manualSchedule = true;
+  mock.limits = [];
+  const now = nowSec();
+  const pauseAndRelaunch = (sid, sessionEnv) => {
+    fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
+    acc.run(['statusline'], acc.statuslineInput(sid, 'claude-fable-5-1', 50, now + 7200, 90, now + 2 * 86400), sessionEnv);
+    const stop = acc.hook({ hook_event_name: 'PostToolBatch', session_id: sid, cwd: PROJECT_DIR, transcript_path: TRANSCRIPT }, sessionEnv);
+    const wait = (acc.state().waits || {})[sid];
+    acc.run(['statusline'], acc.statuslineInput(sid, 'claude-fable-5-1', 5, now + 7200, 23, now + 3 * 86400), sessionEnv);
+    resetCalls();
+    acc.run(['resume', '--sid', sid, '--account', acc.dir]);
+    const line = callsLog().find((entry) => entry.includes(`--resume ${sid} `)) || '';
+    const field = (name) => {
+      const found = new RegExp(`(?:^| )${name}=(\\S*)`).exec(line);
+      return found ? found[1] : null;
+    };
+    return {
+      stopped: stop.includes('"continue":false'),
+      recorded: wait ? wait.configDirEnv : 'no wait',
+      handoff: field('HANDOFF'),
+      config: [field('CONFIG_SET'), field('CONFIG')],
+      pending: (acc.state().waits || {})[sid] !== undefined,
+    };
+  };
+  const plain = pauseAndRelaunch('dh1', {});
+  check('default install: the session is paused at the weekly wall', plain.stopped, true);
+  check('default install: the wait records that the session had no CLAUDE_CONFIG_DIR', plain.recorded, '');
+  check('default install: the runner relaunched the session', plain.handoff, 'dh1');
+  check('default install: the relaunch runs without CLAUDE_CONFIG_DIR, like the session did', plain.config, ['', '']);
+  check('default install: the wait is closed after the relaunch', plain.pending, false);
+  const explicit = pauseAndRelaunch('dh2', { CLAUDE_CONFIG_DIR: acc.dir });
+  check('explicit ~/.claude: the wait records the value the session had', explicit.recorded, acc.dir);
+  check('explicit ~/.claude: the relaunch keeps it although the runner has none', explicit.config, ['yes', acc.dir]);
+  acc.run(['cancel']);
+  acc.stopRunners();
+  mock.limits = [];
 }
 
 async function scenarioWeeklyLongWait(acc) {
@@ -693,6 +783,21 @@ async function scenarioQueueMode(acc) {
   check('untrusted queue file is reported instead', untrusted.includes('noctis queue trust'), true);
   const untrustedAgain = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'q0b', cwd: PROJECT_DIR });
   check('and reported again next session, not once a week', untrustedAgain.includes('noctis queue trust'), true);
+  const untrustedStop = acc.hook({ hook_event_name: 'Stop', session_id: 'u0', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
+  check('untrusted queue file does not drive the Stop hook', !untrustedStop.includes('Queue continues') && (acc.state().stopGuard || {}).u0 === undefined, true);
+  acc.statusline('u0', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400);
+  acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'u0', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
+  acc.editState((state) => {
+    state.waits.u0.resumeAt = now - 5;
+    state.waits.u0.until = now - 10;
+  });
+  const aged = new Date(Date.now() - 3600000);
+  fs.utimesSync(TRANSCRIPT, aged, aged);
+  acc.statusline('u0', 'claude-fable-5-1', 5, now + 7200, 10, now + 3 * 86400);
+  resetCalls();
+  acc.run(['resume', '--sid', 'u0', '--account', acc.dir]);
+  const untrustedResume = callsLog().filter((line) => line.includes('--resume u0'));
+  check('untrusted queue file stays out of the relaunch prompt', untrustedResume.length > 0 && untrustedResume.every((line) => !line.includes('Task list:') && !line.includes('Next:')), true);
   acc.run(['queue', 'trust', '--file', queueFile]);
   check('trust is recorded against the file', Object.keys(acc.state().queueTrust || {}).length, 1);
   const startup = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'q1', cwd: PROJECT_DIR });
@@ -822,6 +927,7 @@ async function scenarioQueueContinuation(acc) {
   const queueFile = path.join(PROJECT_DIR, 'TASKS.md');
   const writeQueue = (open) => fs.writeFileSync(queueFile, ['# q', '- [x] done item', ...Array.from({ length: open }, (_, i) => `- [ ] item ${i + 1}`), ''].join('\n'));
   writeQueue(4);
+  acc.run(['queue', 'trust', '--file', queueFile]);
   acc.statusline('qc1', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
   const first = acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
   check('stop blocked while queue has open items', first.includes('"decision":"block"') && first.includes('Queue continues: 4 open') && first.includes('item 1'), true);
@@ -1085,6 +1191,7 @@ async function scenarioSubagentsAndObserve(acc) {
   check('digest agent may run commands', acc.hook({ hook_event_name: 'PreToolUse', session_id: 'sp1', agent_id: 'd1', agent_type: `${PLUGIN_NAME}:digest`, tool_name: 'Bash', tool_input: { command: 'npm test' } }), '');
   const start = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'sp1', cwd: PROJECT_DIR });
   fs.writeFileSync(path.join(PROJECT_DIR, 'TASKS.md'), '# q\n- [ ] item one\n- [ ] item two\n');
+  acc.run(['queue', 'trust', '--file', path.join(PROJECT_DIR, 'TASKS.md')]);
   const queueStart = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'sp1', cwd: PROJECT_DIR });
   check('queue directive mentions the digest agent', queueStart.includes(`${PLUGIN_NAME}:digest`), true);
   check('no queue file -> no digest mention', start.includes('digest'), false);
@@ -1137,6 +1244,17 @@ async function scenarioBudgetWakeWebhook(acc) {
   const notice = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'bd1', cwd: PROJECT_DIR, prompt: 'continue with the parser code' });
   check('daily budget notice once it is exceeded', notice.includes('daily budget reached') && notice.includes('11%'), true);
   check('budget notice not repeated the same day', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'bd1', cwd: PROJECT_DIR, prompt: 'continue with the parser code' }), '');
+  fs.writeFileSync(path.join(PROJECT_DIR, 'TASKS.md'), '# q\n- [ ] first item\n- [ ] second item\n');
+  acc.statusline('bd2', 'claude-fable-5-1', 20, now + 7200, 41, weekReset);
+  const stopNotice = JSON.parse(acc.hook({ hook_event_name: 'Stop', session_id: 'bd2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false }) || '{}');
+  check('a one-time notice that a Stop hook uses up is shown while the queue continues', stopNotice.decision === 'block' && String(stopNotice.systemMessage).includes('daily budget reached') && String(stopNotice.reason).includes('Queue continues: 2 open'), true);
+  const stopAgain = JSON.parse(acc.hook({ hook_event_name: 'Stop', session_id: 'bd2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true }) || '{}');
+  check('the Stop hook does not repeat a notice it already showed', stopAgain.decision === 'block' && stopAgain.systemMessage === undefined, true);
+  fs.rmSync(path.join(PROJECT_DIR, 'TASKS.md'), { force: true });
+  acc.statusline('bd3', 'claude-fable-5-1', 20, now + 7200, 41, weekReset);
+  const spawnNotice = JSON.parse(acc.hook({ hook_event_name: 'PreToolUse', session_id: 'bd3', cwd: PROJECT_DIR, tool_name: 'Agent', tool_input: { subagent_type: 'Explore', prompt: 'find the parser' } }) || '{}');
+  const spawnSpecific = spawnNotice.hookSpecificOutput || {};
+  check('a one-time notice that an Agent spawn uses up is shown and the model pin is kept', String(spawnNotice.systemMessage).includes('daily budget reached') && spawnSpecific.permissionDecision === 'allow' && (spawnSpecific.updatedInput || {}).model === 'haiku', true);
   acc.setConfig((config) => {
     config.budget.hardStop = true;
     config.wait.maxInHookMinutes = 1;
@@ -1280,11 +1398,11 @@ async function scenarioMarketplaceBootstrap(acc) {
   writeJson(path.join(rolesDir, 'settings.json'), {});
   const economy = spawnSync(shipped, ['setup', '--config-dir', rolesDir, '--profile', 'economy'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
   const economyConfig = readJson(path.join(rolesDir, PLUGIN_NAME, 'config.json'));
-  check('roles: profile flag sets the roles and the working keys', economy.status === 0 && economyConfig.roles.profile === 'economy' && economyConfig.models.primary === 'sonnet' && economyConfig.models.effort === 'high' && economyConfig.models.fallback === 'haiku' && economyConfig.router.subagentModels.Plan === 'opus', true);
-  check('roles: settings.json follows the code role', readJson(path.join(rolesDir, 'settings.json')).model === 'sonnet' && readJson(path.join(rolesDir, 'settings.json')).env.CLAUDE_CODE_EFFORT_LEVEL === 'high', true);
+  check('roles: profile flag sets the roles and the working keys', economy.status === 0 && economyConfig.roles.profile === 'economy' && economyConfig.models.primary === 'opus' && economyConfig.models.effort === 'low' && economyConfig.models.fallback === 'opus' && economyConfig.router.subagentModels.Plan === 'opus', true);
+  check('roles: settings.json follows the code role', readJson(path.join(rolesDir, 'settings.json')).model === 'opus' && readJson(path.join(rolesDir, 'settings.json')).env.CLAUDE_CODE_EFFORT_LEVEL === 'low', true);
   const lite = fs.readFileSync(path.join(root, 'agents', 'lite.md'), 'utf8');
   const digest = fs.readFileSync(path.join(root, 'agents', 'digest.md'), 'utf8');
-  check('roles: plugin agents rewritten from the profile', /^model: haiku$/m.test(lite) && /^effort: high$/m.test(lite) && /^effort: low$/m.test(digest) && lite.split('---').length === 3, true);
+  check('roles: plugin agents rewritten from the profile', /^model: sonnet$/m.test(lite) && /^effort: high$/m.test(lite) && /^model: haiku$/m.test(digest) && !/^effort:/m.test(digest) && lite.split('---').length === 3, true);
   check('setup: permissions.defaultMode=auto when the CLI supports it', readJson(path.join(rolesDir, 'settings.json')).permissions.defaultMode === 'auto' && readJson(path.join(rolesDir, PLUGIN_NAME, 'config.json')).managedPermissionMode === 'auto', true);
   const keepDir = path.join(LAB_ROOT, 'keep-account');
   fs.mkdirSync(keepDir, { recursive: true });
@@ -1308,8 +1426,188 @@ async function scenarioMarketplaceBootstrap(acc) {
   const upgraded = spawnSync(shipped, ['setup', '--config-dir', oldDir], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
   const upgradedConfig = readJson(path.join(oldDir, PLUGIN_NAME, 'config.json'));
   check('roles: an older config keeps its models and gets a derived custom profile', upgraded.status === 0 && upgradedConfig.roles.profile === 'custom' && upgradedConfig.roles.code.model === 'opus' && upgradedConfig.roles.code.effort === 'high' && upgradedConfig.models.primary === 'opus' && upgradedConfig.models.fallback === 'sonnet', true);
+  const haikuRun = spawnSync(shipped, ['setup', '--config-dir', rolesDir, '--digest', 'haiku:high'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
+  const haikuConfig = readJson(path.join(rolesDir, PLUGIN_NAME, 'config.json'));
+  check('roles: an effort for a model that takes none is named and not stored', haikuRun.status === 0 && haikuRun.stdout.includes('effort seviyesi almaz') && haikuConfig.roles.digest.model === 'haiku' && haikuConfig.roles.digest.effort === undefined && !/^effort:/m.test(fs.readFileSync(path.join(root, 'agents', 'digest.md'), 'utf8')), true);
   spawnSync(shipped, ['setup', '--config-dir', rolesDir, '--profile', 'noctis'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
-  check('roles: back to noctis restores the agents', /^model: opus$/m.test(fs.readFileSync(path.join(root, 'agents', 'lite.md'), 'utf8')), true);
+  check('roles: back to noctis restores the agents', /^model: opus$/m.test(fs.readFileSync(path.join(root, 'agents', 'lite.md'), 'utf8')) && /^effort: xhigh$/m.test(fs.readFileSync(path.join(root, 'agents', 'lite.md'), 'utf8')) && !/^effort:/m.test(fs.readFileSync(path.join(root, 'agents', 'digest.md'), 'utf8')), true);
+  const switchDir = path.join(LAB_ROOT, 'switch-account');
+  fs.mkdirSync(switchDir, { recursive: true });
+  writeJson(path.join(switchDir, 'settings.json'), {});
+  spawnSync(shipped, ['setup', '--config-dir', switchDir, '--code', 'fable:max', '--fallback', 'opus:max'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
+  const setOnFable = readJson(path.join(switchDir, 'settings.json')).model;
+  spawnSync(shipped, ['setup', '--config-dir', switchDir, '--profile', 'economy'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
+  const afterSwitch = readJson(path.join(switchDir, 'settings.json'));
+  check('roles: a profile switch replaces the model setup itself wrote', setOnFable === 'fable' && afterSwitch.model === 'opus' && afterSwitch.env.CLAUDE_CODE_EFFORT_LEVEL === 'low', true);
+  spawnSync(shipped, ['install', '--source', root, '--config-dir', switchDir, '--uninstall'], { encoding: 'utf8', env });
+  check('uninstall: after a replaced model the person gets back what they had', 'model' in readJson(path.join(switchDir, 'settings.json')), false);
+  const ownDir = path.join(LAB_ROOT, 'own-model-account');
+  fs.mkdirSync(ownDir, { recursive: true });
+  writeJson(path.join(ownDir, 'settings.json'), { model: 'fable' });
+  spawnSync(shipped, ['setup', '--config-dir', ownDir, '--profile', 'economy'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
+  check('roles: a model the person chose themselves is left alone', readJson(path.join(ownDir, 'settings.json')).model, 'fable');
+  const retunedDir = path.join(LAB_ROOT, 'retuned-account');
+  fs.mkdirSync(path.join(retunedDir, PLUGIN_NAME), { recursive: true });
+  writeJson(path.join(retunedDir, 'settings.json'), { model: 'fable', env: { CLAUDE_CODE_EFFORT_LEVEL: 'max' } });
+  writeJson(path.join(retunedDir, PLUGIN_NAME, 'config.json'), {
+    roles: { profile: 'noctis', code: { model: 'fable', effort: 'max' }, research: { model: 'opus', effort: 'xhigh' }, planning: { model: 'fable' }, digest: { model: 'haiku', effort: 'high' }, explore: { model: 'haiku' }, fallback: { model: 'opus', effort: 'max' } },
+    models: { primary: 'fable', fallback: 'opus', effort: 'max' },
+    managedModel: { previous: null, set: 'fable' },
+  });
+  const retunedEnv = { ...env, CLAUDE_CONFIG_DIR: retunedDir, NOCTIS_NO_TASKS: '1' };
+  const namedBefore = spawnSync(shipped, ['status'], { encoding: 'utf8', env: retunedEnv }).stdout;
+  const untouched = readJson(path.join(retunedDir, 'settings.json')).model;
+  spawnSync(shipped, ['setup', '--config-dir', retunedDir, '--profile', 'noctis'], { encoding: 'utf8', env: retunedEnv });
+  const namedAfter = spawnSync(shipped, ['status'], { encoding: 'utf8', env: retunedEnv }).stdout;
+  const adopted = readJson(path.join(retunedDir, 'settings.json'));
+  check('roles: an earlier noctis assignment is named, not switched on its own', namedBefore.includes('--profile noctis') && untouched === 'fable', true);
+  check('roles: setup adopts the re-tuned profile and the notice goes away', !namedAfter.includes('--profile noctis') && adopted.model === 'opus' && adopted.env.CLAUDE_CODE_EFFORT_LEVEL === 'max', true);
+}
+
+async function scenarioStaleRepoSums() {
+  const crypto = require('crypto');
+  const checkout = path.join(LAB_ROOT, 'stale-checkout');
+  fs.rmSync(checkout, { recursive: true, force: true });
+  fs.cpSync(lab.sourceRoot, checkout, { recursive: true });
+  fs.mkdirSync(path.join(checkout, 'tests'), { recursive: true });
+  fs.copyFileSync(path.join(__dirname, 'harness.js'), path.join(checkout, 'tests', 'harness.js'));
+  const shippedName = path.relative(path.join(lab.sourceRoot, 'bin'), lab.snapshotBinary).split(path.sep).join('/');
+  const staleSums = `${'0'.repeat(64)}  ${shippedName}\n`;
+  const checkoutSums = path.join(checkout, 'bin', 'SHA256SUMS');
+  fs.writeFileSync(checkoutSums, staleSums);
+  const staleLab = new (require(path.join(checkout, 'tests', 'harness.js')).Lab)('noctis-lab-stale');
+  try {
+    let refused = '';
+    try {
+      staleLab.account('rebuilt').install();
+    } catch (err) {
+      refused = err.message;
+    }
+    check('harness: a checkout whose SHA256SUMS predates its binary still installs', refused, '');
+    const carried = crypto.createHash('sha256').update(fs.readFileSync(staleLab.snapshotBinary)).digest('hex');
+    check('harness: the snapshot lists the checksum of the binary it carries', fs.readFileSync(path.join(staleLab.sourceRoot, 'bin', 'SHA256SUMS'), 'utf8').split('\n').includes(`${carried}  ${shippedName}`), true);
+    check('harness: building a lab leaves the checkout\'s bin/SHA256SUMS as it was', fs.readFileSync(checkoutSums, 'utf8'), staleSums);
+  } finally {
+    fs.rmSync(staleLab.root, { recursive: true, force: true });
+  }
+}
+
+async function scenarioCrashedSuiteTeardown() {
+  const stop = (pid) => {
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch (err) {
+      if (err.code !== 'ESRCH') throw err;
+    }
+  };
+  const mocksUnder = (roots) => processTable().filter(({ pid, line }) => pid !== process.pid
+    && line.includes('mock-usage-server') && roots.some((root) => line.includes(path.join(root, 'mock'))));
+
+  const script = path.join(LAB_ROOT, 'killed-suite.js');
+  const record = path.join(LAB_ROOT, 'killed-suite.json');
+  fs.rmSync(record, { force: true });
+  fs.writeFileSync(script, [
+    '\'use strict\';',
+    'const fs = require(\'fs\');',
+    'const { Lab } = require(process.argv[2]);',
+    '(async () => {',
+    '  const lab = new Lab(\'noctis-killed\');',
+    '  await lab.startMock();',
+    '  fs.writeFileSync(process.argv[3], JSON.stringify({ pid: lab.mockProcess.pid, root: lab.root }));',
+    '  process.kill(process.pid, \'SIGKILL\');',
+    '})();',
+    '',
+  ].join('\n'));
+  spawnSync(process.execPath, [script, path.join(__dirname, 'harness.js'), record], { stdio: 'ignore', timeout: 60000 });
+  const killed = readJson(record) || {};
+  for (let i = 0; i < 100 && isAlive(killed.pid); i += 1) await sleep(100);
+  const orphaned = isAlive(killed.pid);
+  if (orphaned) stop(killed.pid);
+  if (killed.root) fs.rmSync(killed.root, { recursive: true, force: true });
+  check('harness: the mock of a suite killed outright stops by itself', !killed.pid ? 'the suite never reported its mock' : orphaned ? 'still running' : 'stopped', 'stopped');
+
+  const suites = [
+    ['lab.js', 'noctis-lab', ['baseline']],
+    ['soak.js', 'noctis-soak', ['--days', '1']],
+    ['monkey.js', 'noctis-monkey', ['--rounds', '1']],
+    ['chaos.js', 'noctis-chaos', []],
+    ['contract.js', 'noctis-contract', []],
+    ['torrent.js', 'noctis-torrent', ['--jobs', '1', '--accounts', '1', '--quiet']],
+  ];
+  const unlisted = fs.readdirSync(__dirname).filter((file) => {
+    const source = file.endsWith('.js') ? fs.readFileSync(path.join(__dirname, file), 'utf8') : '';
+    return source.includes('.startMock()') && !suites.some(([suite, name]) => suite === file && source.includes(`new Lab('${name}')`));
+  });
+  check('harness: every suite that starts the mock is crashed on purpose below', unlisted, []);
+  const missing = path.join(LAB_ROOT, IS_WINDOWS ? 'no-such-noctis.exe' : 'no-such-noctis');
+  const roots = [];
+  for (const [suite, name, args] of suites) {
+    const started = Date.now();
+    const run = spawnSync(process.execPath, [path.join(__dirname, suite), ...args], { encoding: 'utf8', env: { ...process.env, NOCTIS_BINARY: missing }, timeout: 60000 });
+    roots.push(path.join(path.dirname(LAB_ROOT), `${name}-${run.pid}`));
+    const said = `${run.stdout || ''}${run.stderr || ''}`;
+    const outcome = run.status === null ? `still running after ${Date.now() - started} ms`
+      : run.status === 1 && said.includes('install failed') ? 'exit 1' : `exit ${run.status}: ${said.trim().split('\n')[0]}`;
+    check(`harness: ${suite} ends with exit 1 when its install fails after the mock started`, outcome, 'exit 1');
+  }
+  check('harness: the process table shows this lab\'s own mock', processTable().some(({ pid }) => pid === lab.mockProcess.pid), true);
+  let left = mocksUnder(roots);
+  for (let i = 0; i < 20 && left.length; i += 1) {
+    await sleep(250);
+    left = mocksUnder(roots);
+  }
+  for (const { pid } of left) stop(pid);
+  for (const root of roots) fs.rmSync(root, { recursive: true, force: true });
+  check('harness: no crashed suite leaves its mock server running', left.map(({ line }) => line), []);
+}
+
+async function scenarioCloneInstaller() {
+  if (IS_WINDOWS) return;
+  const root = path.join(LAB_ROOT, 'clone-installer');
+  fs.rmSync(root, { recursive: true, force: true });
+  const script = path.join(root, 'scripts', 'install.sh');
+  fs.mkdirSync(path.dirname(script), { recursive: true });
+  fs.copyFileSync(path.join(SOURCE_ROOT, 'scripts', 'install.sh'), script);
+  fs.chmodSync(script, 0o755);
+  for (const platform of ['linux-amd64', 'linux-arm64', 'darwin-amd64', 'darwin-arm64']) {
+    fs.mkdirSync(path.join(root, 'bin', platform), { recursive: true });
+    fs.writeFileSync(path.join(root, 'bin', platform, 'noctis'), `#!/bin/sh\necho "ran ${platform} $*"\n`, { mode: 0o755 });
+  }
+  const fakeBin = path.join(root, 'fake-bin');
+  fs.mkdirSync(fakeBin, { recursive: true });
+  fs.writeFileSync(path.join(fakeBin, 'uname'), '#!/bin/sh\nif [ "$1" = "-m" ]; then echo "$NOCTIS_LAB_UNAME_M"; else echo "$NOCTIS_LAB_UNAME_S"; fi\n', { mode: 0o755 });
+  const install = (system, machine, args = ['--host', 'codex']) => spawnSync(script, args, {
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, NOCTIS_LAB_UNAME_S: system, NOCTIS_LAB_UNAME_M: machine },
+  });
+  const refused = 'refused, ran nothing and said what to do';
+  const refusal = (result, ...needles) => (result.status === 1 && result.stdout === '' && needles.every((needle) => result.stderr.includes(needle))
+    ? refused : `exit ${result.status}: ${`${result.stdout}${result.stderr}`.trim()}`);
+  for (const [system, machine] of [['MINGW64_NT-10.0-26100', 'x86_64'], ['MSYS_NT-10.0-26100', 'x86_64'], ['CYGWIN_NT-10.0-26100', 'x86_64'], ['MINGW32_NT-10.0-26100', 'i686']]) {
+    check(`clone installer: ${system} ${machine} is sent to install.ps1 in PowerShell`, refusal(install(system, machine), '.\\scripts\\install.ps1 in PowerShell'), refused);
+  }
+  check('clone installer: an uninstall from Git Bash is sent to install.ps1 -Uninstall, not to an install', refusal(install('MINGW64_NT-10.0-26100', 'x86_64', ['--config-dir', '/c/Users/me/.claude', '--uninstall']), '.\\scripts\\install.ps1 -Uninstall in PowerShell'), refused);
+  for (const machine of ['armv7l', 'i686']) {
+    check(`clone installer: Linux ${machine} names the CPU instead of running the amd64 binary`, refusal(install('Linux', machine), machine, 'not supported'), refused);
+  }
+  check('clone installer: FreeBSD names the OS', refusal(install('FreeBSD', 'amd64'), 'FreeBSD', 'not supported'), refused);
+  for (const [system, machine, platform] of [['Linux', 'x86_64', 'linux-amd64'], ['Linux', 'aarch64', 'linux-arm64'], ['Darwin', 'x86_64', 'darwin-amd64'], ['Darwin', 'arm64', 'darwin-arm64']]) {
+    const result = install(system, machine);
+    check(`clone installer: ${system} ${machine} runs bin/${platform}`, `${result.status} ${result.stdout.trim()}`, `0 ran ${platform} install --source ${root} --host codex`);
+  }
+  fs.rmSync(root, { recursive: true, force: true });
+}
+
+async function scenarioShippedProfile(acc) {
+  const now = nowSec();
+  const config = readJson(acc.configFile);
+  const settings = readJson(path.join(acc.dir, 'settings.json'));
+  check('shipped profile: the main session runs Opus at max effort', settings.model === 'opus' && settings.env.CLAUDE_CODE_EFFORT_LEVEL === 'max' && config.models.primary === 'opus' && config.roles.profile === 'noctis', true);
+  check('shipped profile: the Fable cap stays watched and leads back to the code model', config.models.scopedPattern === 'fable' && config.models.fallback === 'opus' && config.router.subagentModels.Plan === 'opus' && config.router.subagentModels.Explore === 'haiku', true);
+  acc.statusline('sp1', 'claude-opus-5-5', 20, now + 7200, 10, now + 3 * 86400, 30);
+  const advice = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'sp1', cwd: PROJECT_DIR, prompt: 'Audit every route handler under src/routes for missing auth checks and fix what you find' });
+  check('shipped profile: workflow agents get the profile models', advice.includes('code-writing agents → opus (effort max)') && advice.includes('read-only analysis and review agents → opus (effort xhigh)') && advice.includes('test runs and other noisy verification → haiku.'), true);
+  check('shipped profile: status names no earlier profile', acc.run(['status']).includes('--profile'), false);
 }
 
 async function scenarioQueuePriorities(acc) {
@@ -1325,6 +1623,7 @@ async function scenarioQueuePriorities(acc) {
     '- [ ] (P9) cleanup (after #nonexistent)',
     '',
   ].join('\n'));
+  acc.run(['queue', 'trust', '--file', queueFile]);
   acc.statusline('qp1', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
   const first = acc.hook({ hook_event_name: 'Stop', session_id: 'qp1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
   const firstReason = JSON.parse(first).reason;
@@ -1391,6 +1690,15 @@ async function scenarioGitHubQueue(acc) {
   acc.setConfig((config) => {
     config.queue.github.closeOnDone = true;
   });
+  acc.run(['queue', 'untrust', '--file', queueFile]);
+  acc.statusline('gh0', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
+  const untrustedStop = acc.hook({ hook_event_name: 'Stop', session_id: 'gh0', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
+  fs.writeFileSync(queueFile, content.replace('- [ ] (P1) #12', '- [x] (P1) #12'));
+  acc.hook({ hook_event_name: 'Stop', session_id: 'gh0', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
+  await sleep(400);
+  check('close-on-done: an untrusted queue file neither drives the stop nor closes issues', untrustedStop === '' && !acc.lab.ghCalls().some((line) => line.includes('issue close')), true);
+  fs.writeFileSync(queueFile, content);
+  acc.run(['queue', 'trust', '--file', queueFile]);
   acc.statusline('gh1', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
   acc.hook({ hook_event_name: 'Stop', session_id: 'gh1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
   fs.writeFileSync(queueFile, fs.readFileSync(queueFile, 'utf8').replace('- [ ] (P1) #12', '- [x] (P1) #12'));
@@ -1456,6 +1764,7 @@ async function scenarioWorkflows(acc) {
   });
   const queueFile = path.join(PROJECT_DIR, 'TASKS.md');
   fs.writeFileSync(queueFile, '# q\n- [ ] migrate every component under src/components to TypeScript\n- [ ] fix typo\n');
+  acc.run(['queue', 'trust', '--file', queueFile]);
   acc.statusline('wf3', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
   const stop = acc.hook({ hook_event_name: 'Stop', session_id: 'wf3', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
   check('workflow: fan-out queue item gets the advisory in the Stop directive', JSON.parse(stop).reason.includes('The next item looks like a fan-out task'), true);
@@ -1748,6 +2057,79 @@ async function scenarioEarlyReset(acc) {
   acc.run(['cancel']);
 }
 
+async function scenarioDataReturns(acc) {
+  const now = nowSec();
+  const fiveReset = now + 3 * 3600;
+  const weekReset = now + 5 * 86400;
+  const fableFile = path.join(acc.guardDir, 'fable.json');
+  const usageFile = path.join(acc.guardDir, 'usage.json');
+  const transcript = path.join(LAB_ROOT, 'data-returns.jsonl');
+  fs.copyFileSync(TRANSCRIPT, transcript);
+  const touch = (epoch) => fs.utimesSync(transcript, new Date(epoch * 1000), new Date(epoch * 1000));
+  const goBlind = () => {
+    writeJson(fableFile, { fetchedAt: now - 3600, five_hour: { used: 30, resetsAt: fiveReset }, seven_day: { used: 84, resetsAt: weekReset } });
+    writeJson(usageFile, { ...readJson(usageFile), updatedAt: nowSec() - 120, five_hour: { used: 30, resetsAt: fiveReset }, seven_day: { used: 84, resetsAt: weekReset }, history: {} });
+    lab.setOutage('rate-limited');
+    touch(nowSec() - 3600);
+  };
+  const recovered = [
+    { kind: 'session', percent: 30, resets_at: new Date(fiveReset * 1000).toISOString() },
+    { kind: 'weekly_all', percent: 84.5, resets_at: new Date(weekReset * 1000).toISOString() },
+  ];
+  const freshReading = () => acc.run(['statusline'], acc.statuslineInput('dr-other', 'claude-opus-5', 30, fiveReset, 84.5, weekReset), { NOCTIS_NO_EARLY_TRIGGER: '' });
+  const resumeNotice = /limit sıfırlandı; iş devam ettiriliyor|kullanım verisi geri geldi/;
+  acc.setConfig((config) => {
+    config.alarm.webhook = { url: `http://127.0.0.1:${lab.mockPort}/webhook/data-returns`, preset: 'generic' };
+  });
+  acc.manualSchedule = true;
+  goBlind();
+  const stop = acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'dr1', cwd: PROJECT_DIR, transcript_path: transcript });
+  const parked = acc.state().waits.dr1;
+  check('data returns: no usage data near the weekly edge parks the session until the reset', stop.includes('"continue":false') && Boolean(parked) && parked.hit === 'blind' && !parked.inHook && parked.until === weekReset, true);
+  resetCalls();
+  lab.setOutage('');
+  mock.limits = recovered;
+  let told = lab.webhooks().length;
+  freshReading();
+  check('data returns: fresh data with room resumes the parked session days before the reset', (await callsMatching('--resume dr1 ')).length, 1);
+  check('data returns: journaled as data coming back, not as an early reset', acc.run(['why', '--last', '8']).includes('data-back'), true);
+  let notices = (await webhooksMatching(told, resumeNotice)).map((hook) => hook.body).join('\n');
+  check('data returns: the person is told the data came back, not that the limit reset', notices.includes('kullanım verisi geri geldi') && !notices.includes('limit sıfırlandı'), true);
+  goBlind();
+  acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'dr2', cwd: PROJECT_DIR, transcript_path: transcript });
+  check('data returns: a second blind pause is parked', Boolean(acc.state().waits.dr2 && acc.state().waits.dr2.hit === 'blind'), true);
+  touch(nowSec() + 600);
+  lab.setOutage('');
+  mock.limits = recovered;
+  freshReading();
+  check('data returns: a session that went on after its pause is not relaunched a second time', Boolean(acc.state().waits.dr2) && !acc.state().waits.dr2.earlyTriggeredAt, true);
+  acc.run(['cancel', 'dr2']);
+  goBlind();
+  acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'dr3', cwd: PROJECT_DIR, transcript_path: transcript });
+  check('data returns: a third blind pause is parked', Boolean(acc.state().waits.dr3 && acc.state().waits.dr3.hit === 'blind'), true);
+  resetCalls();
+  lab.setOutage('');
+  const nextWeekReset = now + 7 * 86400;
+  mock.limits = [
+    { kind: 'session', percent: 30, resets_at: new Date(fiveReset * 1000).toISOString() },
+    { kind: 'weekly_all', percent: 2, resets_at: new Date(nextWeekReset * 1000).toISOString() },
+  ];
+  told = lab.webhooks().length;
+  acc.run(['statusline'], acc.statuslineInput('dr-other', 'claude-opus-5', 30, fiveReset, 2, nextWeekReset), { NOCTIS_NO_EARLY_TRIGGER: '' });
+  check('data returns: a real reset of the window resumes a blind pause as an early reset', (await callsMatching('--resume dr3 ')).length === 1 && acc.run(['why', '--last', '8']).includes('early-reset'), true);
+  notices = (await webhooksMatching(told, resumeNotice)).map((hook) => hook.body).join('\n');
+  check('data returns: a real reset is announced as a reset, not as data coming back', notices.includes('limit sıfırlandı') && !notices.includes('kullanım verisi geri geldi'), true);
+  acc.manualSchedule = false;
+  acc.run(['cancel']);
+  acc.setConfig((config) => {
+    config.alarm.webhook = { url: '', preset: 'generic', chatId: '' };
+  });
+  mock.limits = [];
+  fs.rmSync(fableFile, { force: true });
+  fs.rmSync(transcript, { force: true });
+  acc.statusline('dr-other', 'claude-opus-5', 10, now + 7200, 10, now + 3 * 86400);
+}
+
 async function scenarioVisibleRelaunch(acc) {
   if (IS_WINDOWS) return;
   const now = nowSec();
@@ -1782,7 +2164,7 @@ async function scenarioVisibleRelaunch(acc) {
   const wasFast = acc.fastClaude;
   acc.fastClaude = false; 
   acc.timeOffset = 30; 
-  const runner = acc.runPromise(['resume', '--sid', 'vr1', '--account', acc.dir], null, { NOCTIS_NO_TERMINAL: '', DISPLAY: ':9' });
+  const runner = acc.runPromise(['resume', '--sid', 'vr1', '--account', acc.dir], null, { NOCTIS_NO_TERMINAL: '', DISPLAY: ':9', ...HOOK_SESSION_MARKERS });
   let moved = '';
   for (let i = 0; i < 40 && !moved; i += 1) {
     await sleep(100);
@@ -1793,6 +2175,7 @@ async function scenarioVisibleRelaunch(acc) {
   acc.fastClaude = wasFast;
   acc.timeOffset = 0;
   check('visible relaunch: claude ran through the terminal launcher', callsLog().some((line) => line.includes('--resume vr1') && line.includes('HANDOFF=vr1')), true);
+  check('visible relaunch: the window\'s claude runs without the Claude session markers the runner inherited from the hook', (callsLog().find((line) => line.includes('--resume vr1')) || '').includes(' CHILD= '), true);
   await new Promise((resolve) => {
     if (previous.exitCode !== null || previous.signalCode !== null) return resolve();
     previous.once('exit', resolve);
@@ -1867,14 +2250,14 @@ async function scenarioHosts(acc) {
 
   fs.mkdirSync(hostDir('codex'), { recursive: true });
   writeJson(path.join(hostDir('codex'), 'hooks.json'), { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'python3 other.py' }] }] } });
-  const codexSetup = acc.run(['install', '--source', SOURCE_ROOT, '--host', 'codex', '--config-dir', hostDir('codex')]);
+  const codexSetup = acc.run(['install', '--source', lab.sourceRoot, '--host', 'codex', '--config-dir', hostDir('codex')]);
   check('codex: setup wires hooks and names the next step', codexSetup.includes('hooks.json') && codexSetup.includes('/hooks'), true);
   const codexHooks = readJson(path.join(hostDir('codex'), 'hooks.json')).hooks;
   check('codex: foreign Stop hook kept, ours appended with the marker', codexHooks.Stop.length === 2 && codexHooks.Stop[0].hooks[0].command === 'python3 other.py' && codexHooks.Stop[1].hooks[0].statusMessage === 'noctis' && /"[^"]*noctis(\.exe)?"? hook --host codex --account/.test(codexHooks.Stop[1].hooks[0].command), true);
   check('codex: every event wired with a long timeout on the gates', ['SessionStart', 'SessionEnd', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'].every((event) => Array.isArray(codexHooks[event])) && codexHooks.PostToolUse[0].hooks[0].timeout === 21600 && codexHooks.SessionEnd[0].hooks[0].timeout === 3, true);
   const codexConfig = readJson(path.join(hostDir('codex'), 'noctis', 'config.json'));
   check('codex: config records the host and the app-server usage source', codexConfig.host === 'codex' && codexConfig.fable.source === 'codex', true);
-  const codexSecond = acc.run(['install', '--source', SOURCE_ROOT, '--host', 'codex', '--config-dir', hostDir('codex')]);
+  const codexSecond = acc.run(['install', '--source', lab.sourceRoot, '--host', 'codex', '--config-dir', hostDir('codex')]);
   check('codex: setup twice does not duplicate hooks', codexSecond.includes('hooks.json') && readJson(path.join(hostDir('codex'), 'hooks.json')).hooks.Stop.length, 2);
   writeJson(path.join(hostDir('codex'), 'noctis', 'config.json'), { ...codexConfig, wait: { ...codexConfig.wait, maxInHookMinutes: 0, resetMarginSeconds: 1, builtinGraceSeconds: 1 }, resume: { ...codexConfig.resume, mode: 'headless' } });
   const codexInput = (event, extra = {}) => ({ hook_event_name: event, session_id: 'thr_codex1', transcript_path: hostTranscript, cwd: PROJECT_DIR, model: 'gpt-5.6', permission_mode: 'default', ...extra });
@@ -1900,13 +2283,13 @@ async function scenarioHosts(acc) {
   check('codex: research prompts are not routed (no lite agent outside Claude Code)', codexPrompt.includes('Non-code research'), false);
   const codexStart = hostRun('codex', ['hook'], codexInput('SessionStart', { source: 'fork' }));
   check('codex: SessionStart carries the plain queue directive', codexStart.includes('Queue mode (TASKS.md: 2 open)') && !codexStart.includes('lite'), true);
-  acc.run(['install', '--source', SOURCE_ROOT, '--host', 'codex', '--config-dir', hostDir('codex'), '--uninstall']);
+  acc.run(['install', '--source', lab.sourceRoot, '--host', 'codex', '--config-dir', hostDir('codex'), '--uninstall']);
   const codexAfter = readJson(path.join(hostDir('codex'), 'hooks.json')).hooks;
   check('codex: uninstall removes only our hooks', codexAfter.Stop.length === 1 && codexAfter.Stop[0].hooks[0].command === 'python3 other.py' && codexAfter.PostToolUse === undefined, true);
 
   fs.mkdirSync(hostDir('antigravity'), { recursive: true });
   writeJson(path.join(LAB_ROOT, 'agy-hooks.json'), { 'my-linter': { PostToolUse: [{ matcher: 'run_command', hooks: [{ command: './lint.sh' }] }] } });
-  const agySetup = acc.run(['install', '--source', SOURCE_ROOT, '--host', 'antigravity', '--config-dir', hostDir('antigravity')]);
+  const agySetup = acc.run(['install', '--source', lab.sourceRoot, '--host', 'antigravity', '--config-dir', hostDir('antigravity')]);
   const agyHooks = readJson(path.join(LAB_ROOT, 'agy-hooks.json'));
   check('antigravity: hooks keyed by plugin name, other entries kept', agySetup.includes('agy-hooks.json') && agyHooks['my-linter'] !== undefined && Array.isArray(agyHooks['noctis'].PreInvocation) && agyHooks['noctis'].Stop[0].command.includes('--host antigravity'), true);
   check('antigravity: status line wired in settings.json', readJson(path.join(hostDir('antigravity'), 'settings.json')).statusLine.command.includes('statusline --host antigravity'), true);
@@ -1937,11 +2320,11 @@ async function scenarioHosts(acc) {
   const agyError = hostRun('antigravity', ['hook'], agyInput('Stop', { executionNum: 1, terminationReason: 'error', error: 'Individual quota reached (rate limit)', fullyIdle: true }), { NOCTIS_NO_SCHEDULE: '1' });
   check('antigravity: Stop with terminationReason=error is treated as a rate-limit failure', JSON.parse(agyError).decision === 'stop' && readJson(path.join(hostDir('antigravity'), 'noctis', 'state.json')).waits['conv-agy1'] !== undefined, true);
   acc.run(['cancel', 'conv-agy1', '--host', 'antigravity', '--account', hostDir('antigravity')]);
-  acc.run(['install', '--source', SOURCE_ROOT, '--host', 'antigravity', '--config-dir', hostDir('antigravity'), '--uninstall']);
+  acc.run(['install', '--source', lab.sourceRoot, '--host', 'antigravity', '--config-dir', hostDir('antigravity'), '--uninstall']);
   check('antigravity: uninstall removes our hooks and status line, keeps others', readJson(path.join(LAB_ROOT, 'agy-hooks.json'))['noctis'] === undefined && readJson(path.join(LAB_ROOT, 'agy-hooks.json'))['my-linter'] !== undefined && readJson(path.join(hostDir('antigravity'), 'settings.json')).statusLine === undefined, true);
 
   fs.mkdirSync(hostDir('droid'), { recursive: true });
-  const droidSetup = acc.run(['install', '--source', SOURCE_ROOT, '--host', 'droid', '--config-dir', hostDir('droid')]);
+  const droidSetup = acc.run(['install', '--source', lab.sourceRoot, '--host', 'droid', '--config-dir', hostDir('droid')]);
   const droidHooks = readJson(path.join(hostDir('droid'), 'hooks.json'));
   check('droid: hooks written event-keyed, limit guard declared off', /limit guard stays off|limit koruması burada kapalı/.test(droidSetup) && droidHooks.Stop[0].hooks[0].command.includes('--host droid') && droidHooks.PreToolUse[0].matcher === 'Task', true);
   const droidInput = (event, extra = {}) => ({ hook_event_name: event, session_id: 'droid-1', transcript_path: hostTranscript, cwd: PROJECT_DIR, permission_mode: 'auto-high', ...extra });
@@ -1958,7 +2341,7 @@ async function scenarioHosts(acc) {
   check('droid: resumed with `droid exec --session-id <id> --auto high … prompt`', droidCall.includes('exec --session-id droid-1 --auto high') && droidCall.includes('TASKS.md'), true);
 
   fs.mkdirSync(hostDir('copilot'), { recursive: true });
-  acc.run(['install', '--source', SOURCE_ROOT, '--host', 'copilot', '--config-dir', hostDir('copilot')]);
+  acc.run(['install', '--source', lab.sourceRoot, '--host', 'copilot', '--config-dir', hostDir('copilot')]);
   const copilotHooks = readJson(path.join(hostDir('copilot'), 'hooks', 'noctis.json'));
   check('copilot: exec-form hook file with version 1', copilotHooks.version === 1 && copilotHooks.hooks.agentStop[0].exec.endsWith(IS_WINDOWS ? 'noctis.exe' : 'noctis') && copilotHooks.hooks.agentStop[0].args.join(' ') === `hook --host copilot --account ${hostDir('copilot')}` && copilotHooks.hooks.userPromptSubmitted[0].timeoutSec === 21600, true);
   const copilotStart = hostRun('copilot', ['hook'], { hook_event_name: 'sessionStart', sessionId: 'cp-1', timestamp: Date.now(), cwd: PROJECT_DIR, source: 'new' });
@@ -1983,16 +2366,16 @@ async function scenarioHosts(acc) {
   resetCalls();
   acc.run(['resume', '--sid', 'cp-2', '--host', 'copilot', '--account', hostDir('copilot')], null, { NOCTIS_TIME_OFFSET: String(Math.ceil(copilotState2.waits['cp-2'].resumeAt - now) + 5) });
   check('copilot: opting in adds --allow-all-tools', (callsLog().find((line) => line.startsWith('FAKE_COPILOT')) || '').includes('--allow-all-tools'), true);
-  acc.run(['install', '--source', SOURCE_ROOT, '--host', 'copilot', '--config-dir', hostDir('copilot'), '--uninstall']);
+  acc.run(['install', '--source', lab.sourceRoot, '--host', 'copilot', '--config-dir', hostDir('copilot'), '--uninstall']);
   check('copilot: uninstall removes the hook file', fs.existsSync(path.join(hostDir('copilot'), 'hooks', 'noctis.json')), false);
 
-  const asked = spawnSync(acc.engine()[0], ['install', '--source', SOURCE_ROOT, '--config-dir', hostDir('asked')], { encoding: 'utf8', input: '2\n', env: { ...acc.env(), NOCTIS_NO_TASKS: '1' } });
+  const asked = spawnSync(acc.engine()[0], ['install', '--source', lab.sourceRoot, '--config-dir', hostDir('asked')], { encoding: 'utf8', input: '2\n', env: { ...acc.env(), NOCTIS_NO_TASKS: '1' } });
   check('host question: piped stdin means no question, Claude Code install', asked.status === 0 && fs.existsSync(path.join(hostDir('asked'), 'skills', PLUGIN_NAME)) && !fs.existsSync(path.join(hostDir('asked'), 'hooks.json')), true);
 
   const cacheRoot = path.join(LAB_ROOT, 'plugins', 'cache', 'synex-mkt', PLUGIN_NAME, PLUGIN_VERSION);
   fs.rmSync(cacheRoot, { recursive: true, force: true });
   for (const entry of ['.claude-plugin', 'hooks', 'agents', 'skills', 'config.default.json', 'bin']) {
-    fs.cpSync(path.join(SOURCE_ROOT, entry), path.join(cacheRoot, entry), { recursive: true });
+    fs.cpSync(path.join(lab.sourceRoot, entry), path.join(cacheRoot, entry), { recursive: true });
   }
   const updDir = path.join(LAB_ROOT, 'update-account');
   fs.mkdirSync(updDir, { recursive: true });
@@ -2009,21 +2392,22 @@ async function scenarioHosts(acc) {
   }
   check('auto-update: setup enables marketplace auto-update via claude', cacheSetup.status === 0 && autoUpdateCalled && autoUpdateSaid, true);
   resetCalls();
-  spawnSync(acc.engine()[0], ['setup', '--config-dir', updDir, '--profile', 'balanced', '--updates', 'keep'], { encoding: 'utf8', env: { ...acc.env(), NOCTIS_PLUGIN_ROOT: cacheRoot, NOCTIS_NO_TASKS: '1' } });
+  const keptSetup = spawnSync(acc.engine()[0], ['setup', '--config-dir', updDir, '--profile', 'balanced', '--updates', 'keep'], { encoding: 'utf8', env: { ...acc.env(), NOCTIS_PLUGIN_ROOT: cacheRoot, NOCTIS_NO_TASKS: '1' } });
   check('auto-update: --updates keep leaves the marketplace setting alone', callsLog().some((line) => line.includes('--auto-update')), false);
   resetCalls();
   const cloneRoot = path.join(LAB_ROOT, 'clone-root');
   fs.rmSync(cloneRoot, { recursive: true, force: true });
   for (const entry of ['.claude-plugin', 'hooks', 'agents', 'skills', 'config.default.json']) {
-    fs.cpSync(path.join(SOURCE_ROOT, entry), path.join(cloneRoot, entry), { recursive: true });
+    fs.cpSync(path.join(lab.sourceRoot, entry), path.join(cloneRoot, entry), { recursive: true });
   }
   fs.cpSync(path.dirname(acc.engine()[0]), path.join(cloneRoot, 'bin', path.basename(path.dirname(acc.engine()[0]))), { recursive: true });
-  fs.cpSync(path.join(SOURCE_ROOT, 'bin', 'SHA256SUMS'), path.join(cloneRoot, 'bin', 'SHA256SUMS'));
+  fs.cpSync(path.join(lab.sourceRoot, 'bin', 'SHA256SUMS'), path.join(cloneRoot, 'bin', 'SHA256SUMS'));
   const cloneDir = path.join(LAB_ROOT, 'clone-account');
   fs.mkdirSync(cloneDir, { recursive: true });
   writeJson(path.join(cloneDir, 'settings.json'), {});
-  spawnSync(acc.engine()[0], ['setup', '--config-dir', cloneDir, '--profile', 'balanced'], { encoding: 'utf8', env: { ...acc.env(), NOCTIS_PLUGIN_ROOT: cloneRoot, NOCTIS_NO_TASKS: '1' } });
+  const cloneSetup = spawnSync(acc.engine()[0], ['setup', '--config-dir', cloneDir, '--profile', 'balanced'], { encoding: 'utf8', env: { ...acc.env(), NOCTIS_PLUGIN_ROOT: cloneRoot, NOCTIS_NO_TASKS: '1' } });
   check('auto-update: clone installs (no marketplace path) do not touch marketplaces', callsLog().some((line) => line.includes('plugin marketplace')), false);
+  check('auto-update: the keep and clone setups both finish, so the two checks above saw a real run', [keptSetup.status, cloneSetup.status], [0, 0]);
 
   const versionFile = path.join(lab.mockDir, 'plugin-version.json');
   fs.writeFileSync(versionFile, JSON.stringify({ name: PLUGIN_NAME, version: '9.9.9' }));
@@ -2191,6 +2575,15 @@ async function scenarioSilentFailures(acc) {
   check('doctor exits 1 when something needs attention', doctorBroken.status, 1);
   check('and prints a remedy under the problem', /fix:|çözüm:/.test(doctorBroken.stdout), true);
   writeJson(path.join(acc.dir, 'settings.json'), savedStatusLine);
+  const scoutFile = path.join(acc.dir, 'skills', PLUGIN_NAME, 'agents', 'scout.md');
+  fs.writeFileSync(scoutFile, '---\nname: scout\ndescription: hand-made research agent\ntools: WebSearch, Read, Write, Edit\n---\nResearch the question.\n');
+  const routerConfig = fs.readFileSync(acc.configFile, 'utf8');
+  acc.setConfig((config) => { config.router.agent = 'scout'; });
+  const doctorScout = acc.runFull(['doctor']);
+  fs.writeFileSync(acc.configFile, routerConfig);
+  fs.rmSync(scoutFile);
+  const scoutLine = doctorScout.stdout.split('\n').find((line) => line.startsWith('!!  agents/scout.md')) || '';
+  check('doctor names a router agent that may call Edit, which the hook never sends to noctis', doctorScout.status === 1 && scoutLine.includes(' Edit ') && !scoutLine.includes('MultiEdit') && scoutLine.includes('disallowedTools'), true);
 
   acc.editState((noHooks) => {
     noHooks.lastHookAt = 0;
@@ -2305,12 +2698,11 @@ async function scenarioHousekeeping(acc) {
   check('errors.log only warn/error', errors.every((line) => /\[(WARN|ERROR)/.test(line)), true);
   const doctor = acc.run(['doctor']);
   check('doctor runs', doctor.includes('plugin konumu'), true);
-  const uninstall = spawnSync(acc.engine()[0], ['install', '--source', SOURCE_ROOT, '--config-dir', acc.dir, '--uninstall'], { encoding: 'utf8', env: acc.env() });
+  const uninstall = spawnSync(acc.engine()[0], ['install', '--source', lab.sourceRoot, '--config-dir', acc.dir, '--uninstall'], { encoding: 'utf8', env: acc.env() });
   check('uninstall restores settings', uninstall.status === 0 && !(readJson(path.join(acc.dir, 'settings.json')) || {}).statusLine, true);
 }
 
 async function main() {
-  refreshChecksums();
   await lab.startMock();
   const accA = lab.account('accountA');
   const accB = lab.account('accountB');
@@ -2321,10 +2713,12 @@ async function main() {
     ['warn band + burst projection', () => scenarioWarnAndBurst(accA)],
     ['in-hook wait', () => scenarioInHookWait(accA)],
     ['early reset', () => scenarioEarlyReset(accA)],
+    ['data returns: a blind pause ends on fresh data, never over a session that went on', () => scenarioDataReturns(accA)],
     ['visible relaunch: terminal, moved marker, close previous', () => scenarioVisibleRelaunch(accA)],
     ['repair: dead hand-offs and stranded waits', () => scenarioRepair(accA)],
     ['workspace guard', () => scenarioWorkspaceGuard(accA)],
     ['killed hook recovery', () => scenarioKilledHookRecovery(accA)],
+    ['default install relaunch: CLAUDE_CONFIG_DIR only when the session had it', () => scenarioDefaultInstallRelaunch()],
     ['weekly long wait', () => scenarioWeeklyLongWait(accA)],
     ['fable flow + handoff', () => scenarioFableFlow(accA)],
     ['stale fallback + near-edge', () => scenarioStaleFallbackAndNearEdge(accA)],
@@ -2345,6 +2739,14 @@ async function main() {
     ['subagent pinning, digest policy, observe mode, why, completion promise', () => scenarioSubagentsAndObserve(accA)],
     ['daily budget, permission inheritance, same-session wake, webhooks, setup', () => scenarioBudgetWakeWebhook(accA)],
     ['marketplace bootstrap: launcher → platform binary via exec-form ensure', () => scenarioMarketplaceBootstrap(accA)],
+    ['harness: a local rebuild the committed SHA256SUMS does not know yet', () => scenarioStaleRepoSums()],
+    ['harness: a suite that dies after its mock started exits at once and takes the mock with it', () => scenarioCrashedSuiteTeardown()],
+    ['clone installer: install.sh picks the platform binary or says what to run instead', () => scenarioCloneInstaller()],
+    ['shipped roles profile: Opus at max, Fable cap watched', () => {
+      const shippedAcc = lab.account('shippedProfile');
+      shippedAcc.install(undefined, { asShipped: true });
+      return scenarioShippedProfile(shippedAcc);
+    }],
     ['queue priorities, tags and dependencies', () => scenarioQueuePriorities(accA)],
     ['github issues: import + close-on-done', () => scenarioGitHubQueue(accA)],
     ['dynamic workflows: advisory, gate, rescue', () => scenarioWorkflows(accA)],
@@ -2401,6 +2803,7 @@ async function main() {
   };
   check('suite: the account config is back to what install wrote',
     canonical(stripManaged(JSON.parse(fs.readFileSync(accA.configFile, 'utf8')))), canonical(stripManaged(JSON.parse(baselineConfig))));
+  check('suite: the repository\'s bin/SHA256SUMS is never rewritten', fingerprint(REPO_SUMS) === repoSumsAtStart, true);
   const collected = accA.stopRunners() + accB.stopRunners();
   lab.stopMock();
   const failed = results.filter((result) => !result.ok);
@@ -2411,5 +2814,6 @@ async function main() {
 
 main().catch((err) => {
   process.stderr.write(`${err.stack}\n`);
-  process.exitCode = 1;
+  lab.stopMock();
+  process.exit(1);
 });

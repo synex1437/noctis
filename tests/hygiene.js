@@ -55,6 +55,12 @@ const launcher = fs.readFileSync(path.join(ROOT, 'bin', 'noctis'));
 if (!launcher.subarray(0, 2).equals(Buffer.from('#!'))) {
   problems.push('bin/noctis is not the shell launcher any more (a build overwrote it?)');
 }
+if (fs.existsSync(path.join(ROOT, 'package.json'))) {
+  const lockfiles = ['package-lock.json', 'npm-shrinkwrap.json', 'bun.lock', 'bun.lockb'].filter((name) => fs.existsSync(path.join(ROOT, name)));
+  if (lockfiles.length) {
+    problems.push(`package.json and ${lockfiles.join(', ')} at the plugin root: Claude Code would run an install in every cached copy of the plugin`);
+  }
+}
 
 const sums = fs.readFileSync(path.join(ROOT, 'bin', 'SHA256SUMS'), 'utf8').split('\n').filter(Boolean);
 if (sums.length < 6) problems.push(`bin/SHA256SUMS lists only ${sums.length} binaries`);
@@ -108,6 +114,20 @@ const targets = [...fuzzSource.matchAll(/^func (Fuzz\w+)\(/gm)].map((found) => f
 if (!targets.length) problems.push('fuzz_test.go declares no fuzz targets');
 for (const target of targets) {
   if (!new RegExp(`\\b${target}\\b`).test(ci)) problems.push(`ci.yml never runs the fuzz target ${target}`);
+}
+
+const workflowDir = path.join(ROOT, '.github', 'workflows');
+for (const name of fs.readdirSync(workflowDir).filter((file) => /\.ya?ml$/.test(file))) {
+  const workflow = fs.readFileSync(path.join(workflowDir, name), 'utf8');
+  if (!/\bnode tests\//.test(workflow)) continue;
+  const at = workflow.search(/^jobs:/m);
+  const jobs = at < 0 ? [] : workflow.slice(at).split(/^ {2}(?=[\w-]+:\s*$)/m).slice(1);
+  if (!jobs.length) problems.push(`.github/workflows/${name} runs the suites, but its jobs could not be read`);
+  for (const job of jobs) {
+    if (!/^ {4}timeout-minutes: *\d+/m.test(job)) {
+      problems.push(`.github/workflows/${name}: job ${job.slice(0, job.indexOf(':'))} sets no timeout-minutes, so a suite that hangs holds the runner for six hours`);
+    }
+  }
 }
 
 const engineSources = fs.readdirSync(path.join(ROOT, 'go', 'cmd', 'noctis'))

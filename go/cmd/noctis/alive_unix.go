@@ -4,7 +4,9 @@ package main
 
 import (
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -23,6 +25,18 @@ func processAlive(pid int) bool {
 }
 
 func processName(pid int) string {
+	if _, err := os.Stat("/proc/self/comm"); err == nil {
+		id := strconv.Itoa(pid)
+		status, err := os.ReadFile(filepath.Join("/proc", id, "status"))
+		if err != nil || !strings.Contains(string(status), "\nTgid:\t"+id+"\n") {
+			return ""
+		}
+		comm, err := os.ReadFile(filepath.Join("/proc", id, "comm"))
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(comm))
+	}
 	out, err := runWithTimeout(exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "comm="), 5*time.Second)
 	if err != nil {
 		return ""
