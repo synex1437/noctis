@@ -431,7 +431,20 @@ func bootedOut(recorded []recordedCommand, agents, label string) bool {
 	return false
 }
 
-func TestLaunchdRunnerDoesNotBootOutItsOwnJob(t *testing.T) {
+func commandIndex(recorded []recordedCommand, words ...string) int {
+	for index, entry := range recorded {
+		if strings.Join(entry.args, " ") == strings.Join(words, " ") {
+			return index
+		}
+	}
+	return -1
+}
+
+func bootOutOf(label string) []string {
+	return []string{"launchctl", "bootout", "gui/" + currentUID() + "/" + label}
+}
+
+func TestALaunchdRunnerBootsOutItsOwnJobOnlyOnceItsWorkIsDone(t *testing.T) {
 	agents, recorded := sandboxLaunchd(t, object{"resume": object{"mode": "none"}, "alarm": object{"enabled": false}})
 	sid := "mac-fable"
 	now := float64(nowSec())
@@ -443,13 +456,28 @@ func TestLaunchdRunnerDoesNotBootOutItsOwnJob(t *testing.T) {
 	if label == "" || statSafe(plist) == nil {
 		t.Fatalf("no launchd job was registered to fire: label %q", label)
 	}
+	fake := runScheduler
+	var waitAtBootOut object
+	bootOuts := 0
+	runScheduler = func(command *exec.Cmd, timeout time.Duration) ([]byte, error) {
+		if strings.Join(command.Args, " ") == strings.Join(bootOutOf(label), " ") {
+			bootOuts++
+			waitAtBootOut = getMap(getMap(readState(), "waits"), sid)
+		}
+		return fake(command, timeout)
+	}
+	t.Cleanup(func() { runScheduler = fake })
 
 	firedByLaunchd(t, sid, label)
 	before := len(*recorded)
 	runResume()
 
-	if bootedOut((*recorded)[before:], agents, label) {
-		t.Fatalf("the runner launchd started booted its own job %s out; launchd answers that with SIGTERM before anything is resumed: %v", label, (*recorded)[before:])
+	after := (*recorded)[before:]
+	if bootOuts != 1 || commandIndex(after, bootOutOf(label)...) != len(after)-1 {
+		t.Fatalf("the job launchd ran must be booted out once, as the runner's last command, or it stays loaded and fires again on that date next year: %v", after)
+	}
+	if waitAtBootOut != nil {
+		t.Fatalf("the runner booted its own job out, which ends it, before it had closed the wait: %v", waitAtBootOut)
 	}
 	if statSafe(plist) != nil {
 		t.Fatalf("the fired job's plist is still in LaunchAgents; the next login would load it again")
@@ -478,17 +506,21 @@ func TestLaunchdRunnerThatReschedulesRegistersANewJob(t *testing.T) {
 	before := len(*recorded)
 	runResume()
 
-	if bootedOut((*recorded)[before:], agents, fired) {
-		t.Fatalf("the runner booted its own job %s out while rescheduling: %v", fired, (*recorded)[before:])
-	}
+	after := (*recorded)[before:]
 	scheduled := getMap(getMap(getMap(readState(), "waits"), sid), "scheduled")
 	next := getString(scheduled, "label")
 	if getString(scheduled, "method") != "launchd" || next == "" || next == fired {
 		t.Fatalf("the runner did not register a job of its own for the new deadline: %v (the fired job is %s)", scheduled, fired)
 	}
-	bootstrapped, found := findCommand((*recorded)[before:], "bootstrap")
+	bootstrapped, found := findCommand(after, "bootstrap")
 	if !found || !strings.HasSuffix(strings.Join(bootstrapped.args, " "), filepath.Join(agents, next+".plist")) {
-		t.Fatalf("the new job %s was not bootstrapped: %v", next, (*recorded)[before:])
+		t.Fatalf("the new job %s was not bootstrapped: %v", next, after)
+	}
+	if ownBootOut := commandIndex(after, bootOutOf(fired)...); ownBootOut != len(after)-1 || commandIndex(after, bootstrapped.args...) > ownBootOut {
+		t.Fatalf("the runner booted its own job %s out before the new job existed, or never: %v", fired, after)
+	}
+	if bootedOut(after, agents, next) {
+		t.Fatalf("the runner booted out the job it had just registered for the new deadline: %v", after)
 	}
 	if statSafe(filepath.Join(agents, fired+".plist")) != nil {
 		t.Fatalf("the fired job's plist was left in LaunchAgents")
@@ -498,7 +530,7 @@ func TestLaunchdRunnerThatReschedulesRegistersANewJob(t *testing.T) {
 	}
 }
 
-func TestLaunchdRunnerWithoutAWaitDoesNotBootOutItsOwnJob(t *testing.T) {
+func TestALaunchdRunnerThatFindsNoWaitStillLeavesNoJobBehind(t *testing.T) {
 	agents, recorded := sandboxLaunchd(t, object{})
 	sid := "mac-done"
 	now := float64(nowSec())
@@ -512,11 +544,51 @@ func TestLaunchdRunnerWithoutAWaitDoesNotBootOutItsOwnJob(t *testing.T) {
 	before := len(*recorded)
 	runResume()
 
-	if bootedOut((*recorded)[before:], agents, label) {
-		t.Fatalf("a runner that found no wait booted its own job %s out: %v", label, (*recorded)[before:])
+	after := (*recorded)[before:]
+	if len(after) != 1 || commandIndex(after, bootOutOf(label)...) != 0 {
+		t.Fatalf("a runner that found no wait must only boot its own job out at the end: %v", after)
 	}
 	if statSafe(filepath.Join(agents, label+".plist")) != nil {
 		t.Fatalf("the fired job's plist is still in LaunchAgents")
+	}
+}
+
+func TestSchedulingBootsOutAJobOfTheSessionThatRanAndStayedLoaded(t *testing.T) {
+	agents, _ := sandboxLaunchd(t, object{})
+	sid := "mac-leftover"
+	ensureDir(agents)
+	leftover, running := launchdLabel(sid)+".1700000000", launchdLabel(sid)+".1700000600"
+	pending := launchdLabel(sid) + ".1700001200"
+	if err := os.WriteFile(filepath.Join(agents, pending+".plist"), []byte("<plist/>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	other := launchdLabel("another-session") + ".1700000000"
+	listing := "PID\tStatus\tLabel\n-\t0\t" + leftover + "\n4242\t0\t" + running + "\n-\t0\t" + other + "\n-\t0\tcom.apple.Finder\n-\t0\t" + launchdLabel(sid) + "./../victim\n"
+	recorded := withFakeScheduler(t, func(command *exec.Cmd) ([]byte, error) {
+		if strings.Join(command.Args, " ") == "launchctl list" {
+			return []byte(listing), nil
+		}
+		return nil, nil
+	})
+	updateState(func(state object) { stateMap(state, "waits")[sid] = liveWait(3600) })
+
+	fresh := getString(scheduleRunner(loadConfig(), sid, float64(nowSec()+3600)), "label")
+
+	if commandIndex(*recorded, bootOutOf(leftover)...) < 0 {
+		t.Fatalf("a job of this session that ran, lost its plist and stayed loaded was left to fire again next year: %v", *recorded)
+	}
+	for _, label := range []string{running, other, "com.apple.Finder", fresh} {
+		if commandIndex(*recorded, bootOutOf(label)...) >= 0 {
+			t.Fatalf("scheduling booted out %s, which is running, another session's or not noctis's: %v", label, *recorded)
+		}
+	}
+	if commandIndex(*recorded, bootOutOf(pending)...) < 0 || statSafe(filepath.Join(agents, pending+".plist")) != nil {
+		t.Fatalf("the session's pending job was not replaced: %v", *recorded)
+	}
+	for _, entry := range *recorded {
+		if strings.Contains(strings.Join(entry.args, " "), "..") {
+			t.Fatalf("a label from launchctl list reached launchctl unchecked: %v", entry.args)
+		}
 	}
 }
 
