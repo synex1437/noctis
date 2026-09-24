@@ -292,3 +292,104 @@ func TestAProfileSwitchLeavesThePermissionModeTheUserChose(t *testing.T) {
 		t.Fatalf("uninstall should give back the mode --permissions auto replaced, got %q:\n%s", mode, uninstall)
 	}
 }
+
+func TestUninstallLeavesAValueSetupHoldsNoRecordOf(t *testing.T) {
+	sandboxFiles(t)
+	account := recordAccount(t, object{"env": object{"CLAUDE_CODE_EFFORT_LEVEL": "high"}, "permissions": object{"defaultMode": "acceptEdits"}})
+	mustWriteJSON(filepath.Join(account, pluginName, "config.json"), object{"thresholds": object{"session5h": float64(92)}, "managedPermissionMode": "acceptEdits"})
+
+	after, _ := recordUninstall(t, account)
+
+	if got, _ := recordValue(after, "env", "CLAUDE_CODE_EFFORT_LEVEL"); got != "high" {
+		t.Errorf("setup holds no record of this effort, yet uninstall made it %q", got)
+	}
+	if got, _ := recordValue(after, "permissions", "defaultMode"); got != "acceptEdits" {
+		t.Errorf("setup recorded no value from before it for this mode (it found acceptEdits already set), yet uninstall made it %q", got)
+	}
+}
+
+func TestUninstallGivesBackAModeThatAlreadyMatchedWhatSetupWrote(t *testing.T) {
+	sandboxFiles(t)
+	recordClaudeWithAuto(t)
+	cases := []struct {
+		name, original string
+		runs           [][]string
+	}{
+		{"acceptEdits before setup, setup --permissions acceptEdits", "acceptEdits", [][]string{{"--permissions", "acceptEdits"}}},
+		{"auto before setup, a first setup without --permissions", "auto", [][]string{nil}},
+		{"plan, then acceptEdits, then plan again", "plan", [][]string{{"--permissions", "acceptEdits"}, {"--permissions", "plan"}}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			account := recordAccount(t, object{"permissions": object{"defaultMode": c.original, "allow": []any{"Bash(npm test)"}}})
+			for _, flags := range c.runs {
+				recordSetup(t, account, "max", flags...)
+			}
+
+			after, _ := recordUninstall(t, account)
+
+			if got, _ := recordValue(after, "permissions", "defaultMode"); got != c.original {
+				t.Fatalf("defaultMode %s before setup: uninstall left %q", c.original, got)
+			}
+			if len(getList(getMap(after, "permissions"), "allow")) != 1 {
+				t.Fatalf("the allow rules were not kept: %v", getMap(after, "permissions"))
+			}
+		})
+	}
+}
+
+func TestUninstallForgetsWhatSetupRecordedSoALaterSetupStartsOver(t *testing.T) {
+	sandboxFiles(t)
+	recordClaudeWithAuto(t)
+	original := object{"model": "sonnet", "env": object{"CLAUDE_CODE_EFFORT_LEVEL": "medium"}, "permissions": object{"defaultMode": "plan"}}
+	account := recordAccount(t, original)
+	settingsFile := filepath.Join(account, "settings.json")
+	configFile := filepath.Join(account, pluginName, "config.json")
+	restored := func(settings object) bool {
+		effort, _ := recordValue(settings, "env", "CLAUDE_CODE_EFFORT_LEVEL")
+		mode, _ := recordValue(settings, "permissions", "defaultMode")
+		return getString(settings, "model") == "sonnet" && effort == "medium" && mode == "plan"
+	}
+
+	recordSetup(t, account, "max", "--permissions", "keep")
+	recordSetup(t, account, "max", "--permissions", "acceptEdits")
+	first, _ := recordUninstall(t, account)
+	if !restored(first) {
+		t.Fatalf("the first uninstall did not put back sonnet, medium and plan: %v", first)
+	}
+	config := readJSON(configFile)
+	for _, key := range []string{"managedModel", "managedEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep"} {
+		if _, kept := config[key]; kept {
+			t.Errorf("uninstall put settings.json back but kept %s, which describes a setup that is gone: %v", key, config[key])
+		}
+	}
+	if second, _ := recordUninstall(t, account); !restored(second) {
+		t.Fatalf("a second uninstall changed what the first one put back: %v", second)
+	}
+
+	recordSetup(t, account, "max")
+	if mode, _ := recordValue(readJSON(settingsFile), "permissions", "defaultMode"); mode != "auto" {
+		t.Fatalf("a setup after an uninstall should start over like a first setup and switch to auto, got %q", mode)
+	}
+	if again, _ := recordUninstall(t, account); !restored(again) {
+		t.Fatalf("the uninstall after a new setup did not put back sonnet, medium and plan: %v", again)
+	}
+}
+
+func TestAValueSetByHandAfterAnUninstallIsNotTakenForSetups(t *testing.T) {
+	sandboxFiles(t)
+	account := recordAccount(t, object{})
+	settingsFile := filepath.Join(account, "settings.json")
+	recordSetup(t, account, "max", "--permissions", "keep")
+	recordUninstall(t, account)
+	settings := readJSON(settingsFile)
+	settings["env"] = object{"CLAUDE_CODE_EFFORT_LEVEL": "max"}
+	mustWriteJSON(settingsFile, settings)
+
+	recordSetup(t, account, "max", "--permissions", "keep")
+	after, _ := recordUninstall(t, account)
+
+	if got, _ := recordValue(after, "env", "CLAUDE_CODE_EFFORT_LEVEL"); got != "max" {
+		t.Fatalf("effort max set by hand after an uninstall matched the old record of the first setup and was removed by the next uninstall: %q", got)
+	}
+}

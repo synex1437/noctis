@@ -617,6 +617,7 @@ func uninstallFrom(configDir string) error {
 		if err := undoSetupSettings(settingsFile, settings.data, stored.data); err != nil {
 			return err
 		}
+		forgetSetupRecords(configFile, stored.data)
 	}
 	installRoot := filepath.Join(configDir, "skills", pluginName)
 	if statSafe(installRoot) != nil {
@@ -625,6 +626,24 @@ func uninstallFrom(configDir string) error {
 		}
 	}
 	return nil
+}
+
+var setupRecords = []string{"managedModel", "managedEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep"}
+
+func forgetSetupRecords(configFile string, config object) {
+	forgotten := false
+	for _, key := range setupRecords {
+		if _, recorded := config[key]; recorded {
+			delete(config, key)
+			forgotten = true
+		}
+	}
+	if !forgotten {
+		return
+	}
+	if err := writeJSONAtomic(configFile, config); err != nil {
+		warn("uninstall: %s still holds what setup recorded about settings.json: %v", filepath.Base(configFile), err)
+	}
 }
 
 func undoSetupSettings(settingsFile string, data, guardConfig object) error {
@@ -640,17 +659,18 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 	if env := getMap(data, "env"); env != nil {
 		managedEffort := getMap(guardConfig, "managedEffort")
 		switch {
-		case managedEffort != nil && getString(env, "CLAUDE_CODE_EFFORT_LEVEL") != getString(managedEffort, "set"):
+		case managedEffort == nil, getString(env, "CLAUDE_CODE_EFFORT_LEVEL") != getString(managedEffort, "set"):
 
-		case managedEffort != nil && getString(managedEffort, "previous") != "":
+		case getString(managedEffort, "previous") != "":
 			env["CLAUDE_CODE_EFFORT_LEVEL"] = getString(managedEffort, "previous")
 		default:
 			delete(env, "CLAUDE_CODE_EFFORT_LEVEL")
 		}
 	}
 	managed := getString(guardConfig, "managedPermissionMode")
-	if permissions := getMap(data, "permissions"); permissions != nil && managed != "" && getString(permissions, "defaultMode") == managed {
-		if previous := getString(guardConfig, "managedPermissionPrevious"); previous != "" && previous != managed {
+	found, foundRecorded := guardConfig["managedPermissionPrevious"]
+	if permissions := getMap(data, "permissions"); permissions != nil && managed != "" && foundRecorded && getString(permissions, "defaultMode") == managed {
+		if previous, _ := found.(string); previous != "" {
 			permissions["defaultMode"] = previous
 		} else {
 			delete(permissions, "defaultMode")
