@@ -3,7 +3,7 @@
 7.0.1 is about the part of noctis that does its work while nobody watches: bringing a paused
 session back when the limit resets. That path was read again from the pause to the relaunched
 session's first answer, on every backend, and so were the findings the 7.0 review had left for
-later. Forty-four product bugs came out of it. Each fix came with a test that fails without it; the
+later. Forty-five product bugs came out of it. Each fix came with a test that fails without it; the
 scheduler stubs were made to start jobs the way launchd and systemd really do, and on the old code
 they now fail the way a user's machine did.
 
@@ -50,7 +50,9 @@ session relaunched headless on top of it; xfce4-terminal got a command line it r
 the previous relaunch window used a pid that could, after a reboot, belong to any shell, node or
 terminal — on Windows with its whole tree. A window is now closed only while the runner that opened
 it still watches it, and a pid outside the kernel's range, a zombie or a protected Windows process
-is no longer misjudged (`kill(2^32-1)` used to become `kill(-1)`).
+is no longer misjudged (`kill(2^32-1)` used to become `kill(-1)`). On macOS, a launcher in a folder
+whose path has a space or a quote never opened its Terminal window, because the path reached the
+shell unquoted; the session came back headless a minute later instead.
 
 **A request that can never succeed was retried forever.** An unexplained failure always got the
 first retry step, so a prompt that is too long came back every 10 minutes with a notification each
