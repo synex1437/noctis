@@ -2,21 +2,25 @@ package main
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 var stopWords = map[string][]string{
-	"en": {"the", "and", "is", "are", "to", "of", "in", "that", "it", "for", "with", "on", "this", "you", "not", "be", "have", "please", "can", "what", "how", "make", "add", "fix"},
-	"tr": {"ve", "bir", "bu", "için", "ile", "mı", "mi", "mu", "mü", "ne", "değil", "var", "yok", "olarak", "çok", "gibi", "sonra", "ama", "şu", "ben", "sen", "biz", "yap", "ekle", "düzelt", "lütfen", "nasıl", "şimdi", "kadar", "daha", "olan", "her"},
-	"de": {"der", "die", "das", "und", "nicht", "ist", "ich", "mit", "für", "auf", "eine", "ein", "zu", "den", "dem", "sind", "auch", "bitte", "wie", "kann", "noch", "wenn", "aber", "hinzufügen", "mach"},
-	"fr": {"le", "la", "les", "des", "est", "pas", "une", "pour", "dans", "que", "qui", "avec", "sur", "ce", "il", "ne", "et", "je", "nous", "vous", "s'il", "ajoute", "comment", "peux", "faire", "sont", "mais"},
-	"es": {"el", "los", "las", "es", "una", "por", "para", "con", "que", "del", "no", "en", "se", "y", "un", "lo", "como", "puedes", "hacer", "agrega", "también", "pero", "más", "son", "está"},
-	"pt": {"o", "os", "as", "um", "uma", "não", "com", "para", "que", "em", "do", "da", "dos", "das", "é", "você", "isso", "como", "pode", "fazer", "adicione", "também", "mas", "mais", "são"},
-	"it": {"il", "gli", "le", "un", "una", "che", "non", "per", "con", "del", "della", "è", "sono", "di", "e", "come", "puoi", "fare", "aggiungi", "anche", "ma", "più", "questo", "nel"},
-	"nl": {"de", "het", "een", "en", "van", "niet", "is", "ik", "je", "met", "voor", "op", "dat", "zijn", "ook", "kun", "maken", "voeg", "toe", "hoe", "maar", "nog", "dit", "wat"},
-	"pl": {"nie", "jest", "się", "to", "na", "i", "w", "z", "do", "że", "jak", "czy", "dla", "ale", "też", "można", "zrób", "dodaj", "proszę", "być", "przez", "tego", "już"},
+	"en": {"the", "and", "is", "are", "to", "of", "in", "that", "it", "for", "with", "on", "this", "you", "not", "be", "have", "please", "can", "what", "how", "make", "add", "fix", "i", "do", "does", "did", "done", "don't", "doesn't", "didn't", "isn't", "aren't", "can't", "won't", "it's", "i'm", "i've", "i'll", "i'd", "that's", "there's", "what's", "let's", "as", "if", "at", "why", "should", "would", "could", "will", "from", "just", "there", "here", "no", "my", "me", "we", "our", "your", "they", "them", "their", "an", "or", "but", "by", "so", "all", "any", "some", "only", "then", "than", "when", "where", "which", "who", "was", "were", "been", "has", "had", "need", "want", "use", "get", "now", "into", "about", "these", "those", "each", "per", "one", "well", "more", "very", "too", "same", "other", "again", "still", "after", "before", "because", "while", "until", "without", "over", "around", "ci", "ai", "ten", "plus", "pod", "im"},
+	"tr": {"ve", "bir", "bu", "için", "ile", "mı", "mi", "mu", "mü", "ne", "değil", "var", "yok", "olarak", "çok", "gibi", "sonra", "ama", "şu", "ben", "sen", "biz", "yap", "ekle", "düzelt", "lütfen", "nasıl", "şimdi", "kadar", "daha", "olan", "her", "neden", "niye", "önce", "ki", "şey", "hiç", "tüm", "bütün", "sadece", "yine", "tekrar", "artık", "bunu", "şunu", "onu", "buna", "bunun", "burada", "misin", "mısın", "musun", "müsün", "yaz", "bak", "göster", "sil", "tamam", "evet", "hayır"},
+	"de": {"der", "die", "das", "und", "nicht", "ist", "ich", "mit", "für", "auf", "eine", "ein", "zu", "den", "dem", "sind", "auch", "bitte", "wie", "kann", "noch", "wenn", "aber", "hinzufügen", "mach", "in", "im", "es", "sie", "du", "dir", "mir", "mich", "dich", "wir", "uns", "sich", "von", "vom", "zum", "zur", "aus", "bei", "beim", "nach", "vor", "über", "um", "oder", "dass", "ob", "weil", "was", "warum", "wo", "wer", "welche", "dieser", "diese", "dieses", "diesen", "einen", "einem", "einer", "eines", "kein", "keine", "nur", "schon", "doch", "dann", "jetzt", "hier", "alle", "alles", "mehr", "sehr", "gibt", "hat", "haben", "wird", "soll", "muss", "kannst", "bevor", "damit", "ohne", "an", "so", "als", "er", "füge", "will"},
+	"fr": {"le", "la", "les", "des", "est", "pas", "une", "pour", "dans", "que", "qui", "avec", "sur", "ce", "il", "ne", "et", "je", "nous", "vous", "s'il", "ajoute", "comment", "peux", "faire", "sont", "mais", "de", "du", "un", "au", "aux", "en", "par", "plus", "ou", "où", "si", "tu", "on", "elle", "cette", "ces", "mon", "ma", "mes", "ton", "ta", "tes", "son", "sa", "ses", "moi", "toi", "lui", "y", "ai", "fait", "fais", "peut", "dois", "doit", "être", "avoir", "quand", "pourquoi", "quoi", "tout", "tous", "rien", "bien", "très", "déjà", "encore", "aussi", "avant", "après", "sans", "comme", "c'est", "j'ai", "me", "te", "va", "hier", "qu'est", "depuis", "même", "à", "ça", "ici"},
+	"es": {"el", "los", "las", "es", "una", "por", "para", "con", "que", "del", "no", "en", "se", "y", "un", "lo", "como", "puedes", "hacer", "agrega", "también", "pero", "más", "son", "está", "de", "la", "al", "le", "les", "su", "sus", "mi", "me", "te", "nos", "ya", "hay", "muy", "sin", "sobre", "este", "esta", "esto", "estos", "estas", "ese", "esa", "eso", "qué", "cómo", "cuál", "cuando", "dónde", "donde", "porque", "todo", "todos", "nada", "algo", "otro", "otra", "ahora", "antes", "después", "si", "o", "ni", "haz", "dime", "puede", "tiene", "hace", "están", "estoy", "quiero", "necesito", "tu", "solo", "ha", "bien", "aquí", "tan"},
+	"pt": {"o", "os", "as", "um", "uma", "não", "com", "para", "que", "em", "do", "da", "dos", "das", "é", "você", "isso", "como", "pode", "fazer", "adicione", "também", "mas", "mais", "são", "de", "e", "no", "na", "nos", "nas", "se", "ao", "aos", "à", "pelo", "pela", "por", "eu", "ele", "ela", "meu", "minha", "seu", "sua", "esse", "essa", "este", "esta", "estas", "isto", "está", "estão", "tem", "ter", "foi", "já", "só", "até", "quando", "onde", "porque", "nada", "tudo", "todo", "todos", "algo", "agora", "antes", "depois", "sem", "muito", "faz", "faça", "preciso", "quero", "consegue", "me", "te", "lhe", "sobre", "tu", "sempre", "tão", "aqui", "ainda", "ou"},
+	"it": {"il", "gli", "le", "un", "una", "che", "non", "per", "con", "del", "della", "è", "sono", "di", "e", "come", "puoi", "fare", "aggiungi", "anche", "ma", "più", "questo", "nel", "la", "lo", "i", "in", "da", "dal", "dalla", "al", "alla", "allo", "ai", "agli", "alle", "dei", "delle", "degli", "nella", "nelle", "negli", "sul", "sulla", "si", "se", "mi", "ti", "ci", "cosa", "perché", "quando", "dove", "prima", "poi", "dopo", "tutto", "tutti", "niente", "nulla", "sempre", "già", "solo", "ora", "qui", "questa", "questi", "queste", "quello", "quella", "mio", "mia", "tuo", "tua", "ho", "hai", "ha", "abbiamo", "fai", "fa", "dimmi", "fammi", "voglio", "devi", "deve", "va", "bene", "no", "o", "ancora", "me", "te", "tu", "lui"},
+	"nl": {"de", "het", "een", "en", "van", "niet", "is", "ik", "je", "met", "voor", "op", "dat", "zijn", "ook", "kun", "maken", "voeg", "toe", "hoe", "maar", "nog", "dit", "wat", "in", "er", "te", "aan", "om", "als", "dan", "bij", "of", "uit", "door", "naar", "heeft", "hebben", "wordt", "kan", "kunt", "moet", "mijn", "jij", "jouw", "we", "wij", "ze", "zo", "al", "geen", "wel", "deze", "die", "waarom", "waar", "wanneer", "welke", "hier", "daar", "nu", "even", "alles", "alle", "iets", "niets", "eens", "zou", "zal", "gaan", "gaat", "maak", "sinds", "over", "had", "want", "was"},
+	"pl": {"nie", "jest", "się", "to", "na", "i", "w", "z", "do", "że", "jak", "czy", "dla", "ale", "też", "można", "zrób", "dodaj", "proszę", "być", "przez", "tego", "już", "o", "po", "co", "tak", "za", "od", "tylko", "jego", "mnie", "mi", "jej", "gdy", "bo", "może", "tym", "ten", "ta", "te", "tu", "tam", "jeszcze", "bardzo", "nic", "coś", "są", "ma", "mam", "masz", "żeby", "gdzie", "kiedy", "który", "która", "które", "oraz", "lub", "albo", "ze", "u", "przy", "pod", "nad", "bez", "mój", "moje", "dlaczego", "napraw", "popraw", "sprawdź", "zobacz", "teraz", "wszystko", "wszystkie", "no", "on", "my"},
 }
+
+var typographicApostrophes = strings.NewReplacer("’", "'", "‘", "'", "ʼ", "'")
 
 var scriptLanguages = []struct {
 	lang string
@@ -60,23 +64,30 @@ func detectLanguage(text string) string {
 			return script.lang
 		}
 	}
-	words := strings.FieldsFunc(strings.ToLower(sample), func(r rune) bool {
-		return !unicode.IsLetter(r) && r != '\''
-	})
+	var words []string
+	for _, token := range strings.FieldsFunc(typographicApostrophes.Replace(strings.ToLower(sample)), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune("'.-/", r)
+	}) {
+		words = appendTokenWords(words, token)
+	}
 	if len(words) < 2 {
 		return ""
 	}
 	scores := map[string]int{}
+	exclusive := map[string]int{}
 	turkishLetters := 0
 	polishLetters := 0
 	for _, word := range words {
+		owners, owner := 0, ""
 		for lang, list := range stopWords {
-			for _, stop := range list {
-				if word == stop {
-					scores[lang]++
-					break
-				}
+			if slices.Contains(list, word) {
+				scores[lang]++
+				owners++
+				owner = lang
 			}
+		}
+		if owners == 1 {
+			exclusive[owner]++
 		}
 		if strings.ContainsAny(word, "şğıİ") {
 			turkishLetters++
@@ -87,6 +98,8 @@ func detectLanguage(text string) string {
 	}
 	scores["tr"] += turkishLetters * 2
 	scores["pl"] += polishLetters * 2
+	exclusive["tr"] += turkishLetters * 2
+	exclusive["pl"] += polishLetters * 2
 	best, second, bestLang := 0, 0, ""
 	for lang, score := range scores {
 		switch {
@@ -96,10 +109,45 @@ func detectLanguage(text string) string {
 			second = score
 		}
 	}
-	if best < 2 || best-second < 1 || best == second {
+	if best-second < 1 || (best < 3 && exclusive[bestLang] < 2) {
 		return ""
 	}
 	return bestLang
+}
+
+func appendTokenWords(words []string, token string) []string {
+	token = strings.TrimLeft(strings.TrimRight(token, "'."), "'")
+	if strings.Contains(token, "/") {
+		for _, part := range strings.Split(token, "/") {
+			if part = strings.TrimLeft(strings.TrimRight(part, "'."), "'"); utf8.RuneCountInString(part) > 1 {
+				words = appendTokenWords(words, part)
+			}
+		}
+		return words
+	}
+	if !strings.ContainsFunc(token, unicode.IsLetter) {
+		return words
+	}
+	if !strings.Contains(token, "-") || strings.HasPrefix(token, "-") || strings.ContainsFunc(token, func(r rune) bool { return r == '.' || unicode.IsDigit(r) }) {
+		return append(words, token)
+	}
+	parts := strings.FieldsFunc(token, func(r rune) bool { return r == '-' })
+	for i, part := range parts {
+		parts[i] = strings.Trim(part, "'")
+		if !listedWord(parts[i]) {
+			return append(words, token)
+		}
+	}
+	return append(words, parts...)
+}
+
+func listedWord(word string) bool {
+	for _, list := range stopWords {
+		if slices.Contains(list, word) {
+			return true
+		}
+	}
+	return false
 }
 
 func rememberSessionLanguage(sid, text string) string {
