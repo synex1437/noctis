@@ -10,6 +10,7 @@
   "hit.projection": "burn projection from stale data",
   "hit.budget": "daily budget",
   "hit.ceiling": "usage limit reached (paid credits refused)",
+  "hit.ceilingSoon": "usage limit about to be reached (paid credits refused)",
   "hit.threshold": "threshold %s%%",
   "wait.reason": "%s window %s%% (%s), resets %s",
   "wait.resumed": "⏸ %s limit %s%%: waited %s, continuing.",

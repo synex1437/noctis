@@ -719,7 +719,11 @@ func subagentLimit(cfg object, now int64) decision {
 func subagentLimitReason(wait, ceiling *waitPlan) string {
 	resume := "The session continues after the reset at " + formatTime(wait.until) + "."
 	if ceiling != nil {
-		return fmt.Sprintf("[noctis] %s usage is %s%%, at the paid-credit ceiling (%s%%): past it the account pays for the overflow in usage credits, so this agent stops now. %s", ceiling.label, formatNumber(ceiling.used), formatNumber(ceiling.threshold), resume)
+		where := "at the paid-credit ceiling"
+		if ceiling.used < ceiling.threshold {
+			where = "close enough to the paid-credit ceiling to cross it at the current burn rate"
+		}
+		return fmt.Sprintf("[noctis] %s usage is %s%%, %s (%s%%): past it the account pays for the overflow in usage credits, so this agent stops now. %s", ceiling.label, formatNumber(ceiling.used), where, formatNumber(ceiling.threshold), resume)
 	}
 	point := formatNumber(wait.threshold) + "%"
 	if wait.used < wait.threshold {

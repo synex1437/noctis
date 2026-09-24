@@ -972,6 +972,7 @@ type waitPlan struct {
 	threshold float64
 	until     float64
 	hit       string
+	cause     string
 }
 
 type warnPlan struct {
@@ -1058,7 +1059,8 @@ func evaluate(cfg object, usage usageView, model string, contextPercent float64,
 func nearEdge(cfg object, usage usageView) bool {
 	thresholds := section(cfg, "thresholds")
 	return (usage.fiveHour != nil && validThreshold(thresholds["session5h"]) && usage.fiveHour.used >= thresholdOf(cfg, "session5h")-nearEdgeBand) ||
-		(usage.sevenDay != nil && validThreshold(thresholds["weeklyAll"]) && usage.sevenDay.used >= thresholdOf(cfg, "weeklyAll")-nearEdgeBand)
+		(usage.sevenDay != nil && validThreshold(thresholds["weeklyAll"]) && usage.sevenDay.used >= thresholdOf(cfg, "weeklyAll")-nearEdgeBand) ||
+		nearCeiling(cfg, usage)
 }
 
 func edgePollSeconds(cfg object, usage usageView) float64 {
@@ -1074,6 +1076,13 @@ func edgePollSeconds(cfg object, usage usageView) float64 {
 		burst = math.Max(burst, usage.sevenDay.burst)
 		if validThreshold(section(cfg, "thresholds")["weeklyAll"]) {
 			gap = math.Min(gap, thresholdOf(cfg, "weeklyAll")-usage.sevenDay.used)
+		}
+	}
+	if !paidCreditsAllowed(cfg) {
+		for _, win := range []*window{usage.fiveHour, usage.sevenDay} {
+			if win != nil {
+				gap = math.Min(gap, creditCeiling(cfg)-win.used)
+			}
 		}
 	}
 	seconds := float64(nearEdgePollSlow)
