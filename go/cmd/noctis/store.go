@@ -932,8 +932,15 @@ func pruneState(state object, now int64) {
 		}
 	}
 	for sid, raw := range stateMap(state, "autoQueues") {
+		if getMap(getMap(state, "waits"), sid) != nil {
+			continue
+		}
 		record := toObject(raw)
-		if float64(now)-numberOr(record, "at", 0) > checkpointTTLSeconds {
+		touched := numberOr(record, "at", 0)
+		if info := statSafe(getString(record, "path")); info != nil && float64(info.ModTime().Unix()) > touched {
+			touched = float64(info.ModTime().Unix())
+		}
+		if float64(now)-touched > checkpointTTLSeconds {
 			_ = os.Remove(getString(record, "path"))
 			delete(stateMap(state, "autoQueues"), sid)
 		}
