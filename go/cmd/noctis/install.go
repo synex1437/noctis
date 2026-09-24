@@ -658,6 +658,10 @@ func forgetSetupRecords(configFile string, config object) {
 			forgotten = true
 		}
 	}
+	if statusline := getMap(config, "statusline"); getString(statusline, "chainCommand") != "" {
+		statusline["chainCommand"] = ""
+		forgotten = true
+	}
 	if !forgotten {
 		return
 	}
