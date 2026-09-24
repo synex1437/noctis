@@ -143,6 +143,10 @@ class Lab {
       'LICENSE',
       'README.md',
     ];
+    const hooksManifest = readJson(path.join(SOURCE_ROOT, 'hooks', 'hooks.json')) || {};
+    for (const name of Array.isArray(hooksManifest.modules) ? hooksManifest.modules : []) {
+      if (typeof name === 'string') wanted.push(path.join('hooks', name));
+    }
     for (const relative of wanted) {
       const from = path.join(SOURCE_ROOT, relative);
       if (!fs.existsSync(from)) continue;
