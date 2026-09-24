@@ -1545,17 +1545,19 @@ func clearWaitAndConsume(sid string, state object) {
 	})
 }
 
-func notify(cfg object, title, body string) {
+func notify(cfg object, title, body string) string {
 	alarm := section(cfg, "alarm")
 	if !getBool(alarm, "enabled", true) {
-		return
+		return "alarm.enabled: false"
 	}
 	var child *exec.Cmd
+	notShown := ""
 	switch {
 	case isWindows && files.notifyScript == "":
+		notShown = fmt.Sprintf("%s is not the plugin folder of this binary, so its scripts\\notify.ps1 is not run", files.pluginRoot)
 		if float64(nowSec())-numberOr(getMap(readState(), "notified"), "notify:untrusted", 0) > 86400 {
 			updateState(func(next object) { stateMap(next, "notified")["notify:untrusted"] = float64(nowSec()) })
-			warn("no toast: %s is not the plugin folder of this binary, so its scripts\\notify.ps1 is not run", files.pluginRoot)
+			warn("no toast: %s", notShown)
 		}
 	case isWindows:
 		child = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", files.notifyScript, "-Title", title, "-Body", body)
@@ -1568,7 +1570,7 @@ func notify(cfg object, title, body string) {
 	if child != nil {
 		configureDetached(child)
 		if err := child.Start(); err != nil {
-
+			notShown = err.Error()
 			if notifierMissing(err) {
 				once := "notify:" + filepath.Base(child.Path)
 				if float64(nowSec())-numberOr(getMap(readState(), "notified"), once, 0) > 86400 {
@@ -1590,6 +1592,7 @@ func notify(cfg object, title, body string) {
 		}
 	}
 	logInfo("notify: %s — %s", title, body)
+	return notShown
 }
 
 var switchedEffortKeys = []string{"effortSet", "effortWas", "effortAbsent"}
@@ -2137,8 +2140,10 @@ type decideOptions struct {
 }
 
 func decide(cfg object, state object, input object, now int64, options decideOptions) decision {
-	recordHookPulse(state, now)
 	sid := sessionKey(input)
+	if sid != selftestSession {
+		recordHookPulse(state, now)
+	}
 	usageFile := readJSON(files.usage)
 	model := resolveSessionModel(cfg, state, usageFile, sid)
 	sessionInfo := getMap(getMap(usageFile, "sessions"), sid)

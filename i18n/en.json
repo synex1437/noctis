@@ -234,6 +234,7 @@
   "selftest.hookSpeed": "hook speed: %d ms (below-threshold call)",
   "selftest.notifyBody": "Self-test notification: if you see this, beep/toast works.",
   "selftest.notifySent": "notification sent (toast/beep should be visible)",
+  "selftest.notifyNone": "no desktop notification here (%s): alarms stay silent on this machine; waits are unaffected",
   "selftest.taskFailed": "Task Scheduler registration failed: %s",
   "selftest.taskWaiting": "   Task Scheduler test: task registered for 1 min from now, waiting for it to fire (up to 120 s)...",
   "selftest.taskFired": "Task Scheduler task fired and the runner binary ran",

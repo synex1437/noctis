@@ -234,6 +234,7 @@
   "selftest.hookSpeed": "vitesse des hooks : %d ms (appel sous le seuil)",
   "selftest.notifyBody": "Notification d'auto-test : si vous voyez ceci, bip/toast fonctionnent.",
   "selftest.notifySent": "notification envoyée (une bulle/un son devrait apparaître)",
+  "selftest.notifyNone": "pas de notification de bureau ici (%s) : les alarmes restent muettes sur cette machine ; les attentes ne sont pas touchées",
   "selftest.taskFailed": "échec de l'enregistrement dans le Planificateur de tâches : %s",
   "selftest.taskWaiting": "   test du Planificateur de tâches : tâche enregistrée pour dans 1 min, en attente du déclenchement (jusqu'à 120 s)...",
   "selftest.taskFired": "la tâche du Planificateur s'est déclenchée et le binaire runner a tourné",

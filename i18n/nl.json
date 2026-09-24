@@ -234,6 +234,7 @@
   "selftest.hookSpeed": "hooksnelheid: %d ms (aanroep onder de drempel)",
   "selftest.notifyBody": "Zelftestmelding: als je dit ziet, werken piep/toast.",
   "selftest.notifySent": "melding verstuurd (er hoort een melding of geluid te komen)",
+  "selftest.notifyNone": "hier geen bureaubladmelding (%s): alarmen blijven stil op deze machine; wachttijden merken er niets van",
   "selftest.taskFailed": "registratie in Taakplanner mislukt: %s",
   "selftest.taskWaiting": "   Taakplanner-test: taak geregistreerd voor over 1 min, wachten tot hij afgaat (tot 120 s)...",
   "selftest.taskFired": "de Taakplanner-taak is afgegaan en de runner-binary heeft gedraaid",
