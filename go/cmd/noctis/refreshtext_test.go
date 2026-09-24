@@ -53,3 +53,30 @@ func TestStatusAndDoctorNameARefreshProblemInWords(t *testing.T) {
 		}
 	}
 }
+
+func TestARefreshProblemSaysWhenNoctisTriesAgain(t *testing.T) {
+	sandboxFiles(t)
+	previousHost, previousLocale := activeHost, locale
+	t.Cleanup(func() { activeHost, locale = previousHost, previousLocale })
+	locale = "en"
+	until := float64(nowSec() + 600)
+	next := "next try after " + formatTime(until)
+
+	mustWriteJSON(files.fable, object{"error": "http-429", "backoffUntil": until})
+	if line := scopedDataLine(t, object{"fable": object{"source": "oauth"}}); !strings.Contains(line, next) || strings.Contains(line, "later") {
+		t.Errorf("status does not say when noctis asks the usage endpoint again: %q, want %q in it", line, next)
+	}
+
+	activeHost = "codex"
+	mustWriteJSON(files.fable, object{"error": "codex codex executable not found", "backoffUntil": until})
+	doctorIssues = 0
+	usageLine := ""
+	for _, line := range doctorLines(object{}) {
+		if strings.Contains(line, "usage.json:") {
+			usageLine = line
+		}
+	}
+	if !strings.Contains(usageLine, next) {
+		t.Errorf("the Codex doctor does not say when noctis asks Codex again: %q, want %q in it", usageLine, next)
+	}
+}
