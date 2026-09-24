@@ -750,7 +750,7 @@ func denySubagentTool(input, cfg object) bool {
 	case result.wait != nil:
 		reason, what = subagentLimitReason(result.wait, ceiling), hitLabel(shownLimit(result.wait, ceiling))
 	case toolName == "Workflow":
-		reason, what = gateWorkflowLaunch(cfg, result), orDefault(hitLabelOrWarn(result), "fan-out headroom")
+		reason, what = gateWorkflowLaunch(cfg, result, input), orDefault(hitLabelOrWarn(result), "fan-out headroom")
 	}
 	if reason == "" {
 		return false
@@ -936,7 +936,7 @@ func onPreToolUse(input, cfg object) {
 
 func onWorkflowLaunch(input, cfg object, state object, now int64, sid string) {
 	result := decide(cfg, state, input, now, decideOptions{force: true})
-	if reason := gateWorkflowLaunch(cfg, result); reason != "" {
+	if reason := gateWorkflowLaunch(cfg, result, input); reason != "" {
 		if observed(sid, "PreToolUse", "deny-workflow", reason, usageFacts(result.usage)) {
 			recordWorkflowLaunch(sid, input, now)
 			return

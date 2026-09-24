@@ -1235,17 +1235,34 @@ func TestTheFanOutAdviceSendsNoAgentToFableWhileTheFableQuotaIsOut(t *testing.T)
 }
 
 func TestNoWorkflowIsAdvisedThatTheLaunchGateWouldRefuse(t *testing.T) {
-	cfg, project := retiredProfileSandbox(t, nil, 97)
-	if advice := contextOf(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg)); strings.Contains(advice, "fan-out task") {
-		t.Fatalf("with -2 points of Fable room a workflow was advised that the launch gate refuses: %q", advice)
+	cfg, project := retiredProfileSandbox(t, nil, 80)
+	workflow := func(toolInput object) object {
+		return agentHookInput("PreToolUse", "s1", project, object{"tool_name": "Workflow", "tool_input": toolInput})
 	}
-	launch := agentHookInput("PreToolUse", "s1", project, object{"tool_name": "Workflow", "tool_input": object{"name": "audit-routes"}})
-	if output := hookOutput(t, onPreToolUse, launch, cfg); permissionOf(output) != "deny" {
-		t.Fatalf("the launch gate let a workflow fan out with -2 points of Fable room: %v", output)
+	if advice := contextOf(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg)); strings.Contains(advice, "fan-out task") {
+		t.Fatalf("with 15 points of Fable room a workflow was advised that puts its code agents on Fable, which the launch gate refuses: %q", advice)
+	}
+	onFable := object{"script": strings.Replace(opusOnlyWorkflow, "model: 'opus'", "model: 'fable'", 1)}
+	if output := hookOutput(t, onPreToolUse, workflow(onFable), cfg); permissionOf(output) != "deny" {
+		t.Fatalf("the launch gate let a workflow with agents on Fable fan out with 15 points of Fable room: %v", output)
 	}
 	trustQueueFile(writeQueueFile(t, project, "# q\n- [ ] migrate every component under src/components to TypeScript\n- [ ] fix typo\n"), true)
 	if reason := getString(hookOutput(t, onStop, stopInput("s1", project), cfg), "reason"); !strings.Contains(reason, "Queue continues") || strings.Contains(reason, "fan-out task") {
-		t.Fatalf("with -2 points of Fable room the queue advised a workflow that the launch gate refuses: %q", reason)
+		t.Fatalf("with 15 points of Fable room the queue advised a workflow that the launch gate refuses: %q", reason)
+	}
+	writeFableBucket(97, float64(nowSec()), float64(nowSec()+2*86400))
+	advice := contextOf(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg))
+	if !strings.Contains(advice, "fan-out task") || !strings.Contains(advice, "code-writing agents → opus (effort max)") || strings.Contains(strings.ToLower(advice), "fable") {
+		t.Fatalf("with the Fable quota out every agent of the advice runs on Opus, so the Fable window has no say, and no such advice was given: %q", advice)
+	}
+	if output := hookOutput(t, onPreToolUse, workflow(object{"script": opusOnlyWorkflow}), cfg); permissionOf(output) == "deny" {
+		t.Fatalf("the launch gate refused the Opus-only workflow the advice asks for: %v", output)
+	}
+	if output := hookOutput(t, onPreToolUse, workflow(object{"name": "audit-routes"}), cfg); permissionOf(output) != "deny" {
+		t.Fatalf("the launch gate let a workflow it cannot read, which may run on Fable, fan out with -2 points of Fable room: %v", output)
+	}
+	if reason := getString(hookOutput(t, onStop, stopInput("s1", project), cfg), "reason"); !strings.Contains(reason, "Queue continues") || !strings.Contains(reason, "code-writing agents → opus (effort max)") {
+		t.Fatalf("with the Fable quota out the queue gave no Opus workflow advice for its fan-out item: %q", reason)
 	}
 	writeFableBucket(50, float64(nowSec()), float64(nowSec()+2*86400))
 	if advice := contextOf(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg)); !strings.Contains(advice, "fan-out task") {

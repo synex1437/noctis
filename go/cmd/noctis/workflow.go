@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -16,6 +18,12 @@ var fanOutPatterns = []*lazyRe{
 }
 
 var workflowKeywords = lazyRegexp(`(?i)\b(ultracode|workflow|iş akışı|/deep-research)\b`)
+
+var nestedWorkflowCall = lazyRegexp(`\bworkflow\s*\(`)
+
+var agentTypeOption = lazyRegexp(`\bagentType\b`)
+
+var agentTypeLiteral = lazyRegexp(`\bagentType\b["']?\s*:\s*(?:'([^'\\\r\n]*)'|"([^"\\\r\n]*)")\s*(?:[,})\r\n]|$)`)
 
 func looksLikeFanOut(text string) bool {
 	if text == "" || workflowKeywords.MatchString(text) {
@@ -33,30 +41,126 @@ func workflowCfg(cfg object) object {
 	return section(cfg, "workflow")
 }
 
-func workflowAdvice(cfg object, subject string, usage usageView) string {
+type roleModel struct {
+	model  string
+	effort string
+}
+
+func workflowRoleModels(cfg object, usage usageView) []roleModel {
 	roles := section(cfg, "roles")
 	state, now := readState(), nowSec()
-	spec := func(role, fallback string) string {
+	pick := func(role, fallback string) roleModel {
 		entry := getMap(roles, role)
 		model := orDefault(getString(entry, "model"), fallback)
 		effort := appliedEffort(role, object{"model": model, "effort": getString(entry, "effort")})
 		if safe := scopedSafeModel(cfg, state, usage, model, now); safe != model {
 			model, effort = safe, appliedEffort("fallback", object{"model": safe, "effort": getString(getMap(roles, "fallback"), "effort")})
 		}
-		if effort != "" {
-			return model + " (effort " + effort + ")"
-		}
-		return model
+		return roleModel{model: model, effort: effort}
 	}
+	return []roleModel{pick("code", getString(section(cfg, "models"), "primary")), pick("research", "opus"), pick("explore", "haiku"), pick("digest", "haiku")}
+}
+
+func roleModelText(role roleModel) string {
+	if role.effort != "" {
+		return role.model + " (effort " + role.effort + ")"
+	}
+	return role.model
+}
+
+func workflowAdvice(cfg object, subject string, usage usageView) string {
+	models := workflowRoleModels(cfg, usage)
 	size := orDefault(getString(workflowCfg(cfg), "size"), "medium")
-	return fmt.Sprintf(`[noctis] %s looks like a fan-out task: run it as a dynamic workflow (ultracode) instead of working item by item — one agent per unit, results verified before they are reported, size guideline %s. Agent models: code-writing agents → %s; read-only analysis and review agents → %s; discovery/search agents → %s; test runs and other noisy verification → %s. Give parallel editors isolated copies (worktrees) so their edits never collide, and keep the run's script path: if the run is interrupted, relaunch that same script (completed agents return saved results) rather than starting a new run.`, subject, size, spec("code", getString(section(cfg, "models"), "primary")), spec("research", "opus"), spec("explore", "haiku"), spec("digest", "haiku"))
+	return fmt.Sprintf(`[noctis] %s looks like a fan-out task: run it as a dynamic workflow (ultracode) instead of working item by item — one agent per unit, results verified before they are reported, size guideline %s. Agent models: code-writing agents → %s; read-only analysis and review agents → %s; discovery/search agents → %s; test runs and other noisy verification → %s. Give parallel editors isolated copies (worktrees) so their edits never collide, and keep the run's script path: if the run is interrupted, relaunch that same script (completed agents return saved results) rather than starting a new run.`, subject, size, roleModelText(models[0]), roleModelText(models[1]), roleModelText(models[2]), roleModelText(models[3]))
+}
+
+func launchedScript(launch object) (string, bool) {
+	toolInput := getMap(launch, "tool_input")
+	script := ""
+	if path := firstString(toolInput, "scriptPath", "script_path"); path != "" {
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(getString(launch, "cwd"), path)
+		}
+		info := statSafe(path)
+		if info == nil || !info.Mode().IsRegular() || info.Size() > workflowScriptMaxBytes {
+			return "", false
+		}
+		content, err := readFileShared(path)
+		if err != nil {
+			return "", false
+		}
+		script = string(content)
+	} else if script = getString(toolInput, "script"); script == "" {
+		return "", false
+	}
+	if nestedWorkflowCall.MatchString(script) {
+		return "", false
+	}
+	if args, present := toolInput["args"]; present {
+		script += "\n" + string(marshalCompact(args))
+	}
+	return script, true
+}
+
+func fanOutMayUseScoped(cfg object, result decision, launch object) bool {
+	scoped := scopedModelPattern(cfg)
+	if result.model == "" || scoped.MatchString(result.model) {
+		return true
+	}
+	if launch == nil {
+		for _, role := range workflowRoleModels(cfg, result.usage) {
+			if scoped.MatchString(role.model) {
+				return true
+			}
+		}
+		return false
+	}
+	script, readable := launchedScript(launch)
+	return !readable || scoped.MatchString(script) || agentTypesMayUseScoped(script, scoped)
+}
+
+func agentTypesMayUseScoped(script string, scoped *regexp.Regexp) bool {
+	literals := agentTypeLiteral.FindAllStringSubmatch(script, -1)
+	if len(literals) < len(agentTypeOption.FindAllStringSubmatch(script, -1)) {
+		return true
+	}
+	for _, literal := range literals {
+		name, own := strings.CutPrefix(literal[1]+literal[2], pluginName+":")
+		if !own || name == "" || strings.ContainsAny(name, `/\:.`) || files.pluginRoot == "" {
+			return true
+		}
+		model, readable := agentFileModel(filepath.Join(files.pluginRoot, "agents", name+".md"))
+		if !readable || (model != "" && model != "inherit" && scoped.MatchString(model)) {
+			return true
+		}
+	}
+	return false
+}
+
+func agentFileModel(file string) (string, bool) {
+	content, err := readFileShared(file)
+	if err != nil {
+		return "", false
+	}
+	text := strings.ReplaceAll(strings.TrimPrefix(string(content), "\uFEFF"), "\r\n", "\n")
+	front, _, closed := strings.Cut(strings.TrimPrefix(text, "---\n"), "\n---")
+	if !strings.HasPrefix(text, "---\n") || !closed {
+		return "", false
+	}
+	for _, line := range strings.Split(front, "\n") {
+		if key, value, found := strings.Cut(line, ":"); found && strings.TrimRight(key, " \t") == "model" {
+			value, _, _ = strings.Cut(value, " #")
+			return strings.Trim(strings.TrimSpace(value), `"'`), true
+		}
+	}
+	return "", true
 }
 
 func workflowAdvisable(cfg object, result decision) bool {
 	if !getBool(workflowCfg(cfg), "suggest", true) || result.wait != nil || result.warnWindow != nil || result.fableHit {
 		return false
 	}
-	return gateWorkflowLaunch(cfg, result) == ""
+	return gateWorkflowLaunch(cfg, result, nil) == ""
 }
 
 func suggestWorkflow(cfg object, prompt string, result decision) string {
@@ -158,7 +262,7 @@ func workflowResumeNote(state object, sid string) string {
 	return strings.Join(notes, " ")
 }
 
-func gateWorkflowLaunch(cfg object, result decision) string {
+func gateWorkflowLaunch(cfg object, result decision, launch object) string {
 	if !getBool(workflowCfg(cfg), "gate", true) {
 		return ""
 	}
@@ -171,7 +275,11 @@ func gateWorkflowLaunch(cfg object, result decision) string {
 		return "[noctis] the scoped model quota is out; the plugin is switching the default model. Launch the workflow after the switch, on the fallback model."
 	}
 	if needed := fanOutHeadroom(cfg); needed > 0 {
-		if room, label := headroomLeft(cfg, result.usage); room < needed {
+		usage := result.usage
+		if !fanOutMayUseScoped(cfg, result, launch) {
+			usage.fable = nil
+		}
+		if room, label := headroomLeft(cfg, usage); room < needed {
 			return fmt.Sprintf("[noctis] only %s points of the %s window are left before the pause point, and a workflow fans out many agents at once: between two checks they can burn through the rest, and past the subscription limit the account pays for the overflow in usage credits. A workflow needs %s points of room. Do this as a single-agent job now, or launch the workflow after the reset.", formatNumber(roundTo(room, 1)), label, formatNumber(needed))
 		}
 	}
