@@ -1058,7 +1058,10 @@ async function scenarioLocaleAndModes(acc) {
   const en = acc.run(['statusline'], acc.statuslineInput('lc1', 'claude-fable-5-1', 41, now + 7200, 23, now + 3 * 86400), { NOCTIS_LANG: 'en' });
   check('NOCTIS_LANG=en switches labels, and the percent follows the number as it does in English', en.startsWith('∞ 5h 41%') && en.includes('Wk 23%'), true);
   check('english off message', acc.run(['off', '1'], null, { NOCTIS_LANG: 'en' }).includes('disabled until'), true);
+  check('the status line marks a paused guard', acc.run(['statusline'], acc.statuslineInput('lc1', 'claude-fable-5-1', 41, now + 7200, 23, now + 3 * 86400)).startsWith('∞⏸ '), true);
+  check('but not at the 100 % ceiling, where the pause does not hold', acc.run(['statusline'], acc.statuslineInput('lc1', 'claude-fable-5-1', 100, now + 7200, 23, now + 3 * 86400)).startsWith('∞ '), true);
   acc.run(['on']);
+  check('and drops the mark once the guard is back on', acc.run(['statusline'], acc.statuslineInput('lc1', 'claude-fable-5-1', 41, now + 7200, 23, now + 3 * 86400)).startsWith('∞ '), true);
   acc.setConfig((config) => {
     config.locale = 'en';
   });
