@@ -287,6 +287,7 @@
   "roles.explore": "bestanden zoeken (Explore-subagent)",
   "roles.fallback": "terugval als het modelquotum op is",
   "roles.badValue": "%s: leeg model in '%s'",
+  "roles.badModel": "%s: %s is geen modelnaam (alleen letters, cijfers en . _ : @ / [ ] -)",
   "roles.badEffort": "%s: onbekende effort '%s' (low, medium, high, xhigh, max)",
   "roles.effortIgnored": "%s neemt alleen een model; de effort %s wordt genegeerd (de Agent-tool kent geen effort)",
   "roles.modelNoEffort": "%s: %s kent geen effort-niveau; de effort %s wordt genegeerd",
