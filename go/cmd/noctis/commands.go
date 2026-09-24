@@ -491,7 +491,7 @@ func fixLine(ok bool, text, remedyKey string, values ...any) []string {
 }
 
 func doctorLines(cfg object) []string {
-	lines := []string{checkLine(true, T("doctor.engine", platformName()))}
+	lines := []string{checkLine(true, T("doctor.engine", pluginName+" "+pluginVersion+" · "+platformName()))}
 
 	if disabled := numberOr(readState(), "disabledUntil", 0); disabled > float64(nowSec()) {
 		lines = append(lines, fixLine(false, T("doctor.disabled", formatTime(disabled)), "doctor.fixDisabled")...)
