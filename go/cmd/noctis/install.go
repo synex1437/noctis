@@ -504,10 +504,17 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		if permissions == nil {
 			permissions = object{}
 		}
-		config["managedPermissionPrevious"] = valueSetupFound(permissions, "defaultMode", modeSetEarlier, modeFound, modeFoundRecorded)
+		before := valueSetupFound(permissions, "defaultMode", modeSetEarlier, modeFound, modeFoundRecorded)
+		config["managedPermissionPrevious"] = before
 		permissions["defaultMode"] = mode
 		data["permissions"] = permissions
-		permissionNote = T("install.permissions", mode)
+		permissionNote = permissionChangeNote(mode, before)
+	} else if choiceOf(permissionChoices, flagString("permissions")) == "" {
+		if current := getString(getMap(data, "permissions"), "defaultMode"); current != "" {
+			permissionNote = T("install.permissionsKept", current)
+		} else {
+			permissionNote = T("install.permissionsNone")
+		}
 	}
 	if err := writeInstallConfig(configFile, config); err != nil {
 		return err
@@ -526,6 +533,19 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	}
 	fmt.Println(T("install.settings", backupText, effort, getString(data, "model")))
 	return nil
+}
+
+func permissionChangeNote(mode string, before any) string {
+	previous, _ := before.(string)
+	switch {
+	case previous == "":
+		return T("install.permissionsUnset", mode)
+	case previous == mode:
+		return T("install.permissionsSame", mode)
+	case previous != "keep" && choiceOf(permissionChoices, previous) == previous && (previous != "auto" || supportedPermissionMode(object{"resume": object{"permissionMode": "auto"}}, claudeExecutable(), "") == "auto"):
+		return T("install.permissions", mode, previous, previous)
+	}
+	return T("install.permissionsOther", mode, previous)
 }
 
 func valueSetupFound(holder object, key, setEarlier string, found any, recorded bool) any {
