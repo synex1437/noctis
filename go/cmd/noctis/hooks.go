@@ -191,12 +191,13 @@ func onSessionStart(input, cfg object) {
 	}
 	if source == "clear" {
 		releaseClearedSession(sid, cwd, now)
+		state = readState()
 	}
 	output := object{}
 	contexts := []string{}
 	queueNotice, queueNoticeKey, cutOffSid := "", "", ""
 	if source == "startup" || source == "clear" {
-		if checkpointSid, checkpoint := latestCheckpointFor(state, cwd, now); checkpoint != nil {
+		if checkpointSid, checkpoint := checkpointForNewSession(state, cwd, now); checkpoint != nil {
 			handOverCheckpoint(checkpointSid, sid)
 			contexts = append(contexts, T("session.checkpoint", pluginName, formatTime(numberOr(checkpoint, "at", 0)), getString(checkpoint, "path"), hostResumeCommand(currentHost().id, checkpointSid)))
 			if note := cutOffNote(readState(), checkpointSid); note != "" {
@@ -421,6 +422,7 @@ func onUserPromptSubmit(input, cfg object) {
 	sid := sessionKey(input)
 	state := readState()
 	if guardPaused(cfg, state, now) {
+		retireOwnCheckpoint(state, sid)
 		return
 	}
 	clearDeadHandoffs(state)
@@ -464,6 +466,7 @@ func onUserPromptSubmit(input, cfg object) {
 	} else if promptFromPlugin {
 		forgetCutOffs(sid)
 	}
+	retireOwnCheckpoint(state, sid)
 	contexts := []string{}
 	if waitContext != "" {
 		contexts = append(contexts, waitContext)

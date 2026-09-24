@@ -1047,11 +1047,27 @@ func checkpointUsable(entry object, cwd string, now int64) bool {
 }
 
 func latestCheckpointFor(state object, cwd string, now int64) (string, object) {
+	return latestCheckpointWhere(state, cwd, now, func(string) bool { return true })
+}
+
+func checkpointForNewSession(state object, cwd string, now int64) (string, object) {
+	return latestCheckpointWhere(state, cwd, now, func(sid string) bool {
+		return !waitLive(getMap(getMap(state, "waits"), sid), now) && getMap(getMap(state, "handedOff"), sid) == nil
+	})
+}
+
+func retireOwnCheckpoint(state object, sid string) {
+	if entry := getMap(getMap(state, "checkpoints"), sid); entry != nil && !getBool(entry, "consumed", false) {
+		consumeCheckpoint(sid)
+	}
+}
+
+func latestCheckpointWhere(state object, cwd string, now int64, eligible func(sid string) bool) (string, object) {
 	bestSid := ""
 	var best object
 	for sid, raw := range getMap(state, "checkpoints") {
 		entry := toObject(raw)
-		if !checkpointUsable(entry, cwd, now) {
+		if !checkpointUsable(entry, cwd, now) || !eligible(sid) {
 			continue
 		}
 		if best == nil || numberOr(entry, "at", 0) > numberOr(best, "at", 0) {
