@@ -393,7 +393,7 @@ func TestAnInHookBurstPauseOutlastsAFreshReadingAndEndsOnTheRealReset(t *testing
 	if !hasAction(actions, "early-reset") || hasAction(actions, "data-back") {
 		t.Fatalf("the burst pause did not end on the real reset of its window: %v", actions)
 	}
-	if float64(nowSec()) >= plan.until || outcome.stop != "" || outcome.notice != T("wait.earlyReset", plan.label, durationText(float64(nowSec()-now))) {
+	if float64(nowSec()) >= plan.until || outcome.stop != "" || outcome.notice != T("wait.earlyReset", plan.label, durationText(float64(nowSec()-now)))+" "+T("wait.pauseReason", T("hit.burst")) {
 		t.Fatalf("the session was not let go as soon as the window reset: %+v", outcome)
 	}
 	if getMap(getMap(readState(), "waits"), "rel") != nil {
@@ -419,7 +419,7 @@ func TestAnInHookBlindPauseEndsWhenFreshDataShowsRoom(t *testing.T) {
 	if !hasAction(actions, "data-back") || hasAction(actions, "early-reset") {
 		t.Fatalf("the release was not journaled as data coming back: %v", actions)
 	}
-	if outcome.stop != "" || outcome.notice != T("wait.resumed", plan.label, formatNumber(plan.used), durationText(float64(nowSec()-now))) {
+	if outcome.stop != "" || outcome.notice != T("wait.resumed", plan.label, formatNumber(plan.used), durationText(float64(nowSec()-now)))+" "+T("wait.pauseReason", T("hit.blind")) {
 		t.Fatalf("the session was not let go with the plain resume notice: %+v", outcome)
 	}
 	if getMap(getMap(readState(), "waits"), "rel") != nil {

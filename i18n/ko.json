@@ -17,6 +17,7 @@
   "wait.savedManual": "⏸ %s 한도 %s%%: 작업 저장됨, %s 이후에 직접 재개하세요.",
   "wait.saved": "⏸ %s 한도 %s%%: 작업 저장됨, %s%s에 자동 재개합니다.",
   "wait.savedHint": "그래도 계속 작업하려면: /noctis:pause 120 (또는 `noctis off 120`).",
+  "wait.pauseReason": "일시 중지 이유: %s.",
   "wait.earlyReset": "⚡ %[2]s 대기 후 %[1]s 한도가 예정보다 일찍 초기화되었습니다 — 멈춘 지점부터 이어갑니다.",
   "wait.earlyResetNotify": "%s 한도가 일찍 초기화되었습니다: 세션을 이어갑니다.",
   "wait.cancelled": "▶ %s 대기를 취소했습니다 — 계속합니다.",

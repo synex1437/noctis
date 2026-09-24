@@ -17,6 +17,7 @@
   "wait.savedManual": "⏸ %s-Limit %s%%: Arbeit gesichert; setze sie nach %s selbst fort.",
   "wait.saved": "⏸ %s-Limit %s%%: Arbeit gesichert, automatische Fortsetzung um %s%s.",
   "wait.savedHint": "Trotzdem weiterarbeiten: /noctis:pause 120 (oder `noctis off 120`).",
+  "wait.pauseReason": "Grund der Pause: %s.",
   "wait.earlyReset": "⚡ %s-Limit wurde nach %s Wartezeit früher als geplant zurückgesetzt — es geht dort weiter, wo du aufgehört hast.",
   "wait.earlyResetNotify": "%s-Limit vorzeitig zurückgesetzt: die Sitzung läuft jetzt weiter.",
   "wait.cancelled": "▶ %s-Wartezeit abgebrochen — weiter geht's.",

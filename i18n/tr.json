@@ -17,6 +17,7 @@
   "wait.savedManual": "⏸ %s limit %%%s: iş kaydedildi; %s sonrasında kendiniz devam ettirin.",
   "wait.saved": "⏸ %s limit %%%s: iş kaydedildi, otomatik devam: %s%s.",
   "wait.savedHint": "Yine de çalışmak için: /noctis:pause 120 (veya `noctis off 120`).",
+  "wait.pauseReason": "Duraklama nedeni: %s.",
   "wait.earlyReset": "⚡ %s limiti planlanandan önce sıfırlandı (%s beklendi) — kaldığın yerden devam ediliyor.",
   "wait.earlyResetNotify": "%s limiti erken sıfırlandı: oturum şimdi devam ediyor.",
   "wait.cancelled": "▶ %s beklemesi iptal edildi — devam ediliyor.",

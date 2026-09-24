@@ -17,6 +17,7 @@
   "wait.savedManual": "⏸ limite %s %s%%: trabalho salvo; retome você mesmo depois de %s.",
   "wait.saved": "⏸ limite %s %s%%: trabalho salvo, retomada automática às %s%s.",
   "wait.savedHint": "Para continuar mesmo assim: /noctis:pause 120 (ou `noctis off 120`).",
+  "wait.pauseReason": "Motivo da pausa: %s.",
   "wait.earlyReset": "⚡ O limite %s foi zerado antes do previsto após %s de espera — continuamos de onde você parou.",
   "wait.earlyResetNotify": "Limite %s zerado mais cedo: a sessão continua agora.",
   "wait.cancelled": "▶ Espera %s cancelada — continuando.",

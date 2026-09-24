@@ -1496,7 +1496,7 @@ func holdWait(kind, sid string, cfg object, wait *waitPlan, resumeAt float64, he
 		if !sameReset(current, wait.window, wait.until) || !getBool(current, "inHook", false) {
 			journal(sid, kind, "wait-replaced", hitLabel(wait), object{"window": getString(current, "window")})
 			logInfo("in-hook wait for %s was replaced by a %s pause it cannot wait out; stopping", sid, getString(current, "window"))
-			return waitHold{watch: watch, stop: savedNotice(cfg, orDefault(getString(current, "label"), wait.label), formatNumber(numberOr(current, "used", wait.used)), formatTime(numberOr(current, "resumeAt", resumeAt)), "")}
+			return waitHold{watch: watch, stop: savedNotice(cfg, orDefault(getString(current, "label"), wait.label), formatNumber(numberOr(current, "used", wait.used)), formatTime(numberOr(current, "resumeAt", resumeAt)), "") + pauseWhy(heldPlan(current, wait))}
 		}
 		journal(sid, kind, "join-wait", hitLabel(wait), object{"window": wait.window})
 		held, owned = current, false
@@ -1506,12 +1506,12 @@ func holdWait(kind, sid string, cfg object, wait *waitPlan, resumeAt float64, he
 func joinWait(kind, sid string, cfg object, wait *waitPlan, current object, resumeAt float64, inHook bool, now int64) waitOutcome {
 	journal(sid, kind, "join-wait", hitLabel(wait), object{"window": wait.window})
 	if !inHook || !getBool(current, "inHook", false) {
-		return waitOutcome{stop: savedNotice(cfg, wait.label, formatNumber(wait.used), formatTime(numberOr(current, "resumeAt", resumeAt)), "")}
+		return waitOutcome{stop: savedNotice(cfg, wait.label, formatNumber(wait.used), formatTime(numberOr(current, "resumeAt", resumeAt)), "") + pauseWhy(wait)}
 	}
 	if hold := holdWait(kind, sid, cfg, wait, resumeAt, current, false); hold.stop != "" {
 		return waitOutcome{stop: hold.stop}
 	}
-	return waitOutcome{notice: T("wait.resumed", wait.label, formatNumber(wait.used), durationText(float64(nowSec()-now)))}
+	return waitOutcome{notice: resumedNotice(wait, float64(nowSec()-now))}
 }
 
 func clearWait(sid string, state object) {
@@ -1845,6 +1845,17 @@ func recordTree(cfg object, record object, cwd string) {
 	}
 }
 
+func pauseWhy(wait *waitPlan) string {
+	if wait == nil || wait.hit == "" || wait.hit == "threshold" {
+		return ""
+	}
+	return " " + T("wait.pauseReason", hitLabel(wait))
+}
+
+func resumedNotice(wait *waitPlan, waited float64) string {
+	return T("wait.resumed", wait.label, formatNumber(wait.used), durationText(waited)) + pauseWhy(wait)
+}
+
 func hitLabel(wait *waitPlan) string {
 	switch wait.hit {
 	case "ceiling":
@@ -1964,7 +1975,7 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 			logInfo("in-hook wait for %s cancelled; continuing", sid)
 			return waitOutcome{notice: T("wait.cancelled", wait.label)}
 		case !hold.owned:
-			return waitOutcome{notice: T("wait.resumed", wait.label, formatNumber(wait.used), durationText(float64(nowSec()-now)))}
+			return waitOutcome{notice: resumedNotice(wait, float64(nowSec()-now))}
 		case watch.dataBack:
 			journal(sid, kind, "data-back", hitLabel(wait), object{"waited": float64(nowSec() - now)})
 			notify(cfg, pluginName, T("wait.dataReady", wait.label, T("wait.readyTail")))
@@ -1984,9 +1995,9 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 			})
 			logInfo("an in-hook wait of %ds completed past the learned cap; cap forgotten", int(slept))
 		}
-		outcome := waitOutcome{notice: T("wait.resumed", wait.label, formatNumber(wait.used), durationText(float64(nowSec()-now)))}
+		outcome := waitOutcome{notice: resumedNotice(wait, float64(nowSec()-now))}
 		if watch.early && (wait.until <= 0 || float64(nowSec()) < wait.until) {
-			outcome.notice = T("wait.earlyReset", wait.label, durationText(float64(nowSec()-now)))
+			outcome.notice = T("wait.earlyReset", wait.label, durationText(float64(nowSec()-now))) + pauseWhy(wait)
 		}
 		if workspaceChanged(record) {
 			journal(sid, kind, "workspace-changed", "tree differs from the checkpoint", nil)
@@ -2003,8 +2014,16 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 	return waitOutcome{stop: savedStop(cfg, kind, wait, resumeAt, suffix)}
 }
 
+func heldPlan(current object, wait *waitPlan) *waitPlan {
+	hit := getString(current, "hit")
+	if hit == "" {
+		return wait
+	}
+	return &waitPlan{hit: hit, threshold: numberOr(current, "threshold", wait.threshold)}
+}
+
 func savedStop(cfg object, kind string, wait *waitPlan, resumeAt float64, suffix string) string {
-	stop := savedNotice(cfg, wait.label, formatNumber(wait.used), formatTime(resumeAt), suffix)
+	stop := savedNotice(cfg, wait.label, formatNumber(wait.used), formatTime(resumeAt), suffix) + pauseWhy(wait)
 	if kind == "prompt" && wait.hit != "ceiling" {
 		stop += " " + T("wait.savedHint")
 	}

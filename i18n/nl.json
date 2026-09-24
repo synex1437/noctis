@@ -17,6 +17,7 @@
   "wait.savedManual": "⏸ %s-limiet %s%%: werk opgeslagen; ga na %s zelf verder.",
   "wait.saved": "⏸ %s-limiet %s%%: werk opgeslagen, automatisch hervatten om %s%s.",
   "wait.savedHint": "Toch doorwerken: /noctis:pause 120 (of `noctis off 120`).",
+  "wait.pauseReason": "Reden van de pauze: %s.",
   "wait.earlyReset": "⚡ De %s-limiet is na %s wachten eerder gereset dan verwacht — we gaan verder waar je gebleven was.",
   "wait.earlyResetNotify": "%s-limiet vroeg gereset: de sessie gaat nu verder.",
   "wait.cancelled": "▶ %s-wachttijd geannuleerd — we gaan door.",

@@ -17,6 +17,7 @@
   "wait.savedManual": "⏸ limite %s %s%% : travail sauvegardé ; reprends-le toi-même après %s.",
   "wait.saved": "⏸ limite %s %s%% : travail sauvegardé, reprise automatique à %s%s.",
   "wait.savedHint": "Pour continuer quand même : /noctis:pause 120 (ou `noctis off 120`).",
+  "wait.pauseReason": "Motif de la pause : %s.",
   "wait.earlyReset": "⚡ La limite %s a été réinitialisée en avance après %s d'attente — on reprend là où tu t'es arrêté.",
   "wait.earlyResetNotify": "Limite %s réinitialisée en avance : la session continue maintenant.",
   "wait.cancelled": "▶ Attente %s annulée — on continue.",
