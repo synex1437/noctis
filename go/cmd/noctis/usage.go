@@ -268,7 +268,7 @@ func currentUsageIn(now int64, guardDir string) usageView {
 		useOauth := false
 		switch {
 		case fromStatus != nil && fromOauth != nil:
-			if fetchedAt > usageAt {
+			if oauthReadingWins(fromStatus, fromOauth, usageAt, fetchedAt) {
 				raw, at, useOauth = fromOauth, fetchedAt, true
 			} else {
 				raw, at = fromStatus, usageAt
@@ -312,6 +312,15 @@ func currentUsageIn(now int64, guardDir string) usageView {
 		updatedAt:   math.Max(usageAt, fetchedAt),
 		clockOffset: offset,
 	}
+}
+
+func oauthReadingWins(fromStatus, fromOauth object, usageAt, fetchedAt float64) bool {
+	statusUsed, statusReset, statusOk := storedWindow(fromStatus)
+	oauthUsed, oauthReset, oauthOk := storedWindow(fromOauth)
+	if statusOk && oauthOk && math.Abs(statusReset-oauthReset) <= sameWindowSeconds && statusUsed != oauthUsed {
+		return oauthUsed > statusUsed
+	}
+	return fetchedAt > usageAt
 }
 
 func currentUsage(now int64) usageView {

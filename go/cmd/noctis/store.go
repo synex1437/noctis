@@ -74,6 +74,7 @@ const (
 	learnedBlockMisroutes   = 2
 	gitStatusLines          = 30
 	treeStatLimit           = 2000
+	sameWindowSeconds       = 120
 	hookPulseInterval       = 600
 	maxResetHorizon         = 45 * 86400
 	launchRecordTTLSeconds  = 8 * 86400
