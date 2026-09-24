@@ -395,6 +395,58 @@ func TestAValueSetByHandAfterAnUninstallIsNotTakenForSetups(t *testing.T) {
 	}
 }
 
+func TestAStatusLineSetAfterAnUninstallIsChainedAndPutBackByTheNextOne(t *testing.T) {
+	sandboxFiles(t)
+	account := recordAccount(t, object{"statusLine": object{"type": "command", "command": "my-old-line"}})
+	settingsFile := filepath.Join(account, "settings.json")
+	configFile := filepath.Join(account, pluginName, "config.json")
+	chained := func() string { return getString(section(readJSON(configFile), "statusline"), "chainCommand") }
+
+	recordSetup(t, account, "max", "--permissions", "keep")
+	first, _ := recordUninstall(t, account)
+	if got := getString(getMap(first, "statusLine"), "command"); got != "my-old-line" {
+		t.Fatalf("the first uninstall put back the status line %q", got)
+	}
+	if chain := chained(); chain != "" {
+		t.Errorf("uninstall put the status line back but kept statusline.chainCommand %q, which describes a setup that is gone", chain)
+	}
+	settings := readJSON(settingsFile)
+	settings["statusLine"] = object{"type": "command", "command": "my-new-line"}
+	mustWriteJSON(settingsFile, settings)
+
+	recordSetup(t, account, "max", "--permissions", "keep")
+	if chain := chained(); chain != "my-new-line" {
+		t.Errorf("the setup after an uninstall chained %q, not the status line it replaced", chain)
+	}
+	second, _ := recordUninstall(t, account)
+
+	if got := getString(getMap(second, "statusLine"), "command"); got != "my-new-line" {
+		t.Fatalf("the status line set by hand after the first uninstall came back as %q", got)
+	}
+}
+
+func TestAStatusLineRemovedAfterAnUninstallIsNeitherChainedNorPutBackByTheNextOne(t *testing.T) {
+	sandboxFiles(t)
+	account := recordAccount(t, object{"statusLine": object{"type": "command", "command": "my-old-line"}})
+	settingsFile := filepath.Join(account, "settings.json")
+	configFile := filepath.Join(account, pluginName, "config.json")
+
+	recordSetup(t, account, "max", "--permissions", "keep")
+	recordUninstall(t, account)
+	settings := readJSON(settingsFile)
+	delete(settings, "statusLine")
+	mustWriteJSON(settingsFile, settings)
+	recordSetup(t, account, "max", "--permissions", "keep")
+	if chain := getString(section(readJSON(configFile), "statusline"), "chainCommand"); chain != "" {
+		t.Errorf("my-old-line was removed by hand after the uninstall, yet the next setup chains %q above noctis's status line", chain)
+	}
+	after, _ := recordUninstall(t, account)
+
+	if line, present := after["statusLine"]; present {
+		t.Fatalf("my-old-line was removed by hand after the first uninstall, yet the second one put back %v", line)
+	}
+}
+
 func recordEnglish(t *testing.T) {
 	t.Helper()
 	previous := locale
