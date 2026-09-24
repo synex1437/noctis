@@ -1,7 +1,9 @@
 ---
 name: pause
 description: Temporarily disable noctis enforcement (limit pauses, routing, queue continuation) for N minutes. Use when the user says pause noctis, disable the guard, stop the plugin for a while.
-allowed-tools: Bash
+allowed-tools:
+  - Bash("${CLAUDE_PLUGIN_ROOT}/bin/noctis" off *)
+disable-model-invocation: true
 ---
 
 Disable the guard for the time the user asked for (default 60 minutes). The request: $ARGUMENTS
