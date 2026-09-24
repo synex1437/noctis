@@ -131,8 +131,10 @@ func TestARepeatedSetupKeepsThePermissionModeFoundBeforeTheFirstOne(t *testing.T
 	}
 }
 
-func TestAValueChangedBetweenTwoSetupsIsTheOneUninstallPutsBack(t *testing.T) {
+func TestAValueSetByHandBetweenTwoSetupsLeavesTheOneFromBeforeTheFirstForUninstall(t *testing.T) {
 	sandboxFiles(t)
+	recordEnglish(t)
+	recordClaudeWithAuto(t)
 	account := recordAccount(t, object{"env": object{"CLAUDE_CODE_EFFORT_LEVEL": "medium"}, "permissions": object{"defaultMode": "plan"}})
 	settingsFile := filepath.Join(account, "settings.json")
 
@@ -140,15 +142,25 @@ func TestAValueChangedBetweenTwoSetupsIsTheOneUninstallPutsBack(t *testing.T) {
 	settings := readJSON(settingsFile)
 	getMap(settings, "env")["CLAUDE_CODE_EFFORT_LEVEL"] = "high"
 	getMap(settings, "permissions")["defaultMode"] = "default"
+	settings["model"] = "sonnet"
 	mustWriteJSON(settingsFile, settings)
-	recordSetup(t, account, "low", "--permissions", "acceptEdits")
+	output := recordSetup(t, account, "low", "--permissions", "acceptEdits")
+	if got := getString(readJSON(settingsFile), "model"); got != "opus" {
+		t.Fatalf("the second setup did not replace the model sonnet set by hand: %q", got)
+	}
 	after, _ := recordUninstall(t, account)
 
-	if got, _ := recordValue(after, "env", "CLAUDE_CODE_EFFORT_LEVEL"); got != "high" {
-		t.Errorf("the effort set by hand between two setups, which the second one replaced, came back as %q", got)
+	if !strings.Contains(output, "permissions.defaultMode=acceptEdits (before setup: plan; noctis setup --permissions plan puts it back)") {
+		t.Errorf("the second setup does not name plan, the mode from before the first setup:\n%s", output)
 	}
-	if got, _ := recordValue(after, "permissions", "defaultMode"); got != "default" {
-		t.Errorf("the mode set by hand between two setups, which the second one replaced, came back as %q", got)
+	if model, present := after["model"]; present {
+		t.Errorf("no model before the first setup, sonnet set by hand before the second: uninstall left model %v", model)
+	}
+	if got, _ := recordValue(after, "env", "CLAUDE_CODE_EFFORT_LEVEL"); got != "medium" {
+		t.Errorf("effort medium before the first setup, high set by hand before the second: uninstall made it %q", got)
+	}
+	if got, _ := recordValue(after, "permissions", "defaultMode"); got != "plan" {
+		t.Errorf("mode plan before the first setup, default set by hand before the second: uninstall made it %q", got)
 	}
 }
 
@@ -289,8 +301,8 @@ func TestAProfileSwitchLeavesThePermissionModeTheUserChose(t *testing.T) {
 		t.Fatalf("--permissions auto should still switch the mode, got %q:\n%s", mode, switched)
 	}
 	uninstall := runNoctisCLI(t, env, "install", "--uninstall", "--config-dir", account, "--host", "claude")
-	if mode, _ := recordValue(readJSON(settingsFile), "permissions", "defaultMode"); uninstall.code != 0 || mode != "default" {
-		t.Fatalf("uninstall should give back the mode --permissions auto replaced, got %q:\n%s", mode, uninstall)
+	if mode, _ := recordValue(readJSON(settingsFile), "permissions", "defaultMode"); uninstall.code != 0 || mode != "plan" {
+		t.Fatalf("uninstall should give back plan, the mode from before the first setup, got %q:\n%s", mode, uninstall)
 	}
 }
 
@@ -444,6 +456,43 @@ func TestAStatusLineRemovedAfterAnUninstallIsNeitherChainedNorPutBackByTheNextOn
 
 	if line, present := after["statusLine"]; present {
 		t.Fatalf("my-old-line was removed by hand after the first uninstall, yet the second one put back %v", line)
+	}
+}
+
+func TestASetupWhileTheFallbackRoleStandsInKeepsTheModelAndEffortFromBeforeTheFirstSetup(t *testing.T) {
+	sandboxFiles(t)
+	account := recordAccount(t, object{"env": object{"CLAUDE_CODE_EFFORT_LEVEL": "medium"}})
+	configFile := filepath.Join(account, pluginName, "config.json")
+	config := cloneObject(shippedDefaults(t))
+	models := cloneObject(section(config, "models"))
+	models["fallback"] = "sonnet"
+	config["models"] = models
+	roles := cloneObject(section(config, "roles"))
+	roles["fallback"] = object{"model": "sonnet", "effort": "high"}
+	config["roles"] = roles
+	mustWriteJSON(configFile, config)
+	files.settings = filepath.Join(account, "settings.json")
+
+	recordSetup(t, account, "max", "--permissions", "keep")
+	now := nowSec()
+	persistModelSwitch(readJSON(configFile), float64(now+3600), now)
+	switched := readJSON(files.settings)
+	if effort, _ := recordValue(switched, "env", "CLAUDE_CODE_EFFORT_LEVEL"); getString(switched, "model") != "sonnet" || effort != "high" {
+		t.Fatalf("the switch to the fallback role did not set its model and effort: %v", switched)
+	}
+	recordSetup(t, account, "max", "--permissions", "keep")
+	maybeRevertDefaultModel(readJSON(configFile), readState(), usageView{}, now+3601)
+	reverted := readJSON(files.settings)
+	if effort, _ := recordValue(reverted, "env", "CLAUDE_CODE_EFFORT_LEVEL"); getString(reverted, "model") != "opus" || effort != "max" {
+		t.Fatalf("after the switch back the settings do not hold the opus and max setup wrote: %v", reverted)
+	}
+	after, _ := recordUninstall(t, account)
+
+	if model, present := after["model"]; present {
+		t.Errorf("no model before setup; setup, the switch to the fallback role (sonnet), setup again, the switch back, uninstall: model %v is left", model)
+	}
+	if got, _ := recordValue(after, "env", "CLAUDE_CODE_EFFORT_LEVEL"); got != "medium" {
+		t.Errorf("effort medium before setup; setup, the switch to the fallback role (effort high), setup again, the switch back, uninstall: the effort is %q", got)
 	}
 }
 

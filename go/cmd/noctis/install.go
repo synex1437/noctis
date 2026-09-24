@@ -475,7 +475,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		env = object{}
 	}
 	effortRecord := getMap(config, "managedEffort")
-	config["managedEffort"] = object{"previous": valueSetupFound(env, "CLAUDE_CODE_EFFORT_LEVEL", getString(effortRecord, "set"), effortRecord["previous"], effortRecord != nil), "set": effort}
+	config["managedEffort"] = object{"previous": valueSetupFound(env, "CLAUDE_CODE_EFFORT_LEVEL", effortRecord["previous"], effortRecord != nil), "set": effort}
 	env["CLAUDE_CODE_EFFORT_LEVEL"] = effort
 	data["env"] = env
 	current := getString(data, "model")
@@ -489,7 +489,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 			if !hadModel {
 				previous = nil
 			}
-			if ours {
+			if managed != nil {
 				previous = managed["previous"]
 			}
 			config["managedModel"] = object{"previous": previous, "set": primary}
@@ -497,14 +497,13 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		data["model"] = primary
 	}
 	permissionNote := ""
-	modeSetEarlier := getString(config, "managedPermissionMode")
 	modeFound, modeFoundRecorded := config["managedPermissionPrevious"]
 	if mode := managedPermissionMode(config); mode != "" {
 		permissions := getMap(data, "permissions")
 		if permissions == nil {
 			permissions = object{}
 		}
-		before := valueSetupFound(permissions, "defaultMode", modeSetEarlier, modeFound, modeFoundRecorded)
+		before := valueSetupFound(permissions, "defaultMode", modeFound, modeFoundRecorded)
 		config["managedPermissionPrevious"] = before
 		permissions["defaultMode"] = mode
 		data["permissions"] = permissions
@@ -548,8 +547,8 @@ func permissionChangeNote(mode string, before any) string {
 	return T("install.permissionsOther", mode, previous)
 }
 
-func valueSetupFound(holder object, key, setEarlier string, found any, recorded bool) any {
-	if recorded && setEarlier != "" && getString(holder, key) == setEarlier {
+func valueSetupFound(holder object, key string, found any, recorded bool) any {
+	if recorded {
 		return found
 	}
 	return holder[key]
