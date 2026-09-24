@@ -1658,6 +1658,15 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 	return waitOutcome{stop: stop}
 }
 
+func blindWindow(cfg object, snapshot usageView) (key string, threshold float64, guarded bool) {
+	fiveLimit, fiveGuarded := thresholdEnabled(cfg, "session5h")
+	weekLimit, weekGuarded := thresholdEnabled(cfg, "weeklyAll")
+	if fiveGuarded && (!weekGuarded || (snapshot.fiveHour != nil && snapshot.fiveHour.used >= fiveLimit-nearEdgeBand)) {
+		return "five_hour", fiveLimit, true
+	}
+	return "seven_day", weekLimit, weekGuarded
+}
+
 func handleFableHit(kind string, input object, cfg object, result decision) string {
 	now := nowSec()
 	sid := sessionKey(input)
@@ -1695,8 +1704,8 @@ func maybeRevertDefaultModel(cfg object, state object, usage usageView, now int6
 		return ""
 	}
 	cleared := false
-	if usage.fable != nil {
-		cleared = usage.fable.used < scopedThreshold(cfg)/2
+	if limit, guarded := scopedThresholdEnabled(cfg); guarded && usage.fable != nil {
+		cleared = usage.fable.used < limit/2
 	} else {
 		cleared = float64(now) > numberOr(switched, "fableResetsAt", 0)
 	}
@@ -1747,7 +1756,8 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 	fableCandidate := scopedModelPattern(cfg).MatchString(model)
 	snapshot := currentUsage(now)
 	edge := nearEdge(cfg, snapshot)
-	fableEdge := fableCandidate && snapshot.fable != nil && snapshot.fable.used >= scopedThreshold(cfg)-nearEdgeBand
+	fableLimit, fableGuarded := scopedThresholdEnabled(cfg)
+	fableEdge := fableCandidate && fableGuarded && snapshot.fable != nil && snapshot.fable.used >= fableLimit-nearEdgeBand
 	usage := snapshot
 	refreshError := ""
 	if fableCandidate || usageStale || options.force || edge {
@@ -1792,22 +1802,21 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 			}
 		}
 		if refreshError != "" {
-			key, threshold := "seven_day", thresholdOf(cfg, "weeklyAll")
-			if snapshot.fiveHour != nil && snapshot.fiveHour.used >= thresholdOf(cfg, "session5h")-nearEdgeBand {
-				key, threshold = "five_hour", thresholdOf(cfg, "session5h")
-			}
+			key, threshold, guarded := blindWindow(cfg, snapshot)
 			label := windowLabel(key)
 			win := snapshot.byKey(key)
 			blind := evaluate(cfg, usage, model, contextPercent, hasContext)
 			blind.usageStale, blind.contextPercent, blind.hasContext = true, contextPercent, hasContext
-			if blind.wait == nil && win != nil {
+			if blind.wait == nil && win != nil && guarded {
 				blind.wait = &waitPlan{window: key, label: label, used: win.used, threshold: threshold, until: win.resetsAt, hit: "blind"}
 			}
 			used := 0.0
 			if win != nil {
 				used = win.used
 			}
-			fail("no usage data for %d min while at %s%% (%s); pausing until data or reset", int((float64(nowSec())-snapshot.updatedAt)/60+0.5), formatNumber(used), label)
+			if blind.wait != nil {
+				fail("no usage data for %d min while at %s%% (%s); pausing until data or reset", int((float64(nowSec())-snapshot.updatedAt)/60+0.5), formatNumber(used), label)
+			}
 			return blind
 		}
 	}

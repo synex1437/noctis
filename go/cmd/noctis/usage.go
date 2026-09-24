@@ -113,6 +113,18 @@ func scopedThreshold(cfg object) float64 {
 	return value
 }
 
+func thresholdEnabled(cfg object, key string) (float64, bool) {
+	value := section(cfg, "thresholds")[key]
+	number, _ := toNumber(value)
+	return number, validThreshold(value)
+}
+
+func scopedThresholdEnabled(cfg object) (float64, bool) {
+	value := scopedThresholdValue(cfg)
+	number, _ := toNumber(value)
+	return number, validThreshold(value)
+}
+
 func pruneSessions(sessions object, now int64) object {
 	kept := object{}
 	for sid, raw := range sessions {

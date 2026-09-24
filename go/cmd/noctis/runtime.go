@@ -94,7 +94,11 @@ func paceMarker(cfg object, win *window, now int64) string {
 		return ""
 	}
 	elapsed := 1 - remaining/(7*86400)
-	expected := elapsed * thresholdOf(cfg, "weeklyAll")
+	limit, guarded := thresholdEnabled(cfg, "weeklyAll")
+	if !guarded {
+		limit = 100
+	}
+	expected := elapsed * limit
 	switch {
 	case win.used > expected+5:
 		return "▼"
@@ -106,17 +110,17 @@ func paceMarker(cfg object, win *window, now int64) string {
 
 func usageBadgeAt(usage usageView, cfg object, now int64) string {
 	parts := []string{}
-	mark := func(win *window, threshold float64) string {
-		if win.used >= threshold-warnBand {
+	mark := func(win *window, key string) string {
+		if threshold, guarded := thresholdEnabled(cfg, key); guarded && win.used >= threshold-warnBand {
 			return "⚠"
 		}
 		return ""
 	}
 	if usage.fiveHour != nil {
-		parts = append(parts, fmt.Sprintf("%s%s %%%d→%s", mark(usage.fiveHour, thresholdOf(cfg, "session5h")), T("win.five"), int(math.Round(usage.fiveHour.used)), formatTime(usage.fiveHour.resetsAt)))
+		parts = append(parts, fmt.Sprintf("%s%s %%%d→%s", mark(usage.fiveHour, "session5h"), T("win.five"), int(math.Round(usage.fiveHour.used)), formatTime(usage.fiveHour.resetsAt)))
 	}
 	if usage.sevenDay != nil {
-		parts = append(parts, fmt.Sprintf("%s%s %%%d%s→%s", mark(usage.sevenDay, thresholdOf(cfg, "weeklyAll")), T("badge.week"), int(math.Round(usage.sevenDay.used)), paceMarker(cfg, usage.sevenDay, now), formatTime(usage.sevenDay.resetsAt)))
+		parts = append(parts, fmt.Sprintf("%s%s %%%d%s→%s", mark(usage.sevenDay, "weeklyAll"), T("badge.week"), int(math.Round(usage.sevenDay.used)), paceMarker(cfg, usage.sevenDay, now), formatTime(usage.sevenDay.resetsAt)))
 	}
 	if usage.fable != nil {
 		parts = append(parts, fmt.Sprintf("%s %%%d", scopedLabel(cfg), int(math.Round(usage.fable.used))))
