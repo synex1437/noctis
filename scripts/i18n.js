@@ -139,6 +139,9 @@ function auditCatalog(code, english, table, problems) {
     if (wanted !== got) {
       problems.push(`i18n/${code}.json: "${key}" takes ${got} where English takes ${wanted} — Go would print %!verb(MISSING)`);
     }
+    if (/%(?:\[\d+\])?[sd]['\u2019]\p{L}/u.test(target)) {
+      problems.push(`i18n/${code}.json: "${key}" glues a suffix to a placeholder; the right suffix depends on the value, so say it without one`);
+    }
     if (source.trimStart().startsWith('[noctis]') && target !== source) {
       problems.push(`i18n/${code}.json: "${key}" is an instruction handed to the model; those stay in English`);
     }
