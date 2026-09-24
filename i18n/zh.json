@@ -10,6 +10,7 @@
   "hit.projection": "基于过期数据的消耗预测",
   "hit.budget": "每日预算",
   "hit.ceiling": "用量已达上限（拒绝使用付费额度）",
+  "hit.ceilingSoon": "用量即将达到上限（拒绝使用付费额度）",
   "hit.threshold": "阈值 %s%%",
   "wait.reason": "%s 窗口 %s%%（%s），重置于 %s",
   "wait.resumed": "⏸ %s 限额 %s%%：已等待 %s，继续。",

@@ -10,6 +10,7 @@
   "hit.projection": "bayat veriden yakım öngörüsü",
   "hit.budget": "günlük bütçe",
   "hit.ceiling": "kullanım tavanı doldu (ücretli kredi reddedildi)",
+  "hit.ceilingSoon": "kullanım tavanı dolmak üzere (ücretli kredi reddedildi)",
   "hit.threshold": "eşik %%%s",
   "wait.reason": "%s pencere %%%s (%s), sıfırlanma %s",
   "wait.resumed": "⏸ %s limit %%%s: %s beklendi, devam ediliyor.",

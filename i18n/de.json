@@ -10,6 +10,7 @@
   "hit.projection": "Verbrauchsprognose aus alten Daten",
   "hit.budget": "Tagesbudget",
   "hit.ceiling": "Nutzungsgrenze erreicht (bezahlte Credits abgelehnt)",
+  "hit.ceilingSoon": "Nutzungsgrenze wird gleich erreicht (bezahlte Credits abgelehnt)",
   "hit.threshold": "Schwelle %s%%",
   "wait.reason": "%s-Fenster %s%% (%s), Reset %s",
   "wait.resumed": "⏸ %s-Limit %s%%: %s gewartet, weiter geht's.",

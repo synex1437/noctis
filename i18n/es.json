@@ -10,6 +10,7 @@
   "hit.projection": "proyección de consumo con datos antiguos",
   "hit.budget": "presupuesto diario",
   "hit.ceiling": "límite de uso alcanzado (créditos de pago rechazados)",
+  "hit.ceilingSoon": "límite de uso a punto de alcanzarse (créditos de pago rechazados)",
   "hit.threshold": "umbral %s%%",
   "wait.reason": "ventana %s %s%% (%s), se reinicia %s",
   "wait.resumed": "⏸ límite %s %s%%: esperé %s, continúo.",

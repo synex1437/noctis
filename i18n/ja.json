@@ -10,6 +10,7 @@
   "hit.projection": "古いデータからの消費予測",
   "hit.budget": "日次予算",
   "hit.ceiling": "使用量の上限に到達（有料クレジットは使いません）",
+  "hit.ceilingSoon": "使用量の上限に到達しそう（有料クレジットは使いません）",
   "hit.threshold": "しきい値 %s%%",
   "wait.reason": "%s ウィンドウ %s%%（%s）、リセット %s",
   "wait.resumed": "⏸ %s上限 %s%%: %s待機して再開します。",

@@ -52,6 +52,9 @@ func windowClearedAt(usage usageView, windowKey string, threshold, startedAt, ma
 
 func dataPause(record object) bool {
 	hit := getString(record, "hit")
+	if hit == "ceiling" {
+		hit = getString(record, "cause")
+	}
 	return hit == "blind" || hit == "projection"
 }
 
