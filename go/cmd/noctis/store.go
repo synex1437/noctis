@@ -672,6 +672,7 @@ func loadConfig() object {
 		merged["configError"] = userRead.err
 	}
 	repairThresholds(merged, defaults)
+	repairCompaction(merged, defaults)
 	return merged
 }
 
