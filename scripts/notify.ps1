@@ -4,10 +4,6 @@ param(
 )
 
 try {
-  1..3 | ForEach-Object { [console]::beep(1100, 260); Start-Sleep -Milliseconds 140 }
-} catch {}
-
-try {
   [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
   [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
   $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
