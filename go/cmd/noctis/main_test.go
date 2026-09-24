@@ -17,6 +17,8 @@ const (
 	lingerFor = 5 * time.Second
 )
 
+const testAsNoctis = "NOCTIS_TEST_AS_NOCTIS"
+
 func TestMain(m *testing.M) {
 	if marker := os.Getenv(lingerEnv); marker != "" {
 		time.Sleep(lingerFor)
@@ -38,6 +40,10 @@ func TestMain(m *testing.M) {
 	}
 	if sid := os.Getenv("NOCTIS_TEST_RUNNER_SID"); sid != "" {
 		os.Exit(runTestRunner(sid, os.Getenv("NOCTIS_TEST_RUNNER_ACCOUNT")))
+	}
+	if os.Getenv(testAsNoctis) != "" {
+		main()
+		os.Exit(0)
 	}
 	if raw := os.Getenv("NOCTIS_TEST_MAIN_ARGS"); raw != "" {
 		var argv []string

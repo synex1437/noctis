@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 	"unicode"
 )
 
@@ -335,11 +338,12 @@ func releaseClearedSession(newSid, cwd string, now int64) {
 
 func onSessionEnd(input, _ object) {
 	sid := sessionKey(input)
+	handingOff := stopFailureHandedOff(sid)
 	updateState(func(state object) {
 		delete(stateMap(state, "modelOverrides"), sid)
 		delete(stateMap(state, "autoResume"), sid)
 		delete(stateMap(state, "overload"), sid)
-		if getMap(getMap(state, "waits"), sid) == nil {
+		if getMap(getMap(state, "waits"), sid) == nil && !handingOff {
 
 			delete(stateMap(state, "workflows"), sid)
 		}
@@ -1452,6 +1456,62 @@ func clearOverload(state object, sid string) {
 	updateState(func(next object) { delete(stateMap(next, "overload"), sid) })
 }
 
+var nonInteractiveEntrypoints = map[string]bool{"sdk-cli": true, "sdk-ts": true, "sdk-py": true, "claude-code-github-action": true}
+
+const handOffLifetime = time.Hour
+
+func handOffDir() string {
+	return filepath.Join(files.guardDir, "pending")
+}
+
+func handsStopFailuresOff() bool {
+	return currentHost().id == "claude" && nonInteractiveEntrypoints[os.Getenv("CLAUDE_CODE_ENTRYPOINT")]
+}
+
+func stopFailureHandedOff(sid string) bool {
+	entries, _ := os.ReadDir(handOffDir())
+	prefix := hashKey(sid) + "-"
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), prefix) || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		if info, err := entry.Info(); err == nil && time.Since(info.ModTime()) < handOffLifetime {
+			return true
+		}
+	}
+	return false
+}
+
+func handOffStopFailure(raw object) bool {
+	sid := sessionKey(raw)
+	file := filepath.Join(handOffDir(), hashKey(sid)+"-"+strconv.Itoa(os.Getpid())+".json")
+	if err := writeJSONAtomic(file, raw); err != nil {
+		warn("StopFailure for %s handled in the hook: hand-off not written (%v)", sid, err)
+		return false
+	}
+	if detachedSelf([]string{"hook", "--input", file, "--account", files.configDir}) > 0 {
+		return true
+	}
+	_ = os.Remove(file)
+	warn("StopFailure for %s handled in the hook: the detached copy did not start", sid)
+	return false
+}
+
+func handedOffStopFailure(file string) (object, string) {
+	resolved, err := filepath.Abs(file)
+	if err != nil || filepath.Dir(resolved) != handOffDir() {
+		warn("hook --input %s ignored: not a StopFailure hand-off", file)
+		return nil, ""
+	}
+	payload := readJSON(resolved)
+	if getString(payload, "hook_event_name") != "StopFailure" {
+		_ = os.Remove(resolved)
+		return nil, ""
+	}
+	logInfo("StopFailure for %s taken over from the claude -p hook", sessionKey(payload))
+	return payload, resolved
+}
+
 func onStopFailure(input, cfg object) {
 
 	if !currentHost().stopFailure {
@@ -1543,7 +1603,7 @@ func onStopFailure(input, cfg object) {
 	record["permissionMode"] = permissionModeOf(input)
 	recordTree(cfg, record, getString(input, "cwd"))
 	wakeCfg := section(cfg, "wake")
-	interactive := getMap(getMap(readJSON(files.usage), "sessions"), sid) != nil
+	interactive := flagString("input") == "" && getMap(getMap(readJSON(files.usage), "sessions"), sid) != nil
 	wakeable := currentHost().wake && getBool(wakeCfg, "sameSession", true) && interactive && getString(record, "window") != "fable" && resumeAt-float64(now) <= math.Max(1, numberOr(wakeCfg, "maxMinutes", 330))*60
 	runnerAt := resumeAt
 	if wakeable {
@@ -1838,7 +1898,24 @@ func copilotEventName(raw object) string {
 }
 
 func runHook() {
-	raw := readStdinJSON()
+	var raw object
+	if handedOff := flagString("input"); handedOff != "" {
+		signal.Ignore(syscall.SIGTERM)
+		payload, file := handedOffStopFailure(handedOff)
+		if payload == nil {
+			return
+		}
+		defer os.Remove(file)
+		raw = payload
+	} else {
+		raw = readStdinJSON()
+		if getString(raw, "hook_event_name") == "StopFailure" && handsStopFailuresOff() {
+			signal.Ignore(syscall.SIGTERM)
+			if handOffStopFailure(raw) {
+				return
+			}
+		}
+	}
 	if os.Getenv("NOCTIS_DEBUG_HOOKS") != "" {
 
 		_ = appendRotating(filepath.Join(files.guardDir, "hooks-debug.log"), localISO(float64(nowSec()))+" "+activeHost+" "+string(marshalCompact(raw)))
