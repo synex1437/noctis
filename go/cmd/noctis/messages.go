@@ -22,10 +22,11 @@ var durationUnits = map[string][3]string{
 func baseCatalog() map[string]map[string]string {
 	return map[string]map[string]string{
 		"en": {
-			"win.five":    "5h",
-			"win.week":    "weekly",
-			"win.unknown": "unknown",
-			"badge.week":  "Wk",
+			"win.five":      "5h",
+			"win.week":      "weekly",
+			"win.unknown":   "unknown",
+			"badge.percent": "%d%%",
+			"badge.week":    "Wk",
 
 			"hit.burst":      "burst projection",
 			"hit.compaction": "safety before context compaction",
@@ -371,10 +372,11 @@ func baseCatalog() map[string]map[string]string {
 			"doctor.issuesFound":      "%d thing(s) need attention above.",
 		},
 		"tr": {
-			"win.five":    "5sa",
-			"win.week":    "haftalık",
-			"win.unknown": "bilinmeyen",
-			"badge.week":  "Hf",
+			"win.five":      "5sa",
+			"win.week":      "haftalık",
+			"win.unknown":   "bilinmeyen",
+			"badge.percent": "%%%d",
+			"badge.week":    "Hf",
 
 			"hit.burst":      "ani yükseliş öngörüsü",
 			"hit.compaction": "bağlam sıkıştırması öncesi güvenlik",

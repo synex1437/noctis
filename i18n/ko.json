@@ -2,6 +2,7 @@
   "win.five": "5시간",
   "win.week": "주간",
   "win.unknown": "알 수 없음",
+  "badge.percent": "%d%%",
   "badge.week": "주",
   "hit.burst": "급증 예측",
   "hit.compaction": "컨텍스트 압축 전 안전 정지",
