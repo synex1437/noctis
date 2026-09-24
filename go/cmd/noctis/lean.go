@@ -16,6 +16,8 @@ var leanKeys = []string{"lean", "compactAtPercent", "keepTurns", "maxToolResultC
 
 var leanDecimal = lazyRegexp(`^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$`)
 
+const leanClaudeMin = "2.1.281"
+
 type leanPolicy struct {
 	on        bool
 	compactAt float64
@@ -137,8 +139,28 @@ func leanDoctorLines(cfg object) []string {
 	if leanPolicyOf(cfg).on {
 		value := leanSwitchValue()
 		lines = append(lines, fixLine(switchIsOn(value), T("doctor.leanSwitch", orDefault(value, T("doctor.none"))), "doctor.fixLeanSwitch")...)
+		if sid, version := lastClaudeSession(); claudeTooOldForLean(version) && !leanRanIn(sid) {
+			lines = append(lines, fixLine(false, T("doctor.leanOld", version, leanClaudeMin), "doctor.fixLeanOld")...)
+		}
 	}
 	return lines
+}
+
+func claudeTooOldForLean(version string) bool {
+	match := versionPattern.FindStringSubmatch(version)
+	return match != nil && compareVersions(match[1], leanClaudeMin) < 0
+}
+
+func lastClaudeSession() (string, string) {
+	sid, version, latest := "", "", -1.0
+	for key, raw := range getMap(readJSON(files.usage), "sessions") {
+		info, _ := raw.(object)
+		reported, at := getString(info, "version"), numberOr(info, "updatedAt", 0)
+		if reported != "" && (at > latest || at == latest && compareVersions(reported, version) > 0) {
+			sid, version, latest = key, reported, at
+		}
+	}
+	return sid, version
 }
 
 const leanLogLines = 200
@@ -272,4 +294,44 @@ func leanSwitchValue() string {
 		return fmt.Sprint(value)
 	}
 	return os.Getenv(functionHooksVar)
+}
+
+func leanRanIn(sid string) bool {
+	for key := range getMap(readJSON(filepath.Join(files.guardDir, "lean.json")), "sessions") {
+		if safeName(key) == sid {
+			return true
+		}
+	}
+	return false
+}
+
+func leanHintDue(cfg object, sid string, percent float64) bool {
+	if sid == "" || sid == "unknown" || currentHost().id != "claude" {
+		return false
+	}
+	policy := leanPolicyOf(cfg)
+	return policy.on && policy.compactAt > 0 && percent >= policy.compactAt && !leanRanIn(sid)
+}
+
+func leanContextText(cfg object, sid string, percent float64) string {
+	if leanHintDue(cfg, sid, percent) {
+		return T("statusline.ctxCompact", int(math.Round(percent)))
+	}
+	return T("statusline.ctx", int(math.Round(percent)))
+}
+
+func leanNotice(cfg, state object, sid string) string {
+	session := getMap(getMap(readJSON(files.usage), "sessions"), sid)
+	percent, known := getNumber(session, "context")
+	key := "lean:" + sid
+	if !known || !leanHintDue(cfg, sid, percent) || getMap(state, "notified")[key] != nil {
+		return ""
+	}
+	updateState(func(next object) { stateMap(next, "notified")[key] = float64(nowSec()) })
+	journal(sid, "UserPromptSubmit", "lean-hint", "lean module not running", object{"ctx": percent})
+	badge := T("badge.percent", int(math.Round(percent)))
+	if version := getString(session, "version"); claudeTooOldForLean(version) {
+		return T("lean.noticeOld", badge, version, leanClaudeMin)
+	}
+	return T("lean.notice", badge)
 }

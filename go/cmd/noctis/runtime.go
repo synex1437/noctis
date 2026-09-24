@@ -253,6 +253,9 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 			sid = sessionKey(input)
 			sessions := getMap(next, "sessions")
 			info := object{"model": getString(getMap(input, "model"), "id"), "cwd": getString(input, "cwd"), "transcript": getString(input, "transcript_path"), "updatedAt": float64(now)}
+			if reported := getString(input, "version"); reported != "" {
+				info["version"] = reported
+			}
 			if context, ok := getNumber(getMap(input, "context_window"), "used_percentage"); ok {
 				info["context"] = context
 			} else {
@@ -311,7 +314,7 @@ func runStatusline() {
 	}
 	context := ""
 	if percent, ok := getNumber(getMap(input, "context_window"), "used_percentage"); ok {
-		context = T("statusline.ctx", int(math.Round(percent)))
+		context = leanContextText(cfg, sid, percent)
 	}
 	marker := "∞"
 	if !getBool(statuslineCfg, "emoji", true) {
