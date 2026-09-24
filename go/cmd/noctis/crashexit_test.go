@@ -57,7 +57,7 @@ func crashedRun(t *testing.T, argv ...string) cliRun {
 }
 
 func TestACrashInACommandPeopleRunExitsOneAndSaysWhereTheDetailsAre(t *testing.T) {
-	for _, name := range []string{"check", "setup", "install", "doctor", "status", "cancel", "off"} {
+	for _, name := range []string{"check", "setup", "install", "doctor", "status", "cancel", "off", "webhook"} {
 		t.Run(name, func(t *testing.T) {
 			run := crashedRun(t, name)
 
@@ -72,7 +72,7 @@ func TestACrashInACommandPeopleRunExitsOneAndSaysWhereTheDetailsAre(t *testing.T
 }
 
 func TestACrashInWhatAHostRunsNeverFailsTheHost(t *testing.T) {
-	for _, name := range []string{"hook", "statusline", "ensure", "resume", "sleeper", "webhook", "selftest-mark", "release-check"} {
+	for _, name := range []string{"hook", "statusline", "ensure", "resume", "sleeper", "selftest-mark", "release-check"} {
 		t.Run(name, func(t *testing.T) {
 			run := crashedRun(t, name, "--sid", "s1")
 
