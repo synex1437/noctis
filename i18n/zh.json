@@ -91,6 +91,7 @@
   "statusline.moved": " · ↪ 已在另一个窗口继续 — 此窗口可以关闭",
   "statusline.observe": " · 👁 观察",
   "statusline.fatal": "∞ %s 错误 (errors.log)",
+  "fatal.command": "%s 崩溃：%v — 详情见 %s；`noctis report --bundle` 可生成一个用于附到 issue 的文件",
   "checkpoint.title": "# %s 检查点",
   "checkpoint.session": "- 会话：%s",
   "checkpoint.time": "- 时间：%s",

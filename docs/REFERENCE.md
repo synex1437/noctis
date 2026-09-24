@@ -31,7 +31,9 @@ Two flags work with every command: `--account <dir>` is the account folder whose
 
 Called by the plugin itself: `hook`, `statusline`, `resume`, `sleeper`, `release-check`, `selftest-mark`. `state-write` is for the test harness.
 
-`noctis check` is the exit-code gate for crons, CI and other agents: `0` under every threshold, `10` inside the warn band, `11` a threshold is reached (the hooks would pause right now), `20` no or stale usage data, `2` an unknown `--host` or `NOCTIS_HOST`. `11` also covers a window at the 100 % ceiling or about to cross it and a Fable session over the Fable threshold; a `budget.hardStop` pause is not reflected. It records nothing and never touches the network.
+A command you run that crashes prints `noctis <command> crashed: <reason>` with the path of `errors.log` on stderr and exits 1. The commands a host or noctis itself starts exit 0 after a crash, so a hook never fails the session; a crashed status line prints `∞ noctis error (errors.log)`.
+
+`noctis check` is the exit-code gate for crons, CI and other agents: `0` under every threshold, `10` inside the warn band, `11` a threshold is reached (the hooks would pause right now), `20` no or stale usage data, `2` an unknown `--host` or `NOCTIS_HOST`, `1` a crash of noctis itself (the reason is in `errors.log`). `11` also covers a window at the 100 % ceiling or about to cross it and a Fable session over the Fable threshold; a `budget.hardStop` pause is not reflected. It records nothing and never touches the network.
 
 `report --json` is ccusage-compatible (`daily[]` with `inputTokens/outputTokens/cacheCreationTokens/cacheReadTokens/totalTokens/totalCost/modelsUsed/modelBreakdowns`) and adds `keptOffPrimary` — the tokens subagents spent on other models instead of the primary one, with the API-equivalent cost they avoided. Costs use the published list prices (informational on a subscription); `report.pricing` in `config.json` overrides or extends the table.
 

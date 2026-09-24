@@ -102,12 +102,7 @@ func offeredCommands() string {
 func main() {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			fail("fatal: %v", recovered)
-
-			if command == "statusline" {
-				fmt.Println(T("statusline.fatal", pluginName))
-			}
-			os.Exit(0)
+			os.Exit(crashed(recovered))
 		}
 	}()
 	args = parseArgs(os.Args[1:])
@@ -153,6 +148,25 @@ func main() {
 		os.Exit(2)
 	}
 	run()
+}
+
+func crashed(recovered any) int {
+	fail("fatal: %v", recovered)
+	name := command
+	if name == "" {
+		name = positional(0)
+	}
+	if name == "statusline" {
+		fmt.Println(T("statusline.fatal", pluginName))
+	}
+	if startedByHost[name] {
+		return 0
+	}
+	fmt.Fprintln(os.Stderr, T("fatal.command", strings.TrimSpace(pluginName+" "+name), recovered, files.errors))
+	if name == "" {
+		return 0
+	}
+	return 1
 }
 
 var startedByHost = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "ensure": true, "release-check": true, "webhook": true, "selftest-mark": true, "state-write": true}

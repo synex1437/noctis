@@ -91,6 +91,7 @@
   "statusline.moved": " · ↪ يكمل في نافذة أخرى — يمكن إغلاق هذه",
   "statusline.observe": " · 👁 مراقبة",
   "statusline.fatal": "∞ خطأ %s (errors.log)",
+  "fatal.command": "تعطّل %s: %v — التفاصيل في %s؛ ينشئ `noctis report --bundle` ملفًا لإرفاقه بالمسألة",
   "checkpoint.title": "# نقطة حفظ %s",
   "checkpoint.session": "- الجلسة: %s",
   "checkpoint.time": "- الوقت: %s",

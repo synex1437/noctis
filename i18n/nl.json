@@ -91,6 +91,7 @@
   "statusline.moved": " · ↪ gaat verder in een ander venster — dit kan dicht",
   "statusline.observe": " · 👁 observeren",
   "statusline.fatal": "∞ %s-fout (errors.log)",
+  "fatal.command": "%s is gecrasht: %v — de details staan in %s; `noctis report --bundle` maakt een bestand om aan een issue toe te voegen",
   "checkpoint.title": "# %s-checkpoint",
   "checkpoint.session": "- Sessie: %s",
   "checkpoint.time": "- Tijd: %s",
