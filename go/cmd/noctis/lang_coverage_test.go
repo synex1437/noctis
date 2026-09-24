@@ -194,7 +194,7 @@ func TestTheWorkspaceNoteStatesFactsInsteadOfOrders(t *testing.T) {
 	clauses := regexp.MustCompile(`[.:;,()!]`)
 	for lang, table := range catalogTable() {
 		note := strings.TrimSpace(strings.TrimPrefix(table["workspace.context"], "[noctis]"))
-		if !strings.Contains(note, "git status differs from the checkpoint") {
+		if !strings.Contains(note, "the files, the commit or git status differ from the checkpoint") {
 			t.Errorf("%s: the workspace note must say what changed, got %q", lang, note)
 		}
 		for _, clause := range clauses.Split(note, -1) {

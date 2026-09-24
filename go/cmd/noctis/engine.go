@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"math"
 	"os"
 	"os/exec"
@@ -521,7 +523,7 @@ func gitStatusUncached(cwd string) (string, bool) {
 	if !insideGitRepo(cwd) {
 		return "", false
 	}
-	command := exec.Command("git", "status", "--short")
+	command := exec.Command("git", "-c", "status.relativePaths=true", "-c", "color.status=false", "-c", "status.branch=false", "status", "--short")
 	command.Dir = cwd
 	output, err := runWithTimeout(command, 3*time.Second)
 	if err != nil {
@@ -535,8 +537,120 @@ func treeFingerprint(cwd string) string {
 	if !ok {
 		return ""
 	}
-	sum := sha1.Sum([]byte(raw))
-	return hex.EncodeToString(sum[:8])
+	digest := sha1.New()
+	fmt.Fprintf(digest, "%s\x00%s", gitHead(cwd), raw)
+	budget := treeStatLimit
+	folders := []string{}
+	for _, name := range statusPaths(raw) {
+		if budget <= 0 {
+			break
+		}
+		budget--
+		if hashPathState(digest, cwd, name) {
+			folders = append(folders, name)
+		}
+	}
+	for _, name := range folders {
+		if budget <= 0 {
+			break
+		}
+		budget = hashFolderState(digest, cwd, name, budget)
+	}
+	return hex.EncodeToString(digest.Sum(nil)[:8])
+}
+
+func gitHead(cwd string) string {
+	command := exec.Command("git", "rev-parse", "-q", "--verify", "HEAD")
+	command.Dir = cwd
+	output, err := runWithTimeout(command, 3*time.Second)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
+}
+
+func statusPaths(raw string) []string {
+	paths := []string{}
+	for _, line := range strings.Split(raw, "\n") {
+		if len(line) < 4 {
+			continue
+		}
+		rest := line[3:]
+		if strings.ContainsAny(line[:2], "RC") {
+			if from, to, ok := splitStatusRename(rest); ok {
+				paths = append(paths, from, to)
+				continue
+			}
+		}
+		paths = append(paths, unquoteStatusPath(rest))
+	}
+	return paths
+}
+
+func splitStatusRename(rest string) (string, string, bool) {
+	end := strings.Index(rest, " -> ")
+	if strings.HasPrefix(rest, `"`) {
+		end = -1
+		for i := 1; i < len(rest); i++ {
+			if rest[i] == '\\' {
+				i++
+				continue
+			}
+			if rest[i] == '"' {
+				end = i + 1
+				break
+			}
+		}
+	}
+	if end < 0 || !strings.HasPrefix(rest[end:], " -> ") {
+		return "", "", false
+	}
+	return unquoteStatusPath(rest[:end]), unquoteStatusPath(rest[end+len(" -> "):]), true
+}
+
+func unquoteStatusPath(field string) string {
+	if len(field) >= 2 && field[0] == '"' && field[len(field)-1] == '"' {
+		if unquoted, err := strconv.Unquote(field); err == nil {
+			return unquoted
+		}
+	}
+	return field
+}
+
+func hashPathState(digest io.Writer, cwd, name string) bool {
+	info, err := os.Lstat(filepath.Join(cwd, filepath.FromSlash(name)))
+	if err != nil {
+		fmt.Fprintf(digest, "\x00%s\x00gone", name)
+		return false
+	}
+	writePathState(digest, name, info)
+	return info.IsDir()
+}
+
+func hashFolderState(digest io.Writer, cwd, name string, budget int) int {
+	path := filepath.Join(cwd, filepath.FromSlash(name))
+	_ = filepath.WalkDir(path, func(entryPath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil || entryPath == path {
+			return nil
+		}
+		if budget <= 0 {
+			return filepath.SkipAll
+		}
+		if entry.IsDir() && entry.Name() == ".git" {
+			return filepath.SkipDir
+		}
+		budget--
+		if entryInfo, infoErr := entry.Info(); infoErr == nil {
+			relative, _ := filepath.Rel(cwd, entryPath)
+			writePathState(digest, filepath.ToSlash(relative), entryInfo)
+		}
+		return nil
+	})
+	return budget
+}
+
+func writePathState(digest io.Writer, name string, info os.FileInfo) {
+	fmt.Fprintf(digest, "\x00%s\x00%d\x00%d\x00%d", name, info.Size(), info.ModTime().UnixNano(), info.Mode())
 }
 
 func workspaceChanged(record object) bool {
