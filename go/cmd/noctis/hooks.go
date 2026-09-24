@@ -1075,7 +1075,7 @@ func onStop(input, cfg object) {
 	if getMap(getMap(state, "handedOff"), sid) != nil && !isHandoffSession(sid) {
 		return
 	}
-	if wait := getMap(getMap(state, "waits"), sid); wait != nil && !getBool(wait, "inHook", false) {
+	if wait := getMap(getMap(state, "waits"), sid); wait != nil && !getBool(wait, "inHook", false) && !resumedByThisSession(state, sid, wait) {
 		return
 	}
 	clearOverload(state, sid)
