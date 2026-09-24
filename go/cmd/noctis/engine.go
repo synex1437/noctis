@@ -1575,7 +1575,7 @@ func notify(cfg object, title, body string) string {
 				once := "notify:" + filepath.Base(child.Path)
 				if float64(nowSec())-numberOr(getMap(readState(), "notified"), once, 0) > 86400 {
 					updateState(func(next object) { stateMap(next, "notified")[once] = float64(nowSec()) })
-					warn("no desktop notifier here (%v); alarms are silent, waits are unaffected", err)
+					logInfo("no desktop notifier here (%v); alarms are silent, waits are unaffected", err)
 				}
 			} else {
 				warn("notify failed: %v", err)
