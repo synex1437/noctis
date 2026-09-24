@@ -694,7 +694,7 @@ func refreshFable(cfg object, now int64, reason string, maxAge float64, ignoreBa
 		next["error"] = "no-token"
 		next["backoffUntil"] = float64(now + 1800)
 		mustWriteJSON(files.fable, next)
-		warn("fable refresh skipped (%s): no usable OAuth token in %s", reason, files.credentials)
+		logInfo("fable refresh skipped (%s): no usable OAuth token in %s", reason, files.credentials)
 		return next
 	}
 	version := getString(readJSON(files.usage), "version")

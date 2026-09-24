@@ -84,3 +84,43 @@ func TestAPlanWithoutTheScopedBucketIsNotLoggedAsAnError(t *testing.T) {
 		t.Fatalf("the note is not in guard.log either:\n%s", content)
 	}
 }
+
+func TestNotesNoctisLeavesForItselfDoNotFailTheDoctor(t *testing.T) {
+	cfg, project := agentSessionSandbox(t, 20)
+	t.Setenv("NOCTIS_UPDATE_URL", "off")
+	previousHost := activeHost
+	t.Cleanup(func() { activeHost = previousHost })
+	activeHost = "claude"
+	mustWriteJSON(files.settings, object{"statusLine": object{"type": "command", "command": "ccstatusline"}})
+	if err := os.Remove(files.usage); err != nil {
+		t.Fatal(err)
+	}
+
+	start := hookOutput(t, onSessionStart, agentHookInput("SessionStart", "notes-1", project, object{"source": "startup"}), cfg)
+	if !strings.Contains(getString(start, "systemMessage"), T("selfcheck.statusline")) || !strings.Contains(getString(start, "systemMessage"), T("selfcheck.token", scopedLabel(cfg))) {
+		t.Fatalf("the startup self-check did not tell the user about the foreign status line and the missing sign-in: %v", start)
+	}
+	if getString(readJSON(files.fable), "error") != "no-token" {
+		t.Fatalf("the session start did not try the usage refresh without a sign-in: %v", readJSON(files.fable))
+	}
+
+	path := os.Getenv("PATH")
+	t.Setenv("PATH", t.TempDir())
+	if reason := notify(object{}, pluginName, "probe"); reason == "" {
+		t.Fatal("a machine without a desktop notifier reported the notification as shown")
+	}
+	t.Setenv("PATH", path)
+
+	if content, _ := os.ReadFile(files.errors); len(content) > 0 {
+		t.Fatalf("notes noctis already showed or that describe the machine are logged as errors, so the doctor fails on them for a day:\n%s", content)
+	}
+	logged, _ := os.ReadFile(files.log)
+	for _, note := range []string{"self-check:", "no usable OAuth token", "no desktop notifier here"} {
+		if !strings.Contains(string(logged), note) {
+			t.Fatalf("guard.log lost the note %q:\n%s", note, logged)
+		}
+	}
+	if line, _ := doctorErrorsLine(t, "claude"); !strings.HasPrefix(line, "OK") {
+		t.Fatalf("the doctor fails on notes noctis wrote itself: %q", line)
+	}
+}

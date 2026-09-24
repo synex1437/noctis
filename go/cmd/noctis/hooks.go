@@ -237,7 +237,7 @@ func onSessionStart(input, cfg object) {
 	if source == "startup" && float64(now)-numberOr(getMap(state, "notified"), "selfcheck", 0) > selfCheckIntervalSec {
 		if issues := selfCheckIssues(cfg); len(issues) > 0 {
 			updateState(func(next object) { stateMap(next, "notified")["selfcheck"] = float64(now) })
-			warn("self-check: %s", strings.Join(issues, "; "))
+			logInfo("self-check: %s", strings.Join(issues, "; "))
 			output["systemMessage"] = joinNotices(getString(output, "systemMessage"), T("selfcheck.message", pluginName, strings.Join(issues, "; ")))
 		}
 	}
