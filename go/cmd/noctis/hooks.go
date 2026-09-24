@@ -194,7 +194,7 @@ func onSessionStart(input, cfg object) {
 	queueNotice, queueNoticeKey, cutOffSid := "", "", ""
 	if source == "startup" || source == "clear" {
 		if checkpointSid, checkpoint := latestCheckpointFor(state, cwd, now); checkpoint != nil {
-			consumeCheckpoint(checkpointSid)
+			handOverCheckpoint(checkpointSid, sid)
 			contexts = append(contexts, T("session.checkpoint", pluginName, formatTime(numberOr(checkpoint, "at", 0)), getString(checkpoint, "path"), hostResumeCommand(currentHost().id, checkpointSid)))
 			if note := cutOffNote(readState(), checkpointSid); note != "" {
 				contexts = append(contexts, note)
@@ -1014,6 +1014,45 @@ func completionPromised(cfg object, transcriptPath string) bool {
 	return strings.Contains(summary.lastAssistantRaw, "<promise>"+promise+"</promise>")
 }
 
+func onPermissionRequest(input, cfg object) {
+	tool := getString(input, "tool_name")
+	switch tool {
+	case "Read", "Edit", "MultiEdit", "Write":
+	default:
+		return
+	}
+	if getString(input, "permission_mode") == "plan" {
+		return
+	}
+	requested := filepath.FromSlash(getString(getMap(input, "tool_input"), "file_path"))
+	if !filepath.IsAbs(requested) {
+		return
+	}
+	sid := sessionKey(input)
+	if tool == "Read" && checkpointHandedTo(readState(), sid, requested) {
+		allowFileRequest(sid, tool, requested, "allow-checkpoint-note", "the resume note handed to")
+		return
+	}
+	queuePath := sessionQueueFile(cfg, sid, queueDirs(input)...)
+	if queuePath == "" || requested != queuePath || !queueTrusted(cfg, queuePath) {
+		return
+	}
+	allowFileRequest(sid, tool, queuePath, "allow-queue-file", "the queue file of")
+}
+
+func allowFileRequest(sid, tool, path, action, role string) {
+	if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() {
+		return
+	}
+	reason := tool + " " + filepath.Base(path)
+	if observed(sid, "PermissionRequest", action, reason, nil) {
+		return
+	}
+	journal(sid, "PermissionRequest", action, reason, nil)
+	logInfo("permission request for %s answered: %s is %s %s", tool, path, role, sid)
+	emit(object{"hookSpecificOutput": object{"hookEventName": "PermissionRequest", "decision": object{"behavior": "allow"}}})
+}
+
 func onStop(input, cfg object) {
 	now := nowSec()
 	sid := sessionKey(input)
@@ -1818,18 +1857,19 @@ func runHook() {
 	}
 	input["hook_event_name"] = event
 	handlers := map[string]func(object, object){
-		"SessionStart":     onSessionStart,
-		"SessionEnd":       onSessionEnd,
-		"UserPromptSubmit": onUserPromptSubmit,
-		"PreToolUse":       onPreToolUse,
-		"PostToolUse":      onPostToolUse,
-		"PostToolBatch":    onPostToolBatch,
-		"Stop":             onStop,
-		"StopFailure":      onStopFailure,
-		"Notification":     onNotification,
-		"PostModelSwitch":  onPostModelSwitch,
-		"TaskCreated":      onTaskEvent,
-		"TaskCompleted":    onTaskEvent,
+		"SessionStart":      onSessionStart,
+		"SessionEnd":        onSessionEnd,
+		"UserPromptSubmit":  onUserPromptSubmit,
+		"PreToolUse":        onPreToolUse,
+		"PostToolUse":       onPostToolUse,
+		"PostToolBatch":     onPostToolBatch,
+		"Stop":              onStop,
+		"StopFailure":       onStopFailure,
+		"Notification":      onNotification,
+		"PostModelSwitch":   onPostModelSwitch,
+		"TaskCreated":       onTaskEvent,
+		"TaskCompleted":     onTaskEvent,
+		"PermissionRequest": onPermissionRequest,
 	}
 	handler, ok := handlers[event]
 	if !ok {
