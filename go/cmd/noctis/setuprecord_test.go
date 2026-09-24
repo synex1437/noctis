@@ -186,3 +186,109 @@ func TestAValueChangedAfterTheLastSetupStaysThroughUninstall(t *testing.T) {
 		t.Errorf("the mode set by hand after setup became %q on uninstall", got)
 	}
 }
+
+func TestASetupWithoutPermissionsLeavesTheModeAnEarlierSetupChose(t *testing.T) {
+	sandboxFiles(t)
+	recordClaudeWithAuto(t)
+	cases := []struct {
+		name     string
+		original string
+		first    []string
+		byHand   func(permissions object)
+		want     string
+	}{
+		{"auto from the first setup, set to default by hand", "plan", nil, func(p object) { p["defaultMode"] = "default" }, "default"},
+		{"auto from the first setup, removed by hand", "plan", nil, func(p object) { delete(p, "defaultMode") }, ""},
+		{"acceptEdits chosen with --permissions", "", []string{"--permissions", "acceptEdits"}, nil, "acceptEdits"},
+		{"keep chosen on the first setup", "plan", []string{"--permissions", "keep"}, nil, "plan"},
+		{"keep chosen on the first setup with no mode set", "", []string{"--permissions", "keep"}, nil, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			permissions := object{"allow": []any{"Bash(npm test)"}}
+			if c.original != "" {
+				permissions["defaultMode"] = c.original
+			}
+			account := recordAccount(t, object{"permissions": permissions})
+			settingsFile := filepath.Join(account, "settings.json")
+			recordSetup(t, account, "max", c.first...)
+			if c.byHand != nil {
+				settings := readJSON(settingsFile)
+				c.byHand(getMap(settings, "permissions"))
+				mustWriteJSON(settingsFile, settings)
+			}
+
+			recordSetup(t, account, "low")
+
+			got, present := recordValue(readJSON(settingsFile), "permissions", "defaultMode")
+			if c.want == "" && present {
+				t.Fatalf("a setup without --permissions wrote defaultMode %q where an earlier setup's choice left none", got)
+			}
+			if c.want != "" && got != c.want {
+				t.Fatalf("a setup without --permissions made defaultMode %q; an earlier setup's choice left %q", got, c.want)
+			}
+			if effort, _ := recordValue(readJSON(settingsFile), "env", "CLAUDE_CODE_EFFORT_LEVEL"); effort != "low" {
+				t.Fatalf("the second setup did not set its effort: %q", effort)
+			}
+		})
+	}
+}
+
+func TestTheFirstSetupSwitchesToAutoAndAnExplicitModeStillSwitches(t *testing.T) {
+	sandboxFiles(t)
+	recordClaudeWithAuto(t)
+	account := recordAccount(t, object{"permissions": object{"defaultMode": "plan"}})
+	settingsFile := filepath.Join(account, "settings.json")
+
+	recordSetup(t, account, "max")
+	if got, _ := recordValue(readJSON(settingsFile), "permissions", "defaultMode"); got != "auto" {
+		t.Fatalf("the first setup without --permissions left defaultMode %q, want auto", got)
+	}
+	settings := readJSON(settingsFile)
+	getMap(settings, "permissions")["defaultMode"] = "default"
+	mustWriteJSON(settingsFile, settings)
+	recordSetup(t, account, "max", "--permissions", "acceptEdits")
+	if got, _ := recordValue(readJSON(settingsFile), "permissions", "defaultMode"); got != "acceptEdits" {
+		t.Fatalf("--permissions acceptEdits made defaultMode %q", got)
+	}
+	recordSetup(t, account, "max", "--permissions", "auto")
+	if got, _ := recordValue(readJSON(settingsFile), "permissions", "defaultMode"); got != "auto" {
+		t.Fatalf("--permissions auto made defaultMode %q", got)
+	}
+}
+
+func TestAProfileSwitchLeavesThePermissionModeTheUserChose(t *testing.T) {
+	recordClaudeWithAuto(t)
+	root := cliPluginTree(t)
+	account := t.TempDir()
+	settingsFile := filepath.Join(account, "settings.json")
+	cliWrite(t, settingsFile, []byte(`{"permissions": {"defaultMode": "plan"}}`))
+	env := cliAccountEnv(root, account)
+
+	first := runNoctisCLI(t, env, "setup", "--config-dir", account, "--profile", "noctis")
+	if mode, _ := recordValue(readJSON(settingsFile), "permissions", "defaultMode"); first.code != 0 || mode != "auto" {
+		t.Fatalf("the first setup should switch to auto, got %q:\n%s", mode, first)
+	}
+	settings := readJSON(settingsFile)
+	getMap(settings, "permissions")["defaultMode"] = "default"
+	mustWriteJSON(settingsFile, settings)
+
+	economy := runNoctisCLI(t, env, "setup", "--config-dir", account, "--profile", "economy")
+
+	settings = readJSON(settingsFile)
+	if mode, _ := recordValue(settings, "permissions", "defaultMode"); economy.code != 0 || mode != "default" {
+		t.Fatalf("the user set defaultMode back to default after setup; a profile switch made it %q:\n%s", mode, economy)
+	}
+	if effort, _ := recordValue(settings, "env", "CLAUDE_CODE_EFFORT_LEVEL"); effort != "low" {
+		t.Fatalf("the profile switch did not set the economy effort: %q", effort)
+	}
+
+	switched := runNoctisCLI(t, env, "setup", "--config-dir", account, "--profile", "economy", "--permissions", "auto")
+	if mode, _ := recordValue(readJSON(settingsFile), "permissions", "defaultMode"); switched.code != 0 || mode != "auto" {
+		t.Fatalf("--permissions auto should still switch the mode, got %q:\n%s", mode, switched)
+	}
+	uninstall := runNoctisCLI(t, env, "install", "--uninstall", "--config-dir", account, "--host", "claude")
+	if mode, _ := recordValue(readJSON(settingsFile), "permissions", "defaultMode"); uninstall.code != 0 || mode != "default" {
+		t.Fatalf("uninstall should give back the mode --permissions auto replaced, got %q:\n%s", mode, uninstall)
+	}
+}

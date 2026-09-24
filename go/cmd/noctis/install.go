@@ -538,6 +538,10 @@ func valueSetupFound(holder object, key, setEarlier string, found any, recorded 
 func managedPermissionMode(config object) string {
 	choice := choiceOf(permissionChoices, flagString("permissions"))
 	if choice == "keep" {
+		config["managedPermissionKeep"] = true
+		return ""
+	}
+	if choice == "" && (getString(config, "managedPermissionMode") != "" || getBool(config, "managedPermissionKeep", false)) {
 		return ""
 	}
 	if choice == "" {
