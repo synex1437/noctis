@@ -572,10 +572,12 @@ func launchClaude(cfg object, launch launchSpec) launchResult {
 	logInfo("launching claude (%s) model=%s mode=%s cwd=%s", mode, launch.model, permissionMode, launch.cwd)
 	closePreviousLaunch(cfg, launch.sid, getMap(getMap(readState(), "waits"), launch.sid))
 	if mode == "window" {
-		if isWindows {
+		switch {
+		case isWindows && files.launchScript != "":
 			return launchResult{started: launchInWindowsTerminal(cfg, launch, claudePath, claudeArgs, env, effort), window: true}
-		}
-		if launchInDesktopTerminal(cfg, launch, claudePath, claudeArgs, effort) {
+		case isWindows:
+			warn("relaunch of %s runs headless: %s is not the plugin folder of this binary, so its scripts\\launch.ps1 is not run", launch.sid, files.pluginRoot)
+		case launchInDesktopTerminal(cfg, launch, claudePath, claudeArgs, effort):
 			return launchResult{started: true, window: true}
 		}
 	}

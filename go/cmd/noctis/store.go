@@ -240,6 +240,19 @@ func resolvePluginRoot(executable string) string {
 	return filepath.Dir(filepath.Dir(filepath.Dir(executable)))
 }
 
+func scriptsTrusted(root, executable string) bool {
+	if !looksLikePluginRoot(root) {
+		return false
+	}
+	for _, candidate := range []string{os.Getenv("NOCTIS_PLUGIN_ROOT"), os.Getenv("CLAUDE_PLUGIN_ROOT")} {
+		if resolved, err := filepath.Abs(candidate); candidate != "" && err == nil && resolved == root {
+			return true
+		}
+	}
+	folder := filepath.Dir(executable)
+	return folder == filepath.Join(root, "bin") || folder == filepath.Dir(platformBinary(root))
+}
+
 func initPaths() {
 	executable, _ := os.Executable()
 	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
@@ -265,10 +278,14 @@ func initPaths() {
 		configDir, _ = filepath.Abs(configDir)
 	}
 	guardDir := filepath.Join(configDir, pluginName)
+	notifyScript, launchScript := "", ""
+	if scriptsTrusted(pluginRoot, executable) {
+		notifyScript, launchScript = filepath.Join(pluginRoot, "scripts", "notify.ps1"), filepath.Join(pluginRoot, "scripts", "launch.ps1")
+	}
 	files = paths{
 		pluginRoot:     pluginRoot,
-		notifyScript:   filepath.Join(pluginRoot, "scripts", "notify.ps1"),
-		launchScript:   filepath.Join(pluginRoot, "scripts", "launch.ps1"),
+		notifyScript:   notifyScript,
+		launchScript:   launchScript,
 		configDir:      configDir,
 		guardDir:       guardDir,
 		config:         filepath.Join(guardDir, "config.json"),

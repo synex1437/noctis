@@ -1445,6 +1445,11 @@ func notify(cfg object, title, body string) {
 	}
 	var child *exec.Cmd
 	switch {
+	case isWindows && files.notifyScript == "":
+		if float64(nowSec())-numberOr(getMap(readState(), "notified"), "notify:untrusted", 0) > 86400 {
+			updateState(func(next object) { stateMap(next, "notified")["notify:untrusted"] = float64(nowSec()) })
+			warn("no toast: %s is not the plugin folder of this binary, so its scripts\\notify.ps1 is not run", files.pluginRoot)
+		}
 	case isWindows:
 		child = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", files.notifyScript, "-Title", title, "-Body", body)
 	case runtime.GOOS == "darwin":
@@ -1453,20 +1458,22 @@ func notify(cfg object, title, body string) {
 	default:
 		child = exec.Command("notify-send", title, body)
 	}
-	configureDetached(child)
-	if err := child.Start(); err != nil {
+	if child != nil {
+		configureDetached(child)
+		if err := child.Start(); err != nil {
 
-		if notifierMissing(err) {
-			once := "notify:" + filepath.Base(child.Path)
-			if float64(nowSec())-numberOr(getMap(readState(), "notified"), once, 0) > 86400 {
-				updateState(func(next object) { stateMap(next, "notified")[once] = float64(nowSec()) })
-				warn("no desktop notifier here (%v); alarms are silent, waits are unaffected", err)
+			if notifierMissing(err) {
+				once := "notify:" + filepath.Base(child.Path)
+				if float64(nowSec())-numberOr(getMap(readState(), "notified"), once, 0) > 86400 {
+					updateState(func(next object) { stateMap(next, "notified")[once] = float64(nowSec()) })
+					warn("no desktop notifier here (%v); alarms are silent, waits are unaffected", err)
+				}
+			} else {
+				warn("notify failed: %v", err)
 			}
 		} else {
-			warn("notify failed: %v", err)
+			_ = child.Process.Release()
 		}
-	} else {
-		_ = child.Process.Release()
 	}
 	if webhookSettings(cfg).target != "" {
 		if command == "webhook" {
