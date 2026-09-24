@@ -492,6 +492,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	effortRecord := getMap(config, "managedEffort")
 	config["managedEffort"] = object{"previous": valueSetupFound(env, "CLAUDE_CODE_EFFORT_LEVEL", effortRecord["previous"], effortRecord != nil), "set": effort}
 	env["CLAUDE_CODE_EFFORT_LEVEL"] = effort
+	leanNote := wireLeanSwitch(config, env)
 	data["env"] = env
 	current := getString(data, "model")
 	managed := getMap(config, "managedModel")
@@ -562,6 +563,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		backupText = T("install.backup", filepath.Base(backup))
 	}
 	fmt.Println(T("install.settings", backupText, effort, getString(data, "model")))
+	fmt.Println(leanNote)
 	return nil
 }
 
@@ -714,7 +716,7 @@ func uninstallFrom(configDir string) error {
 	return nil
 }
 
-var setupRecords = []string{"managedModel", "managedEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep"}
+var setupRecords = []string{"managedModel", "managedEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep", "managedFunctionHooks"}
 
 func forgetSetupRecords(configFile string, config object) {
 	forgotten := false
@@ -757,6 +759,9 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 			delete(env, "CLAUDE_CODE_EFFORT_LEVEL")
 		}
 	}
+	if env := getMap(data, "env"); env != nil {
+		takeBackLeanSwitch(guardConfig, env)
+	}
 	managed := getString(guardConfig, "managedPermissionMode")
 	found, foundRecorded := guardConfig["managedPermissionPrevious"]
 	if permissions := getMap(data, "permissions"); permissions != nil && managed != "" && foundRecorded && getString(permissions, "defaultMode") == managed {
@@ -783,7 +788,7 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 	return nil
 }
 
-var setupFlags = []string{"profile", "preset", "permissions", "updates", "no-model", "no-ask", "config-dir", "account", "host", "code", "research", "planning", "digest", "explore", "fallback"}
+var setupFlags = []string{"profile", "preset", "permissions", "updates", "no-model", "no-lean", "no-ask", "config-dir", "account", "host", "code", "research", "planning", "digest", "explore", "fallback"}
 
 var installFlags = append([]string{"source", "uninstall"}, setupFlags...)
 
