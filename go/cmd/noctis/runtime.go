@@ -123,7 +123,11 @@ func usageBadgeAt(usage usageView, cfg object, now int64) string {
 		parts = append(parts, fmt.Sprintf("%s%s %s%s→%s", mark(usage.sevenDay, "weeklyAll"), T("badge.week"), T("badge.percent", int(math.Round(usage.sevenDay.used))), paceMarker(cfg, usage.sevenDay, now), formatTime(usage.sevenDay.resetsAt)))
 	}
 	if usage.fable != nil {
-		parts = append(parts, fmt.Sprintf("%s %s", scopedLabel(cfg), T("badge.percent", int(math.Round(usage.fable.used)))))
+		fableMark := ""
+		if limit, guarded := scopedThresholdEnabled(cfg); guarded && usage.fable.used >= limit-warnBand {
+			fableMark = "⚠"
+		}
+		parts = append(parts, fmt.Sprintf("%s%s %s", fableMark, scopedLabel(cfg), T("badge.percent", int(math.Round(usage.fable.used)))))
 	}
 	return strings.Join(parts, " · ")
 }
@@ -312,6 +316,9 @@ func runStatusline() {
 	marker := "∞"
 	if !getBool(statuslineCfg, "emoji", true) {
 		marker = "NOCTIS"
+	}
+	if numberOr(state, "disabledUntil", 0) > float64(now) && ceilingHit(cfg, usage) == nil {
+		marker += "⏸"
 	}
 	waitText := ""
 	if sid != "" {
