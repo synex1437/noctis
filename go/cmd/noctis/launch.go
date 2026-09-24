@@ -347,7 +347,7 @@ func launchInDesktopTerminal(cfg object, launch launchSpec, claudePath string, c
 	case preference != "" && preference != "auto" && strings.Contains(preference, "{script}"):
 		opener = exec.Command("sh", "-c", strings.ReplaceAll(getString(section(cfg, "resume"), "terminal"), "{script}", shellQuote(script)))
 	case isDarwin:
-		opener = exec.Command("osascript", "-e", `tell application "Terminal" to do script "sh `+appleScriptEscape(script)+`"`, "-e", `tell application "Terminal" to activate`)
+		opener = exec.Command("osascript", "-e", `tell application "Terminal" to do script "sh `+appleScriptEscape(shellQuote(script))+`"`, "-e", `tell application "Terminal" to activate`)
 	case os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != "":
 		for _, candidate := range [][]string{{"x-terminal-emulator", "-e"}, {"gnome-terminal", "--"}, {"konsole", "-e"}, {"xfce4-terminal", "-x"}, {"kitty"}, {"alacritty", "-e"}, {"wezterm", "start", "--"}} {
 			if locateExecutable(candidate[0]) != "" {

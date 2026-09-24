@@ -480,3 +480,20 @@ func TestAPreviousWindowPidThatIsNowAShellIsNotClosed(t *testing.T) {
 		t.Fatal("the recorded window pid is now a shell, which a relaunch window never is (the launcher execs claude), and it was killed")
 	}
 }
+
+func TestALauncherInAFolderWithASpaceOrAQuoteOpensItsWindow(t *testing.T) {
+	for index, terminal := range terminalOpeners {
+		t.Run(terminal.name, func(t *testing.T) {
+			home, bin, calls := terminalSandbox(t)
+			openerOnPlatform(t, terminal.darwin)
+			files.launches = filepath.Join(t.TempDir(), "Application Support", "owner's launches")
+			writeStub(t, bin, terminal.opener, forkingOpener(terminal.darwin))
+			if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: fmt.Sprintf("space%d", index+1), cwd: home, prompt: "carry on"}).started {
+				t.Fatal("the window relaunch reported failure")
+			}
+			if runs, recorded := terminalRuns(t, calls); len(runs) != 1 || strings.HasPrefix(runs[0], "-p ") || !recorded {
+				t.Fatalf("the launcher in %q never ran in the window %s opened: claude ran %q (recorded=%t)", files.launches, terminal.opener, runs, recorded)
+			}
+		})
+	}
+}
