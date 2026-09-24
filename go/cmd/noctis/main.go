@@ -159,7 +159,7 @@ func crashed(recovered any) int {
 	if name == "statusline" {
 		fmt.Println(T("statusline.fatal", pluginName))
 	}
-	if startedByHost[name] {
+	if startedByHost[name] && !answersTheCaller[name] {
 		return 0
 	}
 	fmt.Fprintln(os.Stderr, T("fatal.command", strings.TrimSpace(pluginName+" "+name), recovered, files.errors))
@@ -170,6 +170,8 @@ func crashed(recovered any) int {
 }
 
 var startedByHost = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "ensure": true, "release-check": true, "webhook": true, "selftest-mark": true, "state-write": true}
+
+var answersTheCaller = map[string]bool{"webhook": true}
 
 func versionAsked() bool {
 	switch positional(0) {
