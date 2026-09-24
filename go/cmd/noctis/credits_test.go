@@ -113,7 +113,7 @@ func TestTheFallbackModelBringsItsOwnEffort(t *testing.T) {
 
 func TestAnEffortForTheAgentToolIsNotStored(t *testing.T) {
 	for _, role := range []string{"planning", "explore"} {
-		spec, err := parseRoleFlag(role, "opus:high")
+		spec, err := parseRoleFlag(role, "opus:high", false)
 		if err != nil {
 			t.Fatalf("%s: %v", role, err)
 		}
@@ -121,7 +121,7 @@ func TestAnEffortForTheAgentToolIsNotStored(t *testing.T) {
 			t.Errorf("%s stored an effort the Agent tool cannot carry: %v", role, spec)
 		}
 	}
-	spec, err := parseRoleFlag("code", "fable:max")
+	spec, err := parseRoleFlag("code", "fable:max", false)
 	if err != nil || getString(spec, "effort") != "max" {
 		t.Fatalf("the code role must keep its effort: %v %v", spec, err)
 	}

@@ -337,6 +337,7 @@
   "roles.fallback": "모델별 할당량이 떨어졌을 때의 대체",
   "roles.badValue": "%s: '%s' 의 모델이 비어 있습니다",
   "roles.badModel": "%s: %s 은(는) 모델 이름이 아닙니다 (영문자, 숫자와 . _ : @ / [ ] - 만 가능)",
+  "roles.unknownModel": "%s: %s 은(는) Claude Code가 아는 모델이 아닙니다 — opus, sonnet, haiku, fable, best, opusplan 중 하나나 claude-opus-5-5 같은 전체 ID를 쓰세요",
   "roles.badEffort": "%s: 알 수 없는 effort '%s' (low, medium, high, xhigh, max)",
   "roles.effortIgnored": "%s 은(는) 모델만 받습니다. effort %s 는 무시됩니다(Agent 도구에는 effort가 없습니다)",
   "roles.modelNoEffort": "%s: %s 에는 effort 단계가 없습니다. effort %s 는 무시됩니다",

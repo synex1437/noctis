@@ -63,6 +63,9 @@ func startNoctisCLIAt(t *testing.T, home, input string, env map[string]string, a
 	child.Env = append(os.Environ(), cliChildArgs+"="+string(encoded), "NOCTIS_LANG=en", "NOCTIS_HOST=", "NOCTIS_NO_WATCHER=1", "NOCTIS_NO_TASKS=1",
 		"CLAUDE_CONFIG_DIR=", "CLAUDE_PLUGIN_ROOT=", "NOCTIS_PLUGIN_ROOT=",
 		"CLAUDE_CODE_OAUTH_TOKEN=test", "HOME="+home, "USERPROFILE="+home, "CODEX_HOME="+filepath.Join(home, ".codex"), "COPILOT_HOME="+filepath.Join(home, ".copilot"))
+	for _, name := range claudeProviderEnv {
+		child.Env = append(child.Env, name+"=")
+	}
 	for key, value := range env {
 		child.Env = append(child.Env, key+"="+value)
 	}

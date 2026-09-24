@@ -559,7 +559,7 @@ func doctorLines(cfg object) []string {
 	for _, issue := range unguardedAgentTools(cfg) {
 		lines = append(lines, checkLine(false, issue))
 	}
-	for _, problem := range badRoleValues(section(cfg, "roles")) {
+	for _, problem := range badRoleValues(section(cfg, "roles"), providerModels(settings.data)) {
 		lines = append(lines, checkLine(false, problem))
 	}
 	lines = append(lines, doctorConfigLines(cfg)...)

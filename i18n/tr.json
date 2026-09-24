@@ -337,6 +337,7 @@
   "roles.fallback": "kapsamlı kota bitince yedek",
   "roles.badValue": "%s: '%s' içinde model boş",
   "roles.badModel": "%s: %s bir model adı değil (yalnızca harf, rakam ve . _ : @ / [ ] -)",
+  "roles.unknownModel": "%s: %s Claude Code'un tanıdığı bir model değil — opus, sonnet, haiku, fable, best ya da opusplan kullan, veya claude-opus-5-5 gibi tam bir kimlik yaz",
   "roles.badEffort": "%s: bilinmeyen effort '%s' (low, medium, high, xhigh, max)",
   "roles.effortIgnored": "%s yalnızca model alır; %s effort değeri yok sayıldı (Agent aracında effort yok)",
   "roles.modelNoEffort": "%s: %s effort seviyesi almaz; %s effort değeri yok sayıldı",

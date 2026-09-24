@@ -91,7 +91,7 @@ func TestNoProfilePromisesAnEffortItsModelCannotTake(t *testing.T) {
 
 func TestAHaikuEffortFromAFlagIsNotStored(t *testing.T) {
 	for role, value := range map[string]string{"digest": "haiku:high", "research": "claude-haiku-4-5:low", "code": "haiku:max"} {
-		spec, err := parseRoleFlag(role, value)
+		spec, err := parseRoleFlag(role, value, false)
 		if err != nil {
 			t.Fatalf("%s %s: %v", role, value, err)
 		}
@@ -99,7 +99,7 @@ func TestAHaikuEffortFromAFlagIsNotStored(t *testing.T) {
 			t.Errorf("%s stored effort %s for a model that takes none", role, effort)
 		}
 	}
-	spec, err := parseRoleFlag("research", "sonnet:high")
+	spec, err := parseRoleFlag("research", "sonnet:high", false)
 	if err != nil || getString(spec, "effort") != "high" {
 		t.Fatalf("a model that takes effort lost it: %v %v", spec, err)
 	}

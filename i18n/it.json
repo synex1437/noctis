@@ -337,6 +337,7 @@
   "roles.fallback": "ripiego quando la quota per modello è esaurita",
   "roles.badValue": "%s: modello vuoto in '%s'",
   "roles.badModel": "%s: %s non è un nome di modello (solo lettere, cifre e . _ : @ / [ ] -)",
+  "roles.unknownModel": "%s: %s non è un modello che Claude Code conosce — usa opus, sonnet, haiku, fable, best o opusplan, oppure un id completo come claude-opus-5-5",
   "roles.badEffort": "%s: effort sconosciuto '%s' (low, medium, high, xhigh, max)",
   "roles.effortIgnored": "%s accetta solo un modello; l'effort %s viene ignorato (lo strumento Agent non ha effort)",
   "roles.modelNoEffort": "%s: %s non ha livelli di effort; l'effort %s viene ignorato",

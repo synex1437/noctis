@@ -388,7 +388,7 @@ func runEnsure() {
 	}
 	if cfg := loadConfig(); getString(cfg, "configError") == "" {
 		if roles := section(cfg, "roles"); len(roles) > 0 {
-			if changed := syncAgentFiles(files.pluginRoot, roles); changed > 0 {
+			if changed := syncAgentFiles(files.pluginRoot, roles, providerModels(readJSONStrict(files.settings).data)); changed > 0 {
 				logInfo("ensure: %d agent file(s) synced with the roles profile", changed)
 			}
 		}
@@ -452,21 +452,21 @@ func statusLineGone(command string) string {
 	return goneBinary(statusLineBinary(command))
 }
 
-func configureRoles(configFile string, config object, pluginRoot string, rolesAreNew bool) error {
+func configureRoles(configFile string, config object, pluginRoot string, rolesAreNew, anyModel bool) error {
 	current := section(config, "roles")
 	if rolesAreNew {
 
 		current = derivedRoles(config, current)
 	}
-	roles, given, err := rolesFromArgs(current)
+	roles, given, err := rolesFromArgs(current, anyModel)
 	if err != nil {
 		return err
 	}
 	if !given && stdinIsTerminal() && !args.present["no-ask"] {
-		roles = askRoles(current)
+		roles = askRoles(current, anyModel)
 	}
 	applyRoles(configFile, config, roles)
-	syncAgentFiles(pluginRoot, roles)
+	syncAgentFiles(pluginRoot, roles, anyModel)
 	fmt.Println(T("roles.applied", describeRoles(roles)))
 	return nil
 }
@@ -696,7 +696,7 @@ func installInto(configDir, sourceRoot string, noModel bool, defaults object) er
 	if err := applyPreset(configFile, config, flagString("preset")); err != nil {
 		return err
 	}
-	if err := configureRoles(configFile, config, installRoot, added["roles"]); err != nil {
+	if err := configureRoles(configFile, config, installRoot, added["roles"], providerModels(readJSONStrict(filepath.Join(configDir, "settings.json")).data)); err != nil {
 		return err
 	}
 	if err := wireSettings(configDir, binary, config, configFile, defaults, noModel); err != nil {
@@ -989,9 +989,13 @@ func setupValueError() error {
 			return errors.New(T("roles.unknownProfile", name))
 		}
 	}
+	anyModel := true
+	for _, configDir := range accountTargets("claude") {
+		anyModel = anyModel && providerModels(readJSONStrict(filepath.Join(configDir, "settings.json")).data)
+	}
 	for _, role := range roleNames {
 		for _, value := range args.values[role] {
-			if err := roleFlagError(role, value); err != nil {
+			if err := roleFlagError(role, value, anyModel); err != nil {
 				return err
 			}
 		}
@@ -1216,7 +1220,7 @@ func setupInto(configDir, pluginRoot string, defaults object) error {
 	if err := applyPreset(configFile, config, flagString("preset")); err != nil {
 		return err
 	}
-	if err := configureRoles(configFile, config, pluginRoot, added["roles"]); err != nil {
+	if err := configureRoles(configFile, config, pluginRoot, added["roles"], providerModels(readJSONStrict(filepath.Join(configDir, "settings.json")).data)); err != nil {
 		return err
 	}
 	if err := wireSettings(configDir, binary, config, configFile, defaults, args.present["no-model"]); err != nil {
