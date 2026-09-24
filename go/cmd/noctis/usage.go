@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -74,14 +75,20 @@ func thresholdOf(cfg object, key string) float64 {
 	return numberOr(section(cfg, "thresholds"), key, 0)
 }
 
-var scopedPatternCache = map[string]*regexp.Regexp{}
+var (
+	scopedPatternCache     = map[string]*regexp.Regexp{}
+	scopedPatternCacheLock sync.Mutex
+)
 
 func scopedModelPattern(cfg object) *regexp.Regexp {
 	source := getString(section(cfg, "models"), "scopedPattern")
 	if source == "" {
 		source = "fable"
 	}
-	if compiled, ok := scopedPatternCache[source]; ok {
+	scopedPatternCacheLock.Lock()
+	compiled, ok := scopedPatternCache[source]
+	scopedPatternCacheLock.Unlock()
+	if ok {
 		return compiled
 	}
 	compiled, err := regexp.Compile("(?i)" + source)
@@ -89,7 +96,9 @@ func scopedModelPattern(cfg object) *regexp.Regexp {
 		warn("models.scopedPattern invalid (%s); using 'fable'", err)
 		compiled = regexp.MustCompile("(?i)fable")
 	}
+	scopedPatternCacheLock.Lock()
 	scopedPatternCache[source] = compiled
+	scopedPatternCacheLock.Unlock()
 	return compiled
 }
 

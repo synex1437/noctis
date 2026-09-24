@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -370,7 +371,10 @@ type parsedFile struct {
 
 const parseCacheLimit = 12
 
-var parseCache = map[string]parsedFile{}
+var (
+	parseCache     = map[string]parsedFile{}
+	parseCacheLock sync.Mutex
+)
 
 func copyValue(value any) any {
 	switch typed := value.(type) {
@@ -407,26 +411,45 @@ func readJSONStrict(file string) strictRead {
 		content, err = readFileShared(file)
 	}
 	if err != nil {
-		delete(parseCache, file)
+		dropParsed(file)
 		if errors.Is(err, os.ErrNotExist) {
 			return strictRead{exists: false, ok: true, data: object{}}
 		}
 		return strictRead{exists: true, ok: false, unopened: true, err: err.Error()}
 	}
-	if cached, seen := parseCache[file]; seen && bytes.Equal(cached.raw, content) {
+	if cached, seen := parsedEntry(file); seen && bytes.Equal(cached.raw, content) {
 		return strictRead{exists: true, ok: true, data: copyObject(cached.data), raw: content}
 	}
 	var raw any
 	if err := json.Unmarshal(bytes.TrimPrefix(content, utf8BOM), &raw); err != nil {
-		delete(parseCache, file)
+		dropParsed(file)
 		return strictRead{exists: true, ok: false, err: err.Error()}
 	}
 	data, _ := raw.(object)
+	keepParsed(file, parsedFile{raw: content, data: copyObject(data)})
+	return strictRead{exists: true, ok: true, data: data, raw: content}
+}
+
+func parsedEntry(file string) (parsedFile, bool) {
+	parseCacheLock.Lock()
+	defer parseCacheLock.Unlock()
+	cached, seen := parseCache[file]
+	return cached, seen
+}
+
+func keepParsed(file string, parsed parsedFile) {
+	parseCacheLock.Lock()
+	defer parseCacheLock.Unlock()
 	if len(parseCache) >= parseCacheLimit {
 		parseCache = map[string]parsedFile{}
 	}
-	parseCache[file] = parsedFile{raw: content, data: copyObject(data)}
-	return strictRead{exists: true, ok: true, data: data, raw: content}
+	parseCache[file] = parsed
+}
+
+func dropParsed(file string) {
+	parseCacheLock.Lock()
+	defer parseCacheLock.Unlock()
+	delete(parseCache, file)
 }
 
 func readJSON(file string) object {
@@ -901,7 +924,7 @@ func pruneState(state object, now int64) {
 		}
 
 		if scheduled := getMap(wait, "scheduled"); scheduled != nil {
-			prunedRunners = append(prunedRunners, object{"sid": sid, "scheduled": scheduled})
+			notePruned(&prunedRunners, object{"sid": sid, "scheduled": scheduled})
 		}
 		delete(stateMap(state, "waits"), sid)
 		warn("stale wait for %s dropped (resume time passed %dh ago without a live runner)", sid, int((float64(now)-numberOr(wait, "resumeAt", 0))/3600+0.5))
@@ -996,7 +1019,7 @@ func pruneState(state object, now int64) {
 			}
 
 			if cwd, ref := getString(entry, "cwd"), getString(entry, "snapshot"); cwd != "" && ref != "" {
-				prunedSnapshots = append(prunedSnapshots, object{"cwd": cwd, "ref": ref})
+				notePruned(&prunedSnapshots, object{"cwd": cwd, "ref": ref})
 			}
 		}
 		delete(stateMap(state, "checkpoints"), key)
@@ -1124,12 +1147,25 @@ var errLockLive = errors.New("the lock is held")
 var (
 	prunedRunners   []object
 	prunedSnapshots []object
+	prunedLock      sync.Mutex
 )
 
+func notePruned(list *[]object, entry object) {
+	prunedLock.Lock()
+	defer prunedLock.Unlock()
+	*list = append(*list, entry)
+}
+
+func takePruned(list *[]object) []object {
+	prunedLock.Lock()
+	defer prunedLock.Unlock()
+	pending := *list
+	*list = nil
+	return pending
+}
+
 func drainPrunedRunners() {
-	pending := prunedRunners
-	prunedRunners = nil
-	for _, entry := range pending {
+	for _, entry := range takePruned(&prunedRunners) {
 		sid, scheduled := getString(entry, "sid"), getMap(entry, "scheduled")
 		cancelScheduled(sid, scheduled)
 		logInfo("scheduler entry for dropped wait %s cancelled", sid)
@@ -1169,10 +1205,9 @@ func updateState(mutator func(state object)) object {
 		result = state
 	})
 	drainPrunedRunners()
-	for _, entry := range prunedSnapshots {
+	for _, entry := range takePruned(&prunedSnapshots) {
 		dropGitSnapshot(getString(entry, "cwd"), getString(entry, "ref"))
 	}
-	prunedSnapshots = nil
 	return result
 }
 

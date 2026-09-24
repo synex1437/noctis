@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -572,14 +573,22 @@ type gitStatusCacheEntry struct {
 	takenAt time.Time
 }
 
-var gitStatusCache = map[string]gitStatusCacheEntry{}
+var (
+	gitStatusCache     = map[string]gitStatusCacheEntry{}
+	gitStatusCacheLock sync.Mutex
+)
 
 func gitStatusRaw(cwd string) (string, bool) {
-	if cached, seen := gitStatusCache[cwd]; seen && time.Since(cached.takenAt) < gitStatusCacheTTL {
+	gitStatusCacheLock.Lock()
+	cached, seen := gitStatusCache[cwd]
+	gitStatusCacheLock.Unlock()
+	if seen && time.Since(cached.takenAt) < gitStatusCacheTTL {
 		return cached.raw, cached.ok
 	}
 	raw, ok := gitStatusUncached(cwd)
+	gitStatusCacheLock.Lock()
 	gitStatusCache[cwd] = gitStatusCacheEntry{raw: raw, ok: ok, takenAt: time.Now()}
+	gitStatusCacheLock.Unlock()
 	return raw, ok
 }
 
