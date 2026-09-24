@@ -540,7 +540,10 @@ func scopedFallbackFor(cfg object, model string) string {
 }
 
 func scopedQuotaOut(cfg, state object, usage usageView, now int64) bool {
-	threshold := scopedThreshold(cfg)
+	threshold, guarded := scopedThresholdEnabled(cfg)
+	if !guarded {
+		return false
+	}
 	if usage.fable != nil && usage.fable.used >= threshold {
 		return true
 	}
@@ -565,7 +568,7 @@ func subagentFallback(cfg object, model string) (string, usageView) {
 	now := nowSec()
 	usage := currentUsage(now)
 	maxAge := -1.0
-	if usage.fable != nil && usage.fable.used >= scopedThreshold(cfg)-nearEdgeBand {
+	if limit, guarded := scopedThresholdEnabled(cfg); guarded && usage.fable != nil && usage.fable.used >= limit-nearEdgeBand {
 		maxAge = nearEdgePollNormal
 	}
 	before := numberOr(readJSON(files.fable), "fetchedAt", 0)
