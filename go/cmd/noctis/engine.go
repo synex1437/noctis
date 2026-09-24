@@ -680,6 +680,15 @@ func gitStatus(cwd string) []string {
 }
 
 func runWithTimeout(command *exec.Cmd, timeout time.Duration) ([]byte, error) {
+	return runUntil(command, timeout, func() { _ = command.Process.Kill() })
+}
+
+func runTreeWithTimeout(command *exec.Cmd, timeout time.Duration) ([]byte, error) {
+	isolateTree(command)
+	return runUntil(command, timeout, func() { killTree(command.Process) })
+}
+
+func runUntil(command *exec.Cmd, timeout time.Duration, stop func()) ([]byte, error) {
 	var buffer bytes.Buffer
 	command.Stdout = &buffer
 
@@ -696,7 +705,7 @@ func runWithTimeout(command *exec.Cmd, timeout time.Duration) ([]byte, error) {
 		}
 		return buffer.Bytes(), err
 	case <-time.After(timeout):
-		_ = command.Process.Kill()
+		stop()
 		<-done
 		return buffer.Bytes(), fmt.Errorf("timeout")
 	}

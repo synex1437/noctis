@@ -12,7 +12,17 @@ import (
 	"time"
 )
 
+const (
+	lingerEnv = "NOCTIS_TEST_LINGER"
+	lingerFor = 5 * time.Second
+)
+
 func TestMain(m *testing.M) {
+	if marker := os.Getenv(lingerEnv); marker != "" {
+		time.Sleep(lingerFor)
+		_ = os.WriteFile(marker, []byte("outlived the chain"), 0o644)
+		os.Exit(0)
+	}
 	if os.Getenv("NOCTIS_TEST_APP_SERVER_NOISE") != "" {
 		for i := 0; ; i++ {
 			if _, err := fmt.Printf("{\"method\":\"noise\",\"params\":{\"n\":%d}}\n", i); err != nil {
