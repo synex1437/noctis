@@ -638,12 +638,16 @@ func thresholdSwitchedOff(value any) bool {
 }
 
 func repairThresholds(merged, defaults object) {
+	shipped := getMap(defaults, "thresholds")
+	repaired := []string{}
+	if _, present := merged["thresholds"]; present && getMap(merged, "thresholds") == nil && shipped != nil {
+		merged["thresholds"] = mergeDefaults(shipped, object{})
+		repaired = append(repaired, "thresholds")
+	}
 	thresholds := getMap(merged, "thresholds")
 	if thresholds == nil {
 		return
 	}
-	shipped := getMap(defaults, "thresholds")
-	repaired := []string{}
 	for _, key := range []string{"session5h", "weeklyAll", "weeklyFable", "weeklyScoped"} {
 		value, present := thresholds[key]
 		if !present || validThreshold(value) || thresholdSwitchedOff(value) {
