@@ -1,5 +1,8 @@
 {
   "description": "noctis: usage-limit guard, scoped-model fallback, research router, queue mode",
+  "modules": [
+    "./lean.js"
+  ],
   "hooks": {
     "SessionStart": [
       {
