@@ -392,6 +392,7 @@
   "queue.trustGranted": "Ten plik może prowadzić sesje: %s",
   "queue.trustRevoked": "Ten plik już nie prowadzi sesji: %s",
   "queue.trustNone": "Nie ma tu pliku kolejki (szukano: %s).",
+  "queue.fileMissing": "Brak pliku kolejki w %s — nic nie zmieniono. Sprawdź nazwę albo podaj folder projektu przez --cwd.",
   "doctor.disabled": "ochrona wstrzymana do %s (noctis off)",
   "doctor.fixDisabled": "noctis on (albo /noctis:resume) od razu włącza ochronę z powrotem",
   "doctor.fixClaude": "zainstaluj Claude Code albo dodaj claude do PATH; wstrzymana sesja potrzebuje go do wznowienia",

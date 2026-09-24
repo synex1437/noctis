@@ -392,6 +392,7 @@
   "queue.trustGranted": "Bu dosya oturumları sürükleyebilir: %s",
   "queue.trustRevoked": "Bu dosya artık oturumları sürüklemiyor: %s",
   "queue.trustNone": "Burada kuyruk dosyası yok (aranan: %s).",
+  "queue.fileMissing": "Şurada kuyruk dosyası yok: %s — hiçbir şey değişmedi. Adı kontrol et ya da proje klasörünü --cwd ile ver.",
   "doctor.disabled": "koruma duraklatıldı, bitiş: %s (noctis off)",
   "doctor.fixDisabled": "noctis on (ya da /noctis:resume) korumayı hemen yeniden açar",
   "doctor.fixClaude": "Claude Code'u kur ya da claude'u PATH'e ekle; duraklatılmış bir oturumu yeniden başlatmak için gerekir",

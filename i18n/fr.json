@@ -392,6 +392,7 @@
   "queue.trustGranted": "Ce fichier peut piloter les sessions : %s",
   "queue.trustRevoked": "Ce fichier ne pilote plus les sessions : %s",
   "queue.trustNone": "Aucun fichier de file ici (cherché : %s).",
+  "queue.fileMissing": "Aucun fichier de file à %s — rien n'a changé. Vérifie le nom, ou indique le dossier du projet avec --cwd.",
   "doctor.disabled": "protection en pause jusqu'à %s (noctis off)",
   "doctor.fixDisabled": "noctis on (ou /noctis:resume) réactive la protection tout de suite",
   "doctor.fixClaude": "installe Claude Code ou mets claude dans le PATH ; une session en pause en a besoin pour redémarrer",

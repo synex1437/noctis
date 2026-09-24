@@ -392,6 +392,7 @@
   "queue.trustGranted": "يمكن لهذا الملف أن يقود الجلسات: %s",
   "queue.trustRevoked": "لم يعد هذا الملف يقود الجلسات: %s",
   "queue.trustNone": "لا ملف طابور هنا (بحثنا عن: %s).",
+  "queue.fileMissing": "لا يوجد ملف طابور في %s — لم يتغيّر شيء. تحقّق من الاسم، أو حدّد مجلد المشروع عبر ‎--cwd‎.",
   "doctor.disabled": "الحماية متوقفة مؤقتًا حتى %s (noctis off)",
   "doctor.fixDisabled": "يعيد noctis on (أو ‎/noctis:resume‎) تشغيل الحماية فورًا",
   "doctor.fixClaude": "ثبّت Claude Code أو أضف claude إلى PATH؛ تحتاج إليه الجلسة المتوقفة لتُستأنف",

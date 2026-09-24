@@ -392,6 +392,7 @@
   "queue.trustGranted": "このファイルはセッションを進行させられます: %s",
   "queue.trustRevoked": "このファイルはもうセッションを進行させません: %s",
   "queue.trustNone": "ここにキューのファイルはありません（探した場所: %s）。",
+  "queue.fileMissing": "%s にキューファイルがありません — 何も変更していません。名前を確認するか、--cwd でプロジェクトのフォルダーを指定してください。",
   "doctor.disabled": "保護は %s まで一時停止中（noctis off）",
   "doctor.fixDisabled": "noctis on（または /noctis:resume）ですぐに保護を再開できます",
   "doctor.fixClaude": "Claude Code をインストールするか、claude を PATH に追加してください。一時停止したセッションの再起動に必要です",

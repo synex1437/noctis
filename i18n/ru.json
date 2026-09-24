@@ -392,6 +392,7 @@
   "queue.trustGranted": "Этот файл может вести сессии: %s",
   "queue.trustRevoked": "Этот файл больше не ведёт сессии: %s",
   "queue.trustNone": "Файла очереди здесь нет (искали: %s).",
+  "queue.fileMissing": "Файла очереди нет по пути %s — ничего не изменено. Проверь имя или укажи папку проекта через --cwd.",
   "doctor.disabled": "защита на паузе до %s (noctis off)",
   "doctor.fixDisabled": "noctis on (или /noctis:resume) сразу снова включает защиту",
   "doctor.fixClaude": "установи Claude Code или добавь claude в PATH; без него приостановленная сессия не перезапустится",

@@ -153,9 +153,15 @@ func runQueueTrust(cfg object, cwd, action string) {
 			fmt.Println(T("queue.trustNone", strings.Join(queueFileNames(cfg), ", ")))
 			return
 		}
+	} else if !filepath.IsAbs(target) {
+		target = filepath.Join(cwd, target)
 	}
 	if absolute, err := filepath.Abs(target); err == nil {
 		target = absolute
+	}
+	if info := statSafe(target); action != "untrust" && (info == nil || !info.Mode().IsRegular()) {
+		fmt.Fprintln(os.Stderr, T("queue.fileMissing", target))
+		os.Exit(1)
 	}
 	switch action {
 	case "trust":
@@ -195,6 +201,9 @@ func runQueue() {
 			target = filepath.Join(cwd, "TASKS.md")
 		}
 	} else {
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(cwd, target)
+		}
 		folder = filepath.Dir(target)
 	}
 	destination, leads := importDestination(folder, target)
