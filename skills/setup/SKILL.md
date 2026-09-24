@@ -1,7 +1,9 @@
 ---
 name: setup
 description: One-time setup of noctis after installing it from a marketplace — asks which model and effort should do which kind of work, places the native engine binary, wires settings.json (statusLine, model, effort) and runs the doctor. Use when the user asks to set up, install, configure or repair noctis, or to change which models it uses.
-allowed-tools: Bash
+allowed-tools:
+  - Bash("${CLAUDE_PLUGIN_ROOT}/bin/noctis" setup *)
+disable-model-invocation: true
 ---
 
 Speak the user's language throughout (the language they are writing in right now).
