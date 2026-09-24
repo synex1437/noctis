@@ -34,6 +34,7 @@
   "scoped.savedManual": "🔁 %s %s%%: lavoro salvato, il modello predefinito ora è %s; continua con /model %s.",
   "scoped.savedRelaunch": "🔁 %s %s%%: lavoro salvato, ripresa con %s in una nuova finestra tra ~1 min.",
   "scoped.reverted": "🔁 quota settimanale di %s azzerata; il modello predefinito è di nuovo %s.",
+  "scoped.revertedDefault": "🔁 quota settimanale di %s azzerata; settings.json non indica di nuovo alcun modello, quindi vale il predefinito di Claude Code.",
   "notice.noUsage": "%s: nessun dato di utilizzo (statusLine è installata? noctis doctor).",
   "notice.configError": "%s: config.json illeggibile, uso i valori predefiniti.",
   "notice.routed": "🔀 Ricerca affidata al sub-agente %s; %s resta per il codice.",

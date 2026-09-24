@@ -481,8 +481,9 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	current := getString(data, "model")
 	managed := getMap(config, "managedModel")
 	ours := managed != nil && current != "" && current == getString(managed, "set")
-	if !noModel && (ours || !keepModelPattern.MatchString(current)) {
-		primary := orDefault(getString(section(config, "models"), "primary"), getString(section(defaults, "models"), "primary"))
+	primary := orDefault(getString(section(config, "models"), "primary"), getString(section(defaults, "models"), "primary"))
+	wroteModel := !noModel && (ours || !keepModelPattern.MatchString(current))
+	if wroteModel {
 		if current != primary {
 
 			previous, hadModel := data["model"]
@@ -520,6 +521,21 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	}
 	backup := backupFile(settingsFile)
 	mustWriteJSON(settingsFile, data)
+	model := getString(data, "model")
+	settleModelSwitch(configDir, noModel, func(switched object) string {
+		before := getString(switched, "from")
+		if getBool(switched, "modelAbsent", false) {
+			before = ""
+		}
+		target := before
+		if (before != "" && before == getString(managed, "set")) || !keepModelPattern.MatchString(before) {
+			target = primary
+		}
+		if wroteModel || model == primary || target == model {
+			return ""
+		}
+		return target
+	})
 	if chained != "" {
 		fmt.Println(T("install.chained", chained))
 	}
@@ -552,6 +568,42 @@ func valueSetupFound(holder object, key string, found any, recorded bool) any {
 		return found
 	}
 	return holder[key]
+}
+
+func settleModelSwitch(configDir string, noModel bool, giveBackAfterSetup func(switched object) string) {
+	previous := files
+	defer func() { files = previous }()
+	files = pathsFor(configDir, files.pluginRoot)
+	if getMap(readState(), "modelSwitched") == nil {
+		return
+	}
+	outcome, giveBack := "", ""
+	updateState(func(state object) {
+		switched := getMap(state, "modelSwitched")
+		if switched == nil {
+			return
+		}
+		outcome = "effort"
+		if !noModel {
+			if giveBack = giveBackAfterSetup(switched); giveBack == "" {
+				state["modelSwitched"], outcome = nil, "dropped"
+				return
+			}
+			switched["from"], outcome = giveBack, "kept"
+			delete(switched, "modelAbsent")
+		}
+		for _, key := range switchedEffortKeys {
+			delete(switched, key)
+		}
+	})
+	switch outcome {
+	case "effort":
+		logInfo("setup set the effort: the scoped-model switch gives back only the model at its reset")
+	case "kept":
+		logInfo("setup set the effort and kept the model the scoped-model switch wrote: the switch gives back %s at its reset", giveBack)
+	case "dropped":
+		logInfo("setup set the default model and effort: the scoped-model switch will not undo them at its reset")
+	}
 }
 
 func managedPermissionMode(config object) string {

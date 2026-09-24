@@ -35,9 +35,10 @@ func TestAThresholdSwitchedOffIsOffEverywhereItIsRead(t *testing.T) {
 		}
 
 		switched := object{"modelSwitched": object{"from": "claude-fable-5-1", "to": "claude-opus-5-5", "fableResetsAt": float64(now - 60)}}
+		mustWriteJSON(files.settings, object{"model": "claude-opus-5-5"})
 		updateState(func(state object) { state["modelSwitched"] = switched["modelSwitched"] })
-		if text := maybeRevertDefaultModel(cfg, readState(), usageView{hasAny: true, fable: &window{used: 10, resetsAt: float64(now + 7*86400)}}, now); text == "" {
-			t.Fatalf("weeklyFable=%s: a model switch whose Fable window has reset was never reverted", name)
+		if text := maybeRevertDefaultModel(cfg, readState(), usageView{hasAny: true, fable: &window{used: 10, resetsAt: float64(now + 7*86400)}}, now); text == "" || settingsModel() != "claude-fable-5-1" {
+			t.Fatalf("weeklyFable=%s: a model switch whose Fable window has reset was never reverted (settings.json model %q)", name, settingsModel())
 		}
 
 		for _, snapshot := range []usageView{

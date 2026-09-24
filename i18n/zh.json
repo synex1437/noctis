@@ -34,6 +34,7 @@
   "scoped.savedManual": "🔁 %s %s%%：工作已保存，默认模型现在是 %s；用 /model %s 继续。",
   "scoped.savedRelaunch": "🔁 %s %s%%：工作已保存，约 1 分钟后在新窗口用 %s 恢复。",
   "scoped.reverted": "🔁 %s 的每周配额已重置；默认模型恢复为 %s。",
+  "scoped.revertedDefault": "🔁 %s 的每周配额已重置；settings.json 不再指定模型，因此使用 Claude Code 自身的默认模型。",
   "notice.noUsage": "%s：没有用量数据（是否安装了 statusLine？noctis doctor）。",
   "notice.configError": "%s：config.json 无法读取，使用默认值。",
   "notice.routed": "🔀 调研已交给子代理 %s；%s 留给编码。",

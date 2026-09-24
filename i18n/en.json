@@ -34,6 +34,7 @@
   "scoped.savedManual": "🔁 %s %s%%: work saved, default model is now %s; continue with /model %s.",
   "scoped.savedRelaunch": "🔁 %s %s%%: work saved, resuming with %s in a new window in ~1 min.",
   "scoped.reverted": "🔁 %s weekly quota reset; default model is %s again.",
+  "scoped.revertedDefault": "🔁 %s weekly quota reset; settings.json names no model again, so Claude Code's own default applies.",
   "notice.noUsage": "%s: no usage data (is statusLine installed? noctis doctor).",
   "notice.configError": "%s: config.json unreadable, using defaults.",
   "notice.routed": "🔀 Research routed to the %s subagent; %s kept for coding.",

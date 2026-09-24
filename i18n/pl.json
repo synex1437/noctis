@@ -34,6 +34,7 @@
   "scoped.savedManual": "🔁 %s %s%%: praca zapisana, domyślny model to teraz %s; kontynuuj przez /model %s.",
   "scoped.savedRelaunch": "🔁 %s %s%%: praca zapisana, wznowienie z %s w nowym oknie za ~1 min.",
   "scoped.reverted": "🔁 tygodniowy limit %s zresetowany; domyślnym modelem znów jest %s.",
+  "scoped.revertedDefault": "🔁 tygodniowy limit %s zresetowany; settings.json znów nie wskazuje modelu, więc obowiązuje domyślny model Claude Code.",
   "notice.noUsage": "%s: brak danych o zużyciu (czy statusLine jest zainstalowana? noctis doctor).",
   "notice.configError": "%s: config.json nieczytelny, używam domyślnych.",
   "notice.routed": "🔀 Research przekazany do subagenta %s; %s zostaje do kodu.",

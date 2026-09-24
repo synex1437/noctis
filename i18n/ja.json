@@ -34,6 +34,7 @@
   "scoped.savedManual": "🔁 %s %s%%: 作業を保存、既定モデルは %s になりました。/model %s で続けてください。",
   "scoped.savedRelaunch": "🔁 %s %s%%: 作業を保存、約1分後に新しいウィンドウで %s により再開します。",
   "scoped.reverted": "🔁 %s の週間クォータがリセットされ、既定モデルは再び %s です。",
+  "scoped.revertedDefault": "🔁 %s の週間クォータがリセットされ、settings.json は再びモデルを指定しないため、Claude Code の既定モデルが使われます。",
   "notice.noUsage": "%s: 使用量データがありません（statusLine は設定済みですか？ noctis doctor）。",
   "notice.configError": "%s: config.json を読めないため既定値を使います。",
   "notice.routed": "🔀 調査をサブエージェント %s に回しました。%s はコード用に温存します。",

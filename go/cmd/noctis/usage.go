@@ -858,12 +858,12 @@ func settingsModel() string {
 	return ""
 }
 
-func setSettingsEffort(effort string) string {
+func setSettingsEffort(effort string) bool {
 	if effort == "" || !currentHost().modelSwitch {
-		return ""
+		return false
 	}
 	previous := ""
-	withSettings(func(data object) bool {
+	changed := withSettings(func(data object) bool {
 		env := getMap(data, "env")
 		if env == nil {
 			env = object{}
@@ -871,16 +871,64 @@ func setSettingsEffort(effort string) string {
 		}
 		previous = getString(env, "CLAUDE_CODE_EFFORT_LEVEL")
 		if previous == effort {
-			previous = ""
 			return false
 		}
 		env["CLAUDE_CODE_EFFORT_LEVEL"] = effort
 		return true
 	})
-	if previous != "" {
-		logInfo("settings env.CLAUDE_CODE_EFFORT_LEVEL %s -> %s", previous, effort)
+	if changed {
+		logInfo("settings env.CLAUDE_CODE_EFFORT_LEVEL %s -> %s", orDefault(previous, "(unset)"), effort)
 	}
-	return previous
+	return changed
+}
+
+func settingsModelAndEffort() (model string, hasModel bool, effort string, hasEffort bool) {
+	settings := readJSONStrict(files.settings)
+	if !settings.ok || settings.data == nil {
+		return "", false, "", false
+	}
+	model, hasModel = settings.data["model"].(string)
+	effort, hasEffort = getMap(settings.data, "env")["CLAUDE_CODE_EFFORT_LEVEL"].(string)
+	return model, hasModel, effort, hasEffort
+}
+
+func removeSettingsModel() bool {
+	if !currentHost().modelSwitch {
+		return false
+	}
+	return withSettings(func(data object) bool {
+		if _, present := data["model"]; !present {
+			return false
+		}
+		delete(data, "model")
+		return true
+	})
+}
+
+func restoreSettingsEffort(switched object) {
+	set := getString(switched, "effortSet")
+	if set == "" {
+		setSettingsEffort(getString(switched, "effortWas"))
+		return
+	}
+	if !currentHost().modelSwitch {
+		return
+	}
+	withSettings(func(data object) bool {
+		env := getMap(data, "env")
+		if getString(env, "CLAUDE_CODE_EFFORT_LEVEL") != set {
+			return false
+		}
+		if !getBool(switched, "effortAbsent", false) {
+			env["CLAUDE_CODE_EFFORT_LEVEL"] = getString(switched, "effortWas")
+			return true
+		}
+		delete(env, "CLAUDE_CODE_EFFORT_LEVEL")
+		if len(env) == 0 {
+			delete(data, "env")
+		}
+		return true
+	})
 }
 
 func setSettingsModel(alias string) bool {

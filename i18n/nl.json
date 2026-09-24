@@ -34,6 +34,7 @@
   "scoped.savedManual": "🔁 %s %s%%: werk opgeslagen, standaardmodel is nu %s; ga verder met /model %s.",
   "scoped.savedRelaunch": "🔁 %s %s%%: werk opgeslagen, over ~1 min gaat het verder met %s in een nieuw venster.",
   "scoped.reverted": "🔁 weekquotum van %s gereset; standaardmodel is weer %s.",
+  "scoped.revertedDefault": "🔁 weekquotum van %s gereset; settings.json noemt weer geen model, dus geldt de standaard van Claude Code.",
   "notice.noUsage": "%s: geen verbruiksdata (is statusLine geïnstalleerd? noctis doctor).",
   "notice.configError": "%s: config.json onleesbaar, standaardwaarden worden gebruikt.",
   "notice.routed": "🔀 Onderzoek doorgestuurd naar subagent %s; %s blijft voor code.",
