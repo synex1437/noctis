@@ -17,6 +17,7 @@
   "wait.savedManual": "⏸ %s上限 %s%%: 作業を保存しました。%s以降にご自身で再開してください。",
   "wait.saved": "⏸ %s上限 %s%%: 作業を保存、%s%sに自動再開します。",
   "wait.savedHint": "それでも作業を続けるには: /noctis:pause 120（または `noctis off 120`）。",
+  "wait.pauseReason": "一時停止の理由: %s。",
   "wait.earlyReset": "⚡ %s の上限が %s の待機のあと予定より早くリセットされました — 中断したところから続けます。",
   "wait.earlyResetNotify": "%s の上限が早めにリセットされました: セッションを再開します。",
   "wait.cancelled": "▶ %s の待機を取り消しました — 続行します。",
