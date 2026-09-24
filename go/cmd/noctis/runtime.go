@@ -933,9 +933,14 @@ func resumeWait(sid, release string) {
 		return
 	}
 	model := orDefault(getString(wait, "modelOverride"), resolveSessionModel(cfg, readState(), readJSON(files.usage), sid))
-	queuePath := queueFileFor(cfg, getString(wait, "cwd"), sid)
+	dirs := sessionDirs(getString(wait, "projectDir"), getString(wait, "cwd"))
+	queuePath := sessionQueueFile(cfg, sid, dirs...)
 	prompt := orDefault(getString(wait, "queuedPrompt"), getString(resume, "prompt"))
+	launchDir := dirs[0]
 	if queuePath != "" && queueTrusted(cfg, queuePath) {
+		if len(dirs) > 1 && queueFile(cfg, dirs[1]) == queuePath {
+			launchDir = dirs[1]
+		}
 		listName := filepath.Base(queuePath)
 		if isAutoQueue(queuePath) {
 			listName = queuePath
@@ -1000,7 +1005,7 @@ func resumeWait(sid, release string) {
 	journal(sid, "resume", "launch", model, object{"mode": orDefault(launchMode, getString(resume, "mode"))})
 	updateState(func(next object) { delete(stateMap(next, "launchFailures"), sid) })
 	launchStart := time.Now()
-	result := launchClaude(cfg, launchSpec{sid: sid, model: model, prompt: prompt, cwd: getString(wait, "cwd"), mode: launchMode, permissionMode: getString(wait, "permissionMode"), configDir: relaunchConfigDir(wait)})
+	result := launchClaude(cfg, launchSpec{sid: sid, model: model, prompt: prompt, cwd: launchDir, mode: launchMode, permissionMode: getString(wait, "permissionMode"), configDir: relaunchConfigDir(wait)})
 	if !result.started {
 		reportLaunchFailure(cfg, sid, model)
 		return

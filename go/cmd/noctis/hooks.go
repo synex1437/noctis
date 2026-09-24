@@ -201,7 +201,7 @@ func onSessionStart(input, cfg object) {
 			}
 		}
 	}
-	if queuePath := queueFileFor(cfg, cwd, sid); queuePath != "" {
+	if queuePath := sessionQueueFile(cfg, sid, queueDirs(input)...); queuePath != "" {
 		snapshot := queueSnapshot(queuePath)
 		if !queueTrusted(cfg, queuePath) {
 
@@ -471,7 +471,7 @@ func onUserPromptSubmit(input, cfg object) {
 			logInfo("warn band for %s: %s %%%s", sid, result.warnWindow.window, formatNumber(result.warnWindow.used))
 		}
 	}
-	if getBool(section(cfg, "queue"), "auto", true) && getBool(section(cfg, "queue"), "enabled", true) && !observing && !promptFromPlugin && queueFile(cfg, getString(input, "cwd")) == "" {
+	if getBool(section(cfg, "queue"), "auto", true) && getBool(section(cfg, "queue"), "enabled", true) && !observing && !promptFromPlugin && queueFile(cfg, queueDirs(input)...) == "" {
 		if items := autoQueueItems(getString(input, "prompt")); len(items) > 0 {
 			if path := startAutoQueue(sid, getString(input, "cwd"), items, now); path != "" {
 				contexts = append(contexts, autoQueueDirective(path, len(items)))
@@ -1012,7 +1012,7 @@ func onStop(input, cfg object) {
 	}
 	clearOverload(state, sid)
 	clearFailureRetries(state, sid)
-	queuePath := queueFileFor(cfg, getString(input, "cwd"), sid)
+	queuePath := sessionQueueFile(cfg, sid, queueDirs(input)...)
 	if queuePath == "" || !queueTrusted(cfg, queuePath) {
 		return
 	}

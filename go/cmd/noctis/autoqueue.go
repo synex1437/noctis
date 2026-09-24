@@ -316,7 +316,11 @@ func endAutoQueue(sid string, removeFile bool) {
 }
 
 func queueFileFor(cfg object, cwd, sid string) string {
-	if file := queueFile(cfg, cwd); file != "" {
+	return sessionQueueFile(cfg, sid, cwd)
+}
+
+func sessionQueueFile(cfg object, sid string, dirs ...string) string {
+	if file := queueFile(cfg, dirs...); file != "" {
 		return file
 	}
 	record := getMap(getMap(readState(), "autoQueues"), sid)

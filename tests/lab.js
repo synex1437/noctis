@@ -932,6 +932,11 @@ async function scenarioQueueContinuation(acc) {
   const first = acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
   check('stop blocked while queue has open items', first.includes('"decision":"block"') && first.includes('Queue continues: 4 open') && first.includes('item 1'), true);
   check('forced continue counted', acc.state().stopGuard.qc1.forced, 1);
+  const subfolder = path.join(PROJECT_DIR, 'cd-subfolder');
+  fs.mkdirSync(subfolder, { recursive: true });
+  const afterCd = acc.hook({ hook_event_name: 'Stop', session_id: 'qcd', cwd: subfolder, transcript_path: TRANSCRIPT, stop_hook_active: false }, { CLAUDE_PROJECT_DIR: PROJECT_DIR });
+  check('stop after cd into a subfolder still continues the project queue', afterCd.includes('"decision":"block"') && afterCd.includes('Queue continues: 4 open'), true);
+  fs.rmSync(subfolder, { recursive: true, force: true });
   for (let i = 0; i < 3; i += 1) acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
   check('idle continues tracked', acc.state().stopGuard.qc1.idle, 3);
   writeQueue(3);
