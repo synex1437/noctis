@@ -65,6 +65,7 @@
   "overload.wakeMessage": "[noctis] The API was %s (attempt %s, waited %s). Retry now: continue exactly where you left off; nothing else changed.",
   "stopfailure.transient": "Error de límite pasajero; trabajo guardado, se reintenta a las %s.",
   "stopfailure.wall": "Muro de límite (%s); trabajo guardado, se reanuda a las %s.",
+  "stopfailure.giveup": "%s sigue fallando (%s) tras %s reintentos automáticos; noctis dejó de reintentar — abre una terminal y ejecuta: %s",
   "stopfailure.account": "Claude Code se detuvo con %s; no hay nada que reintentar hasta que se arregle la cuenta.",
   "stopfailure.modelMissing": "El modelo %s no está disponible en este plan; el modelo por defecto ahora es %s. Elige otro perfil con /noctis:setup.",
   "notification.stale": "Límite reiniciado; Claude Code espera Enter (la continuación automática se activará si estaba prevista).",
