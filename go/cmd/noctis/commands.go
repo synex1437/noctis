@@ -529,17 +529,8 @@ func doctorLines(cfg object) []string {
 		lines = append(lines, checkLine(false, retunedNotice(profile)))
 	}
 	lines = append(lines, tokenDoctorLines(cfg)...)
-	repaired := repairedThresholds(cfg)
-	unguarded := unguardedWindows(cfg)
-	limits := section(cfg, "thresholds")
-	thresholdText := T("doctor.thresholdsOk", getString(limits, "session5h"), getString(limits, "weeklyAll"), formatNumber(scopedThreshold(cfg)))
-	if len(unguarded) > 0 {
-		thresholdText = T("doctor.thresholdsBad", strings.Join(unguarded, ", "))
-	}
-	if len(repaired) > 0 {
-		thresholdText = T("doctor.thresholdsFixed", strings.Join(repaired, ", "))
-	}
-	lines = append(lines, fixLine(len(repaired)+len(unguarded) == 0, thresholdText, "doctor.fixThresholds")...)
+	thresholdText, thresholdsGuarded := thresholdDoctorText(cfg)
+	lines = append(lines, fixLine(thresholdsGuarded, thresholdText, "doctor.fixThresholds")...)
 	lines = append(lines, leanDoctorLines(cfg)...)
 	lines = append(lines, fixLine(!paidCreditsAllowed(cfg), T("doctor.credits", creditsText(cfg)), "doctor.fixCredits")...)
 	lines = append(lines, "    "+T("doctor.creditsNote"))
@@ -575,6 +566,20 @@ func doctorLines(cfg object) []string {
 		lines = append(lines, "ℹ "+note)
 	}
 	return lines
+}
+
+func thresholdDoctorText(cfg object) (string, bool) {
+	repaired := repairedThresholds(cfg)
+	unguarded := unguardedWindows(cfg)
+	limits := section(cfg, "thresholds")
+	text := T("doctor.thresholdsOk", getString(limits, "session5h"), getString(limits, "weeklyAll"), formatNumber(scopedThreshold(cfg)))
+	if len(unguarded) > 0 {
+		text = T("doctor.thresholdsBad", strings.Join(unguarded, ", "))
+	}
+	if len(repaired) > 0 {
+		text = T("doctor.thresholdsFixed", strings.Join(repaired, ", "))
+	}
+	return text, len(repaired)+len(unguarded) == 0
 }
 
 const recentErrorsWindow = 24 * time.Hour
@@ -1338,6 +1343,12 @@ func hostDoctorLines(cfg object, host hostSpec, lines []string) []string {
 		lines = append(lines, statusLineDoctorLines(statusLine, "doctor.fixHostSetup", host.id)...)
 	}
 	lines = append(lines, configDoctorLines(cfg, "doctor.fixHostSetup", host.id)...)
+	if thresholdText, thresholdsGuarded := thresholdDoctorText(cfg); host.limits && !thresholdsGuarded {
+		lines = append(lines, fixLine(false, thresholdText, "doctor.fixThresholds")...)
+	}
+	if host.limits && paidCreditsAllowed(cfg) {
+		lines = append(lines, fixLine(false, T("doctor.credits", creditsText(cfg)), "doctor.fixCredits")...)
+	}
 	switch host.id {
 	case "codex":
 		fable := readJSON(files.fable)

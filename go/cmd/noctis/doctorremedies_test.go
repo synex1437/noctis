@@ -104,3 +104,54 @@ func TestEveryDoctorFailureSaysWhatToRun(t *testing.T) {
 		}
 	})
 }
+
+func TestTheOtherToolsDoctorsNameWhatTheirSelfCheckNames(t *testing.T) {
+	shipped := object{"session5h": float64(92), "weeklyAll": float64(89), "weeklyFable": float64(95)}
+	cases := []struct {
+		name, marker, remedy string
+		cfg                  object
+	}{
+		{"threshold out of range", "session5h", "between 1 and 100", object{"thresholds": shipped, "thresholdsRepaired": "session5h"}},
+		{"threshold switched off", "weeklyAll", "between 1 and 100", object{"thresholds": object{"session5h": float64(92), "weeklyAll": false, "weeklyFable": float64(95)}}},
+		{"paid credits allowed", "ALLOWED", "credits.allowPaid", object{"thresholds": shipped, "credits": object{"allowPaid": true}}},
+	}
+	for _, host := range []string{"codex", "antigravity", "droid", "copilot"} {
+		for _, testCase := range cases {
+			t.Run(host+"/"+testCase.name, func(t *testing.T) {
+				doctorRemedySandbox(t)
+				previousHost := activeHost
+				activeHost = host
+				issues := strings.Join(selfCheckIssues(testCase.cfg), "; ")
+				activeHost = previousHost
+
+				lines := doctorRun(t, host, testCase.cfg)
+
+				if !hostOf(host).limits {
+					if strings.Contains(issues, testCase.marker) {
+						t.Errorf("%s has no limit guard, yet its session self-check names %s: %q", host, testCase.marker, issues)
+					}
+					for _, line := range lines {
+						if strings.HasPrefix(line, "!!") && strings.Contains(line, testCase.marker) {
+							t.Errorf("%s has no limit guard, yet its doctor fails on %s: %q", host, testCase.marker, line)
+						}
+					}
+					return
+				}
+				if !strings.Contains(issues, testCase.marker) {
+					t.Fatalf("the session self-check on %s does not name %s: %q", host, testCase.marker, issues)
+				}
+				if _, fix := remedyFor(t, lines, testCase.marker); fix != "" && !strings.Contains(fix, testCase.remedy) {
+					t.Errorf("the remedy does not say what to change: %q", fix)
+				}
+			})
+		}
+		t.Run(host+"/shipped values", func(t *testing.T) {
+			doctorRemedySandbox(t)
+			for _, line := range doctorRun(t, host, object{"thresholds": shipped}) {
+				if strings.HasPrefix(line, "!!") && (strings.Contains(line, "threshold") || strings.Contains(line, "credits")) {
+					t.Errorf("the shipped thresholds fail the %s doctor: %q", host, line)
+				}
+			}
+		})
+	}
+}

@@ -138,16 +138,16 @@ func selfCheckIssues(cfg object) []string {
 	if getString(cfg, "configError") != "" {
 		issues = append(issues, T("selfcheck.config"))
 	}
-	if repaired := repairedThresholds(cfg); len(repaired) > 0 {
+	if repaired := repairedThresholds(cfg); host.limits && len(repaired) > 0 {
 		issues = append(issues, T("selfcheck.thresholdFixed", strings.Join(repaired, ", ")))
 	}
-	if unguarded := unguardedWindows(cfg); len(unguarded) > 0 {
+	if unguarded := unguardedWindows(cfg); host.limits && len(unguarded) > 0 {
 		issues = append(issues, T("selfcheck.threshold", strings.Join(unguarded, ", ")))
 	}
 	if host.agents {
 		issues = append(issues, unguardedAgentTools(cfg)...)
 	}
-	if paidCreditsAllowed(cfg) {
+	if host.limits && paidCreditsAllowed(cfg) {
 		issues = append(issues, T("credits.allowed"))
 	}
 	if profile := retunedProfile(section(cfg, "roles")); profile != "" {
