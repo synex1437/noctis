@@ -594,6 +594,44 @@ func liveRefreshError(fable object, now int64) string {
 	return getString(fable, "error")
 }
 
+func refreshProblemText(code string) string {
+	switch {
+	case code == "no-token":
+		return T("refresh.noToken")
+	case code == "unexpected-shape":
+		return T("refresh.unexpectedShape")
+	case strings.HasPrefix(code, "bad-json"):
+		return T("refresh.badJSON")
+	case strings.HasPrefix(code, "codex "):
+		return T("refresh.codex", strings.TrimPrefix(code, "codex "))
+	case strings.HasPrefix(code, "http-"):
+		status, detail, _ := strings.Cut(strings.TrimPrefix(code, "http-"), " ")
+		if _, rest, found := strings.Cut(detail, `": `); found && strings.HasPrefix(detail, `Get "`) {
+			detail = rest
+		}
+		switch status {
+		case "0":
+			if strings.HasPrefix(detail, "truncated-response") {
+				return T("refresh.truncated")
+			}
+			return T("refresh.network", orDefault(detail, "?"))
+		case "401", "403":
+			return T("refresh.rejected", status)
+		case "429":
+			return T("refresh.rateLimited")
+		}
+		return T("refresh.httpStatus", status)
+	}
+	return code
+}
+
+func refreshNoteText(cfg object, note string) string {
+	if note == "no-scoped-bucket-in-response" {
+		return T("refresh.noScopedBucket", scopedLabel(cfg))
+	}
+	return note
+}
+
 func clockOffsetFrom(result fetchResult, previous float64) float64 {
 	serverTime, err := http.ParseTime(result.date)
 	if err != nil {

@@ -110,10 +110,10 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 		fableText = T("status.scopedOff", orDefault(source, "off"))
 	}
 	if message := liveRefreshError(fable, nowSec()); message != "" {
-		fableText += T("status.error", message)
+		fableText += T("status.error", refreshProblemText(message))
 	}
 	if note := getString(fable, "note"); note != "" {
-		fableText += " · " + note
+		fableText += " · " + refreshNoteText(cfg, note)
 	}
 	lines = append(lines, T("status.scopedData", scopedLabel(cfg), fableText))
 	if usage.clockOffset != 0 {
@@ -1290,7 +1290,7 @@ func hostDoctorLines(cfg object, host hostSpec, lines []string) []string {
 		if at := numberOr(fable, "fetchedAt", 0); at > 0 {
 			text = T("doctor.usageAt", formatTime(at))
 		} else if message := liveRefreshError(fable, nowSec()); message != "" {
-			text = message
+			text = refreshProblemText(message)
 		}
 		lines = append(lines, checkLine(numberOr(fable, "fetchedAt", 0) > 0, T("doctor.usage", text)))
 	case "antigravity":
