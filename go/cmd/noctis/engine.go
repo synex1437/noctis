@@ -1691,10 +1691,10 @@ func handleFableHit(kind string, input object, cfg object, result decision) stri
 		"queuedPrompt": "", "startedAt": float64(now), "permissionMode": permissionModeOf(input),
 	}
 	recordTree(cfg, record, getString(input, "cwd"))
-	record["scheduled"] = scheduleRunner(cfg, sid, float64(now+20))
 	if !registerWait(sid, record, cfg) {
 		return T("wait.notStored", pluginName)
 	}
+	scheduleRunner(cfg, sid, float64(now+20))
 	return T("scoped.savedRelaunch", label, formatNumber(fableUsed), fallback)
 }
 

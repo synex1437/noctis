@@ -1442,12 +1442,11 @@ func onStopFailure(input, cfg object) {
 		runnerAt += math.Max(60, numberOr(wakeCfg, "graceSeconds", 300))
 	}
 
-	record["scheduled"] = scheduleRunner(cfg, sid, runnerAt)
 	if !registerWait(sid, record, cfg) {
-		cancelRunner(sid, readState())
 		emit(object{"systemMessage": T("wait.notStored", pluginName)})
 		return
 	}
+	scheduleRunner(cfg, sid, runnerAt)
 	if overloaded {
 		journal(sid, "StopFailure", "overload-backoff", errorType, object{"attempt": attempt, "delaySeconds": math.Round(resumeAt - float64(now)), "wake": wakeable})
 		warn("%s StopFailure for %s: attempt %s, retry in %ss wake=%t", errorType, sid, formatNumber(attempt), formatNumber(math.Round(resumeAt-float64(now))), wakeable)

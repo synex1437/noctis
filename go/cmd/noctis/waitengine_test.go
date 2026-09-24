@@ -218,17 +218,16 @@ func TestAStopFailureRetryKeepsTheTaskThatRelaunchesTheSession(t *testing.T) {
 	}
 }
 
-func TestAFableSwitchWhoseWaitCannotBeStoredUnregistersItsTask(t *testing.T) {
+func TestAFableSwitchWhoseWaitCannotBeStoredRegistersNoTask(t *testing.T) {
 	dir, calls := windowsTaskSandbox(t)
 	files.stateLock = filepath.Join(dir, "unreachable", "state.lock")
 	sid := "fable-unstored"
-	name := taskName(sid)
 	message := handleFableHit("batch", object{"session_id": sid, "cwd": dir}, waitEngineConfig(), fableHitDecision())
 	if want := T("wait.notStored", pluginName); message != want {
 		t.Fatalf("a Fable switch whose wait could not be stored said %q, want %q", message, want)
 	}
-	if made, want := taskCalls(t, calls), []string{"register " + name, "unregister " + name}; strings.Join(made, "|") != strings.Join(want, "|") {
-		t.Fatalf("the task registered for a wait that was never stored was not removed once: ran %q, want %q", made, want)
+	if made := taskCalls(t, calls); len(made) != 0 {
+		t.Fatalf("a task was registered for a wait that was never stored: ran %q", made)
 	}
 }
 
@@ -247,21 +246,20 @@ func stopFailureMessage(t *testing.T, input object) string {
 	return getString(output, "systemMessage")
 }
 
-func TestAStopFailureWhoseWaitCannotBeStoredUnregistersItsTask(t *testing.T) {
+func TestAStopFailureWhoseWaitCannotBeStoredRegistersNoTask(t *testing.T) {
 	dir, calls := windowsTaskSandbox(t)
 	files.stateLock = filepath.Join(dir, "unreachable", "state.lock")
 	sid := "stopfailure-unstored"
-	name := taskName(sid)
 	message := stopFailureMessage(t, object{"session_id": sid, "cwd": dir, "error_type": "rate_limit"})
 	if want := T("wait.notStored", pluginName); message != want {
 		t.Fatalf("a StopFailure whose wait could not be stored said %q, want %q", message, want)
 	}
-	if made, want := taskCalls(t, calls), []string{"register " + name, "unregister " + name}; strings.Join(made, "|") != strings.Join(want, "|") {
-		t.Fatalf("the retry task registered for a wait that was never stored was not removed once: ran %q, want %q", made, want)
+	if made := taskCalls(t, calls); len(made) != 0 {
+		t.Fatalf("a retry task was registered for a wait that was never stored: ran %q", made)
 	}
 }
 
-func TestAStopFailureWhoseWaitCannotBeStoredStopsItsTimer(t *testing.T) {
+func TestAStopFailureWhoseWaitCannotBeStoredArmsNoTimer(t *testing.T) {
 	dir := sandboxFiles(t)
 	files.stateLock = filepath.Join(dir, "unreachable", "state.lock")
 	t.Setenv("NOCTIS_NO_TASKS", "")
@@ -274,27 +272,48 @@ func TestAStopFailureWhoseWaitCannotBeStoredStopsItsTimer(t *testing.T) {
 	if want := T("wait.notStored", pluginName); message != want {
 		t.Fatalf("a StopFailure whose wait could not be stored said %q, want %q", message, want)
 	}
-	commands := []string{}
 	for _, entry := range *recorded {
-		commands = append(commands, strings.Join(entry.args, " "))
-	}
-	started := -1
-	armed := ""
-	for index, command := range commands {
-		if name := armedUnit(command); name != "" && systemdJobOf(sid, name) {
-			started, armed = index, name
+		if name := armedUnit(strings.Join(entry.args, " ")); name != "" && systemdJobOf(sid, name) {
+			t.Fatalf("a timer was armed for a wait that was never stored: ran %q", entry.args)
 		}
 	}
-	if started < 0 {
-		t.Fatalf("the retry was not scheduled as the session's systemd timer: ran %q", commands)
-	}
-	stop := "systemctl --user stop " + armed + ".timer"
-	stopped := false
-	for _, command := range commands[started+1:] {
-		stopped = stopped || command == stop
-	}
-	if !stopped {
-		t.Fatalf("the timer made for a wait that was never stored was left to fire: ran %q", commands)
+}
+
+func TestARunnerIsScheduledOnlyOnceItsWaitIsStored(t *testing.T) {
+	dir := sandboxFiles(t)
+	t.Setenv("NOCTIS_NO_TASKS", "")
+	t.Setenv("NOCTIS_NO_SCHEDULE", "")
+	scheduleBackendOverride = "systemd"
+	t.Cleanup(func() { scheduleBackendOverride = "" })
+	sids := []string{"fable-order", "failure-order"}
+	storedWhenArmed := map[string]bool{}
+	withFakeScheduler(t, func(command *exec.Cmd) ([]byte, error) {
+		joined := strings.Join(command.Args, " ") + " "
+		if armedUnit(strings.TrimSpace(joined)) == "" {
+			return nil, nil
+		}
+		for _, sid := range sids {
+			if strings.Contains(joined, " --sid "+sid+" ") {
+				storedWhenArmed[sid] = getMap(getMap(readState(), "waits"), sid) != nil
+			}
+		}
+		return nil, nil
+	})
+
+	handleFableHit("batch", object{"session_id": sids[0], "cwd": dir}, waitEngineConfig(), fableHitDecision())
+	stopFailureMessage(t, object{"session_id": sids[1], "cwd": dir, "error_type": "overloaded"})
+
+	for _, sid := range sids {
+		stored, armed := storedWhenArmed[sid]
+		if !armed {
+			t.Fatalf("no timer was armed for %s", sid)
+		}
+		if !stored {
+			t.Fatalf("the runner for %s was scheduled before its wait was stored; a runner that reads the state first finds no wait and gives up", sid)
+		}
+		if scheduled := getMap(getMap(getMap(readState(), "waits"), sid), "scheduled"); getString(scheduled, "method") != "systemd" {
+			t.Fatalf("the stored wait of %s does not name its timer: %v", sid, scheduled)
+		}
 	}
 }
 
