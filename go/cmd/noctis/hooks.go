@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -967,6 +968,22 @@ func hitLabelOrWarn(result decision) string {
 	return ""
 }
 
+const claudeStopBlockCap = 8
+
+func stopBlockCap() float64 {
+	if activeHost != "claude" {
+		return 0
+	}
+	value, err := strconv.ParseFloat(strings.TrimSpace(os.Getenv("CLAUDE_CODE_STOP_HOOK_BLOCK_CAP")), 64)
+	if err != nil || math.IsNaN(value) {
+		return claudeStopBlockCap
+	}
+	if value <= 0 || math.IsInf(value, 1) {
+		return 0
+	}
+	return value
+}
+
 func queueContinuationPrompt(prompt string) bool {
 	for _, line := range strings.Split(prompt, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), queueContinuesPrefix) {
@@ -1069,6 +1086,9 @@ func onStop(input, cfg object) {
 	guard["at"] = float64(now)
 	queue := section(cfg, "queue")
 	maxIdle := math.Max(1, numberOr(queue, "maxIdleContinues", 4))
+	if limit := stopBlockCap(); limit > 0 {
+		maxIdle = math.Max(1, math.Min(maxIdle, math.Floor(limit)))
+	}
 	maxForced := math.Max(1, numberOr(queue, "maxContinuesPerSession", 200))
 	if numberOr(guard, "idle", 0) >= maxIdle || numberOr(guard, "forced", 0) >= maxForced {
 
