@@ -38,6 +38,7 @@ func baseCatalog() map[string]map[string]string {
 
 			"wait.reason":           "%s window %s%% (%s), resets %s",
 			"wait.resumed":          "⏸ %s limit %s%%: waited %s, continuing.",
+			"wait.savedManual":      "⏸ %s limit %s%%: work saved; resume it yourself after %s.",
 			"wait.saved":            "⏸ %s limit %s%%: work saved, auto-resume at %s%s.",
 			"wait.savedHint":        "To keep working anyway: /noctis:pause 120 (or `noctis off 120`).",
 			"wait.earlyReset":       "⚡ %s limit reset ahead of schedule after %s of waiting — continuing where you stopped.",
@@ -75,7 +76,8 @@ func baseCatalog() map[string]map[string]string {
 			"selfcheck.agentTools":     "%s: add %s to its disallowedTools (noctis cannot check those calls)",
 			"selfcheck.message":        "%s: %s — noctis doctor",
 			"session.checkpoint":       "%s: the previous session was paused at %s because of a usage limit; resume note %s (full context: %s).",
-			"session.alreadyOver":      "⏸ %s usage is already %s%%: new work pauses until %s and resumes on its own. To keep working anyway: /noctis:pause 120.",
+			"session.alreadyOver":      "⏸ %s usage is already %s%%: new work pauses until %s and resumes on its own.",
+			"session.pauseHint":        " To keep working anyway: /noctis:pause 120.",
 
 			"queue.stuckNotify":    "Queue not progressing: %d open items, session stopped (%s).",
 			"queue.stuckMessage":   "⛔ Queue not progressing (%d open); auto-continue stopped — see errors.log.",
@@ -388,6 +390,7 @@ func baseCatalog() map[string]map[string]string {
 
 			"wait.reason":           "%s pencere %%%s (%s), sıfırlanma %s",
 			"wait.resumed":          "⏸ %s limit %%%s: %s beklendi, devam ediliyor.",
+			"wait.savedManual":      "⏸ %s limit %%%s: iş kaydedildi; %s sonrasında kendiniz devam ettirin.",
 			"wait.saved":            "⏸ %s limit %%%s: iş kaydedildi, otomatik devam: %s%s.",
 			"wait.savedHint":        "Yine de çalışmak için: /noctis:pause 120 (veya `noctis off 120`).",
 			"wait.earlyReset":       "⚡ %s limiti planlanandan önce sıfırlandı (%s beklendi) — kaldığın yerden devam ediliyor.",
@@ -425,7 +428,8 @@ func baseCatalog() map[string]map[string]string {
 			"selfcheck.agentTools":     "%s: disallowedTools listesine %s ekle (noctis bu çağrıları denetleyemez)",
 			"selfcheck.message":        "%s: %s — noctis doctor",
 			"session.checkpoint":       "%s: önceki oturum %s tarihinde kullanım limiti nedeniyle duraklatıldı; devam notu %s (tam bağlam: %s).",
-			"session.alreadyOver":      "⏸ %s kullanımı zaten %%%s: yeni iş duraklar ve %s sonrasında kendiliğinden devam eder. Yine de çalışmak için: /noctis:pause 120.",
+			"session.alreadyOver":      "⏸ %s kullanımı zaten %%%s: yeni iş duraklar ve %s sonrasında kendiliğinden devam eder.",
+			"session.pauseHint":        " Yine de çalışmak için: /noctis:pause 120.",
 
 			"queue.stuckNotify":    "Kuyruk ilerlemiyor: %d açık madde, oturum durdu (%s).",
 			"queue.stuckMessage":   "⛔ Kuyruk ilerlemiyor (%d açık); otomatik devam durduruldu — errors.log'a bak.",
