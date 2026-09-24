@@ -124,3 +124,19 @@ func TestTheDoctorsFirstLineCarriesTheVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestTheQuestionMarkSwitchPrintsTheHelpAndRunsNothing(t *testing.T) {
+	help := runNoctisCLI(t, nil, "help")
+	for _, argv := range [][]string{{"-?"}, {"setup", "-?"}, {"install", "-?"}} {
+		t.Run(strings.Join(argv, " "), func(t *testing.T) {
+			box := newCLIBox(t)
+
+			run := box.run(t, argv...)
+
+			if help.code != 0 || run.code != 0 || run.stdout != help.stdout || run.stderr != "" {
+				t.Fatalf("want the help noctis help prints, and exit 0:\n%s", run)
+			}
+			box.untouched(t, run)
+		})
+	}
+}
