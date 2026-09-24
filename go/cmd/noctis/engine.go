@@ -198,22 +198,55 @@ func queueFileNames(cfg object) []string {
 	return names
 }
 
-func queueFile(cfg object, cwd string) string {
+func queueFile(cfg object, dirs ...string) string {
 	queue := section(cfg, "queue")
-	if cwd == "" || !getBool(queue, "enabled", true) {
+	if !getBool(queue, "enabled", true) {
 		return ""
 	}
-	for _, raw := range getList(queue, "files") {
-		name, _ := raw.(string)
-		if name == "" {
+	for _, dir := range dirs {
+		if dir == "" {
 			continue
 		}
-		file := filepath.Join(cwd, name)
-		if info := statSafe(file); info != nil && info.Mode().IsRegular() {
-			return file
+		for _, raw := range getList(queue, "files") {
+			name, _ := raw.(string)
+			if name == "" {
+				continue
+			}
+			file := filepath.Join(dir, name)
+			if info := statSafe(file); info != nil && info.Mode().IsRegular() {
+				return file
+			}
 		}
 	}
 	return ""
+}
+
+func queueDirs(input object) []string {
+	return sessionDirs(claudeProjectDir(), getString(input, "cwd"))
+}
+
+func claudeProjectDir() string {
+	project := os.Getenv("CLAUDE_PROJECT_DIR")
+	if activeHost != "claude" || project == "" || !filepath.IsAbs(project) {
+		return ""
+	}
+	return filepath.Clean(project)
+}
+
+func sessionDirs(project, cwd string) []string {
+	if project == "" {
+		return []string{cwd}
+	}
+	if cwd == "" || filepath.Clean(cwd) == project {
+		return []string{project}
+	}
+	return []string{project, cwd}
+}
+
+func recordProjectDir(record object) {
+	if project := claudeProjectDir(); project != "" {
+		record["projectDir"] = project
+	}
 }
 
 type queueView struct {
@@ -723,7 +756,7 @@ func buildCheckpoint(input object, reasonLine, model string, cfg object) string 
 	queuePath := ""
 
 	if cfg != nil {
-		if candidate := queueFileFor(cfg, cwd, sessionKey(input)); queueTrusted(cfg, candidate) {
+		if candidate := sessionQueueFile(cfg, sid, queueDirs(input)...); queueTrusted(cfg, candidate) {
 			queuePath = candidate
 		}
 	}
@@ -1277,6 +1310,7 @@ func prepareWait(sid string, record object, cfg object) {
 		}
 	}
 	record["configDirEnv"] = os.Getenv(claudeConfigEnv)
+	recordProjectDir(record)
 }
 
 func registerWait(sid string, record object, cfg object) bool {
