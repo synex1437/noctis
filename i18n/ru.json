@@ -291,6 +291,7 @@
   "roles.applied": "   роли: %s",
   "setup.unknownPreset": "неизвестный набор: %s (conservative | balanced | aggressive)",
   "why.empty": "Решений пока не записано.",
+  "home.missing": "%s: домашняя папка неизвестна (HOME не задана), поэтому папку аккаунта не найти; задай HOME или передай --account <папка>.",
   "unknownCommand": "Неизвестная команда: %s. Команды: %s",
   "args.unknown": "неизвестный параметр %s",
   "args.unknownGuess": "неизвестный параметр %s (может быть, %s?)",

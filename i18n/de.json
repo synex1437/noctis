@@ -291,6 +291,7 @@
   "roles.applied": "   Rollen: %s",
   "setup.unknownPreset": "unbekannte Voreinstellung: %s (conservative | balanced | aggressive)",
   "why.empty": "Noch keine Entscheidungen erfasst.",
+  "home.missing": "%s: Der Home-Ordner ist unbekannt (HOME ist nicht gesetzt), daher lässt sich der Kontoordner nicht finden; setze HOME oder gib --account <Ordner> an.",
   "unknownCommand": "Unbekannter Befehl: %s. Befehle: %s",
   "args.unknown": "unbekannte Option %s",
   "args.unknownGuess": "unbekannte Option %s (meintest du %s?)",

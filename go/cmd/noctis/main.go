@@ -90,13 +90,24 @@ func main() {
 		}
 	}()
 	args = parseArgs(os.Args[1:])
+	initPaths()
+	if files.configDir == "" {
+		setLocale(nil)
+		switch {
+		case helpAsked():
+			runHelp()
+			return
+		case startedByHost[dispatchCommand()]:
+			os.Exit(0)
+		}
+		fmt.Fprintln(os.Stderr, T("home.missing", pluginName))
+		os.Exit(1)
+	}
 	if helpAsked() {
-		initPaths()
 		setLocale(loadConfig())
 		runHelp()
 		return
 	}
-	initPaths()
 	cfg := loadConfig()
 	resolveHost(cfg)
 	setLocale(cfg)

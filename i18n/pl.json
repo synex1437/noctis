@@ -291,6 +291,7 @@
   "roles.applied": "   role: %s",
   "setup.unknownPreset": "nieznany zestaw: %s (conservative | balanced | aggressive)",
   "why.empty": "Nie zapisano jeszcze żadnych decyzji.",
+  "home.missing": "%s: folder domowy jest nieznany (HOME nie jest ustawione), więc nie można znaleźć folderu konta; ustaw HOME albo podaj --account <folder>.",
   "unknownCommand": "Nieznane polecenie: %s. Polecenia: %s",
   "args.unknown": "nieznana opcja %s",
   "args.unknownGuess": "nieznana opcja %s (czy chodziło o %s?)",

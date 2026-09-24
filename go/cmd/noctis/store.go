@@ -200,7 +200,7 @@ func homeDir() string {
 	if home, err := os.UserHomeDir(); err == nil {
 		return home
 	}
-	return "."
+	return ""
 }
 
 func looksLikePluginRoot(dir string) bool {
@@ -254,10 +254,12 @@ func initPaths() {
 	if configDir == "" {
 		configDir = os.Getenv("CLAUDE_CONFIG_DIR")
 	}
-	if configDir == "" {
-		configDir = filepath.Join(homeDir(), ".claude")
+	if home := homeDir(); configDir == "" && home != "" {
+		configDir = filepath.Join(home, ".claude")
 	}
-	configDir, _ = filepath.Abs(configDir)
+	if configDir != "" {
+		configDir, _ = filepath.Abs(configDir)
+	}
 	guardDir := filepath.Join(configDir, pluginName)
 	files = paths{
 		pluginRoot:     pluginRoot,

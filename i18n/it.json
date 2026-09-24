@@ -291,6 +291,7 @@
   "roles.applied": "   ruoli: %s",
   "setup.unknownPreset": "preimpostazione sconosciuta: %s (conservative | balanced | aggressive)",
   "why.empty": "Nessuna decisione registrata finora.",
+  "home.missing": "%s: la cartella home è sconosciuta (HOME non è impostata), quindi la cartella dell'account non si trova; imposta HOME o passa --account <cartella>.",
   "unknownCommand": "Comando sconosciuto: %s. Comandi: %s",
   "args.unknown": "opzione sconosciuta %s",
   "args.unknownGuess": "opzione sconosciuta %s (intendevi %s?)",

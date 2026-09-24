@@ -291,6 +291,7 @@
   "roles.applied": "   角色：%s",
   "setup.unknownPreset": "未知预设：%s（conservative | balanced | aggressive）",
   "why.empty": "还没有记录任何判断。",
+  "home.missing": "%s：主目录未知（未设置 HOME），因此找不到账户目录；请设置 HOME 或传入 --account <目录>。",
   "unknownCommand": "未知命令：%s。可用命令：%s",
   "args.unknown": "未知选项 %s",
   "args.unknownGuess": "未知选项 %s（是否指 %s？）",

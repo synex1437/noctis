@@ -291,6 +291,7 @@
   "roles.applied": "   rollen: %s",
   "setup.unknownPreset": "onbekende voorinstelling: %s (conservative | balanced | aggressive)",
   "why.empty": "Nog geen beslissingen genoteerd.",
+  "home.missing": "%s: de thuismap is onbekend (HOME is niet ingesteld), dus de accountmap is niet te vinden; stel HOME in of geef --account <map> op.",
   "unknownCommand": "Onbekend commando: %s. Commando's: %s",
   "args.unknown": "onbekende optie %s",
   "args.unknownGuess": "onbekende optie %s (bedoelde je %s?)",

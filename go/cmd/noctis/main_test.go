@@ -29,6 +29,16 @@ func TestMain(m *testing.M) {
 	if sid := os.Getenv("NOCTIS_TEST_RUNNER_SID"); sid != "" {
 		os.Exit(runTestRunner(sid, os.Getenv("NOCTIS_TEST_RUNNER_ACCOUNT")))
 	}
+	if raw := os.Getenv("NOCTIS_TEST_MAIN_ARGS"); raw != "" {
+		var argv []string
+		if json.Unmarshal([]byte(raw), &argv) != nil {
+			os.Exit(2)
+		}
+		_ = os.Unsetenv("NOCTIS_TEST_MAIN_ARGS")
+		os.Args = append([]string{os.Args[0]}, argv...)
+		main()
+		os.Exit(0)
+	}
 	for _, argument := range os.Args[1:] {
 		if strings.HasPrefix(argument, "-") {
 			continue

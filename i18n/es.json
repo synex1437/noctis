@@ -291,6 +291,7 @@
   "roles.applied": "   roles: %s",
   "setup.unknownPreset": "preajuste desconocido: %s (conservative | balanced | aggressive)",
   "why.empty": "Aún no hay decisiones registradas.",
+  "home.missing": "%s: no se conoce la carpeta personal (HOME no está definida), así que no se encuentra la carpeta de la cuenta; define HOME o pasa --account <carpeta>.",
   "unknownCommand": "Comando desconocido: %s. Comandos: %s",
   "args.unknown": "opción desconocida %s",
   "args.unknownGuess": "opción desconocida %s (¿quisiste decir %s?)",
