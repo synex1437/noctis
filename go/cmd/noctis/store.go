@@ -375,6 +375,8 @@ func copyObject(source object) object {
 	return clone
 }
 
+var utf8BOM = []byte("\xef\xbb\xbf")
+
 func readJSONStrict(file string) strictRead {
 	content, err := readFileShared(file)
 	for attempt := 0; err != nil && !errors.Is(err, os.ErrNotExist) && attempt < 8; attempt++ {
@@ -392,7 +394,7 @@ func readJSONStrict(file string) strictRead {
 		return strictRead{exists: true, ok: true, data: copyObject(cached.data), raw: content}
 	}
 	var raw any
-	if err := json.Unmarshal(content, &raw); err != nil {
+	if err := json.Unmarshal(bytes.TrimPrefix(content, utf8BOM), &raw); err != nil {
 		delete(parseCache, file)
 		return strictRead{exists: true, ok: false, err: err.Error()}
 	}

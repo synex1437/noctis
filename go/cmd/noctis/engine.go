@@ -221,7 +221,7 @@ type queueView struct {
 }
 
 func parseQueueEntries(content string) ([]queueEntry, bool) {
-	lines := strings.Split(content, "\n")
+	lines := strings.Split(strings.TrimPrefix(content, "\uFEFF"), "\n")
 	hasBoxes := false
 	for _, line := range lines {
 		if queueItemPattern.MatchString(strings.TrimRight(line, "\r")) {
