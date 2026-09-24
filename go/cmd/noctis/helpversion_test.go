@@ -106,3 +106,21 @@ func TestAnUnknownCommandListsOnlyTheCommandsPeopleRun(t *testing.T) {
 		}
 	}
 }
+
+func TestTheDoctorsFirstLineCarriesTheVersion(t *testing.T) {
+	for _, host := range []string{"claude", "codex", "copilot"} {
+		t.Run(host, func(t *testing.T) {
+			sandboxFiles(t)
+			previousHost, previousLocale := activeHost, locale
+			t.Cleanup(func() { activeHost, locale = previousHost, previousLocale })
+			activeHost, locale = host, "en"
+			doctorIssues = 0
+
+			first := doctorLines(object{})[0]
+
+			if !strings.HasPrefix(first, "OK") || !strings.Contains(first, pluginName+" "+pluginVersion) || !strings.Contains(first, platformName()) {
+				t.Fatalf("a pasted doctor report does not say which noctis wrote it: %q", first)
+			}
+		})
+	}
+}
