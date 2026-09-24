@@ -65,9 +65,24 @@ func installedPaths() (files []string, dirs []string) {
 		}
 }
 
+func hooksModules(root string) []string {
+	modules := []string{}
+	for _, raw := range getList(readJSON(filepath.Join(root, "hooks", "hooks.json")), "modules") {
+		name, _ := raw.(string)
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		relative := filepath.Join("hooks", filepath.FromSlash(name))
+		if isInside(filepath.Join(root, relative), root) {
+			modules = append(modules, relative)
+		}
+	}
+	return modules
+}
+
 func copyPluginTree(from, to string) error {
 	wanted, dirs := installedPaths()
-	for _, relative := range wanted {
+	for _, relative := range append(wanted, hooksModules(from)...) {
 		source := filepath.Join(from, relative)
 		if statSafe(source) == nil {
 			continue
