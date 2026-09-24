@@ -356,6 +356,7 @@
   "args.badValue": "%s %s: use one of %s",
   "args.usage": "nothing was changed; noctis %s takes %s",
   "help.cmd.classify": "print the router's verdict for a prompt as JSON",
+  "preview.usage": "usage: noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <epoch seconds>]",
   "help.cmd.schedulepreview": "print what a relaunch would register with the scheduler, without registering it",
   "help.usage": "%s %s — keeps an AI coding session inside its usage limits.\n\nUsage: noctis <command> [--flags]\n",
   "help.more": "\nFlags per command: https://github.com/synex1437/noctis/blob/main/docs/REFERENCE.md. Diagnose a setup with: noctis doctor",

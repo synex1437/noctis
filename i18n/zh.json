@@ -356,6 +356,7 @@
   "args.badValue": "%s %s：可选值为 %s",
   "args.usage": "未做任何更改；noctis %s 可用的选项：%s",
   "help.cmd.classify": "以 JSON 输出路由对某条请求的判定",
+  "preview.usage": "用法：noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <epoch 秒>]",
   "help.cmd.schedulepreview": "显示一次重启会向调度器登记的内容，但不真正登记",
   "help.usage": "%s %s — 让 AI 编程会话保持在用量限额之内。\n\n用法：noctis <命令> [--flags]\n",
   "help.more": "\n各命令的参数：https://github.com/synex1437/noctis/blob/main/docs/REFERENCE.md。诊断安装：noctis doctor",

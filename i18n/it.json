@@ -356,6 +356,7 @@
   "args.badValue": "%s %s: usa uno tra %s",
   "args.usage": "non è stato modificato nulla; noctis %s accetta %s",
   "help.cmd.classify": "stampare in JSON il verdetto del router su una richiesta",
+  "preview.usage": "uso: noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <secondi epoch>]",
   "help.cmd.schedulepreview": "mostrare cosa registrerebbe un riavvio nello scheduler, senza registrarlo",
   "help.usage": "%s %s — mantiene una sessione di programmazione con IA entro i suoi limiti d'uso.\n\nUso: noctis <comando> [--flags]\n",
   "help.more": "\nFlag per comando: https://github.com/synex1437/noctis/blob/main/docs/REFERENCE.md. Diagnostica un'installazione con: noctis doctor",

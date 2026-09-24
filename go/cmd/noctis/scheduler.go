@@ -319,16 +319,37 @@ func cancelNative(sid string, scheduled object) {
 	}
 }
 
+const latestPreviewEpoch = 253402300799
+
+var previewBackends = map[string]bool{"launchd": true, "systemd": true, "task": true, "sleeper": true}
+
+func pasteableCommand(argv []string) string {
+	if !isWindows {
+		return shellJoin(argv)
+	}
+	quoted := make([]string, len(argv))
+	for index, arg := range argv {
+		quoted[index] = psQuote(arg)
+	}
+	return "& " + strings.Join(quoted, " ")
+}
+
 func runSchedulePreview() {
 	sid := orDefault(flagString("sid"), "preview")
-	at := numberOr(object{"at": flagString("at")}, "at", 0)
-	if parsed, ok := toNumber(flagString("at")); ok && parsed > 0 {
+	at := float64(nowSec() + 3600)
+	if args.present["at"] {
+		parsed, ok := toNumber(flagString("at"))
+		if !ok || !(parsed > 0 && parsed <= latestPreviewEpoch) {
+			fmt.Fprintln(os.Stderr, T("preview.usage"))
+			os.Exit(2)
+		}
 		at = parsed
 	}
-	if at <= 0 {
-		at = float64(nowSec() + 3600)
-	}
 	backend := orDefault(flagString("backend"), schedulerBackend())
+	if !previewBackends[backend] {
+		fmt.Fprintln(os.Stderr, T("preview.usage"))
+		os.Exit(2)
+	}
 	executable, err := os.Executable()
 	if err != nil {
 		fail("schedule-preview: %v", err)
@@ -341,12 +362,10 @@ func runSchedulePreview() {
 	case "launchd":
 		fmt.Print(launchdPlistBody(launchdJobLabel(sid, at), executable, commandArgs, at, files.guardDir))
 	case "systemd":
-		fmt.Println(strings.Join(append([]string{"systemd-run"},
-			systemdRunArgs(systemdJobUnit(sid, at), executable, commandArgs, at, wake)...), " "))
+		fmt.Println(shellJoin(append([]string{"systemd-run"}, systemdRunArgs(systemdJobUnit(sid, at), executable, commandArgs, at, wake)...)))
 	case "task":
-		fmt.Println(windowsTaskScript(taskName(sid), at, runnerArgs("resume", sid, `"`+files.configDir+`"`), wake))
+		fmt.Println(windowsTaskScript(files.runnerLauncher, taskName(sid), at, runnerArgs("resume", sid, `"`+files.configDir+`"`), wake))
 	default:
-		fmt.Println(strings.Join(append([]string{executable},
-			runnerArgs("sleeper", sid, files.configDir, "--at", formatNumber(at), "--watch")...), " "))
+		fmt.Println(pasteableCommand(append([]string{executable}, runnerArgs("sleeper", sid, files.configDir, "--at", formatNumber(at))...)))
 	}
 }
