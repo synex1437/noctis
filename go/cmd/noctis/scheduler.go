@@ -128,11 +128,30 @@ func scheduleAtMinute(at float64) time.Time {
 	return moment
 }
 
+var carriedEnvNames = []string{"PATH", "DISPLAY", "WAYLAND_DISPLAY", "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy"}
+
+func carriedEnvironment() [][2]string {
+	carried := [][2]string{}
+	for _, name := range carriedEnvNames {
+		if value := os.Getenv(name); value != "" && !strings.ContainsAny(value, "\r\n") {
+			carried = append(carried, [2]string{name, value})
+		}
+	}
+	return carried
+}
+
 func launchdPlistBody(label, executable string, commandArgs []string, at float64, workingDir string) string {
 	moment := scheduleAtMinute(at)
 	arguments := []string{"<string>" + xmlEscape(executable) + "</string>"}
 	for _, arg := range commandArgs {
 		arguments = append(arguments, "<string>"+xmlEscape(arg)+"</string>")
+	}
+	environment := ""
+	for _, pair := range carriedEnvironment() {
+		environment += "<key>" + xmlEscape(pair[0]) + "</key><string>" + xmlEscape(pair[1]) + "</string>"
+	}
+	if environment != "" {
+		environment = "<key>EnvironmentVariables</key><dict>" + environment + "</dict>\n"
 	}
 	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -142,8 +161,8 @@ func launchdPlistBody(label, executable string, commandArgs []string, at float64
 <key>StartCalendarInterval</key><dict><key>Month</key><integer>%d</integer><key>Day</key><integer>%d</integer><key>Hour</key><integer>%d</integer><key>Minute</key><integer>%d</integer></dict>
 <key>RunAtLoad</key><false/>
 <key>WorkingDirectory</key><string>%s</string>
-</dict></plist>
-`, xmlEscape(label), strings.Join(arguments, ""), int(moment.Month()), moment.Day(), moment.Hour(), moment.Minute(), xmlEscape(workingDir))
+%s</dict></plist>
+`, xmlEscape(label), strings.Join(arguments, ""), int(moment.Month()), moment.Day(), moment.Hour(), moment.Minute(), xmlEscape(workingDir), environment)
 }
 
 func scheduleLaunchd(sid string, at float64, commandArgs []string) (object, bool) {
@@ -234,10 +253,15 @@ func systemdRunArgs(unit, executable string, commandArgs []string, at float64, w
 		"--user", "--quiet", "--collect",
 		"--unit=" + unit,
 		"--setenv=" + systemdUnitEnv + "=" + unit,
-		"--property=KillMode=process",
-		"--on-calendar=" + moment.Format("2006-01-02 15:04:05"),
-		"--timer-property=AccuracySec=1s",
 	}
+	for _, pair := range carriedEnvironment() {
+		arguments = append(arguments, "--setenv="+pair[0]+"="+pair[1])
+	}
+	arguments = append(arguments,
+		"--property=KillMode=process",
+		"--on-calendar="+moment.Format("2006-01-02 15:04:05"),
+		"--timer-property=AccuracySec=1s",
+	)
 	if wake {
 		arguments = append(arguments, "--timer-property=WakeSystem=true")
 	}

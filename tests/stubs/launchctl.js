@@ -28,6 +28,7 @@ print(json.dumps({
   'calendar': data.get('StartCalendarInterval'),
   'runAtLoad': data.get('RunAtLoad'),
   'workingDirectory': data.get('WorkingDirectory'),
+  'environment': data.get('EnvironmentVariables') or {},
 }))
 `;
 
@@ -63,7 +64,7 @@ if (argv[0] === 'bootstrap' || argv[0] === 'load') {
   const priorEntries = fs.readFileSync(log, 'utf8').split('\n').filter(Boolean).length;
   record({
     kind: 'schedule', unit: plist.label, fireAt, command: plist.args,
-    calendar: plist.calendar, workingDirectory: plist.workingDirectory,
+    calendar: plist.calendar, workingDirectory: plist.workingDirectory, environment: plist.environment,
   });
   const timer = spawn(process.execPath, [path.join(__dirname, 'fire.js')], {
     detached: true,
@@ -71,6 +72,7 @@ if (argv[0] === 'bootstrap' || argv[0] === 'load') {
     env: {
       ...process.env,
       XPC_SERVICE_NAME: plist.label,
+      NOCTIS_STUB_JOB_ENV: JSON.stringify(plist.environment),
       NOCTIS_STUB_UNIT: plist.label,
       NOCTIS_STUB_FIRE_AT: String(fireAt),
       NOCTIS_STUB_COMMAND: JSON.stringify(plist.args),

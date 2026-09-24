@@ -96,6 +96,9 @@ async function scenarioSystemdFiresAndResumes(lab) {
     check('systemd: the command is this binary resuming this session',
       entry.command.join(' ').includes('resume') && entry.command.join(' ').includes('sysA'),
       entry.command.join(' '));
+    check('systemd: the timer carries the PATH of the session that paused, so the runner finds claude',
+      String((entry.environment || {}).PATH || '').split(path.delimiter).includes(lab.binDir),
+      JSON.stringify(entry.environment || {}).slice(0, 300));
     const drift = Math.abs(entry.fireAt - (wait.resumeAt || 0));
     check('systemd: the timer fires when the wait says it should (±2s)', drift <= 2, `drift ${drift}s`);
   }
@@ -300,6 +303,9 @@ async function scenarioLaunchdFiresAndResumes(lab) {
     check('launchd: the job resumes this session', entry.command.join(' ').includes('resume')
       && entry.command.join(' ').includes('macA'), entry.command.join(' '));
     check('launchd: it runs from the guard directory', Boolean(entry.workingDirectory), entry.workingDirectory);
+    check('launchd: the agent carries the PATH of the session that paused, so the runner finds claude',
+      String((entry.environment || {}).PATH || '').split(path.delimiter).includes(lab.binDir),
+      JSON.stringify(entry.environment || {}).slice(0, 300));
     const drift = entry.fireAt - (wait.resumeAt || 0);
     check('launchd: the calendar names the minute of the wait, rounded up, never down',
       drift >= 0 && drift < 60, `fires ${drift}s after the wait says it should`);
