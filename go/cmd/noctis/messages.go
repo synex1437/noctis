@@ -93,6 +93,7 @@ func baseCatalog() map[string]map[string]string {
 			"queue.ghFailed":       "gh issue list failed: %v (is the GitHub CLI installed and logged in?)",
 			"queue.importNone":     "nothing new: all %d open issues are already in %s",
 			"queue.importDone":     "imported %[1]d issue(s) into %[3]s (%[2]d already present)",
+			"queue.importLink":     "queue import wrote nothing: %s is a link that leads out of %s (to %s). To import into that file, pass its path with --file.",
 
 			"stopfailure.reason":       "API error (%s), resume %s",
 			"overload.notify":          "API %s; retrying with backoff, next attempt at %s.",
@@ -452,6 +453,7 @@ func baseCatalog() map[string]map[string]string {
 			"queue.ghFailed":       "gh issue list başarısız: %v (GitHub CLI kurulu ve giriş yapılmış mı?)",
 			"queue.importNone":     "yeni bir şey yok: %d açık issue'nun hepsi zaten %s içinde",
 			"queue.importDone":     "%[1]d issue %[3]s dosyasına eklendi (%[2]d zaten vardı)",
+			"queue.importLink":     "queue import hiçbir şey yazmadı: %s, %s klasörünün dışına çıkan bir bağlantı (hedefi: %s). O dosyaya aktarmak için yolunu --file ile verin.",
 
 			"stopfailure.reason":       "API hatası (%s), devam %s",
 			"overload.notify":          "API %s; kademeli geri çekilmeyle tekrar denenecek, sıradaki deneme %s.",
