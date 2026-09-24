@@ -368,7 +368,7 @@ func runChain(chain string, input []byte) string {
 		command = exec.Command("sh", "-c", chain)
 	}
 	command.Stdin = strings.NewReader(string(input))
-	output, err := runWithTimeout(command, 4*time.Second)
+	output, err := runTreeWithTimeout(command, 4*time.Second)
 	if err != nil {
 		return ""
 	}
