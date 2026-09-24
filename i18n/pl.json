@@ -234,6 +234,7 @@
   "selftest.hookSpeed": "szybkość hooków: %d ms (wywołanie poniżej progu)",
   "selftest.notifyBody": "Powiadomienie autotestu: jeśli to widzisz, sygnał/toast działa.",
   "selftest.notifySent": "powiadomienie wysłane (powinien pojawić się komunikat lub dźwięk)",
+  "selftest.notifyNone": "brak tu powiadomień pulpitu (%s): alarmy na tym komputerze będą ciche; oczekiwania działają bez zmian",
   "selftest.taskFailed": "rejestracja w Harmonogramie zadań nie powiodła się: %s",
   "selftest.taskWaiting": "   test Harmonogramu zadań: zadanie zarejestrowane za 1 min, czekam na uruchomienie (do 120 s)...",
   "selftest.taskFired": "zadanie Harmonogramu uruchomiło się i binarka runnera zadziałała",

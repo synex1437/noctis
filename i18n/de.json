@@ -234,6 +234,7 @@
   "selftest.hookSpeed": "Hook-Geschwindigkeit: %d ms (Aufruf unterhalb der Schwelle)",
   "selftest.notifyBody": "Selbsttest-Benachrichtigung: wenn Sie das sehen, funktionieren Piepton/Toast.",
   "selftest.notifySent": "Benachrichtigung gesendet (Toast/Ton sollte zu sehen sein)",
+  "selftest.notifyNone": "hier keine Desktop-Benachrichtigung (%s): Alarme bleiben auf diesem Rechner stumm; Wartezeiten sind nicht betroffen",
   "selftest.taskFailed": "Registrierung im Aufgabenplaner fehlgeschlagen: %s",
   "selftest.taskWaiting": "   Aufgabenplaner-Test: Aufgabe für in 1 Minute registriert, warte auf die Auslösung (bis zu 120 s)...",
   "selftest.taskFired": "Aufgabenplaner-Aufgabe wurde ausgelöst und die Runner-Binärdatei lief",

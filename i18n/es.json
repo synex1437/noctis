@@ -234,6 +234,7 @@
   "selftest.hookSpeed": "velocidad de hooks: %d ms (llamada por debajo del umbral)",
   "selftest.notifyBody": "Notificación de autoprueba: si ves esto, el pitido/toast funciona.",
   "selftest.notifySent": "notificación enviada (debería verse un aviso o sonido)",
+  "selftest.notifyNone": "aquí no hay notificación de escritorio (%s): las alarmas quedan en silencio en esta máquina; las esperas no se ven afectadas",
   "selftest.taskFailed": "falló el registro en el Programador de tareas: %s",
   "selftest.taskWaiting": "   prueba del Programador de tareas: tarea registrada para dentro de 1 min, esperando a que se dispare (hasta 120 s)...",
   "selftest.taskFired": "la tarea del Programador se disparó y el binario runner se ejecutó",

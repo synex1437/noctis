@@ -234,6 +234,7 @@
   "selftest.hookSpeed": "velocidade dos hooks: %d ms (chamada abaixo do limiar)",
   "selftest.notifyBody": "Notificação de autoteste: se você vê isto, bipe/toast funcionam.",
   "selftest.notifySent": "notificação enviada (um aviso/som deve aparecer)",
+  "selftest.notifyNone": "sem notificação de área de trabalho aqui (%s): os alarmes ficam mudos nesta máquina; as esperas não são afetadas",
   "selftest.taskFailed": "falha ao registrar no Agendador de Tarefas: %s",
   "selftest.taskWaiting": "   teste do Agendador de Tarefas: tarefa registrada para daqui a 1 min, aguardando o disparo (até 120 s)...",
   "selftest.taskFired": "a tarefa do Agendador disparou e o binário runner rodou",

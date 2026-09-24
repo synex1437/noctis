@@ -234,6 +234,7 @@
   "selftest.hookSpeed": "hook hızı: %d ms (eşik altı çağrı)",
   "selftest.notifyBody": "Öz-test bildirimi: bunu görüyorsanız bip/toast çalışıyor.",
   "selftest.notifySent": "bildirim gönderildi (toast/bip görünmeli)",
+  "selftest.notifyNone": "burada masaüstü bildirimi yok (%s): alarmlar bu makinede sessiz kalır; beklemeler etkilenmez",
   "selftest.taskFailed": "Görev Zamanlayıcı kaydı başarısız: %s",
   "selftest.taskWaiting": "   Görev Zamanlayıcı testi: 1 dk sonraya görev kuruldu, tetiklenmesi bekleniyor (en fazla 120 sn)...",
   "selftest.taskFired": "Görev Zamanlayıcı görevi tetiklendi ve runner binary'i çalıştı",

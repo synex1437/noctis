@@ -234,6 +234,7 @@
   "selftest.hookSpeed": "钩子速度：%d 毫秒（低于阈值的调用）",
   "selftest.notifyBody": "自检通知：如果你看到这条消息，提示音/弹窗正常。",
   "selftest.notifySent": "通知已发送（应当能看到提示或听到声音）",
+  "selftest.notifyNone": "这里无法显示桌面通知（%s）：这台机器上提醒不会发声；等待不受影响",
   "selftest.taskFailed": "注册到任务计划程序失败：%s",
   "selftest.taskWaiting": "   任务计划程序测试：已注册 1 分钟后的任务，正在等待触发（最多 120 秒）...",
   "selftest.taskFired": "任务计划程序的任务已触发，runner 程序已运行",

@@ -234,6 +234,7 @@
   "selftest.hookSpeed": "フックの速度: %d ms（しきい値未満の呼び出し）",
   "selftest.notifyBody": "セルフテスト通知: これが見えればビープ/トーストは動作しています。",
   "selftest.notifySent": "通知を送信しました（トーストまたは音が出るはずです）",
+  "selftest.notifyNone": "ここではデスクトップ通知が出せません（%s）: このマシンではアラームは鳴りません。待機には影響しません",
   "selftest.taskFailed": "タスク スケジューラへの登録に失敗しました: %s",
   "selftest.taskWaiting": "   タスク スケジューラのテスト: 1 分後のタスクを登録しました。実行されるのを待っています（最大 120 秒）...",
   "selftest.taskFired": "タスク スケジューラのタスクが実行され、runner のバイナリが動きました",

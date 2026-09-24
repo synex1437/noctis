@@ -234,6 +234,7 @@
   "selftest.hookSpeed": "훅 속도: %d ms(임계값 미만 호출)",
   "selftest.notifyBody": "자가 테스트 알림: 이 메시지가 보이면 비프/토스트가 동작합니다.",
   "selftest.notifySent": "알림을 보냈습니다(팝업이나 소리가 나타나야 합니다)",
+  "selftest.notifyNone": "여기서는 데스크톱 알림이 없습니다 (%s): 이 컴퓨터에서는 알람이 울리지 않습니다. 대기에는 영향이 없습니다",
   "selftest.taskFailed": "작업 스케줄러 등록 실패: %s",
   "selftest.taskWaiting": "   작업 스케줄러 테스트: 1분 뒤 작업을 등록했습니다. 실행을 기다리는 중(최대 120초)...",
   "selftest.taskFired": "작업 스케줄러 작업이 실행되었고 runner 바이너리가 동작했습니다",

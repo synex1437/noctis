@@ -797,6 +797,7 @@ func yesNo(value bool) string {
 func runSelftest() {
 	cfg := loadConfig()
 	now := nowSec()
+	doctorIssues = 0
 	lines := doctorLines(cfg)
 	report := func(ok bool, text string) { lines = append(lines, checkLine(ok, text)) }
 	if claudePath := claudeExecutable(); claudePath != "" {
@@ -833,8 +834,11 @@ func runSelftest() {
 		consumeCheckpoint(selftestSession)
 		logInfo("self-test probe left a wait for %s; cleared", selftestSession)
 	}
-	notify(cfg, pluginName, T("selftest.notifyBody"))
-	report(true, T("selftest.notifySent"))
+	if reason := notify(cfg, pluginName, T("selftest.notifyBody")); reason != "" {
+		lines = append(lines, "ℹ "+T("selftest.notifyNone", reason))
+	} else {
+		report(true, T("selftest.notifySent"))
+	}
 	token := hashKey(fmt.Sprintf("%s|%d", files.configDir, time.Now().UnixMilli()))
 	marker := filepath.Join(files.launches, "selftest-"+token+".ok")
 	ensureDir(files.launches)
@@ -874,6 +878,12 @@ func runSelftest() {
 		report(fired, T("selftest.marker", pid, yesNo(fired)))
 	}
 	fmt.Println(strings.Join(lines, "\n"))
+	if doctorIssues == 0 {
+		fmt.Println(T("doctor.allGood"))
+		return
+	}
+	fmt.Println(T("doctor.issuesFound", doctorIssues))
+	os.Exit(1)
 }
 
 type tokenBucket struct {

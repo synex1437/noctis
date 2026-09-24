@@ -234,6 +234,7 @@
   "selftest.hookSpeed": "velocità degli hook: %d ms (chiamata sotto soglia)",
   "selftest.notifyBody": "Notifica di autotest: se la vedi, bip/toast funzionano.",
   "selftest.notifySent": "notifica inviata (dovrebbe comparire un avviso o un suono)",
+  "selftest.notifyNone": "qui nessuna notifica desktop (%s): gli allarmi restano muti su questa macchina; le attese non cambiano",
   "selftest.taskFailed": "registrazione nell'Utilità di pianificazione non riuscita: %s",
   "selftest.taskWaiting": "   test dell'Utilità di pianificazione: attività registrata tra 1 min, in attesa che scatti (fino a 120 s)...",
   "selftest.taskFired": "l'attività pianificata è scattata e il binario runner è stato eseguito",
