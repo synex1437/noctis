@@ -71,6 +71,7 @@ const timer = spawn(process.execPath, [__dirname + '/fire.js'], {
   env: {
     ...process.env,
     ...environment,
+    NOCTIS_STUB_JOB_ENV: JSON.stringify(environment),
     NOCTIS_STUB_UNIT: unit,
     NOCTIS_STUB_FIRE_AT: String(fireAt),
     NOCTIS_STUB_COMMAND: JSON.stringify(command),
