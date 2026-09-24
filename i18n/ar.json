@@ -65,6 +65,7 @@
   "overload.wakeMessage": "[noctis] The API was %s (attempt %s, waited %s). Retry now: continue exactly where you left off; nothing else changed.",
   "stopfailure.transient": "خطأ حد عابر؛ حُفظ العمل، إعادة المحاولة عند %s.",
   "stopfailure.wall": "جدار الحد (%s)؛ حُفظ العمل، الاستئناف عند %s.",
+  "stopfailure.giveup": "لا يزال %s يفشل (%s) بعد %s محاولات تلقائية؛ توقف noctis عن إعادة المحاولة — افتح طرفية ونفّذ: %s",
   "stopfailure.account": "توقف Claude Code بسبب %s؛ لا شيء يمكن إعادة محاولته حتى يُحل وضع الحساب.",
   "stopfailure.modelMissing": "النموذج %s غير متاح في هذه الخطة؛ النموذج الافتراضي الآن هو %s. اختر ملفًا آخر عبر ‎/noctis:setup‎.",
   "notification.stale": "أُعيد ضبط الحد؛ Claude Code ينتظر Enter (ستعمل المتابعة التلقائية إن كانت مخططة).",

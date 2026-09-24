@@ -65,6 +65,7 @@
   "overload.wakeMessage": "[noctis] The API was %s (attempt %s, waited %s). Retry now: continue exactly where you left off; nothing else changed.",
   "stopfailure.transient": "Временная ошибка лимита; работа сохранена, повтор в %s.",
   "stopfailure.wall": "Стена лимита (%s); работа сохранена, продолжение в %s.",
+  "stopfailure.giveup": "%s по-прежнему завершается ошибкой (%s) после %s автоматических повторов; noctis больше не повторяет — открой терминал и выполни: %s",
   "stopfailure.account": "Claude Code остановился с %s; повторять нечего, пока не решён вопрос с аккаунтом.",
   "stopfailure.modelMissing": "Модель %s недоступна в этом тарифе; модель по умолчанию теперь %s. Выбери другой профиль через /noctis:setup.",
   "notification.stale": "Лимит сброшен; Claude Code ждёт Enter (автопродолжение сработает, если запланировано).",

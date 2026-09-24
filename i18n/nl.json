@@ -65,6 +65,7 @@
   "overload.wakeMessage": "[noctis] The API was %s (attempt %s, waited %s). Retry now: continue exactly where you left off; nothing else changed.",
   "stopfailure.transient": "Tijdelijke limietfout; werk opgeslagen, nieuwe poging om %s.",
   "stopfailure.wall": "Limietmuur (%s); werk opgeslagen, hervatten om %s.",
+  "stopfailure.giveup": "%s blijft mislukken (%s), ook na %s automatische pogingen; noctis probeert het niet meer — open een terminal en voer uit: %s",
   "stopfailure.account": "Claude Code is gestopt met %s; er valt niets opnieuw te proberen tot het account in orde is.",
   "stopfailure.modelMissing": "Model %s is niet beschikbaar in dit abonnement; het standaardmodel is nu %s. Kies een ander profiel met /noctis:setup.",
   "notification.stale": "Limiet gereset; Claude Code wacht op Enter (automatisch doorgaan volgt als gepland).",

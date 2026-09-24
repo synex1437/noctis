@@ -999,6 +999,7 @@ func onStop(input, cfg object) {
 		return
 	}
 	clearOverload(state, sid)
+	clearFailureRetries(state, sid)
 	queuePath := queueFileFor(cfg, getString(input, "cwd"), sid)
 	if queuePath == "" || !queueTrusted(cfg, queuePath) {
 		return
@@ -1270,6 +1271,7 @@ func onPostToolBatch(input, cfg object) {
 	sid := sessionKey(input)
 	state := readState()
 	clearOverload(state, sid)
+	clearFailureRetries(state, sid)
 	if guardPaused(cfg, state, now) {
 		return
 	}
@@ -1348,6 +1350,28 @@ func overloadEpisode(cfg object, sid string, now int64) (attempt float64, ok boo
 	return attempt, ok
 }
 
+func failureRetry(cfg object, sid string, now int64) (retry int) {
+	updateState(func(state object) {
+		episodes := stateMap(state, "failureRetries")
+		episode := getMap(episodes, sid)
+		if episode == nil || float64(now)-numberOr(episode, "lastAt", 0) > retryDelaySeconds(cfg, int(numberOr(episode, "retries", 1)))+failureEpisodeSlack {
+			episode = object{"retries": float64(0)}
+		}
+		episode["retries"] = numberOr(episode, "retries", 0) + 1
+		episode["lastAt"] = float64(now)
+		episodes[sid] = episode
+		retry = int(numberOr(episode, "retries", 1))
+	})
+	return retry
+}
+
+func clearFailureRetries(state object, sid string) {
+	if getMap(getMap(state, "failureRetries"), sid) == nil {
+		return
+	}
+	updateState(func(next object) { delete(stateMap(next, "failureRetries"), sid) })
+}
+
 func clearOverload(state object, sid string) {
 	if getMap(getMap(state, "overload"), sid) == nil {
 		return
@@ -1421,8 +1445,19 @@ func onStopFailure(input, cfg object) {
 		record["until"], record["resumeAt"] = float64(now), float64(now+120)
 		record["modelOverride"] = getString(section(cfg, "models"), "fallback")
 	default:
+		retry := failureRetry(cfg, sid, now)
+		if retry > stopFailureMaxAttempts {
+			manual := hostResumeCommand(currentHost().id, sid)
+			journal(sid, "StopFailure", "retry-giveup", errorType, object{"retries": float64(retry - 1)})
+			fail("%s StopFailure for %s: failed again after %d retries; leaving the session stopped", errorType, sid, retry-1)
+			notify(cfg, pluginName, T("stopfailure.giveup", shortSid(sid), errorType, formatNumber(float64(retry-1)), manual))
+			updateState(func(next object) {
+				stateMap(next, "launchFailures")[sid] = object{"at": float64(now), "model": result.model}
+			})
+			return
+		}
 		record["window"], record["label"], record["used"] = "unknown", windowLabel("unknown"), nil
-		record["until"], record["resumeAt"] = float64(now), float64(now)+retryDelaySeconds(cfg, 1)
+		record["until"], record["resumeAt"] = float64(now), float64(now)+retryDelaySeconds(cfg, retry)
 	}
 	resumeAt := numberOr(record, "resumeAt", 0)
 	label := getString(record, "label")

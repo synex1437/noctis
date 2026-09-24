@@ -65,6 +65,7 @@
   "overload.wakeMessage": "[noctis] The API was %s (attempt %s, waited %s). Retry now: continue exactly where you left off; nothing else changed.",
   "stopfailure.transient": "临时限额错误；工作已保存，%s 重试。",
   "stopfailure.wall": "限额墙（%s）；工作已保存，%s 恢复。",
+  "stopfailure.giveup": "%[1]s 在 %[3]s 次自动重试后仍然失败（%[2]s）；noctis 已停止重试 — 请打开终端运行：%[4]s",
   "stopfailure.account": "Claude Code 因 %s 停止；在账户问题解决之前没有可重试的内容。",
   "stopfailure.modelMissing": "此套餐不提供模型 %s；默认模型现在是 %s。用 /noctis:setup 选择其他配置。",
   "notification.stale": "限额已重置；Claude Code 正在等待回车（如已计划，自动继续会触发）。",

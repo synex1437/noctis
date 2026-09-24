@@ -65,6 +65,7 @@
   "overload.wakeMessage": "[noctis] The API was %s (attempt %s, waited %s). Retry now: continue exactly where you left off; nothing else changed.",
   "stopfailure.transient": "Geçici limit hatası; iş kaydedildi, %s'de tekrar denenecek.",
   "stopfailure.wall": "Limit duvarı (%s); iş kaydedildi, %s'de devam.",
+  "stopfailure.giveup": "%[1]s, %[3]s otomatik denemeden sonra da hata veriyor (%[2]s); noctis yeniden denemeyi bıraktı — bir terminal açıp şunu çalıştırın: %[4]s",
   "stopfailure.account": "Claude Code %s ile durdu; hesap düzelene kadar yeniden denenecek bir şey yok.",
   "stopfailure.modelMissing": "%s modeli bu planda yok; varsayılan model artık %s. /noctis:setup ile başka bir profil seç.",
   "notification.stale": "Limit sıfırlandı; Claude Code Enter bekliyor (plan varsa otomatik devam edecek).",

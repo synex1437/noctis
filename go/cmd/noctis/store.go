@@ -36,6 +36,7 @@ const (
 	schedulingGraceSeconds  = 30
 	lockQueueBackgroundMs   = 900000
 	stopFailureMaxAttempts  = 5
+	failureEpisodeSlack     = 3600
 	burstHistoryLimit       = 6
 	burstWindowSeconds      = 1800
 	burstMinUsed            = 60.0
@@ -730,6 +731,7 @@ func emptyState() object {
 		"launched":         object{},
 		"queueTrust":       object{},
 		"launchFailures":   object{},
+		"failureRetries":   object{},
 	}
 }
 
@@ -950,6 +952,7 @@ func pruneState(state object, now int64) {
 		"stopGuard":      stateEntryTTLSeconds,
 		"tasks":          stateEntryTTLSeconds,
 		"launchFailures": stateEntryTTLSeconds,
+		"failureRetries": stateEntryTTLSeconds,
 		"modelOverrides": launchRecordTTLSeconds,
 	} {
 		for key, raw := range stateMap(state, name) {

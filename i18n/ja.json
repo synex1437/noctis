@@ -65,6 +65,7 @@
   "overload.wakeMessage": "[noctis] The API was %s (attempt %s, waited %s). Retry now: continue exactly where you left off; nothing else changed.",
   "stopfailure.transient": "一時的な上限エラー。作業を保存し、%s に再試行します。",
   "stopfailure.wall": "上限の壁（%s）。作業を保存し、%s に再開します。",
+  "stopfailure.giveup": "%[1]s は %[3]s 回の自動再試行の後もエラーが続いています（%[2]s）。noctis は再試行をやめました — ターミナルを開いて実行してください: %[4]s",
   "stopfailure.account": "Claude Code は %s で停止しました。アカウントの問題が解決するまで再試行できることはありません。",
   "stopfailure.modelMissing": "モデル %s はこのプランでは利用できません。既定のモデルは %s になりました。/noctis:setup で別のプロファイルを選んでください。",
   "notification.stale": "上限がリセットされました。Claude Code は Enter を待っています（予定があれば自動継続が働きます）。",
