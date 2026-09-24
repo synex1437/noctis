@@ -225,6 +225,10 @@ func hostRelaunchEnv(host hostSpec, launch launchSpec) []string {
 }
 
 func launchInWindowsTerminal(cfg object, launch launchSpec, claudePath string, claudeArgs []string, env []string, effort string) bool {
+	if files.launchScript == "" {
+		warn("no relaunch window for %s: %s is not the plugin folder of this binary, so its scripts\\launch.ps1 is not run", launch.sid, files.pluginRoot)
+		return false
+	}
 	ensureDir(files.launches)
 	spec, started, pidFile := launchFiles(launch.sid)
 	_ = os.Remove(started)
