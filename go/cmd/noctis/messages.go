@@ -388,6 +388,7 @@ func baseCatalog() map[string]map[string]string {
 			"args.usage":               "nothing was changed; noctis %s takes %s",
 
 			"help.cmd.classify":        "print the router's verdict for a prompt as JSON",
+			"preview.usage":            "usage: noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <epoch seconds>]",
 			"help.cmd.schedulepreview": "print what a relaunch would register with the scheduler, without registering it",
 
 			"help.usage":              "%s %s — keeps an AI coding session inside its usage limits.\n\nUsage: noctis <command> [--flags]\n",
@@ -806,6 +807,7 @@ func baseCatalog() map[string]map[string]string {
 			"args.usage":               "hiçbir şey değişmedi; noctis %s şu bayrakları alır: %s",
 
 			"help.cmd.classify":        "bir istem için yönlendiricinin kararını JSON olarak yazar",
+			"preview.usage":            "kullanım: noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <epoch saniye>]",
 			"help.cmd.schedulepreview": "bir yeniden başlatmanın zamanlayıcıya kaydedeceği işi, kaydetmeden gösterir",
 
 			"help.usage":              "%s %s — yapay zekâ oturumunu kullanım limitlerinin içinde tutar.\n\nKullanım: noctis <komut> [--flags]\n",

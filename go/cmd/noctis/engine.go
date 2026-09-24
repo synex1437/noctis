@@ -1272,7 +1272,7 @@ func writeRunnerLauncher(content []byte) error {
 }
 
 func scheduleWindowsTask(name string, at float64, commandArgs []string, wake bool) shellResult {
-	return runPowershell(windowsTaskScript(name, at, commandArgs, wake), 45*time.Second)
+	return runPowershell(windowsTaskScript(ensureRunnerLauncher(), name, at, commandArgs, wake), 45*time.Second)
 }
 
 func windowsShellArgument(line string) string {
@@ -1283,8 +1283,7 @@ func windowsTaskArgument(launcher string, commandArgs []string) string {
 	return windowsShellArgument(`"` + launcher + `" ` + strings.Join(commandArgs, " "))
 }
 
-func windowsTaskScript(name string, at float64, commandArgs []string, wake bool) string {
-	launcher := ensureRunnerLauncher()
+func windowsTaskScript(launcher, name string, at float64, commandArgs []string, wake bool) string {
 	argument := windowsTaskArgument(launcher, commandArgs)
 	wakeFlag := ""
 	if wake {

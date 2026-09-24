@@ -356,6 +356,7 @@
   "args.badValue": "%s %s: 次のいずれかを指定してください: %s",
   "args.usage": "何も変更していません。noctis %s のオプション: %s",
   "help.cmd.classify": "依頼に対するルーターの判定を JSON で表示する",
+  "preview.usage": "使い方: noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <エポック秒>]",
   "help.cmd.schedulepreview": "再起動がスケジューラーに登録する内容を、登録せずに表示する",
   "help.usage": "%s %s — AI コーディングのセッションを使用量の上限内に保ちます。\n\n使い方: noctis <コマンド> [--flags]\n",
   "help.more": "\nコマンドごとのフラグ: https://github.com/synex1437/noctis/blob/main/docs/REFERENCE.md。セットアップの診断: noctis doctor",

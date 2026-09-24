@@ -356,6 +356,7 @@
   "args.badValue": "%s %s: şunlardan biri olmalı: %s",
   "args.usage": "hiçbir şey değişmedi; noctis %s şu bayrakları alır: %s",
   "help.cmd.classify": "bir istem için yönlendiricinin kararını JSON olarak yazar",
+  "preview.usage": "kullanım: noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <epoch saniye>]",
   "help.cmd.schedulepreview": "bir yeniden başlatmanın zamanlayıcıya kaydedeceği işi, kaydetmeden gösterir",
   "help.usage": "%s %s — yapay zekâ oturumunu kullanım limitlerinin içinde tutar.\n\nKullanım: noctis <komut> [--flags]\n",
   "help.more": "\nKomut bayrakları: https://github.com/synex1437/noctis/blob/main/docs/REFERENCE.md. Kurulumu denetlemek için: noctis doctor",
