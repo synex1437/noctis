@@ -63,6 +63,7 @@
   "queue.ghFailed": "gh issue list 실패: %v (GitHub CLI가 설치되어 있고 로그인되어 있나요?)",
   "queue.importNone": "새로운 것이 없습니다: 열린 이슈 %d개는 이미 %s에 있습니다",
   "queue.importDone": "%[3]s에 이슈 %[1]d개를 가져왔습니다(%[2]d개는 이미 있었음)",
+  "queue.importLink": "queue import가 아무것도 쓰지 않았습니다: %s은(는) %s 밖(%s)을 가리키는 링크입니다. 그 파일로 가져오려면 --file로 경로를 지정하세요.",
   "stopfailure.reason": "API 오류(%s), 재개 %s",
   "overload.notify": "API %s; 백오프로 재시도, 다음 시도 %s.",
   "overload.giveup": "API가 재시도 예산 내내 %s 상태였습니다 (%s회). 세션이 정지되었습니다 — status.claude.com 확인.",
