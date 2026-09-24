@@ -533,6 +533,7 @@ func sanitizePrompt(text string) string {
 type launchSpec struct {
 	sid            string
 	model          string
+	effort         string
 	prompt         string
 	cwd            string
 	mode           string
@@ -566,7 +567,7 @@ func launchClaude(cfg object, launch launchSpec) launchResult {
 		return launchResult{}
 	}
 	permissionMode := supportedPermissionMode(cfg, claudePath, launch.permissionMode)
-	effort := getString(section(cfg, "models"), "effort")
+	effort := orDefault(launch.effort, getString(section(cfg, "models"), "effort"))
 	claudeArgs := hostLaunchArgs("claude", cfg, launch, effort, permissionMode)
 	env := relaunchEnv(launch, effort)
 	logInfo("launching claude (%s) model=%s mode=%s cwd=%s", mode, launch.model, permissionMode, launch.cwd)
@@ -870,6 +871,7 @@ func resumeWait(sid, release string) {
 	}
 	resume := section(cfg, "resume")
 	ready := ""
+	capUsage := usageView{}
 	if kind != "fable" && currentHost().limits {
 
 		result := decide(cfg, state, object{"session_id": sid, "cwd": getString(wait, "cwd"), "transcript_path": getString(wait, "transcript")}, now, decideOptions{force: true})
@@ -913,6 +915,12 @@ func resumeWait(sid, release string) {
 			warn("runner %s: no usage data, retry %d at %s", sid, attempts, localISO(retryAt))
 			return
 		}
+		capUsage = result.usage
+		if result.fableHit && !observed(sid, "resume", "switch-model", scopedLabel(cfg), usageFacts(result.usage)) {
+			persistModelSwitch(cfg, result.usage.fable.resetsAt, now)
+			journal(sid, "resume", "switch-model", scopedLabel(cfg)+" "+formatNumber(result.usage.fable.used)+"%", object{"to": getString(section(cfg, "models"), "fallback")})
+			logInfo("runner %s: %s is at %s%%, over its pause point; relaunching on the fallback role", sid, scopedLabel(cfg), formatNumber(result.usage.fable.used))
+		}
 		if getString(resume, "mode") == "none" {
 			notify(cfg, pluginName, readyNotice(wait, release, now, T("wait.readyNone")))
 		} else {
@@ -933,6 +941,14 @@ func resumeWait(sid, release string) {
 		return
 	}
 	model := orDefault(getString(wait, "modelOverride"), resolveSessionModel(cfg, readState(), readJSON(files.usage), sid))
+	onFallback := getString(wait, "modelOverride") != ""
+	if safe := scopedSafeModel(cfg, readState(), capUsage, model, now); safe != model && !observing {
+		model, onFallback = safe, true
+	}
+	effort := ""
+	if onFallback {
+		effort = appliedEffort("fallback", getMap(section(cfg, "roles"), "fallback"))
+	}
 	dirs := sessionDirs(getString(wait, "projectDir"), getString(wait, "cwd"))
 	queuePath := sessionQueueFile(cfg, sid, dirs...)
 	prompt := orDefault(getString(wait, "queuedPrompt"), getString(resume, "prompt"))
@@ -1005,7 +1021,7 @@ func resumeWait(sid, release string) {
 	journal(sid, "resume", "launch", model, object{"mode": orDefault(launchMode, getString(resume, "mode"))})
 	updateState(func(next object) { delete(stateMap(next, "launchFailures"), sid) })
 	launchStart := time.Now()
-	result := launchClaude(cfg, launchSpec{sid: sid, model: model, prompt: prompt, cwd: launchDir, mode: launchMode, permissionMode: getString(wait, "permissionMode"), configDir: relaunchConfigDir(wait)})
+	result := launchClaude(cfg, launchSpec{sid: sid, model: model, effort: effort, prompt: prompt, cwd: launchDir, mode: launchMode, permissionMode: getString(wait, "permissionMode"), configDir: relaunchConfigDir(wait)})
 	if !result.started {
 		reportLaunchFailure(cfg, sid, model)
 		return
