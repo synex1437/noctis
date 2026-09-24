@@ -337,8 +337,13 @@ func currentUsage(now int64) usageView {
 }
 
 func oauthToken() string {
+	token, _ := oauthTokenState()
+	return token
+}
+
+func oauthTokenState() (string, string) {
 	if token := os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"); token != "" {
-		return token
+		return token, "present"
 	}
 	credentials := readJSON(files.credentials)
 	if credentials == nil && isDarwin {
@@ -347,12 +352,12 @@ func oauthToken() string {
 	oauth := getMap(credentials, "claudeAiOauth")
 	token := getString(oauth, "accessToken")
 	if token == "" {
-		return ""
+		return "", "missing"
 	}
 	if expires, ok := getNumber(oauth, "expiresAt"); ok && expires > 0 && expires < float64(time.Now().UnixMilli()) {
-		return ""
+		return "", "expired"
 	}
-	return token
+	return token, "present"
 }
 
 const claudeSecureStorageEnv = "CLAUDE_SECURESTORAGE_CONFIG_DIR"

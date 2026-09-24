@@ -106,6 +106,9 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	if fetched := numberOr(fable, "fetchedAt", 0); fetched > 0 {
 		fableText = T("status.fetchedAt", formatTime(fetched))
 	}
+	if source := getString(section(cfg, "fable"), "source"); source != "oauth" && source != "codex" {
+		fableText = T("status.scopedOff", orDefault(source, "off"))
+	}
 	if message := liveRefreshError(fable, nowSec()); message != "" {
 		fableText += T("status.error", message)
 	}
@@ -525,11 +528,7 @@ func doctorLines(cfg object) []string {
 	if profile := retunedProfile(section(cfg, "roles")); profile != "" {
 		lines = append(lines, checkLine(false, retunedNotice(profile)))
 	}
-	tokenText := T("doctor.tokenYes")
-	if oauthToken() == "" {
-		tokenText = T("doctor.tokenNo", files.credentials)
-	}
-	lines = append(lines, fixLine(oauthToken() != "", T("doctor.token", scopedLabel(cfg), tokenText), "doctor.fixToken")...)
+	lines = append(lines, tokenDoctorLines(cfg)...)
 	repaired := repairedThresholds(cfg)
 	unguarded := unguardedWindows(cfg)
 	limits := section(cfg, "thresholds")
@@ -612,6 +611,25 @@ func errorsDoctorLines() []string {
 		latest = string(runes[:160])
 	}
 	return fixLine(false, T("doctor.errors", T("doctor.errorsRecent", count, latest)), "doctor.fixErrors", files.errors)
+}
+
+func tokenDoctorLines(cfg object) []string {
+	source := getString(section(cfg, "fable"), "source")
+	if source != "oauth" {
+		return []string{checkLine(true, T("doctor.token", scopedLabel(cfg), T("doctor.tokenOff", orDefault(source, "off"))))}
+	}
+	token, state := oauthTokenState()
+	if token != "" {
+		return []string{checkLine(true, T("doctor.token", scopedLabel(cfg), T("doctor.tokenYes")))}
+	}
+	where := files.credentials
+	if isDarwin && statSafe(files.credentials) == nil {
+		where = T("doctor.keychain", keychainServiceName())
+	}
+	if state == "expired" {
+		return fixLine(false, T("doctor.token", scopedLabel(cfg), T("doctor.tokenExpired", where)), "doctor.fixTokenExpired")
+	}
+	return fixLine(false, T("doctor.token", scopedLabel(cfg), T("doctor.tokenNo", where)), "doctor.fixToken")
 }
 
 func schedulerDoctorLines() []string {
