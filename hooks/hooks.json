@@ -75,6 +75,21 @@
         ]
       }
     ],
+    "PermissionRequest": [
+      {
+        "matcher": "Read|Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/noctis",
+            "args": [
+              "hook"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PostToolBatch": [
       {
         "hooks": [
