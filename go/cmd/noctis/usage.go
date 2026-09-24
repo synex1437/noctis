@@ -730,10 +730,8 @@ func sweepStaleLocks() {
 		}
 	}
 	for _, lockFile := range lockFiles {
-		if lockAbandoned(lockFile) {
-			if err := os.Remove(lockFile); err == nil {
-				logInfo("abandoned %s removed", filepath.Base(lockFile))
-			}
+		if lockAbandoned(lockFile) && removeStaleLock(lockFile) == nil {
+			logInfo("abandoned %s removed", filepath.Base(lockFile))
 		}
 	}
 	sweepTempFiles()
@@ -784,14 +782,18 @@ func lockHolder(lockFile string) (string, time.Duration, bool) {
 	return strings.TrimSpace(string(content)), age, true
 }
 
-func holderStale(owner string, age time.Duration) bool {
+func lockOwnerPid(owner string) (int, bool) {
 	pid, parseErr := strconv.Atoi(owner)
 	if parseErr != nil {
 		if match := firstNumber.FindString(owner); match != "" {
 			pid, parseErr = strconv.Atoi(match)
 		}
 	}
-	if parseErr == nil && pid > 0 && pid != os.Getpid() {
+	return pid, parseErr == nil && pid > 0
+}
+
+func holderStale(owner string, age time.Duration) bool {
+	if pid, parsed := lockOwnerPid(owner); parsed && pid != os.Getpid() {
 		if !processAlive(pid) {
 			return age > lockDeadOwnerMs*time.Millisecond
 		}
@@ -813,16 +815,16 @@ func tryFileLock(lockFile string) (func(), bool) {
 	for attempt := 0; attempt < 2; attempt++ {
 		handle, err := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 		if err == nil {
+			holdLock(handle)
 			_, _ = handle.WriteString(strconv.Itoa(os.Getpid()))
-			return func() {
-				handle.Close()
-				_ = os.Remove(lockFile)
-			}, true
+			return func() { releaseLock(handle, lockFile) }, true
 		}
 		if !lockAbandoned(lockFile) {
 			return func() {}, false
 		}
-		_ = os.Remove(lockFile)
+		if err := removeStaleLock(lockFile); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return func() {}, false
+		}
 	}
 	return func() {}, false
 }
