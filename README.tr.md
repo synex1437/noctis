@@ -242,7 +242,7 @@ VS Code ve Cursor eklentilerinde her şey çalışır; tek fark, uzun bir beklem
 
 ## Komutlar
 
-Claude Code içinde: `/noctis:setup` (modelleri değiştirmek için yeniden çalıştırın) · `/noctis:status` (kullanım, duraklama noktaları, roller, bekleyen devamlar, son kararlar) · `/noctis:pause [dakika]` (varsayılan 60; `2 saat` gibi bir süre de yazılabilir, en fazla bir hafta: o süre boyunca limit duraklaması, yönlendirme ya da kuyruk devamı olmaz; %100'deki durdurma yine geçerlidir) · `/noctis:resume` (hemen geri açar).
+Claude Code içinde: `/noctis:setup` (modelleri değiştirmek için yeniden çalıştırın) · `/noctis:status` (kullanım, duraklama noktaları, roller, bekleyen devamlar, son kararlar) · `/noctis:pause [dakika]` (varsayılan 60; `2 saat` gibi bir süre de yazılabilir, en fazla bir hafta: o süre boyunca limit duraklaması, yönlendirme ya da kuyruk devamı olmaz; %100'deki durdurma yine geçerlidir) · `/noctis:resume` (hemen geri açar). `/noctis:setup` ve `/noctis:pause` yalnızca siz yazınca çalışır: Claude bunları kendi başına başlatamaz.
 
 `noctis` komutunun kendisi: Claude Code içinde başına `!` koyarak çalıştırın — `!noctis status`, `!noctis why`, `!noctis queue trust`, `!noctis off 30`, `!noctis on` — çünkü eklentinin `bin/` klasörü Claude Code'un kabuğunun PATH'indedir. Terminalde setup'ın yazdığı tam yolu kullanın ya da o klasörü PATH'e ekleyin. Her komut ve bayrak: [docs/REFERENCE.md](docs/REFERENCE.md#commands) (İngilizce).
 

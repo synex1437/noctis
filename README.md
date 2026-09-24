@@ -242,7 +242,7 @@ In the VS Code and Cursor extensions everything works, except that a relaunch af
 
 ## Commands
 
-Inside Claude Code: `/noctis:setup` (run again to change models) · `/noctis:status` (usage, pause points, roles, pending waits, last decisions) · `/noctis:pause [minutes]` (default 60, or a duration such as `2 hours`, at most a week: no limit pauses, routing or queue continuation for that long; the stop at 100 % still applies) · `/noctis:resume` (back on now).
+Inside Claude Code: `/noctis:setup` (run again to change models) · `/noctis:status` (usage, pause points, roles, pending waits, last decisions) · `/noctis:pause [minutes]` (default 60, or a duration such as `2 hours`, at most a week: no limit pauses, routing or queue continuation for that long; the stop at 100 % still applies) · `/noctis:resume` (back on now). `/noctis:setup` and `/noctis:pause` run only when you type them: Claude cannot start them on its own.
 
 The `noctis` command itself: inside Claude Code, run it with a leading `!` — `!noctis status`, `!noctis why`, `!noctis queue trust`, `!noctis off 30`, `!noctis on` — because the plugin's `bin/` folder is on the PATH of Claude Code's shell. In a terminal, use the full path setup prints, or add that folder to your PATH. Every command and flag: [docs/REFERENCE.md](docs/REFERENCE.md#commands).
 
