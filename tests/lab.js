@@ -6,6 +6,7 @@ const path = require('path');
 const http = require('http');
 const { spawn, spawnSync } = require('child_process');
 const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, isAlive, processTable } = require('./harness');
+const { leanChecks } = require('./lean');
 const PLUGIN_VERSION = readJson(path.join(SOURCE_ROOT, '.claude-plugin', 'plugin.json')).version;
 const REPO_SUMS = path.join(SOURCE_ROOT, 'bin', 'SHA256SUMS');
 const repoSumsAtStart = fingerprint(REPO_SUMS);
@@ -2792,6 +2793,22 @@ async function scenarioHousekeeping(acc) {
   check('uninstall restores settings', uninstall.status === 0 && !(readJson(path.join(acc.dir, 'settings.json')) || {}).statusLine, true);
 }
 
+async function scenarioLeanModule(acc) {
+  const installed = path.join(acc.dir, 'skills', PLUGIN_NAME, 'hooks');
+  check('lean: the installed copy carries the hooks module its hooks.json names', fs.existsSync(path.join(installed, 'lean.js')), true);
+  check('lean: the installed hooks.json still names that module', readJson(path.join(installed, 'hooks.json')).modules, ['./lean.js']);
+  const outcome = leanChecks();
+  if (outcome.skipped) {
+    process.stdout.write(`  lean: claude plugin validate and claude plugin test skipped (${outcome.skipped})\n`);
+    return;
+  }
+  process.stdout.write(`  lean: checked with claude ${outcome.version} (${outcome.claude})\n`);
+  for (const item of outcome.checks) {
+    results.push({ name: `lean: ${item.name}`, ok: item.ok, actual: item.ok ? 'ok' : item.detail, expected: 'ok' });
+    if (!item.ok) process.stdout.write(`  FAIL lean: ${item.name}\n${item.detail}\n`);
+  }
+}
+
 async function main() {
   await lab.startMock();
   const accA = lab.account('accountA');
@@ -2848,6 +2865,7 @@ async function main() {
     ['bug-report bundle', () => scenarioBundle(accA)],
     ['silent failures: wiring, unwritable wait, recycled pid, doctor gate', () => scenarioSilentFailures(accA)],
     ['channel: what the plugin hands Claude, and how often', () => scenarioChannelBudget(accA)],
+    ['lean compaction: the installed module, claude plugin validate and claude plugin test', () => scenarioLeanModule(accA)],
     ['housekeeping', () => scenarioHousekeeping(accA)],
   ];
   const only = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));

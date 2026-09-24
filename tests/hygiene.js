@@ -16,7 +16,7 @@ function walk(dir, visit) {
   }
 }
 
-const TEXT = /\.(go|js|json|md|ya?ml|sh|ps1|svg|txt)$/;
+const TEXT = /\.(go|js|ts|json|md|ya?ml|sh|ps1|svg|txt)$/;
 walk(ROOT, (file) => {
   if (!TEXT.test(file)) return;
   const data = fs.readFileSync(file);
@@ -59,6 +59,23 @@ if (fs.existsSync(path.join(ROOT, 'package.json'))) {
   const lockfiles = ['package-lock.json', 'npm-shrinkwrap.json', 'bun.lock', 'bun.lockb'].filter((name) => fs.existsSync(path.join(ROOT, name)));
   if (lockfiles.length) {
     problems.push(`package.json and ${lockfiles.join(', ')} at the plugin root: Claude Code would run an install in every cached copy of the plugin`);
+  }
+}
+
+{
+  const hooksFile = path.join(ROOT, 'hooks', 'hooks.json');
+  const manifest = JSON.parse(fs.readFileSync(hooksFile, 'utf8'));
+  if ('modules' in manifest) {
+    const modules = manifest.modules;
+    if (!Array.isArray(modules) || modules.length !== 1 || typeof modules[0] !== 'string' || !modules[0].trim()) {
+      problems.push(`hooks/hooks.json: "modules" must be a list naming exactly one hooks module (Claude Code refuses a second entry), not ${JSON.stringify(modules)}`);
+    } else {
+      const module = path.resolve(path.dirname(hooksFile), modules[0]);
+      const relative = path.relative(ROOT, module);
+      if (relative.startsWith('..') || path.isAbsolute(relative)) problems.push(`hooks/hooks.json names the hooks module ${modules[0]}, which is outside the plugin`);
+      else if (!fs.existsSync(module) || !fs.statSync(module).isFile()) problems.push(`hooks/hooks.json names the hooks module ${modules[0]}, which does not exist`);
+      if (!/\.(ts|tsx|jsx|js|mjs|cjs|mts|cts)$/.test(module)) problems.push(`hooks/hooks.json names the hooks module ${modules[0]}, which is not named like code, so Claude Code would not load it`);
+    }
   }
 }
 
