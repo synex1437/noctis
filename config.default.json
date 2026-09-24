@@ -155,6 +155,11 @@
     "gitSnapshot": false
   },
   "compaction": {
-    "contextPercent": 85
+    "contextPercent": 85,
+    "lean": true,
+    "compactAtPercent": 70,
+    "keepTurns": 6,
+    "maxToolResultChars": 2000,
+    "instructions": ""
   }
 }
