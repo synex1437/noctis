@@ -157,7 +157,7 @@ Install for another tool from the zip or clone: `./scripts/install.sh --host cod
 | `resume-output.log` | Output of headless relaunches, rotated at 512 KB |
 | `hooks-debug.log` | Raw hook payloads, only with `NOCTIS_DEBUG_HOOKS` |
 | `checkpoints/<sid>.md` | The checkpoint of each paused session, kept 7 days |
-| `queues/<session>.md` | Checklists noctis wrote from long prompts |
+| `queues/<session>.md` | Checklists noctis wrote from long prompts; one is removed when its job is done or you steer the session by hand, otherwise 7 days after it last changed, and never while its session waits on a pause |
 | `quiet/<session>.json` | Markers for the quiet fast path |
 | `launches/` | Relaunch scripts, pid files, selftest markers |
 | `runner.cmd` | Windows: the launcher the scheduled task runs; it switches its console to UTF-8 (code page 65001) first, so a profile path with letters such as Ç, ü or Cyrillic still resolves |
