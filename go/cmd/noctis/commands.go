@@ -491,14 +491,14 @@ func doctorLines(cfg object) []string {
 	lines := []string{checkLine(true, T("doctor.engine", platformName()))}
 
 	if disabled := numberOr(readState(), "disabledUntil", 0); disabled > float64(nowSec()) {
-		lines = append(lines, checkLine(false, T("status.disabled", formatTime(disabled))))
+		lines = append(lines, fixLine(false, T("doctor.disabled", formatTime(disabled)), "doctor.fixDisabled")...)
 	}
 	host := currentHost()
 	if host.id != "claude" {
 		return hostDoctorLines(cfg, host, lines)
 	}
-	claudePath := claudeExecutable()
-	lines = append(lines, checkLine(claudePath != "", T("doctor.claude", orDefault(claudePath, T("doctor.notFound")))))
+	claudePath := claudeLookup()
+	lines = append(lines, fixLine(claudePath != "", T("doctor.claude", orDefault(claudePath, T("doctor.notFound"))), "doctor.fixClaude")...)
 	settings := readJSONStrict(files.settings)
 	settingsText := settings.err
 	if settings.ok {
@@ -507,11 +507,20 @@ func doctorLines(cfg object) []string {
 			settingsText = T("doctor.settingsReadable")
 		}
 	}
-	lines = append(lines, checkLine(settings.ok, T("doctor.settings", settingsText)))
+	settingsRemedy := "doctor.fixSettings"
+	if settings.unopened {
+		settingsRemedy = "doctor.fixSettingsOpen"
+	}
+	lines = append(lines, fixLine(settings.ok, T("doctor.settings", settingsText), settingsRemedy, files.settings)...)
 	statusLine := getString(getMap(settings.data, "statusLine"), "command")
 	lines = append(lines, fixLine(strings.Contains(statusLine, "guard.js") || strings.Contains(statusLine, "noctis"), T("doctor.statusline", orDefault(statusLine, T("doctor.none"))), "doctor.fixStatusline")...)
 	effort := getString(getMap(settings.data, "env"), "CLAUDE_CODE_EFFORT_LEVEL")
-	lines = append(lines, fixLine(effort == getString(section(cfg, "models"), "effort"), T("doctor.effort", orDefault(effort, T("doctor.none"))), "doctor.fixSetup")...)
+	wantEffort := getString(section(cfg, "models"), "effort")
+	effortText := T("doctor.effort", orDefault(effort, T("doctor.none")))
+	if effort != wantEffort {
+		effortText = T("doctor.effortMismatch", orDefault(effort, T("doctor.none")), orDefault(wantEffort, T("doctor.none")))
+	}
+	lines = append(lines, fixLine(effort == wantEffort, effortText, "doctor.fixEffort", orDefault(wantEffort, T("doctor.none")))...)
 	lines = append(lines, fixLine(getString(settings.data, "model") != "", T("doctor.model", orDefault(getString(settings.data, "model"), T("doctor.none"))), "doctor.fixSetup")...)
 	if profile := retunedProfile(section(cfg, "roles")); profile != "" {
 		lines = append(lines, checkLine(false, retunedNotice(profile)))
@@ -546,8 +555,8 @@ func doctorLines(cfg object) []string {
 	lines = append(lines, schedulerDoctorLines()...)
 	installRoot := files.pluginRoot
 	agent := orDefault(getString(section(cfg, "router"), "agent"), "lite")
-	lines = append(lines, checkLine(statSafe(filepath.Join(installRoot, "hooks", "hooks.json")) != nil, T("doctor.pluginRoot", installRoot)))
-	lines = append(lines, checkLine(statSafe(filepath.Join(installRoot, "agents", agent+".md")) != nil, T("doctor.agent", agent)))
+	lines = append(lines, fixLine(statSafe(filepath.Join(installRoot, "hooks", "hooks.json")) != nil, T("doctor.pluginRoot", installRoot), "doctor.fixPluginRoot")...)
+	lines = append(lines, fixLine(statSafe(filepath.Join(installRoot, "agents", agent+".md")) != nil, T("doctor.agent", agent), "doctor.fixAgent")...)
 	for _, issue := range unguardedAgentTools(cfg) {
 		lines = append(lines, checkLine(false, issue))
 	}
@@ -614,15 +623,21 @@ func schedulerDoctorLines() []string {
 	return lines
 }
 
+var claudeLookup = claudeExecutable
+
 func doctorConfigLines(cfg object) []string {
+	return configDoctorLines(cfg, "doctor.fixSetup")
+}
+
+func configDoctorLines(cfg object, missingRemedy string, values ...any) []string {
 	configText := files.config
-	remedy := "doctor.fixSetup"
+	remedy := missingRemedy
 	configError := getString(cfg, "configError")
 	if configError != "" {
 		configText += " (" + configError + ")"
-		remedy = "doctor.fixConfig"
+		remedy, values = "doctor.fixConfig", nil
 	}
-	return fixLine(statSafe(files.config) != nil && configError == "", T("doctor.config", configText), remedy)
+	return fixLine(statSafe(files.config) != nil && configError == "", T("doctor.config", configText), remedy, values...)
 }
 
 func runDoctor() {
@@ -1242,18 +1257,14 @@ func probeHook(binary string, arguments []string, stdin string) bool {
 
 func hostDoctorLines(cfg object, host hostSpec, lines []string) []string {
 	exe := hostExecutable(host.id)
-	lines = append(lines, checkLine(exe != "", T("doctor.host", host.display, orDefault(exe, T("doctor.notFound")))))
+	lines = append(lines, fixLine(exe != "", T("doctor.host", host.display, orDefault(exe, T("doctor.notFound"))), "doctor.fixHost", host.display, host.exe)...)
 	wired, where := hostHooksWired(host.id, files.configDir)
-	lines = append(lines, checkLine(wired, T("doctor.hostHooks", where)))
+	lines = append(lines, fixLine(wired, T("doctor.hostHooks", where), "doctor.fixHostSetup", host.id)...)
 	if host.id == "antigravity" {
 		statusLine := getString(getMap(readJSON(files.settings), "statusLine"), "command")
-		lines = append(lines, checkLine(strings.Contains(statusLine, "noctis"), T("doctor.statusline", orDefault(statusLine, T("doctor.none")))))
+		lines = append(lines, fixLine(strings.Contains(statusLine, "noctis"), T("doctor.statusline", orDefault(statusLine, T("doctor.none"))), "doctor.fixHostSetup", host.id)...)
 	}
-	configText := files.config
-	if configError := getString(cfg, "configError"); configError != "" {
-		configText += " (" + configError + ")"
-	}
-	lines = append(lines, checkLine(statSafe(files.config) != nil && getString(cfg, "configError") == "", T("doctor.config", configText)))
+	lines = append(lines, configDoctorLines(cfg, "doctor.fixHostSetup", host.id)...)
 	switch host.id {
 	case "codex":
 		fable := readJSON(files.fable)
