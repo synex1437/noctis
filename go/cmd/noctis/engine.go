@@ -229,20 +229,26 @@ func parseQueueEntries(content string) ([]queueEntry, bool) {
 			break
 		}
 	}
-	entries := []queueEntry{}
+	type draft struct {
+		checked bool
+		text    strings.Builder
+	}
+	drafts := []*draft{}
 	open := false
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(strings.TrimRight(line, "\r"))
-		var entry queueEntry
-		var ok bool
+		var text string
+		var checked, ok bool
 		if hasBoxes {
-			entry, ok = parseQueueLine(line, len(entries)+1)
+			text, checked, ok = queueLineParts(line)
 		} else {
-			entry, ok = parseQueueBullet(line, len(entries)+1)
+			text, checked, ok = queueBulletParts(line)
 		}
 		switch {
 		case ok:
-			entries = append(entries, entry)
+			item := &draft{checked: checked}
+			item.text.WriteString(text)
+			drafts = append(drafts, item)
 			open = true
 		case trimmed == "" || queueHeading.MatchString(trimmed) || strings.HasPrefix(trimmed, "```"):
 			open = false
@@ -250,9 +256,14 @@ func parseQueueEntries(content string) ([]queueEntry, bool) {
 		case open && hasBoxes && queueBulletPattern.MatchString(trimmed):
 			open = false
 		case open:
-			last := &entries[len(entries)-1]
-			*last = newQueueEntry(last.ordinal, last.text+" "+trimmed, last.checked)
+			last := drafts[len(drafts)-1]
+			last.text.WriteByte(' ')
+			last.text.WriteString(trimmed)
 		}
+	}
+	entries := make([]queueEntry, 0, len(drafts))
+	for index, item := range drafts {
+		entries = append(entries, newQueueEntry(index+1, item.text.String(), item.checked))
 	}
 	return entries, !hasBoxes && len(entries) > 0
 }
@@ -266,21 +277,37 @@ type queueEntry struct {
 	after    []string
 }
 
-func parseQueueLine(line string, ordinal int) (queueEntry, bool) {
+func queueLineParts(line string) (text string, checked, ok bool) {
 	match := queueItemPattern.FindStringSubmatch(strings.TrimRight(line, "\r"))
 	if match == nil {
+		return "", false, false
+	}
+	return strings.TrimSpace(match[3]), match[1] != "", true
+}
+
+func queueBulletParts(line string) (text string, checked, ok bool) {
+	match := queueBulletPattern.FindStringSubmatch(strings.TrimRight(line, "\r"))
+	if match == nil {
+		return "", false, false
+	}
+	text = strings.TrimSpace(match[1])
+	return text, queueDoneMarker.MatchString(text), true
+}
+
+func parseQueueLine(line string, ordinal int) (queueEntry, bool) {
+	text, checked, ok := queueLineParts(line)
+	if !ok {
 		return queueEntry{}, false
 	}
-	return newQueueEntry(ordinal, match[3], match[1] != ""), true
+	return newQueueEntry(ordinal, text, checked), true
 }
 
 func parseQueueBullet(line string, ordinal int) (queueEntry, bool) {
-	match := queueBulletPattern.FindStringSubmatch(strings.TrimRight(line, "\r"))
-	if match == nil {
+	text, checked, ok := queueBulletParts(line)
+	if !ok {
 		return queueEntry{}, false
 	}
-	text := strings.TrimSpace(match[1])
-	return newQueueEntry(ordinal, text, queueDoneMarker.MatchString(text)), true
+	return newQueueEntry(ordinal, text, checked), true
 }
 
 func newQueueEntry(ordinal int, text string, checked bool) queueEntry {
