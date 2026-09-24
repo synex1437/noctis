@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -159,7 +160,11 @@ func TestAWindowThatPausesAgainIsRelaunchedWhileItsFirstRunnerStillWatchesIt(t *
 	bin := t.TempDir()
 	calls, gate, open := filepath.Join(bin, "calls.log"), filepath.Join(bin, "gate"), filepath.Join(bin, "open")
 	t.Setenv("NOCTIS_TEST_CALLS", calls)
-	writeScript(t, filepath.Join(bin, "claude"), "#!/bin/sh\nprintf '%s %s\\n' \"$$\" \"$*\" >> \"$NOCTIS_TEST_CALLS\"\n"+promptLine+"\nwhile :; do sleep 1; done\n")
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeScript(t, filepath.Join(bin, "claude"), "#!/bin/sh\nprintf '%s %s\\n' \"$$\" \"$*\" >> \"$NOCTIS_TEST_CALLS\"\n"+promptLine+"\nexec "+shellQuote(standInNamed(t, sleep, "claude"))+" 3600\n")
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	terminal := "(while [ -f " + shellQuote(gate) + " ] && [ ! -f " + shellQuote(open) + " ]; do sleep 0.1; done; sh {script}) >/dev/null 2>&1 &"
 	mustWriteJSON(files.config, object{"resume": object{"mode": "window", "terminal": terminal, "prompt": "carry on"}, "alarm": object{"enabled": false}})
@@ -369,38 +374,84 @@ func TestATerminalThatStaysInTheForegroundKeepsTheSessionAndRecordsItWhileItRuns
 	}
 }
 
+var terminalOpeners = []struct {
+	name, opener string
+	darwin       bool
+}{
+	{"an X terminal", "x-terminal-emulator", false},
+	{"Terminal.app", "osascript", true},
+}
+
+func openerOnPlatform(t *testing.T, darwin bool) {
+	t.Helper()
+	previous := isDarwin
+	t.Cleanup(func() { isDarwin = previous })
+	isDarwin = darwin
+}
+
+func forkingOpener(darwin bool) string {
+	if !darwin {
+		return "#!/bin/sh\nshift\n\"$@\" </dev/null >/dev/null 2>&1 &\nexit 0\n"
+	}
+	return strings.Join([]string{
+		"#!/bin/sh",
+		`prefix='tell application "Terminal" to do script "'`,
+		`if [ "$#" -ne 4 ] || [ "$1" != -e ] || [ "$3" != -e ] || [ "$4" != 'tell application "Terminal" to activate' ]; then echo "osascript: unexpected arguments: $*" >&2; exit 1; fi`,
+		`case "$2" in "$prefix"*'"') ;; *) echo "osascript: not a do script command: $2" >&2; exit 1 ;; esac`,
+		`literal=${2#"$prefix"}`,
+		`literal=${literal%'"'}`,
+		`command=`,
+		`while [ -n "$literal" ]; do`,
+		`  rest=${literal#?}; char=${literal%"$rest"}`,
+		`  if [ "$char" = '\' ]; then literal=$rest; rest=${literal#?}; char=${literal%"$rest"}; fi`,
+		`  command=$command$char; literal=$rest`,
+		`done`,
+		`sh -c "$command" </dev/null >/dev/null 2>&1 &`,
+		`exit 0`,
+		"",
+	}, "\n")
+}
+
 func TestATerminalThatFailsAtOnceFallsBackToHeadlessWithoutWaiting(t *testing.T) {
-	home, bin, calls := terminalSandbox(t)
-	writeStub(t, bin, "x-terminal-emulator", "#!/bin/sh\nexit 1\n")
-	started := time.Now()
-	if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: "fail1", cwd: home, prompt: "carry on"}).started {
-		t.Fatal("the headless fallback did not run")
-	}
-	if elapsed := time.Since(started); elapsed > launchPidTimeout {
-		t.Fatalf("a terminal that exited 1 at once kept the runner waiting %s", elapsed)
-	}
-	if runs, _ := terminalRuns(t, calls); len(runs) != 1 || !strings.HasPrefix(runs[0], "-p ") {
-		t.Fatalf("expected one headless run after the terminal failed, claude ran %q", runs)
+	for index, terminal := range terminalOpeners {
+		t.Run(terminal.name, func(t *testing.T) {
+			home, bin, calls := terminalSandbox(t)
+			openerOnPlatform(t, terminal.darwin)
+			writeStub(t, bin, terminal.opener, "#!/bin/sh\nexit 1\n")
+			started := time.Now()
+			if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: fmt.Sprintf("fail%d", index+1), cwd: home, prompt: "carry on"}).started {
+				t.Fatal("the headless fallback did not run")
+			}
+			if elapsed := time.Since(started); elapsed > launchPidTimeout {
+				t.Fatalf("a terminal that exited 1 at once kept the runner waiting %s", elapsed)
+			}
+			if runs, _ := terminalRuns(t, calls); len(runs) != 1 || !strings.HasPrefix(runs[0], "-p ") {
+				t.Fatalf("expected one headless run after %s failed, claude ran %q", terminal.opener, runs)
+			}
+		})
 	}
 }
 
 func TestATerminalThatForksAndReturnsIsRecorded(t *testing.T) {
-	home, bin, calls := terminalSandbox(t)
-	writeStub(t, bin, "x-terminal-emulator", "#!/bin/sh\nshift\n\"$@\" </dev/null >/dev/null 2>&1 &\nexit 0\n")
-	if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: "fork1", cwd: home, prompt: "carry on"}).started {
-		t.Fatal("the window relaunch reported failure")
-	}
-	runs, recorded := terminalRuns(t, calls)
-	if len(runs) != 1 || strings.HasPrefix(runs[0], "-p ") || !recorded {
-		t.Fatalf("expected one recorded interactive run, claude ran %q (recorded=%t)", runs, recorded)
+	for index, terminal := range terminalOpeners {
+		t.Run(terminal.name, func(t *testing.T) {
+			home, bin, calls := terminalSandbox(t)
+			openerOnPlatform(t, terminal.darwin)
+			writeStub(t, bin, terminal.opener, forkingOpener(terminal.darwin))
+			if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: fmt.Sprintf("fork%d", index+1), cwd: home, prompt: "carry on"}).started {
+				t.Fatal("the window relaunch reported failure")
+			}
+			runs, recorded := terminalRuns(t, calls)
+			if len(runs) != 1 || strings.HasPrefix(runs[0], "-p ") || !recorded {
+				t.Fatalf("expected one recorded interactive run through %s, claude ran %q (recorded=%t)", terminal.opener, runs, recorded)
+			}
+		})
 	}
 }
 
 func TestXfceTerminalIsHandedTheLauncherAsACommandLineItAccepts(t *testing.T) {
-	if isDarwin {
-		t.Skip("macOS opens Terminal.app, not an X terminal")
-	}
 	home, bin, calls := terminalSandbox(t)
+	openerOnPlatform(t, false)
 	writeStub(t, bin, "xfce4-terminal", strings.Join([]string{
 		"#!/bin/sh",
 		`case "$1" in`,
