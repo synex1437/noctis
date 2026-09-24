@@ -1699,6 +1699,10 @@ func wakeSameSession(cfg object, sid string, record object, resumeAt float64) {
 			logInfo("wake %s: limit still active (%s %s%%), leaving it to the runner", sid, check.wait.label, formatNumber(check.wait.used))
 			return
 		}
+		if check.fableHit {
+			logInfo("wake %s: %s is over its pause point, leaving it to the runner, which relaunches on the fallback role", sid, scopedLabel(cfg))
+			return
+		}
 	}
 	updateState(func(next object) {
 		if current := getMap(getMap(next, "waits"), sid); current != nil {
