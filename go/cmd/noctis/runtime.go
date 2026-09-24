@@ -876,7 +876,7 @@ func resumeWait(sid, release string) {
 			plan := result.wait
 			if !rescheduleOwnWait(sid, startedAt, func(record object) {
 				record["until"], record["resumeAt"], record["label"], record["window"] = plan.until, resumeAt, plan.label, plan.window
-				record["hit"], record["used"], record["threshold"] = plan.hit, plan.used, plan.threshold
+				record["hit"], record["cause"], record["used"], record["threshold"] = plan.hit, plan.cause, plan.used, plan.threshold
 				record["startedAt"] = float64(now)
 				delete(record, "earlyTriggeredAt")
 			}) {

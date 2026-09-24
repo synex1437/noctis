@@ -33,22 +33,47 @@ func ceilingHit(cfg object, usage usageView) *waitPlan {
 	var worst *waitPlan
 	for _, key := range []string{"five_hour", "seven_day"} {
 		win := usage.byKey(key)
-		if win == nil || win.used < ceiling {
+		cause := windowHit(win, ceiling)
+		if cause == "" {
 			continue
 		}
 		if worst == nil || win.resetsAt > worst.until {
-			worst = &waitPlan{window: key, label: windowLabel(key), used: win.used, threshold: ceiling, until: win.resetsAt, hit: "ceiling"}
+			worst = &waitPlan{window: key, label: windowLabel(key), used: win.used, threshold: ceiling, until: win.resetsAt, hit: "ceiling", cause: cause}
 		}
 	}
 	return worst
+}
+
+func stopPoint(cfg object, threshold string) (float64, bool) {
+	limit, guarded := thresholdEnabled(cfg, threshold)
+	if paidCreditsAllowed(cfg) {
+		return limit, guarded
+	}
+	if ceiling := creditCeiling(cfg); !guarded || ceiling < limit {
+		return ceiling, true
+	}
+	return limit, true
+}
+
+func nearCeiling(cfg object, usage usageView) bool {
+	if paidCreditsAllowed(cfg) {
+		return false
+	}
+	edge := creditCeiling(cfg) - nearEdgeBand
+	return (usage.fiveHour != nil && usage.fiveHour.used >= edge) || (usage.sevenDay != nil && usage.sevenDay.used >= edge)
 }
 
 func guardPaused(cfg, state object, now int64) bool {
 	if numberOr(state, "disabledUntil", 0) <= float64(now) {
 		return false
 	}
-	if ceilingHit(cfg, currentUsage(now)) != nil {
-		warn("the guard is paused, but usage is at the ceiling: refusing to spend paid credits")
+	usage := currentUsage(now)
+	if nearCeiling(cfg, usage) {
+		refreshFable(cfg, now, "paused-ceiling", edgePollSeconds(cfg, usage), false)
+		usage = currentUsage(now)
+	}
+	if ceilingHit(cfg, usage) != nil {
+		warn("the guard is paused, but usage is at the paid-credit ceiling or about to cross it: refusing to spend paid credits")
 		return false
 	}
 	return true

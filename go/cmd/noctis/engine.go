@@ -1655,7 +1655,12 @@ func recordTree(cfg object, record object, cwd string) {
 
 func hitLabel(wait *waitPlan) string {
 	switch wait.hit {
-	case "burst", "compaction", "blind", "projection", "budget", "ceiling":
+	case "ceiling":
+		if wait.used < wait.threshold {
+			return T("hit.ceilingSoon")
+		}
+		return T("hit.ceiling")
+	case "burst", "compaction", "blind", "projection", "budget":
 		return T("hit." + wait.hit)
 	}
 	return T("hit.threshold", formatNumber(wait.threshold))
@@ -1726,7 +1731,7 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 		queuedPrompt = truncateText(getString(input, "prompt"), 4000)
 	}
 	record := object{
-		"kind": kind, "window": wait.window, "label": wait.label, "used": wait.used, "threshold": wait.threshold, "hit": wait.hit,
+		"kind": kind, "window": wait.window, "label": wait.label, "used": wait.used, "threshold": wait.threshold, "hit": wait.hit, "cause": wait.cause,
 		"until": wait.until, "resumeAt": resumeAt, "inHook": inHook, "cwd": getString(input, "cwd"),
 		"transcript": getString(input, "transcript_path"), "checkpoint": checkpoint, "queuedPrompt": queuedPrompt,
 		"startedAt": float64(now), "heartbeat": float64(now), "permissionMode": permissionModeOf(input),
@@ -1821,12 +1826,15 @@ func savedNotice(cfg object, label, used, at, suffix string) string {
 }
 
 func blindWindow(cfg object, snapshot usageView) (key string, threshold float64, guarded bool) {
-	fiveLimit, fiveGuarded := thresholdEnabled(cfg, "session5h")
-	weekLimit, weekGuarded := thresholdEnabled(cfg, "weeklyAll")
-	if fiveGuarded && (!weekGuarded || (snapshot.fiveHour != nil && snapshot.fiveHour.used >= fiveLimit-nearEdgeBand)) {
+	fiveLimit, fiveGuarded := stopPoint(cfg, "session5h")
+	weekLimit, weekGuarded := stopPoint(cfg, "weeklyAll")
+	switch {
+	case fiveGuarded && snapshot.fiveHour != nil && snapshot.fiveHour.used >= fiveLimit-nearEdgeBand:
 		return "five_hour", fiveLimit, true
+	case weekGuarded && snapshot.sevenDay != nil && snapshot.sevenDay.used >= weekLimit-nearEdgeBand:
+		return "seven_day", weekLimit, true
 	}
-	return "seven_day", weekLimit, weekGuarded
+	return "seven_day", weekLimit, false
 }
 
 func handleFableHit(kind string, input object, cfg object, result decision) string {

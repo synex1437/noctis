@@ -10,6 +10,7 @@
   "hit.projection": "오래된 데이터 기반 소비 예측",
   "hit.budget": "일일 예산",
   "hit.ceiling": "사용량 한도 도달(유료 크레딧 거부)",
+  "hit.ceilingSoon": "사용량 한도 도달 임박(유료 크레딧 거부)",
   "hit.threshold": "임계값 %s%%",
   "wait.reason": "%s 창 %s%%(%s), 초기화 %s",
   "wait.resumed": "⏸ %s 한도 %s%%: %s 대기 후 계속합니다.",

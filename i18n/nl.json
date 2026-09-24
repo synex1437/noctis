@@ -10,6 +10,7 @@
   "hit.projection": "verbruiksprojectie op oude data",
   "hit.budget": "dagbudget",
   "hit.ceiling": "gebruikslimiet bereikt (betaalde credits geweigerd)",
+  "hit.ceilingSoon": "gebruikslimiet bijna bereikt (betaalde credits geweigerd)",
   "hit.threshold": "drempel %s%%",
   "wait.reason": "%s-venster %s%% (%s), reset %s",
   "wait.resumed": "⏸ %s-limiet %s%%: %s gewacht, we gaan door.",
