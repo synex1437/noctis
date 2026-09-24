@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -68,14 +69,34 @@ func dispatchCommand() string {
 	return "hook"
 }
 
-func runHelp() {
-	fmt.Println(T("help.usage", pluginName, pluginVersion))
+var plumbingCommands = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "release-check": true, "selftest-mark": true, "state-write": true}
+
+func userCommands() []string {
+	names := []string{}
 	for _, name := range sortedKeys(ported) {
-		if key := "help.cmd." + name; T(key) != key {
-			fmt.Printf("  %-14s %s\n", name, T(key))
+		if !plumbingCommands[name] {
+			names = append(names, name)
 		}
 	}
+	return names
+}
+
+func helpKey(command string) string {
+	return "help.cmd." + strings.ReplaceAll(command, "-", "")
+}
+
+func runHelp() {
+	fmt.Println(T("help.usage", pluginName, pluginVersion))
+	for _, name := range userCommands() {
+		fmt.Printf("  %-17s %s\n", name, T(helpKey(name)))
+	}
 	fmt.Println(T("help.more"))
+}
+
+func offeredCommands() string {
+	names := append(userCommands(), "help")
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 func main() {
@@ -97,6 +118,9 @@ func main() {
 		case helpAsked():
 			runHelp()
 			return
+		case versionAsked():
+			runVersion()
+			return
 		case startedByHost[dispatchCommand()]:
 			os.Exit(0)
 		}
@@ -108,6 +132,10 @@ func main() {
 		runHelp()
 		return
 	}
+	if versionAsked() {
+		runVersion()
+		return
+	}
 	cfg := loadConfig()
 	resolveHost(cfg)
 	setLocale(cfg)
@@ -115,7 +143,7 @@ func main() {
 	command = dispatchCommand()
 	run, ok := ported[command]
 	if !ok {
-		fmt.Fprintln(os.Stderr, T("unknownCommand", command, strings.Join(sortedKeys(ported), ", ")))
+		fmt.Fprintln(os.Stderr, T("unknownCommand", command, offeredCommands()))
 		os.Exit(1)
 	}
 	if host := unknownHost(); host != "" && !startedByHost[command] {
@@ -128,6 +156,16 @@ func main() {
 }
 
 var startedByHost = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "ensure": true, "release-check": true, "webhook": true, "selftest-mark": true, "state-write": true}
+
+func versionAsked() bool {
+	switch positional(0) {
+	case "":
+		return args.present["version"]
+	case "-v", "-V":
+		return true
+	}
+	return false
+}
 
 func helpAsked() bool {
 	if args.present["help"] || args.present["h"] || positional(0) == "help" {

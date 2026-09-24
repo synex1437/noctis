@@ -336,6 +336,8 @@
   "args.noValue": "%s não aceita valor",
   "args.badValue": "%s %s: use um de %s",
   "args.usage": "nada foi alterado; noctis %s aceita %s",
+  "help.cmd.classify": "mostrar em JSON o veredito do roteador sobre um pedido",
+  "help.cmd.schedulepreview": "mostrar o que uma reinicialização registraria no agendador, sem registrar nada",
   "help.usage": "%s %s — mantém uma sessão de programação com IA dentro dos seus limites de uso.\n\nUso: noctis <comando> [--flags]\n",
   "help.more": "\nFlags por comando: docs/REFERENCE.md. Diagnostique uma instalação com: noctis doctor",
   "help.cmd.status": "o que o plugin vê agora: uso, janelas, esperas",

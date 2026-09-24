@@ -336,6 +336,8 @@
   "args.noValue": "%s no lleva valor",
   "args.badValue": "%s %s: usa uno de %s",
   "args.usage": "no se ha cambiado nada; noctis %s acepta %s",
+  "help.cmd.classify": "mostrar en JSON el veredicto del enrutador sobre una petición",
+  "help.cmd.schedulepreview": "mostrar lo que un reinicio registraría en el programador, sin registrarlo",
   "help.usage": "%s %s — mantiene una sesión de programación con IA dentro de sus límites de uso.\n\nUso: noctis <comando> [--flags]\n",
   "help.more": "\nFlags por comando: docs/REFERENCE.md. Diagnostica una instalación con: noctis doctor",
   "help.cmd.status": "lo que el plugin ve ahora mismo: uso, ventanas, esperas",

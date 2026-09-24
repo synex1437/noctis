@@ -336,6 +336,8 @@
   "args.noValue": "%s لا يأخذ قيمة",
   "args.badValue": "%s %s: استخدم واحدًا من %s",
   "args.usage": "لم يتغيّر شيء؛ يقبل noctis %s الخيارات: %s",
+  "help.cmd.classify": "طباعة حكم الموجِّه على طلب بصيغة JSON",
+  "help.cmd.schedulepreview": "عرض ما ستسجّله إعادة التشغيل لدى المجدول، دون تسجيله",
   "help.usage": "%s %s — يبقي جلسة البرمجة بالذكاء الاصطناعي ضمن حدود استخدامها.\n\nالاستخدام: noctis <أمر> [--flags]\n",
   "help.more": "\nخيارات كل أمر: docs/REFERENCE.md. لتشخيص التثبيت: noctis doctor",
   "help.cmd.status": "ما تراه الإضافة الآن: الاستخدام والنوافذ والانتظارات",

@@ -336,6 +336,8 @@
   "args.noValue": "%s 不接受值",
   "args.badValue": "%s %s：可选值为 %s",
   "args.usage": "未做任何更改；noctis %s 可用的选项：%s",
+  "help.cmd.classify": "以 JSON 输出路由对某条请求的判定",
+  "help.cmd.schedulepreview": "显示一次重启会向调度器登记的内容，但不真正登记",
   "help.usage": "%s %s — 让 AI 编程会话保持在用量限额之内。\n\n用法：noctis <命令> [--flags]\n",
   "help.more": "\n各命令的参数：docs/REFERENCE.md。诊断安装：noctis doctor",
   "help.cmd.status": "插件此刻看到的情况：用量、窗口、等待",
