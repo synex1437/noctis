@@ -179,6 +179,8 @@
   "lean.early": "开启，上下文达到 %s 时提前压缩",
   "lean.noEarly": "开启，不提前压缩 (compaction.compactAtPercent 已关闭)",
   "lean.off": "关闭 (compaction.lean 为 false)",
+  "lean.trimmed": " · 已精简的压缩：%d 次，约 %s 个字符",
+  "lean.trimmedNone": " · 尚未精简任何压缩",
   "doctor.leanSwitch": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS：%s",
   "doctor.fixLeanSwitch": "精简压缩已开启，但 Claude Code 不会加载它的模块：运行 /noctis:setup（开关缺失时它会写入 1），或自己在 settings.json → env 中设为 1；或把 compaction.lean 设为 false",
   "doctor.credits": "付费用量额度：%s",

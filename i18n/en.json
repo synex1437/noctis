@@ -179,6 +179,8 @@
   "lean.early": "on, compacts early at %s of the context",
   "lean.noEarly": "on, no early compaction (compaction.compactAtPercent is off)",
   "lean.off": "off (compaction.lean is false)",
+  "lean.trimmed": " · compactions trimmed: %d, ~%s characters",
+  "lean.trimmedNone": " · no compaction trimmed yet",
   "doctor.leanSwitch": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: %s",
   "doctor.fixLeanSwitch": "lean compaction is on but Claude Code will not load its module: run /noctis:setup (it writes 1 when the switch is missing), or set it to 1 in settings.json → env yourself; or set compaction.lean to false",
   "doctor.credits": "paid usage credits: %s",

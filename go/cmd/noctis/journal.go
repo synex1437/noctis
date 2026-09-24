@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -49,23 +50,53 @@ func observed(sid, event, action, reason string, extra object) bool {
 	return true
 }
 
+type whyLine struct {
+	at    float64
+	raw   string
+	entry object
+}
+
+func whyLines(count int) []whyLine {
+	merged := []whyLine{}
+	last := 0.0
+	for _, line := range tailFileLines(files.decisions, count) {
+		var entry object
+		if jsonUnmarshalObject([]byte(line), &entry) != nil {
+			entry = nil
+		}
+		last = numberOr(entry, "at", last)
+		merged = append(merged, whyLine{at: last, raw: line, entry: entry})
+	}
+	for _, compaction := range leanCompactions(count) {
+		entry := compactionJournalEntry(compaction)
+		merged = append(merged, whyLine{at: numberOr(entry, "at", 0), raw: string(marshalCompact(entry)), entry: entry})
+	}
+	sort.SliceStable(merged, func(a, b int) bool { return merged[a].at < merged[b].at })
+	if len(merged) > count {
+		merged = merged[len(merged)-count:]
+	}
+	return merged
+}
+
 func runWhy() {
 	count := 20
 	if value, ok := toNumber(flagString("last")); ok && value >= 1 {
 		count = int(value)
 	}
-	lines := tailFileLines(files.decisions, count)
+	lines := whyLines(count)
 	if len(lines) == 0 {
 		fmt.Println(T("why.empty"))
 		return
 	}
 	if args.present["json"] {
-		fmt.Println(strings.Join(lines, "\n"))
+		for _, line := range lines {
+			fmt.Println(line.raw)
+		}
 		return
 	}
 	for _, line := range lines {
-		var entry object
-		if err := jsonUnmarshalObject([]byte(line), &entry); err != nil || entry == nil {
+		entry := line.entry
+		if entry == nil {
 			continue
 		}
 		facts := []string{}
