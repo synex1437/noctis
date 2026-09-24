@@ -1022,7 +1022,8 @@ func evaluate(cfg object, usage usageView, model string, contextPercent float64,
 		}
 		if win != nil && validThreshold(spec.threshold) {
 			band := math.Min(warnBandMax, math.Max(warnBand, 2*win.burst))
-			if win.used >= limit-band {
+			nearest := result.warnWindow == nil || limit-win.used < result.warnWindow.threshold-result.warnWindow.used
+			if win.used >= limit-band && nearest {
 				result.warnWindow = &warnPlan{window: spec.key, label: spec.label, used: win.used, threshold: limit, resetsAt: win.resetsAt}
 			}
 		}
