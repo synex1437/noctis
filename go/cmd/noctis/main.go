@@ -188,7 +188,7 @@ func helpAsked() bool {
 		return true
 	}
 	for _, word := range args.positional {
-		if word == "-h" || word == "-help" {
+		if word == "-h" || word == "-help" || word == "-?" {
 			return true
 		}
 	}
