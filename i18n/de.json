@@ -336,6 +336,8 @@
   "args.noValue": "%s nimmt keinen Wert",
   "args.badValue": "%s %s: erlaubt ist eines von %s",
   "args.usage": "nichts wurde geändert; noctis %s kennt %s",
+  "help.cmd.classify": "das Urteil des Routers zu einer Anfrage als JSON ausgeben",
+  "help.cmd.schedulepreview": "zeigen, was ein Neustart beim Scheduler eintragen würde, ohne es einzutragen",
   "help.usage": "%s %s — hält eine KI-Coding-Sitzung innerhalb ihrer Nutzungslimits.\n\nAufruf: noctis <Befehl> [--flags]\n",
   "help.more": "\nFlags pro Befehl: docs/REFERENCE.md. Ein Setup prüfen mit: noctis doctor",
   "help.cmd.status": "was das Plugin gerade sieht: Nutzung, Fenster, Wartezeiten",

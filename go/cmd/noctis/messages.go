@@ -368,6 +368,9 @@ func baseCatalog() map[string]map[string]string {
 			"args.badValue":            "%s %s: use one of %s",
 			"args.usage":               "nothing was changed; noctis %s takes %s",
 
+			"help.cmd.classify":        "print the router's verdict for a prompt as JSON",
+			"help.cmd.schedulepreview": "print what a relaunch would register with the scheduler, without registering it",
+
 			"help.usage":              "%s %s — keeps an AI coding session inside its usage limits.\n\nUsage: noctis <command> [--flags]\n",
 			"help.more":               "\nFlags per command: docs/REFERENCE.md. Diagnose a setup with: noctis doctor",
 			"help.cmd.status":         "what the plugin sees right now: usage, windows, waits",
@@ -750,6 +753,9 @@ func baseCatalog() map[string]map[string]string {
 			"args.noValue":             "%s değer almaz",
 			"args.badValue":            "%s %s: şunlardan biri olmalı: %s",
 			"args.usage":               "hiçbir şey değişmedi; noctis %s şu bayrakları alır: %s",
+
+			"help.cmd.classify":        "bir istem için yönlendiricinin kararını JSON olarak yazar",
+			"help.cmd.schedulepreview": "bir yeniden başlatmanın zamanlayıcıya kaydedeceği işi, kaydetmeden gösterir",
 
 			"help.usage":              "%s %s — yapay zekâ oturumunu kullanım limitlerinin içinde tutar.\n\nKullanım: noctis <komut> [--flags]\n",
 			"help.more":               "\nKomut bayrakları: docs/REFERENCE.md. Kurulumu denetlemek için: noctis doctor",

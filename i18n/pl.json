@@ -336,6 +336,8 @@
   "args.noValue": "%s nie przyjmuje wartości",
   "args.badValue": "%s %s: użyj jednej z wartości %s",
   "args.usage": "nic nie zostało zmienione; noctis %s przyjmuje %s",
+  "help.cmd.classify": "wypisać jako JSON werdykt routera dla polecenia",
+  "help.cmd.schedulepreview": "pokazać, co wznowienie zarejestrowałoby w harmonogramie, bez rejestrowania",
   "help.usage": "%s %s — utrzymuje sesję programowania z AI w granicach jej limitów zużycia.\n\nUżycie: noctis <polecenie> [--flags]\n",
   "help.more": "\nFlagi poszczególnych poleceń: docs/REFERENCE.md. Diagnostyka instalacji: noctis doctor",
   "help.cmd.status": "co wtyczka widzi w tej chwili: zużycie, okna, oczekiwania",
