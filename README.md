@@ -111,7 +111,7 @@ One task per line, in the folder where you start `claude`:
 - [ ] update README for the new CLI flags
 ```
 
-That is the whole format. Claude takes the first open item, ticks it `- [x]` when done, and moves on without asking; once every item is ticked it stops, with `✔ Queue finished` if noctis had to push the list along (always for a checklist noctis wrote itself). Sloppy lists are accepted (`-[ ]`, `* [ ]`, `1. [ ]`, `[]`, `TODO:`), and an item wrapped over several lines is one item. In a checkbox list an item is done when its box is ticked (`[x]`, `[X]`, `[✓]`, `[✔]`). A plain bullet list without boxes works too: there `~~struck~~`, `(done)`, `✓` and `✔` mark an item finished, and Claude is asked to rewrite the list with checkboxes first.
+That is the whole format. Claude takes the first open item, ticks it `- [x]` when done, and moves on without asking; once every item is ticked it stops, with `✔ Queue finished` if noctis had to push the list along (always for a checklist noctis wrote itself). Sloppy lists are accepted (`-[ ]`, `* [ ]`, `1. [ ]`, `[]`, `TODO:`), and an item wrapped over several lines is one item. Lines inside a fenced code block (```` ``` ```` or `~~~`) are examples, not items. In a checkbox list an item is done when its box is ticked (`[x]`, `[X]`, `[✓]`, `[✔]`). A plain bullet list without boxes works too: there `~~struck~~`, `(done)`, `✓` and `✔` mark an item finished, and Claude is asked to rewrite the list with checkboxes first.
 
 Priorities and dependencies:
 
@@ -121,7 +121,7 @@ Priorities and dependencies:
 - [ ] deploy (after 2)
 ```
 
-`(P0)`–`(P9)` orders the work (default P5, lower first) and `#name` tags an item. Tags are ASCII — a letter, then letters, digits, `_` or `-`: `#café` is read as `#caf`, and an `(after #café)` then matches nothing and is ignored. `(after #tag)` or `(after 3)` waits until the referenced items are checked; `(after 2)` means the 2nd item in the file. The Stop hook hands Claude the highest-priority eligible item, says how many are still waiting, and stops cleanly when all are blocked or done. A reference that matches nothing is ignored, so a typo never deadlocks a night.
+`(P0)`–`(P9)` orders the work (default P5, lower first) and `#name` tags an item. Tags are ASCII — a letter, then letters, digits, `_` or `-`: `#café` is read as `#caf`, and an `(after #café)` then matches nothing and is ignored. `(after #tag)` or `(after 3)` waits until the referenced items are checked; `(after 2)` means the 2nd item in the file. `(after #12)` or `(after owner/repo#12)` waits for the items of that GitHub issue, and an item's reference to itself is ignored. The Stop hook hands Claude the highest-priority eligible item, says how many are still waiting, and stops cleanly when all are blocked or done. A reference that matches nothing is ignored, so a typo never deadlocks a night.
 
 `noctis queue import` appends open GitHub issues as `- [ ] (P1) #123 Title` through the `gh` CLI (`owner/name#123` with `--repo owner/name`) — priority from `P0`–`P9` or `priority: high` labels, idempotent — and `queue.github.closeOnDone` closes an issue once the items that start with its reference are all ticked; a `#123` further along an item closes nothing.
 

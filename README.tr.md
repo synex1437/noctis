@@ -111,7 +111,7 @@ Eklenti kaldırılmış ama ayarlar yerinde duruyorsa elle geri alın: `~/.claud
 - [ ] yeni CLI bayrakları için README'yi güncelle
 ```
 
-Biçimin tamamı bu. Claude ilk açık maddeyi alır, bitince `- [x]` işaretler ve sormadan diğerine geçer; bütün maddeler işaretlenince durur, noctis listeyi ilerletmek zorunda kaldıysa (kendi yazdığı listelerde her zaman) durmadan önce `✔ Kuyruk bitti` der. Dağınık listeler kabul edilir (`-[ ]`, `* [ ]`, `1. [ ]`, `[]`, `TODO:`), birkaç satıra yayılan madde tek maddedir. Onay kutulu bir listede kutusu işaretlenmiş madde bitmiştir (`[x]`, `[X]`, `[✓]`, `[✔]`). Kutusuz düz bir madde listesi de olur: orada `~~üstü çizili~~`, `(done)`, `(bitti)`, `(tamam)`, `✓` ve `✔` maddeyi bitmiş sayar ve Claude'dan önce listeyi onay kutularıyla yeniden yazması istenir.
+Biçimin tamamı bu. Claude ilk açık maddeyi alır, bitince `- [x]` işaretler ve sormadan diğerine geçer; bütün maddeler işaretlenince durur, noctis listeyi ilerletmek zorunda kaldıysa (kendi yazdığı listelerde her zaman) durmadan önce `✔ Kuyruk bitti` der. Dağınık listeler kabul edilir (`-[ ]`, `* [ ]`, `1. [ ]`, `[]`, `TODO:`), birkaç satıra yayılan madde tek maddedir. Çitli bir kod bloğunun (```` ``` ```` ya da `~~~`) içindeki satırlar madde değil, örnektir. Onay kutulu bir listede kutusu işaretlenmiş madde bitmiştir (`[x]`, `[X]`, `[✓]`, `[✔]`). Kutusuz düz bir madde listesi de olur: orada `~~üstü çizili~~`, `(done)`, `(bitti)`, `(tamam)`, `✓` ve `✔` maddeyi bitmiş sayar ve Claude'dan önce listeyi onay kutularıyla yeniden yazması istenir.
 
 Öncelik ve bağımlılık:
 
@@ -121,7 +121,7 @@ Biçimin tamamı bu. Claude ilk açık maddeyi alır, bitince `- [x]` işaretler
 - [ ] yayına al (after 2)
 ```
 
-`(P0)`–`(P9)` sırayı belirler (varsayılan P5, küçük olan önce), `#ad` maddeyi etiketler. Etiketler ASCII'dir — bir harf, ardından harf, rakam, `_` ya da `-`: `#giriş` `#giri` olarak okunur; `(after #giriş)` ise hiçbir etikete karşılık gelmez ve yok sayılır. `#giris` yazın. `(after #etiket)` ya da `(after 3)` referans verilen maddeler işaretlenene kadar bekletir; `(after 2)` dosyadaki 2. maddedir. Stop hook'u Claude'a önceliği en yüksek uygun maddeyi verir, kaç maddenin hâlâ beklediğini söyler ve hepsi tıkalıysa ya da bittiyse temizce durur. Hiçbir şeye karşılık gelmeyen referans yok sayılır, yani bir yazım hatası geceyi asla kilitlemez.
+`(P0)`–`(P9)` sırayı belirler (varsayılan P5, küçük olan önce), `#ad` maddeyi etiketler. Etiketler ASCII'dir — bir harf, ardından harf, rakam, `_` ya da `-`: `#giriş` `#giri` olarak okunur; `(after #giriş)` ise hiçbir etikete karşılık gelmez ve yok sayılır. `#giris` yazın. `(after #etiket)` ya da `(after 3)` referans verilen maddeler işaretlenene kadar bekletir; `(after 2)` dosyadaki 2. maddedir. `(after #12)` ya da `(after sahip/depo#12)` o GitHub issue'sunun maddelerini bekler; bir maddenin kendisine verdiği referans yok sayılır. Stop hook'u Claude'a önceliği en yüksek uygun maddeyi verir, kaç maddenin hâlâ beklediğini söyler ve hepsi tıkalıysa ya da bittiyse temizce durur. Hiçbir şeye karşılık gelmeyen referans yok sayılır, yani bir yazım hatası geceyi asla kilitlemez.
 
 `noctis queue import` açık GitHub issue'larını `gh` CLI üzerinden `- [ ] (P1) #123 Başlık` olarak ekler (`--repo sahip/depo` verilirse `sahip/depo#123`) — öncelik `P0`–`P9` ya da `priority: high` etiketlerinden gelir, tekrar çalıştırmak güvenlidir — ve `queue.github.closeOnDone`, issue'nun referansıyla başlayan maddelerin hepsi işaretlenince issue'yu kapatır; bir maddenin ortasında geçen `#123` hiçbir şeyi kapatmaz.
 
