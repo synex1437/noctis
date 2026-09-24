@@ -337,6 +337,7 @@
   "roles.fallback": "fallback when the scoped quota is out",
   "roles.badValue": "%s: empty model in '%s'",
   "roles.badModel": "%s: %s is not a model name (only letters, digits and . _ : @ / [ ] -)",
+  "roles.unknownModel": "%s: %s is not a model Claude Code knows — use opus, sonnet, haiku, fable, best or opusplan, or a full id such as claude-opus-5-5",
   "roles.badEffort": "%s: unknown effort '%s' (low, medium, high, xhigh, max)",
   "roles.effortIgnored": "%s takes a model only; the effort %s is ignored (the Agent tool has no effort)",
   "roles.modelNoEffort": "%s: %s takes no effort level; the effort %s is ignored",

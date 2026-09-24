@@ -337,6 +337,7 @@
   "roles.fallback": "запасной вариант, когда квота модели исчерпана",
   "roles.badValue": "%s: пустая модель в '%s'",
   "roles.badModel": "%s: %s — не имя модели (только буквы, цифры и . _ : @ / [ ] -)",
+  "roles.unknownModel": "%s: %s — не модель, которую знает Claude Code; укажи opus, sonnet, haiku, fable, best или opusplan либо полный id, например claude-opus-5-5",
   "roles.badEffort": "%s: неизвестный effort '%s' (low, medium, high, xhigh, max)",
   "roles.effortIgnored": "%s принимает только модель; effort %s игнорируется (у инструмента Agent нет effort)",
   "roles.modelNoEffort": "%s: у %s нет уровней effort; effort %s игнорируется",

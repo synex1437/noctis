@@ -337,6 +337,7 @@
   "roles.fallback": "Rückfall, wenn das modellbezogene Kontingent aufgebraucht ist",
   "roles.badValue": "%s: leeres Modell in '%s'",
   "roles.badModel": "%s: %s ist kein Modellname (nur Buchstaben, Ziffern und . _ : @ / [ ] -)",
+  "roles.unknownModel": "%s: %s ist kein Modell, das Claude Code kennt — nimm opus, sonnet, haiku, fable, best oder opusplan, oder eine volle ID wie claude-opus-5-5",
   "roles.badEffort": "%s: unbekannter Effort '%s' (low, medium, high, xhigh, max)",
   "roles.effortIgnored": "%s nimmt nur ein Modell; der Effort %s wird ignoriert (das Agent-Tool kennt keinen Effort)",
   "roles.modelNoEffort": "%s: %s kennt keine Effort-Stufe; der Effort %s wird ignoriert",

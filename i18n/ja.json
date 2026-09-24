@@ -337,6 +337,7 @@
   "roles.fallback": "モデル別クォータを使い切ったときの代替",
   "roles.badValue": "%s: '%s' のモデルが空です",
   "roles.badModel": "%s: %s はモデル名ではありません（英字・数字と . _ : @ / [ ] - のみ）",
+  "roles.unknownModel": "%s: %s は Claude Code が知っているモデルではありません — opus、sonnet、haiku、fable、best、opusplan のいずれか、または claude-opus-5-5 のような完全な ID を使ってください",
   "roles.badEffort": "%s: 不明な effort '%s'（low, medium, high, xhigh, max）",
   "roles.effortIgnored": "%s はモデルのみを受け取ります。effort %s は無視されます（Agent ツールに effort はありません）",
   "roles.modelNoEffort": "%s: %s には effort レベルがありません。effort %s は無視されます",

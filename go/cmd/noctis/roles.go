@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,6 +20,40 @@ var effortlessRoles = map[string]bool{"planning": true, "explore": true}
 var roleModelPattern = lazyRegexp(`^[A-Za-z0-9._:@/\[\]-]+$`)
 
 var frontmatterLine = lazyRegexp(`(?m)^(model|effort):[^\n]*\n`)
+
+var familyFreeModels = map[string]bool{"best": true, "default": true, "inherit": true}
+
+func knownModelName(model string) bool {
+	name := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(model)), "[1m]")
+	return modelFamily(name) != "" || familyFreeModels[name] || strings.HasPrefix(name, "claude-")
+}
+
+var providerSwitches = []string{"CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_ANTHROPIC_AWS", "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD", "CLAUDE_CODE_USE_MANTLE", "CLAUDE_CODE_USE_GATEWAY"}
+
+func providerModels(settings object) bool {
+	env := getMap(settings, "env")
+	for _, lookup := range []func(string) string{os.Getenv, func(name string) string { return getString(env, name) }} {
+		for _, name := range providerSwitches {
+			switch strings.ToLower(strings.TrimSpace(lookup(name))) {
+			case "1", "true", "yes", "on":
+				return true
+			}
+		}
+		if base := strings.TrimSpace(lookup("ANTHROPIC_BASE_URL")); base != "" && !anthropicHost(base) {
+			return true
+		}
+	}
+	return false
+}
+
+func anthropicHost(address string) bool {
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host == "anthropic.com" || strings.HasSuffix(host, ".anthropic.com")
+}
 
 var roleProfiles = map[string]object{
 	"noctis": {
@@ -85,13 +120,15 @@ func appliedEffort(role string, spec object) string {
 	return getString(spec, "effort")
 }
 
-func roleFlagError(role, value string) error {
+func roleFlagError(role, value string, anyModel bool) error {
 	parts := strings.SplitN(strings.TrimSpace(value), ":", 2)
 	if strings.TrimSpace(parts[0]) == "" {
 		return errors.New(T("roles.badValue", role, value))
 	}
 	if model := strings.TrimSpace(parts[0]); !roleModelPattern.MatchString(model) {
 		return errors.New(T("roles.badModel", role, strconv.Quote(model)))
+	} else if !anyModel && !knownModelName(model) {
+		return errors.New(T("roles.unknownModel", role, strconv.Quote(model)))
 	}
 	if len(parts) == 2 && !validEfforts[strings.ToLower(strings.TrimSpace(parts[1]))] {
 		return errors.New(T("roles.badEffort", role, parts[1]))
@@ -99,8 +136,8 @@ func roleFlagError(role, value string) error {
 	return nil
 }
 
-func parseRoleFlag(role, value string) (object, error) {
-	if err := roleFlagError(role, value); err != nil {
+func parseRoleFlag(role, value string, anyModel bool) (object, error) {
+	if err := roleFlagError(role, value, anyModel); err != nil {
 		return nil, err
 	}
 	parts := strings.SplitN(strings.TrimSpace(value), ":", 2)
@@ -120,7 +157,7 @@ func parseRoleFlag(role, value string) (object, error) {
 	return spec, nil
 }
 
-func rolesFromArgs(current object) (object, bool, error) {
+func rolesFromArgs(current object, anyModel bool) (object, bool, error) {
 	roles := cloneObject(current)
 	given := false
 	if profile := profileAlias(strings.ToLower(flagString("profile"))); profile != "" {
@@ -137,7 +174,7 @@ func rolesFromArgs(current object) (object, bool, error) {
 		if value == "" {
 			continue
 		}
-		spec, err := parseRoleFlag(role, value)
+		spec, err := parseRoleFlag(role, value, anyModel)
 		if err != nil {
 			return nil, false, err
 		}
@@ -148,7 +185,7 @@ func rolesFromArgs(current object) (object, bool, error) {
 	return roles, given, nil
 }
 
-func askRoles(current object) object {
+func askRoles(current object, anyModel bool) object {
 	reader := bufio.NewReader(os.Stdin)
 	ended := false
 	ask := func(question, fallback string) string {
@@ -183,7 +220,7 @@ func askRoles(current object) object {
 		}
 		for {
 			answer := ask(T("roles.roleQuestion", T("roles."+role)), fallback)
-			parsed, err := parseRoleFlag(role, answer)
+			parsed, err := parseRoleFlag(role, answer, anyModel)
 			if err == nil {
 				roles[role] = parsed
 				break
@@ -326,9 +363,11 @@ func retunedNotice(profile string) string {
 	return T("roles.retuned", profile, pluginVersion, roleSummary(roleProfiles[profile], func(role string) string { return role }), profile)
 }
 
-func badRoleValue(role string, spec object) string {
+func badRoleValue(role string, spec object, anyModel bool) string {
 	if model := getString(spec, "model"); model != "" && !roleModelPattern.MatchString(model) {
 		return T("roles.badModel", role, strconv.Quote(model))
+	} else if model != "" && !anyModel && !knownModelName(model) {
+		return T("roles.unknownModel", role, strconv.Quote(model))
 	}
 	if effort := getString(spec, "effort"); effort != "" && !validEfforts[effort] {
 		return T("roles.badEffort", role, strings.Trim(strconv.Quote(effort), `"`))
@@ -336,24 +375,24 @@ func badRoleValue(role string, spec object) string {
 	return ""
 }
 
-func badRoleValues(roles object) []string {
+func badRoleValues(roles object, anyModel bool) []string {
 	problems := []string{}
 	for _, role := range roleNames {
-		if problem := badRoleValue(role, getMap(roles, role)); problem != "" {
+		if problem := badRoleValue(role, getMap(roles, role), anyModel); problem != "" {
 			problems = append(problems, problem)
 		}
 	}
 	return problems
 }
 
-func syncAgentFiles(pluginRoot string, roles object) int {
+func syncAgentFiles(pluginRoot string, roles object, anyModel bool) int {
 	changed := 0
 	for role, file := range map[string]string{"research": "lite.md", "digest": "digest.md"} {
 		spec := getMap(roles, role)
 		if spec == nil || getString(spec, "model") == "" {
 			continue
 		}
-		if problem := badRoleValue(role, spec); problem != "" {
+		if problem := badRoleValue(role, spec, anyModel); problem != "" {
 			warn("agents/%s left unchanged: %s", file, problem)
 			continue
 		}

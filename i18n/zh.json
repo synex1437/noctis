@@ -337,6 +337,7 @@
   "roles.fallback": "按模型的额度用尽时的备选",
   "roles.badValue": "%s：'%s' 中的模型为空",
   "roles.badModel": "%s：%s 不是模型名（只能包含字母、数字和 . _ : @ / [ ] -）",
+  "roles.unknownModel": "%s：%s 不是 Claude Code 认识的模型 — 请用 opus、sonnet、haiku、fable、best 或 opusplan，或完整 ID，例如 claude-opus-5-5",
   "roles.badEffort": "%s：未知的 effort '%s'（low、medium、high、xhigh、max）",
   "roles.effortIgnored": "%s 只接受模型；effort %s 被忽略（Agent 工具没有 effort）",
   "roles.modelNoEffort": "%s：%s 没有 effort 级别；effort %s 被忽略",

@@ -337,6 +337,7 @@
   "roles.fallback": "البديل عند نفاد الحصة الخاصة بالنموذج",
   "roles.badValue": "%s: نموذج فارغ في '%s'",
   "roles.badModel": "%s: %s ليس اسم نموذج (أحرف وأرقام و . _ : @ / [ ] - فقط)",
+  "roles.unknownModel": "%s: %s ليس نموذجًا يعرفه Claude Code — استخدم opus أو sonnet أو haiku أو fable أو best أو opusplan، أو معرّفًا كاملًا مثل claude-opus-5-5",
   "roles.badEffort": "%s: قيمة effort غير معروفة '%s' (low، medium، high، xhigh، max)",
   "roles.effortIgnored": "%s يأخذ نموذجًا فقط؛ يُتجاهل effort %s (أداة Agent لا تملك effort)",
   "roles.modelNoEffort": "%s: لا يدعم %s مستويات effort؛ يُتجاهل effort %s",

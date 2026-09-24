@@ -118,7 +118,7 @@ func TestAFanOutWhoseAgentTypeRunsOnFableNeedsRoomInTheFableWindow(t *testing.T)
 	}
 	allowed("a script whose agents are noctis:lite, on Opus in the shipped agent file,", withAgentType("'noctis:lite'"))
 	allowed("a script whose agents are noctis:digest, on Haiku,", withAgentType(`"noctis:digest"`))
-	if changed := syncAgentFiles(files.pluginRoot, object{"research": object{"model": "fable", "effort": "high"}}); changed != 1 {
+	if changed := syncAgentFiles(files.pluginRoot, object{"research": object{"model": "fable", "effort": "high"}}, false); changed != 1 {
 		t.Fatalf("setup's projection of the research role onto agents/lite.md changed %d files", changed)
 	}
 	refused("a script whose agents are noctis:lite, with the research role (and so agents/lite.md) on Fable,", withAgentType("'noctis:lite'"))
