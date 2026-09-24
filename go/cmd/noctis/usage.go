@@ -738,7 +738,7 @@ func sweepStaleLocks() {
 }
 
 func sweepTempFiles() {
-	sweepDir := func(dir string, stale func(name string) bool) {
+	sweepDir := func(dir string, age time.Duration, stale func(name string) bool) {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return
@@ -748,7 +748,7 @@ func sweepTempFiles() {
 				continue
 			}
 			info, err := entry.Info()
-			if err != nil || time.Since(info.ModTime()) < 5*time.Minute {
+			if err != nil || time.Since(info.ModTime()) < age {
 				continue
 			}
 			if err := os.Remove(filepath.Join(dir, entry.Name())); err == nil {
@@ -757,9 +757,9 @@ func sweepTempFiles() {
 		}
 	}
 	isTemp := func(name string) bool { return strings.HasSuffix(name, ".tmp") }
-	sweepDir(files.guardDir, isTemp)
-	sweepDir(filepath.Join(files.guardDir, "checkpoints"), isTemp)
-	sweepDir(files.launches, func(name string) bool {
+	sweepDir(files.guardDir, 5*time.Minute, isTemp)
+	sweepDir(filepath.Join(files.guardDir, "checkpoints"), 5*time.Minute, isTemp)
+	sweepDir(files.launches, 5*time.Minute, func(name string) bool {
 		for _, suffix := range []string{".tmp", ".sh", ".pid", ".started", ".json"} {
 			if strings.HasSuffix(name, suffix) {
 				return true
@@ -767,6 +767,8 @@ func sweepTempFiles() {
 		}
 		return false
 	})
+	sweepDir(handOffDir(), 5*time.Minute, isTemp)
+	sweepDir(handOffDir(), handOffLifetime, func(name string) bool { return strings.HasSuffix(name, ".json") })
 }
 
 func lockHolder(lockFile string) (string, time.Duration, bool) {
