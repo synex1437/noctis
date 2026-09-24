@@ -360,6 +360,7 @@
   "args.usage": "nada foi alterado; noctis %s aceita %s",
   "help.cmd.classify": "mostrar em JSON o veredito do roteador sobre um pedido",
   "preview.usage": "uso: noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <segundos epoch>]",
+  "resume.usage": "uso: noctis resume --sid <id-da-sessão> [--account <pasta-de-config>]",
   "help.cmd.schedulepreview": "mostrar o que uma reinicialização registraria no agendador, sem registrar nada",
   "help.usage": "%s %s — mantém uma sessão de programação com IA dentro dos seus limites de uso.\n\nUso: noctis <comando> [--flags]\n",
   "help.more": "\nFlags por comando: https://github.com/synex1437/noctis/blob/main/docs/REFERENCE.md. Diagnostique uma instalação com: noctis doctor",

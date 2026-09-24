@@ -126,3 +126,16 @@ func TestThePreviewRefusesABackendOrTimeItDoesNotKnow(t *testing.T) {
 		})
 	}
 }
+
+func TestResumeWithoutASessionPrintsItsUsageAndExitsTwo(t *testing.T) {
+	for _, language := range []string{"en", "tr"} {
+		t.Run(language, func(t *testing.T) {
+			run := runNoctisCLI(t, map[string]string{"NOCTIS_LANG": language}, "resume")
+			usage := catalogFor(language)["resume.usage"]
+
+			if run.code != 2 || usage == "" || !strings.Contains(run.stderr, usage) {
+				t.Fatalf("want the %s usage of resume on stderr and exit 2:\n%s", language, run)
+			}
+		})
+	}
+}

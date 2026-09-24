@@ -360,6 +360,7 @@
   "args.usage": "ничего не изменено; noctis %s принимает %s",
   "help.cmd.classify": "вывести в JSON решение маршрутизатора по запросу",
   "preview.usage": "использование: noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <секунды epoch>]",
+  "resume.usage": "использование: noctis resume --sid <id-сессии> [--account <папка-конфигурации>]",
   "help.cmd.schedulepreview": "показать, что перезапуск зарегистрировал бы в планировщике, ничего не регистрируя",
   "help.usage": "%s %s — удерживает сессию ИИ-разработки в пределах её лимитов использования.\n\nИспользование: noctis <команда> [--flags]\n",
   "help.more": "\nФлаги по командам: https://github.com/synex1437/noctis/blob/main/docs/REFERENCE.md. Диагностика установки: noctis doctor",

@@ -360,6 +360,7 @@
   "args.usage": "rien n'a été modifié ; noctis %s accepte %s",
   "help.cmd.classify": "afficher en JSON le verdict du routeur sur une demande",
   "preview.usage": "usage : noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <secondes epoch>]",
+  "resume.usage": "usage : noctis resume --sid <id-de-session> [--account <dossier-de-config>]",
   "help.cmd.schedulepreview": "montrer ce qu'un redémarrage inscrirait auprès du planificateur, sans l'inscrire",
   "help.usage": "%s %s — maintient une session de codage IA dans ses limites d'usage.\n\nUsage : noctis <commande> [--flags]\n",
   "help.more": "\nFlags par commande : https://github.com/synex1437/noctis/blob/main/docs/REFERENCE.md. Diagnostiquer une installation avec : noctis doctor",

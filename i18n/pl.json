@@ -360,6 +360,7 @@
   "args.usage": "nic nie zostało zmienione; noctis %s przyjmuje %s",
   "help.cmd.classify": "wypisać jako JSON werdykt routera dla polecenia",
   "preview.usage": "użycie: noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <sekundy epoch>]",
+  "resume.usage": "użycie: noctis resume --sid <id-sesji> [--account <katalog-konfiguracji>]",
   "help.cmd.schedulepreview": "pokazać, co wznowienie zarejestrowałoby w harmonogramie, bez rejestrowania",
   "help.usage": "%s %s — utrzymuje sesję programowania z AI w granicach jej limitów zużycia.\n\nUżycie: noctis <polecenie> [--flags]\n",
   "help.more": "\nFlagi poszczególnych poleceń: https://github.com/synex1437/noctis/blob/main/docs/REFERENCE.md. Diagnostyka instalacji: noctis doctor",

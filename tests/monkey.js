@@ -250,7 +250,8 @@ const ACTIONS = [
     note('parallel-hooks');
   }],
   ['resume', (round) => {
-    checkResult(round, 'resume', runEngine(['resume', '--sid', pick(SESSIONS), '--account', acc.dir]), { allowExit: [0, 1] });
+    const sid = pick(SESSIONS);
+    checkResult(round, 'resume', runEngine(['resume', '--sid', sid, '--account', acc.dir]), { allowExit: sid === '' ? [2] : [0, 1] });
     note('resume');
   }],
 ];

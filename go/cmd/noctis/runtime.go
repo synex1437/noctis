@@ -733,6 +733,10 @@ func readyNotice(wait object, release string, now int64, tail string) string {
 
 func runResume() {
 	sid := flagString("sid")
+	if sid == "" {
+		fmt.Fprintln(os.Stderr, T("resume.usage"))
+		os.Exit(2)
+	}
 	resumeWait(sid, flagString("release"))
 	bootOutFinishedLaunchdJob(sid)
 }
@@ -802,7 +806,7 @@ func releaseHandoff(sid string, startedAt float64) {
 
 func resumeWait(sid, release string) {
 	if sid == "" {
-		fmt.Fprintln(os.Stderr, "usage: noctis resume --sid <session-id> [--account <config-dir>]")
+		fmt.Fprintln(os.Stderr, T("resume.usage"))
 		return
 	}
 	cfg := loadConfig()

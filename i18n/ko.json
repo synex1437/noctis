@@ -360,6 +360,7 @@
   "args.usage": "아무것도 바꾸지 않았습니다. noctis %s 옵션: %s",
   "help.cmd.classify": "요청에 대한 라우터의 판정을 JSON으로 출력합니다",
   "preview.usage": "사용법: noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <epoch 초>]",
+  "resume.usage": "사용법: noctis resume --sid <세션-ID> [--account <설정-폴더>]",
   "help.cmd.schedulepreview": "재시작이 스케줄러에 등록할 내용을 등록하지 않고 보여줍니다",
   "help.usage": "%s %s — AI 코딩 세션을 사용량 한도 안에 유지합니다.\n\n사용법: noctis <명령> [--flags]\n",
   "help.more": "\n명령별 플래그: https://github.com/synex1437/noctis/blob/main/docs/REFERENCE.md. 설치 진단: noctis doctor",
