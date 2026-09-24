@@ -128,7 +128,7 @@ function argumentTypes(text) {
 const STATUS_ROWS = ['status.accountDir', 'status.usage', 'status.thresholds', 'status.model',
   'status.router', 'status.skew', 'status.configBroken', 'status.disabled', 'status.observe',
   'status.plan', 'status.waits', 'status.handedOff', 'status.errorsClean', 'status.errors',
-  'status.credits', 'status.roles', 'status.scopedData'];
+  'status.credits', 'status.roles', 'status.scopedData', 'status.lean'];
 
 function auditCatalog(code, english, table, problems) {
   for (const [key, source] of Object.entries(english)) {
