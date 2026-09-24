@@ -474,9 +474,8 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	if env == nil {
 		env = object{}
 	}
-	if getString(env, "CLAUDE_CODE_EFFORT_LEVEL") != effort {
-		config["managedEffort"] = object{"previous": env["CLAUDE_CODE_EFFORT_LEVEL"], "set": effort}
-	}
+	effortRecord := getMap(config, "managedEffort")
+	config["managedEffort"] = object{"previous": valueSetupFound(env, "CLAUDE_CODE_EFFORT_LEVEL", getString(effortRecord, "set"), effortRecord["previous"], effortRecord != nil), "set": effort}
 	env["CLAUDE_CODE_EFFORT_LEVEL"] = effort
 	data["env"] = env
 	current := getString(data, "model")
@@ -498,14 +497,14 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		data["model"] = primary
 	}
 	permissionNote := ""
+	modeSetEarlier := getString(config, "managedPermissionMode")
+	modeFound, modeFoundRecorded := config["managedPermissionPrevious"]
 	if mode := managedPermissionMode(config); mode != "" {
 		permissions := getMap(data, "permissions")
 		if permissions == nil {
 			permissions = object{}
 		}
-		if getString(permissions, "defaultMode") != mode {
-			config["managedPermissionPrevious"] = permissions["defaultMode"]
-		}
+		config["managedPermissionPrevious"] = valueSetupFound(permissions, "defaultMode", modeSetEarlier, modeFound, modeFoundRecorded)
 		permissions["defaultMode"] = mode
 		data["permissions"] = permissions
 		permissionNote = T("install.permissions", mode)
@@ -527,6 +526,13 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	}
 	fmt.Println(T("install.settings", backupText, effort, getString(data, "model")))
 	return nil
+}
+
+func valueSetupFound(holder object, key, setEarlier string, found any, recorded bool) any {
+	if recorded && setEarlier != "" && getString(holder, key) == setEarlier {
+		return found
+	}
+	return holder[key]
 }
 
 func managedPermissionMode(config object) string {
