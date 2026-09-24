@@ -43,8 +43,8 @@ var (
 		[]string{"code", "coding", "codebase", "scripts?", "software", "bugs?", "errors?", "exceptions?", "crash(es|ed)?", "debug(ging)?", "refactor(ing)?", "functions?", "methods?", "class(es)?", "variables?", "api", "apis", "endpoints?", "sql", "quer(y|ies)", "regex", "json", "yaml", "html", "css", "typescript", "javascript", "python", "java", "rust", "golang", "node", "npm", "pnpm", "yarn", "pip", "cargo", "git", "commits?", "branch(es)?", "merge", "rebase", "pull requests?", "deploy(ment)?", "build", "compile", "run", "tests?", "unit", "lint", "files?", "folders?", "director(y|ies)", "repo", "repository", "projects?", "implement(ation)?", "integrate", "features?", "fix(es)?", "patch", "optimi[sz]e", "performance", "migrat(e|ion)", "database", "schema", "components?", "frontend", "backend", "servers?", "docker", "kubernetes", "pipeline", "config", "terminal", "commands?", "plugins?", "hooks?", "agents?", "mcp", "readme", "stack ?trace", "install", "logs?", `loglar\p{L}*`, "kur", `kurma\p{L}*`},
 	)
 	webWords = newWordMatcher(
-		[]string{"güncel", "haber", "kaynak", "literatür", "karşılaştır", "inceleme", "makale", "fiyat", "trend", "piyasa", "avantaj", "dezavantaj", "en iyi", "en yeni", "hangisi daha iyi", "web'?de ara", "internette ara", "google"},
-		[]string{"latest", "newest", "recent", "news", "sources?", "literature", "compar(e|ison)", "which is better", "reviews?", "articles?", "papers?", "prices?", "pricing", "trends?", "market", "benchmarks?", "pros and cons", "best"},
+		[]string{"haber", "kaynaklar", "literatür", "karşılaştır", "incelemeler", "makale", "fiyat", "trendler", "piyasa", "avantaj", "dezavantaj", "en iyi", "en yeni", "hangisi daha iyi", "web'?de ara", "internette ara", "google"},
+		[]string{"güncel", "kaynak", "kaynakça", "latest", "newest", "recent", "news", "sources", "literature", "compar(e|ison)", "which is better", "reviews", "articles", "papers?", "prices", "price of", "pricing", "trends", "market", "benchmarks", "pros and cons", "best"},
 	)
 	investigateWords = newWordMatcher([]string{"araştır", "incele"}, []string{"research", "investigate", "look (up|into)"})
 	codeActionWords  = newWordMatcher(
