@@ -91,6 +91,7 @@
   "statusline.moved": " · ↪ работа продолжается в другом окне — это можно закрыть",
   "statusline.observe": " · 👁 наблюдение",
   "statusline.fatal": "∞ ошибка %s (errors.log)",
+  "fatal.command": "Сбой %s: %v — подробности в %s; `noctis report --bundle` создаёт файл, который можно приложить к issue",
   "checkpoint.title": "# Контрольная точка %s",
   "checkpoint.session": "- Сессия: %s",
   "checkpoint.time": "- Время: %s",

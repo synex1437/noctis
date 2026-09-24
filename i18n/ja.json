@@ -91,6 +91,7 @@
   "statusline.moved": " · ↪ 別のウィンドウで継続中 — このウィンドウは閉じて構いません",
   "statusline.observe": " · 👁 観察",
   "statusline.fatal": "∞ %s エラー (errors.log)",
+  "fatal.command": "%s がクラッシュしました: %v — 詳細は %s にあります。`noctis report --bundle` で issue に添付するファイルを作れます",
   "checkpoint.title": "# %s チェックポイント",
   "checkpoint.session": "- セッション: %s",
   "checkpoint.time": "- 時刻: %s",

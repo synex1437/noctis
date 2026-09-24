@@ -91,6 +91,7 @@
   "statusline.moved": " · ↪ continues in another window — this one can be closed",
   "statusline.observe": " · 👁 observe",
   "statusline.fatal": "∞ %s error (errors.log)",
+  "fatal.command": "%s crashed: %v — the details are in %s; `noctis report --bundle` makes a file to attach to an issue",
   "checkpoint.title": "# %s checkpoint",
   "checkpoint.session": "- Session: %s",
   "checkpoint.time": "- Time: %s",

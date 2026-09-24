@@ -91,6 +91,7 @@
   "statusline.moved": " · ↪ başka bir pencerede sürüyor — burası kapatılabilir",
   "statusline.observe": " · 👁 gözlem",
   "statusline.fatal": "∞ %s hata (errors.log)",
+  "fatal.command": "%s çöktü: %v — ayrıntılar şurada: %s; `noctis report --bundle` bir issue'ya eklenecek dosyayı hazırlar",
   "checkpoint.title": "# %s checkpoint",
   "checkpoint.session": "- Oturum: %s",
   "checkpoint.time": "- Zaman: %s",

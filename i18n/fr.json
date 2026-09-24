@@ -91,6 +91,7 @@
   "statusline.moved": " · ↪ continue dans une autre fenêtre — celle-ci peut être fermée",
   "statusline.observe": " · 👁 observation",
   "statusline.fatal": "∞ erreur %s (errors.log)",
+  "fatal.command": "%s a planté : %v — les détails sont dans %s ; `noctis report --bundle` crée un fichier à joindre à un ticket",
   "checkpoint.title": "# Point de reprise %s",
   "checkpoint.session": "- Session : %s",
   "checkpoint.time": "- Heure : %s",
