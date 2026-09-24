@@ -360,6 +360,7 @@
   "args.usage": "nichts wurde geändert; noctis %s kennt %s",
   "help.cmd.classify": "das Urteil des Routers zu einer Anfrage als JSON ausgeben",
   "preview.usage": "Aufruf: noctis schedule-preview [--backend launchd|systemd|task|sleeper] [--sid <id>] [--at <Epoch-Sekunden>]",
+  "resume.usage": "Aufruf: noctis resume --sid <Sitzungs-ID> [--account <Konfigurationsordner>]",
   "help.cmd.schedulepreview": "zeigen, was ein Neustart beim Scheduler eintragen würde, ohne es einzutragen",
   "help.usage": "%s %s — hält eine KI-Coding-Sitzung innerhalb ihrer Nutzungslimits.\n\nAufruf: noctis <Befehl> [--flags]\n",
   "help.more": "\nFlags pro Befehl: https://github.com/synex1437/noctis/blob/main/docs/REFERENCE.md. Ein Setup prüfen mit: noctis doctor",

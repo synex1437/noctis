@@ -29,7 +29,7 @@ Two flags work with every command: `--account <dir>` is the account folder whose
 | `webhook` | `--title`, `--body` | Posts one message to the configured webhook now, even with `alarm.enabled: false`, and says whether it was delivered: exit 0 when it was; exit 1, with the reason on stderr, when no `alarm.webhook.url` is set, the address is not usable, the circuit breaker is open or the delivery failed. Without `--title` and `--body` it sends a test message and ignores an open circuit |
 | `version`, `help` | — | The version (`--version` and `-v` too); the commands in this table with one line each (`--help` and `-h` too). An unknown command exits 1 and lists them |
 
-Called by the plugin itself: `hook`, `statusline`, `resume`, `sleeper`, `release-check`, `selftest-mark`. `state-write` is for the test harness.
+Called by the plugin itself: `hook`, `statusline`, `resume`, `sleeper`, `release-check`, `selftest-mark`. `state-write` is for the test harness. `resume` without `--sid` prints its usage and exits 2.
 
 A command you run that crashes prints `noctis <command> crashed: <reason>` with the path of `errors.log` on stderr and exits 1. The commands a host or noctis itself starts exit 0 after a crash, so a hook never fails the session; a crashed status line prints `∞ noctis error (errors.log)`. `webhook` is the exception: you run it yourself to test the webhook, so a crash in it exits 1 with that message too.
 
