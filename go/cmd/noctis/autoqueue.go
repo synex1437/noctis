@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"unicode/utf8"
 )
 
 var (
@@ -263,8 +264,15 @@ func cleanItem(text string) string {
 		item = item[len(match[0]):]
 	}
 	item = strings.TrimSpace(strings.ReplaceAll(item, "\n", " "))
-	if len([]rune(item)) > 200 {
-		item = string([]rune(item)[:200]) + "…"
+	if utf8.RuneCountInString(item) > 200 {
+		kept := 0
+		for index := range item {
+			if kept == 200 {
+				item = item[:index] + "…"
+				break
+			}
+			kept++
+		}
 	}
 	if len(wordSplit.Split(item, -1)) < 2 {
 		return ""

@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestAutoQueueItems(t *testing.T) {
@@ -42,5 +43,26 @@ func TestCleanItem(t *testing.T) {
 	}
 	if got := cleanItem("[noctis] keep the tag"); got != "[noctis] keep the tag" {
 		t.Errorf("bracketed word must survive, got %q", got)
+	}
+}
+
+func TestCleanItemShortensALongItemWithoutRewritingItsBytes(t *testing.T) {
+	long := "fix\xffthe parser " + strings.Repeat("and the lexer ", 30)
+	got := cleanItem(long)
+	if !strings.HasSuffix(got, "…") || !strings.HasPrefix(long, strings.TrimSuffix(got, "…")) {
+		t.Fatalf("the shortened item is not the start of the text: %q", got)
+	}
+	if runes := utf8.RuneCountInString(got); runes != 201 {
+		t.Fatalf("the shortened item has %d runes, want 201", runes)
+	}
+	prompt := "- fix\xffA1 " + strings.Repeat("the parser module ", 14) + "\n- fix\xffB2 " + strings.Repeat("the lexer module ", 14) + "\n- fix\xffC3 " + strings.Repeat("the build module ", 14) + "\n"
+	items := autoQueueItems(prompt)
+	if len(items) != 3 {
+		t.Fatalf("want 3 items, got %d: %q", len(items), items)
+	}
+	for _, item := range items {
+		if !strings.HasPrefix(item, "fix\xff") {
+			t.Fatalf("item %q does not start with the prompt's own bytes", item)
+		}
 	}
 }
