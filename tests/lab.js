@@ -972,7 +972,12 @@ async function scenarioQueueContinuation(acc) {
   fs.utimesSync(TRANSCRIPT, old, old);
   acc.statusline('qc2', 'claude-fable-5-1', 5, now + 7200, 10, now + 3 * 86400, 62);
   resetCalls();
-  acc.run(['resume', '--sid', 'qc2', '--account', acc.dir]);
+  const relaunchedStopInput = path.join(acc.dir, 'qc2-stop.json');
+  const relaunchedStopOutput = path.join(acc.dir, 'qc2-stop.out');
+  writeJson(relaunchedStopInput, { hook_event_name: 'Stop', session_id: 'qc2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
+  acc.run(['resume', '--sid', 'qc2', '--account', acc.dir], undefined, { NOCTIS_LAB_STOP_INPUT: relaunchedStopInput, NOCTIS_LAB_STOP_OUTPUT: relaunchedStopOutput, NOCTIS_LAB_NOCTIS: acc.engine()[0] });
+  const relaunchedStop = fs.existsSync(relaunchedStopOutput) ? fs.readFileSync(relaunchedStopOutput, 'utf8') : '';
+  check('the relaunched session is given the next queue item when it stops', relaunchedStop.includes('"decision":"block"') && relaunchedStop.includes('Queue continues: 3 open'), true);
   const call = (await anyCall()).pop() || '';
   check('relaunch always resumes the same session', call.includes('--resume qc2'), true);
   check('remote control and extra args passed', call.includes('--remote-control') && call.includes('--verbose'), true);

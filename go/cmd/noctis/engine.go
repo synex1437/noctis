@@ -1638,6 +1638,11 @@ func isHandoffSession(sid string) bool {
 	return os.Getenv(handoffEnv) == sid
 }
 
+func resumedByThisSession(state object, sid string, wait object) bool {
+	handoff := getMap(getMap(state, "handedOff"), sid)
+	return handoff != nil && isHandoffSession(sid) && numberOr(handoff, "waitStartedAt", -1) == numberOr(wait, "startedAt", -2)
+}
+
 func hookSleeping(wait object) bool {
 	return getBool(wait, "inHook", false) || numberOr(wait, "waking", 0) > 0
 }
