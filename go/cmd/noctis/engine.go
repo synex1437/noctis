@@ -525,6 +525,7 @@ func gitStatusUncached(cwd string) (string, bool) {
 	}
 	command := exec.Command("git", "-c", "status.relativePaths=true", "-c", "color.status=false", "-c", "status.branch=false", "status", "--short")
 	command.Dir = cwd
+	command.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
 	output, err := runWithTimeout(command, 3*time.Second)
 	if err != nil {
 		return "", false
@@ -825,13 +826,27 @@ func buildCheckpoint(input object, reasonLine, model string, cfg object) string 
 	return file
 }
 
+var gitSnapshotTimeout = 15 * time.Second
+
 func gitSnapshot(cwd, sid string) (ref, hash string) {
 	if !insideGitRepo(cwd) {
 		return "", ""
 	}
+	index, ok := gitIndexCopy(cwd)
+	if !ok {
+		return "", ""
+	}
+	defer func() {
+		os.Remove(index)
+		os.Remove(index + ".lock")
+	}()
 	create := exec.Command("git", "stash", "create", "noctis checkpoint "+sid)
 	create.Dir = cwd
-	output, err := runWithTimeout(create, 15*time.Second)
+	create.Env = append(os.Environ(), "GIT_INDEX_FILE="+index)
+	output, err := runTreeWithTimeout(create, gitSnapshotTimeout)
+	if err != nil {
+		removeIndexLeftovers(index)
+	}
 	hash = strings.TrimSpace(string(output))
 	if err != nil || hash == "" {
 		return "", ""
@@ -845,6 +860,52 @@ func gitSnapshot(cwd, sid string) (ref, hash string) {
 	}
 	logInfo("git snapshot %s = %s", ref, hash[:8])
 	return ref, hash
+}
+
+func removeIndexLeftovers(index string) {
+	entries, err := os.ReadDir(filepath.Dir(index))
+	if err != nil {
+		return
+	}
+	prefix := filepath.Base(index) + ".stash."
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), prefix) {
+			os.Remove(filepath.Join(filepath.Dir(index), entry.Name()))
+		}
+	}
+}
+
+func gitIndexCopy(cwd string) (string, bool) {
+	locate := exec.Command("git", "rev-parse", "--git-path", "index")
+	locate.Dir = cwd
+	output, err := runWithTimeout(locate, 5*time.Second)
+	if err != nil {
+		return "", false
+	}
+	source := strings.TrimSpace(string(output))
+	if !filepath.IsAbs(source) {
+		source = filepath.Join(cwd, source)
+	}
+	content, err := readFileShared(source)
+	if err != nil {
+		warn("git snapshot skipped: the index at %s cannot be read (%v)", source, err)
+		return "", false
+	}
+	copied, err := os.CreateTemp("", "noctis-index-*")
+	if err != nil {
+		warn("git snapshot skipped: no temporary copy of the index (%v)", err)
+		return "", false
+	}
+	_, writeErr := copied.Write(content)
+	if closeErr := copied.Close(); writeErr == nil {
+		writeErr = closeErr
+	}
+	if writeErr != nil {
+		os.Remove(copied.Name())
+		warn("git snapshot skipped: no temporary copy of the index (%v)", writeErr)
+		return "", false
+	}
+	return copied.Name(), true
 }
 
 func dropGitSnapshot(cwd, ref string) {
