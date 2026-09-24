@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -116,19 +118,19 @@ func recordWebhookOutcome(success bool, now int64) {
 	})
 }
 
-func deliverWebhook(cfg object, title, body string) {
+func deliverWebhook(cfg object, title, body string, ignoreBreaker bool) (bool, string) {
 	config := webhookSettings(cfg)
 	if config.target == "" {
-		return
+		return false, T("webhook.none", files.config)
 	}
 	endpoint, ok := webhookAllowed(config.target)
 	if !ok {
-		return
+		return false, T("webhook.refused")
 	}
 	now := nowSec()
-	if breakerOpen(readState(), now) {
+	if state := readState(); !ignoreBreaker && breakerOpen(state, now) {
 		logInfo("webhook skipped: circuit open")
-		return
+		return false, T("webhook.circuitOpen", formatTime(numberOr(getMap(state, "webhook"), "openUntil", 0)))
 	}
 	client := &http.Client{Timeout: 5 * time.Second}
 	delays := []time.Duration{0, time.Second, 3 * time.Second}
@@ -143,7 +145,7 @@ func deliverWebhook(cfg object, title, body string) {
 		request, err := buildWebhookRequest(config, endpoint, title, body)
 		if err != nil {
 			warn("webhook request build failed: %v", err)
-			return
+			return false, err.Error()
 		}
 		response, err := client.Do(request)
 		if err != nil {
@@ -154,7 +156,7 @@ func deliverWebhook(cfg object, title, body string) {
 		response.Body.Close()
 		if response.StatusCode < 300 {
 			recordWebhookOutcome(true, now)
-			return
+			return true, ""
 		}
 		lastError = "http-" + itoa(response.StatusCode)
 		if response.StatusCode >= 400 && response.StatusCode < 500 && response.StatusCode != 429 {
@@ -163,6 +165,7 @@ func deliverWebhook(cfg object, title, body string) {
 	}
 	recordWebhookOutcome(false, now)
 	warn("webhook failed (%s): %s", config.preset, lastError)
+	return false, lastError
 }
 
 func webhookErrorText(err error) string {
@@ -185,5 +188,20 @@ func unwrapMessage(err error) string {
 }
 
 func runWebhookCommand() {
-	deliverWebhook(loadConfig(), flagString("title"), flagString("body"))
+	cfg := loadConfig()
+	title, body := flagString("title"), flagString("body")
+	test := !args.present["title"] && !args.present["body"]
+	if test {
+		title, body = pluginName, T("webhook.testBody")
+	}
+	sent, reason := deliverWebhook(cfg, title, body, test)
+	if !sent {
+		fmt.Fprintln(os.Stderr, T("webhook.failed", reason))
+		os.Exit(1)
+	}
+	host := ""
+	if parsed, err := url.Parse(webhookSettings(cfg).target); err == nil {
+		host = parsed.Host
+	}
+	fmt.Println(T("webhook.sent", host, webhookSettings(cfg).preset))
 }

@@ -1584,7 +1584,7 @@ func notify(cfg object, title, body string) {
 	}
 	if webhookSettings(cfg).target != "" {
 		if command == "webhook" {
-			deliverWebhook(cfg, title, body)
+			deliverWebhook(cfg, title, body, false)
 		} else {
 			detachedSelf([]string{"webhook", "--account", files.configDir, "--title", title, "--body", body})
 		}

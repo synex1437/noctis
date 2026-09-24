@@ -20,6 +20,7 @@ func TestHelpSaysWhatEachCommandDoes(t *testing.T) {
 		"help.cmd.queue":      {"queue import", "trust", "untrust", "status"},
 		"help.cmd.cancel":     {"noctis cancel <id>"},
 		"help.cmd.setup":      {"settings.json"},
+		"help.cmd.webhook":    {"alarm.webhook.url"},
 	}
 	for lang, table := range catalogTable() {
 		for key, words := range facts {
