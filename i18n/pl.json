@@ -2,6 +2,7 @@
   "win.five": "5h",
   "win.week": "tygodniowy",
   "win.unknown": "nieznany",
+  "badge.percent": "%d%%",
   "badge.week": "Tydz",
   "hit.burst": "prognoza skoku",
   "hit.compaction": "zabezpieczenie przed kompaktowaniem kontekstu",

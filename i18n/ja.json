@@ -2,6 +2,7 @@
   "win.five": "5時間",
   "win.week": "週間",
   "win.unknown": "不明",
+  "badge.percent": "%d%%",
   "badge.week": "週",
   "hit.burst": "急上昇の予測",
   "hit.compaction": "コンテキスト圧縮前の安全停止",

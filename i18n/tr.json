@@ -2,6 +2,7 @@
   "win.five": "5sa",
   "win.week": "haftalık",
   "win.unknown": "bilinmeyen",
+  "badge.percent": "%%%d",
   "badge.week": "Hf",
   "hit.burst": "ani yükseliş öngörüsü",
   "hit.compaction": "bağlam sıkıştırması öncesi güvenlik",

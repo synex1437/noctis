@@ -2,6 +2,7 @@
   "win.five": "5小时",
   "win.week": "每周",
   "win.unknown": "未知",
+  "badge.percent": "%d%%",
   "badge.week": "周",
   "hit.burst": "突增预测",
   "hit.compaction": "上下文压缩前的安全停止",

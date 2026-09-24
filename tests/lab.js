@@ -1056,7 +1056,7 @@ async function scenarioLocaleAndModes(acc) {
   const english = acc.statusline('lc1', 'claude-fable-5-1', 41, now + 7200, 23, now + 3 * 86400, 32);
   check('turkish statusline by default in lab', english.startsWith('∞ 5sa %41'), true);
   const en = acc.run(['statusline'], acc.statuslineInput('lc1', 'claude-fable-5-1', 41, now + 7200, 23, now + 3 * 86400), { NOCTIS_LANG: 'en' });
-  check('NOCTIS_LANG=en switches labels', en.startsWith('∞ 5h %41') && en.includes('Wk %23'), true);
+  check('NOCTIS_LANG=en switches labels, and the percent follows the number as it does in English', en.startsWith('∞ 5h 41%') && en.includes('Wk 23%'), true);
   check('english off message', acc.run(['off', '1'], null, { NOCTIS_LANG: 'en' }).includes('disabled until'), true);
   acc.run(['on']);
   acc.setConfig((config) => {
@@ -1074,13 +1074,13 @@ async function scenarioLocaleAndModes(acc) {
   check('LANG=de_DE picks the German catalog', acc.run(['off', '1'], null, { NOCTIS_LANG: '', LANG: 'de_DE.UTF-8' }).includes('deaktiviert bis'), true);
   acc.run(['on']);
   const languageCases = [
-    ['de', 'Bitte füge die Tests hinzu und mach das Refactoring nicht zu groß', 'Wo %'],
-    ['fr', 'Est-ce que tu peux ajouter les tests pour le module et corriger le bug', 'Sem %'],
-    ['es', 'Por favor agrega las pruebas y no cambies el esquema de la base', 'Sem %'],
-    ['ja', 'テストを追加してからリファクタリングを続けてください', '週 %'],
-    ['ru', 'Добавь тесты и продолжай рефакторинг модуля', 'Нед %'],
-    ['tr', 'Testleri ekle ve modülü düzeltmeye devam et lütfen', 'Hf %'],
-    ['en', 'Please add the tests and keep going with the refactor of the module', 'Wk %'],
+    ['de', 'Bitte füge die Tests hinzu und mach das Refactoring nicht zu groß', 'Wo 10%'],
+    ['fr', 'Est-ce que tu peux ajouter les tests pour le module et corriger le bug', 'Sem 10%'],
+    ['es', 'Por favor agrega las pruebas y no cambies el esquema de la base', 'Sem 10%'],
+    ['ja', 'テストを追加してからリファクタリングを続けてください', '週 10%'],
+    ['ru', 'Добавь тесты и продолжай рефакторинг модуля', 'Нед 10%'],
+    ['tr', 'Testleri ekle ve modülü düzeltmeye devam et lütfen', 'Hf %10'],
+    ['en', 'Please add the tests and keep going with the refactor of the module', 'Wk 10%'],
   ];
   for (const [lang, prompt, badge] of languageCases) {
     acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'lang1', cwd: PROJECT_DIR, prompt }, { NOCTIS_LANG: '' });

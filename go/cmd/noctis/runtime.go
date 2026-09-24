@@ -117,13 +117,13 @@ func usageBadgeAt(usage usageView, cfg object, now int64) string {
 		return ""
 	}
 	if usage.fiveHour != nil {
-		parts = append(parts, fmt.Sprintf("%s%s %%%d→%s", mark(usage.fiveHour, "session5h"), T("win.five"), int(math.Round(usage.fiveHour.used)), formatTime(usage.fiveHour.resetsAt)))
+		parts = append(parts, fmt.Sprintf("%s%s %s→%s", mark(usage.fiveHour, "session5h"), T("win.five"), T("badge.percent", int(math.Round(usage.fiveHour.used))), formatTime(usage.fiveHour.resetsAt)))
 	}
 	if usage.sevenDay != nil {
-		parts = append(parts, fmt.Sprintf("%s%s %%%d%s→%s", mark(usage.sevenDay, "weeklyAll"), T("badge.week"), int(math.Round(usage.sevenDay.used)), paceMarker(cfg, usage.sevenDay, now), formatTime(usage.sevenDay.resetsAt)))
+		parts = append(parts, fmt.Sprintf("%s%s %s%s→%s", mark(usage.sevenDay, "weeklyAll"), T("badge.week"), T("badge.percent", int(math.Round(usage.sevenDay.used))), paceMarker(cfg, usage.sevenDay, now), formatTime(usage.sevenDay.resetsAt)))
 	}
 	if usage.fable != nil {
-		parts = append(parts, fmt.Sprintf("%s %%%d", scopedLabel(cfg), int(math.Round(usage.fable.used))))
+		parts = append(parts, fmt.Sprintf("%s %s", scopedLabel(cfg), T("badge.percent", int(math.Round(usage.fable.used)))))
 	}
 	return strings.Join(parts, " · ")
 }
