@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -222,9 +223,13 @@ type queueView struct {
 
 func parseQueueEntries(content string) ([]queueEntry, bool) {
 	lines := strings.Split(strings.TrimPrefix(content, "\uFEFF"), "\n")
-	hasBoxes := false
+	hasBoxes, fenced := false, false
 	for _, line := range lines {
-		if queueItemPattern.MatchString(strings.TrimRight(line, "\r")) {
+		if queueFence(line) {
+			fenced = !fenced
+			continue
+		}
+		if !fenced && queueItemPattern.MatchString(strings.TrimRight(line, "\r")) {
 			hasBoxes = true
 			break
 		}
@@ -235,7 +240,15 @@ func parseQueueEntries(content string) ([]queueEntry, bool) {
 	}
 	drafts := []*draft{}
 	open := false
+	fenced = false
 	for _, line := range lines {
+		if queueFence(line) {
+			fenced, open = !fenced, false
+			continue
+		}
+		if fenced {
+			continue
+		}
 		trimmed := strings.TrimSpace(strings.TrimRight(line, "\r"))
 		var text string
 		var checked, ok bool
@@ -250,7 +263,7 @@ func parseQueueEntries(content string) ([]queueEntry, bool) {
 			item.text.WriteString(text)
 			drafts = append(drafts, item)
 			open = true
-		case trimmed == "" || queueHeading.MatchString(trimmed) || strings.HasPrefix(trimmed, "```"):
+		case trimmed == "" || queueHeading.MatchString(trimmed):
 			open = false
 
 		case open && hasBoxes && queueBulletPattern.MatchString(trimmed):
@@ -275,6 +288,11 @@ type queueEntry struct {
 	priority int
 	tags     map[string]bool
 	after    []string
+}
+
+func queueFence(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")
 }
 
 func queueLineParts(line string) (text string, checked, ok bool) {
@@ -354,30 +372,49 @@ func queueSnapshot(file string) queueView {
 	}
 	entries, plain := parseQueueEntries(content)
 	view := queueView{plain: plain}
-	doneByTag := map[string]bool{}
 	doneByOrdinal := map[int]bool{}
-
-	knownTags := map[string]bool{}
-	openByTag := map[string]bool{}
-	for _, entry := range entries {
+	carriers, waitingOn := map[string]int{}, map[string]int{}
+	marks := func(entry queueEntry) []string {
+		keys := []string{}
 		for tag := range entry.tags {
-			knownTags[tag] = true
+			keys = append(keys, "#"+tag)
+		}
+		if issue, found := itemIssue(entry.text); found {
+			keys = append(keys, "issue:"+strings.ToLower(issue.ref()))
+		}
+		return keys
+	}
+	for _, entry := range entries {
+		for _, key := range marks(entry) {
+			carriers[key]++
 			if !entry.checked {
-				openByTag[tag] = true
+				waitingOn[key]++
 			}
 		}
 		doneByOrdinal[entry.ordinal] = entry.checked
 	}
-	for tag := range knownTags {
-		doneByTag[tag] = !openByTag[tag]
-	}
-	satisfied := func(reference string) bool {
-		if strings.HasPrefix(reference, "#") {
-			tag := strings.TrimPrefix(reference, "#")
-			return !knownTags[tag] || doneByTag[tag]
+	satisfied := func(self queueEntry, reference string) bool {
+		key := ""
+		if at := strings.LastIndexByte(reference, '#'); at >= 0 {
+			number := reference[at+1:]
+			if _, err := strconv.Atoi(number); err == nil {
+				key = "issue:" + strings.ToLower(issueID{repo: reference[:at], number: number}.ref())
+			} else if at == 0 {
+				key = reference
+			}
+		}
+		if key != "" {
+			others, waiting := carriers[key], waitingOn[key]
+			if slices.Contains(marks(self), key) {
+				others--
+				if !self.checked {
+					waiting--
+				}
+			}
+			return others <= 0 || waiting <= 0
 		}
 		ordinal, err := strconv.Atoi(reference)
-		if err != nil || ordinal < 1 || ordinal > len(entries) {
+		if err != nil || ordinal < 1 || ordinal > len(entries) || ordinal == self.ordinal {
 			return true
 		}
 		return doneByOrdinal[ordinal]
@@ -390,7 +427,7 @@ func queueSnapshot(file string) queueView {
 		view.total++
 		ready := true
 		for _, reference := range entry.after {
-			if !satisfied(reference) {
+			if !satisfied(entry, reference) {
 				ready = false
 				break
 			}
