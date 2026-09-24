@@ -211,6 +211,7 @@ func onSessionStart(input, cfg object) {
 			}
 			logInfo("queue file %s found but not trusted (%d open): no directive injected", queuePath, snapshot.total)
 		} else {
+			rememberOpenIssues(cfg, queuePath)
 			if isAutoQueue(queuePath) {
 				contexts = append(contexts, autoQueueDirective(queuePath, snapshot.total))
 			} else {
@@ -475,6 +476,7 @@ func onUserPromptSubmit(input, cfg object) {
 	if getBool(section(cfg, "queue"), "auto", true) && getBool(section(cfg, "queue"), "enabled", true) && !observing && !promptFromPlugin && queueFile(cfg, queueDirs(input)...) == "" {
 		if items := autoQueueItems(getString(input, "prompt")); len(items) > 0 {
 			if path := startAutoQueue(sid, getString(input, "cwd"), items, now); path != "" {
+				rememberOpenIssues(cfg, path)
 				contexts = append(contexts, autoQueueDirective(path, len(items)))
 				systemMessage = joinNotices(systemMessage, T("queue.autoNotice", len(items), pluginName))
 				resetIdleGuard(readState(), sid)

@@ -154,6 +154,7 @@ func runQueueTrust(cfg object, cwd, action string) {
 	switch action {
 	case "trust":
 		trustQueueFile(target, true)
+		rememberOpenIssues(cfg, target)
 		fmt.Println(T("queue.trustGranted", target))
 	case "untrust":
 		trustQueueFile(target, false)
@@ -292,6 +293,9 @@ func runQueue() {
 			os.Exit(1)
 		}
 	}
+	if absolute, err := filepath.Abs(target); err == nil {
+		rememberOpenIssues(cfg, absolute)
+	}
 	if qualified > 0 {
 		logInfo("queue import: %d item(s) in %s that an older import wrote as a bare #N now name %s", qualified, filepath.Base(target), repo)
 	}
@@ -302,18 +306,10 @@ func runQueue() {
 	fmt.Println(T("queue.importDone", len(lines), len(issues)-len(lines), filepath.Base(target)))
 }
 
-func syncDoneIssues(cfg object, queuePath, cwd string) {
-	github := getMap(section(cfg, "queue"), "github")
-	if !getBool(github, "closeOnDone", false) {
-		return
-	}
-	content, err := os.ReadFile(queuePath)
-	if err != nil {
-		return
-	}
+func queueIssueItems(content string) (map[string]bool, map[string]issueID) {
 	open, checked := map[string]bool{}, map[string]issueID{}
 	fenced := false
-	for _, line := range strings.Split(strings.TrimPrefix(string(content), "\uFEFF"), "\n") {
+	for _, line := range strings.Split(strings.TrimPrefix(content, "\uFEFF"), "\n") {
 		if queueFence(line) {
 			fenced = !fenced
 			continue
@@ -332,6 +328,41 @@ func syncDoneIssues(cfg object, queuePath, cwd string) {
 			open[issue.ref()] = true
 		}
 	}
+	return open, checked
+}
+
+func rememberOpenIssues(cfg object, queuePath string) {
+	if queuePath == "" || !getBool(getMap(section(cfg, "queue"), "github"), "closeOnDone", false) {
+		return
+	}
+	content, err := os.ReadFile(queuePath)
+	if err != nil {
+		return
+	}
+	open, _ := queueIssueItems(string(content))
+	if len(open) == 0 {
+		return
+	}
+	updateState(func(state object) {
+		seen := stateMap(state, "githubSeen")
+		for ref := range open {
+			if key := queuePath + "#" + ref; seen[key] == nil {
+				seen[key] = object{"status": "open", "at": float64(nowSec())}
+			}
+		}
+	})
+}
+
+func syncDoneIssues(cfg object, queuePath, cwd string) {
+	github := getMap(section(cfg, "queue"), "github")
+	if !getBool(github, "closeOnDone", false) {
+		return
+	}
+	content, err := os.ReadFile(queuePath)
+	if err != nil {
+		return
+	}
+	open, checked := queueIssueItems(string(content))
 	if len(open) == 0 && len(checked) == 0 {
 		return
 	}
