@@ -405,14 +405,7 @@ func healStatusLine() {
 		if command == "" || !strings.Contains(command, pluginName) {
 			return false
 		}
-		current := command
-		if strings.HasPrefix(command, `"`) {
-			if end := strings.Index(command[1:], `"`); end >= 0 {
-				current = command[1 : end+1]
-			}
-		} else if space := strings.Index(command, " "); space >= 0 {
-			current = command[:space]
-		}
+		current := statusLineBinary(command)
 		binary := healTargetBinary()
 		if binary == "" || forwardSlashes(current) == forwardSlashes(binary) {
 			return false
@@ -428,6 +421,35 @@ func healStatusLine() {
 	}) {
 		logInfo("ensure: statusLine re-pointed from %s to %s", from, to)
 	}
+}
+
+func statusLineBinary(command string) string {
+	if strings.HasPrefix(command, `"`) {
+		if end := strings.Index(command[1:], `"`); end >= 0 {
+			return command[1 : end+1]
+		}
+	} else if space := strings.Index(command, " "); space >= 0 {
+		return command[:space]
+	}
+	return command
+}
+
+func ownStatusLine(command string) bool {
+	return strings.Contains(command, "guard.js") || strings.Contains(command, pluginName)
+}
+
+func goneBinary(binary string) string {
+	if strings.Contains(binary, pluginName) && filepath.IsAbs(filepath.FromSlash(binary)) && statSafe(binary) == nil {
+		return binary
+	}
+	return ""
+}
+
+func statusLineGone(command string) string {
+	if !ownStatusLine(command) {
+		return ""
+	}
+	return goneBinary(statusLineBinary(command))
 }
 
 func configureRoles(configFile string, config object, pluginRoot string, rolesAreNew bool) error {

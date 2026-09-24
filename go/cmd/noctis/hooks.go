@@ -128,8 +128,10 @@ func selfCheckIssues(cfg object) []string {
 			issues = append(issues, T("selfcheck.settings"))
 		} else {
 			statusLine := getString(getMap(settings.data, "statusLine"), "command")
-			if !strings.Contains(statusLine, "guard.js") && !strings.Contains(statusLine, "noctis") {
+			if !ownStatusLine(statusLine) {
 				issues = append(issues, T("selfcheck.statusline"))
+			} else if gone := statusLineGone(statusLine); gone != "" {
+				issues = append(issues, T("selfcheck.statuslineGone", gone))
 			}
 		}
 	}

@@ -516,7 +516,7 @@ func doctorLines(cfg object) []string {
 	}
 	lines = append(lines, fixLine(settings.ok, T("doctor.settings", settingsText), settingsRemedy, files.settings)...)
 	statusLine := getString(getMap(settings.data, "statusLine"), "command")
-	lines = append(lines, fixLine(strings.Contains(statusLine, "guard.js") || strings.Contains(statusLine, "noctis"), T("doctor.statusline", orDefault(statusLine, T("doctor.none"))), "doctor.fixStatusline")...)
+	lines = append(lines, statusLineDoctorLines(statusLine, "doctor.fixStatusline")...)
 	effort := getString(getMap(settings.data, "env"), "CLAUDE_CODE_EFFORT_LEVEL")
 	wantEffort := getString(section(cfg, "models"), "effort")
 	effortText := T("doctor.effort", orDefault(effort, T("doctor.none")))
@@ -611,6 +611,47 @@ func errorsDoctorLines() []string {
 		latest = string(runes[:160])
 	}
 	return fixLine(false, T("doctor.errors", T("doctor.errorsRecent", count, latest)), "doctor.fixErrors", files.errors)
+}
+
+func statusLineDoctorLines(command, remedy string, values ...any) []string {
+	text := T("doctor.statusline", orDefault(command, T("doctor.none")))
+	gone := statusLineGone(command)
+	if gone != "" {
+		text = T("doctor.statuslineGone", command, gone)
+	}
+	return fixLine(ownStatusLine(command) && gone == "", text, remedy, values...)
+}
+
+func hostHooksGone(file string) string {
+	binaries := []string{}
+	collectHookBinaries(readJSON(file), &binaries)
+	for _, binary := range binaries {
+		if gone := goneBinary(binary); gone != "" {
+			return gone
+		}
+	}
+	return ""
+}
+
+func collectHookBinaries(value any, into *[]string) {
+	switch typed := value.(type) {
+	case object:
+		for key, item := range typed {
+			text, isText := item.(string)
+			switch {
+			case isText && key == "command":
+				*into = append(*into, statusLineBinary(text))
+			case isText && key == "exec":
+				*into = append(*into, text)
+			default:
+				collectHookBinaries(item, into)
+			}
+		}
+	case []any:
+		for _, item := range typed {
+			collectHookBinaries(item, into)
+		}
+	}
 }
 
 func tokenDoctorLines(cfg object) []string {
@@ -1277,10 +1318,14 @@ func hostDoctorLines(cfg object, host hostSpec, lines []string) []string {
 	exe := hostExecutable(host.id)
 	lines = append(lines, fixLine(exe != "", T("doctor.host", host.display, orDefault(exe, T("doctor.notFound"))), "doctor.fixHost", host.display, host.exe)...)
 	wired, where := hostHooksWired(host.id, files.configDir)
-	lines = append(lines, fixLine(wired, T("doctor.hostHooks", where), "doctor.fixHostSetup", host.id)...)
+	hooksText := T("doctor.hostHooks", where)
+	if gone := hostHooksGone(where); wired && gone != "" {
+		wired, hooksText = false, T("doctor.hostHooksGone", where, gone)
+	}
+	lines = append(lines, fixLine(wired, hooksText, "doctor.fixHostSetup", host.id)...)
 	if host.id == "antigravity" {
 		statusLine := getString(getMap(readJSON(files.settings), "statusLine"), "command")
-		lines = append(lines, fixLine(strings.Contains(statusLine, "noctis"), T("doctor.statusline", orDefault(statusLine, T("doctor.none"))), "doctor.fixHostSetup", host.id)...)
+		lines = append(lines, statusLineDoctorLines(statusLine, "doctor.fixHostSetup", host.id)...)
 	}
 	lines = append(lines, configDoctorLines(cfg, "doctor.fixHostSetup", host.id)...)
 	switch host.id {
