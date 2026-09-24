@@ -21,7 +21,7 @@ func TestEveryToolIsToldToResumeWithItsOwnCommand(t *testing.T) {
 		locale = code
 		for _, text := range []string{
 			T("session.checkpoint", pluginName, "10:00", "/tmp/cp.md", codex),
-			T("launch.failed", "s-1", codex),
+			T("launch.failed", "s-1", "/work/project", codex),
 			T("runner.noData", "s-1", codex),
 			T("status.launchFailed", "s-1", "10:00", codex),
 		} {

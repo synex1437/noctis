@@ -553,7 +553,6 @@ func launchClaude(cfg object, launch launchSpec) launchResult {
 	host := currentHost()
 	claudePath := hostExecutable(host.id)
 	if claudePath == "" {
-		notify(cfg, pluginName, T("launch.noClaude"))
 		fail("launch aborted: %s executable not found", host.exe)
 		return launchResult{}
 	}
@@ -562,7 +561,6 @@ func launchClaude(cfg object, launch launchSpec) launchResult {
 		return launchHostSession(cfg, host, claudePath, launch)
 	}
 	if launch.cwd == "" || statSafe(launch.cwd) == nil {
-		notify(cfg, pluginName, T("launch.noCwd", launch.cwd))
 		fail("launch aborted: cwd missing %s", launch.cwd)
 		return launchResult{}
 	}
@@ -606,7 +604,6 @@ func launchClaude(cfg object, launch launchSpec) launchResult {
 
 func launchHostSession(cfg object, host hostSpec, exe string, launch launchSpec) launchResult {
 	if launch.cwd == "" || statSafe(launch.cwd) == nil {
-		notify(cfg, pluginName, T("launch.noCwd", launch.cwd))
 		fail("launch aborted: cwd missing %s", launch.cwd)
 		return launchResult{}
 	}
@@ -1011,19 +1008,24 @@ func resumeWait(sid, release string) {
 		journal(sid, "resume", "take-over", fmt.Sprintf("runner %d only watches the window it opened before this pause", watcher), nil)
 		logInfo("runner %s: runner %d only watches the window it opened before this pause; taking the session over", sid, watcher)
 	}
-	if ready != "" {
-		notify(cfg, pluginName, ready)
-	}
 	launchMode := getString(wait, "launchMode")
 	if launchMode == "none" {
 		launchMode = ""
 	}
+	launch := launchSpec{sid: sid, model: model, effort: effort, prompt: prompt, cwd: launchDir, mode: launchMode, permissionMode: getString(wait, "permissionMode"), configDir: relaunchConfigDir(wait)}
+	if blocked := launchBlocked(launch); blocked != "" {
+		reportLaunchFailure(cfg, sid, model, launch.cwd, blocked)
+		return
+	}
+	if ready != "" {
+		notify(cfg, pluginName, ready)
+	}
 	journal(sid, "resume", "launch", model, object{"mode": orDefault(launchMode, getString(resume, "mode"))})
 	updateState(func(next object) { delete(stateMap(next, "launchFailures"), sid) })
 	launchStart := time.Now()
-	result := launchClaude(cfg, launchSpec{sid: sid, model: model, effort: effort, prompt: prompt, cwd: launchDir, mode: launchMode, permissionMode: getString(wait, "permissionMode"), configDir: relaunchConfigDir(wait)})
+	result := launchClaude(cfg, launch)
 	if !result.started {
-		reportLaunchFailure(cfg, sid, model)
+		reportLaunchFailure(cfg, sid, model, launch.cwd, "")
 		return
 	}
 	if !relaunchDidNothing(wait, launchStart, result) {
@@ -1033,7 +1035,7 @@ func resumeWait(sid, release string) {
 	journal(sid, "resume", "launch-no-progress", model, object{"attempt": float64(attempts)})
 	if attempts >= stopFailureMaxAttempts {
 		fail("runner %s: the relaunch ended %d times without the session answering", sid, attempts)
-		reportLaunchFailure(cfg, sid, model)
+		reportLaunchFailure(cfg, sid, model, launch.cwd, "")
 		return
 	}
 	ended := float64(nowSec() + 1)
@@ -1052,11 +1054,23 @@ func resumeWait(sid, release string) {
 	warn("runner %s: the relaunch ended without the session answering; retry %d at %s", sid, attempts, localISO(retryAt))
 }
 
-func reportLaunchFailure(cfg object, sid, model string) {
+func launchBlocked(launch launchSpec) string {
+	host := currentHost()
+	manual := hostResumeCommand(host.id, launch.sid)
+	if hostExecutable(host.id) == "" {
+		return T("launch.noClaude", shortSid(launch.sid), host.exe, orDefault(launch.cwd, "?"), manual)
+	}
+	if launch.cwd == "" || statSafe(launch.cwd) == nil {
+		return T("launch.noCwd", shortSid(launch.sid), orDefault(launch.cwd, "?"), manual)
+	}
+	return ""
+}
+
+func reportLaunchFailure(cfg object, sid, model, cwd, notice string) {
 	journal(sid, "resume", "launch-failed", model, nil)
 	manual := hostResumeCommand(currentHost().id, sid)
-	notify(cfg, pluginName, T("launch.failed", shortSid(sid), manual))
-	fail("runner %s: automatic relaunch failed; resume manually with %s", sid, manual)
+	notify(cfg, pluginName, orDefault(notice, T("launch.failed", shortSid(sid), orDefault(cwd, "?"), manual)))
+	fail("runner %s: automatic relaunch failed; resume manually in %s with %s", sid, orDefault(cwd, "?"), manual)
 	updateState(func(next object) {
 		stateMap(next, "launchFailures")[sid] = object{"at": float64(nowSec()), "model": model}
 	})
