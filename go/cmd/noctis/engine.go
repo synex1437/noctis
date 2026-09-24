@@ -1584,24 +1584,40 @@ func notify(cfg object, title, body string) {
 	logInfo("notify: %s — %s", title, body)
 }
 
+var switchedEffortKeys = []string{"effortSet", "effortWas", "effortAbsent"}
+
 func persistModelSwitch(cfg object, fableResetsAt float64, now int64) {
 	models := section(cfg, "models")
 	fallback := getString(models, "fallback")
-	replaced := settingsModel()
+	replaced, hadModel, effortBefore, hadEffort := settingsModelAndEffort()
 	if replaced != fallback {
 		setSettingsModel(fallback)
 	}
-	previousEffort := setSettingsEffort(getString(getMap(section(cfg, "roles"), "fallback"), "effort"))
+	effort := getString(getMap(section(cfg, "roles"), "fallback"), "effort")
+	wroteEffort := setSettingsEffort(effort)
 	updateState(func(state object) {
 		switched := object{"at": float64(now), "from": orDefault(replaced, getString(models, "primary")), "to": fallback, "fableResetsAt": fableResetsAt}
-		if earlier := getMap(state, "modelSwitched"); earlier != nil && replaced == fallback {
-			switched["from"] = orDefault(getString(earlier, "from"), getString(switched, "from"))
-			if previousEffort == "" {
-				previousEffort = getString(earlier, "effortWas")
+		if !hadModel {
+			switched["modelAbsent"] = true
+		}
+		if wroteEffort {
+			switched["effortSet"] = effort
+			if hadEffort {
+				switched["effortWas"] = effortBefore
+			} else {
+				switched["effortAbsent"] = true
 			}
 		}
-		if previousEffort != "" {
-			switched["effortWas"] = previousEffort
+		if earlier := getMap(state, "modelSwitched"); earlier != nil && replaced == fallback {
+			switched["from"] = orDefault(getString(earlier, "from"), getString(switched, "from"))
+			if earlier["modelAbsent"] != nil {
+				switched["modelAbsent"] = earlier["modelAbsent"]
+			}
+			for _, key := range switchedEffortKeys {
+				if earlier[key] != nil && !wroteEffort {
+					switched[key] = earlier[key]
+				}
+			}
 		}
 		state["modelSwitched"] = switched
 	})
@@ -2061,13 +2077,22 @@ func maybeRevertDefaultModel(cfg object, state object, usage usageView, now int6
 	}
 	models := section(cfg, "models")
 	target := orDefault(getString(switched, "from"), getString(models, "primary"))
-	if settingsModel() == orDefault(getString(switched, "to"), getString(models, "fallback")) {
+	notice := ""
+	switch {
+	case settingsModel() != orDefault(getString(switched, "to"), getString(models, "fallback")):
+		logInfo("fable window cleared: the default model was changed after the switch and is left as it is")
+	case getBool(switched, "modelAbsent", false):
+		removeSettingsModel()
+		notice = T("scoped.revertedDefault", scopedLabel(cfg))
+		logInfo("fable window cleared: settings.json names no model again, as before the switch")
+	default:
 		setSettingsModel(target)
+		notice = T("scoped.reverted", scopedLabel(cfg), target)
+		logInfo("fable window cleared: default model reverted to %s", target)
 	}
-	setSettingsEffort(getString(switched, "effortWas"))
+	restoreSettingsEffort(switched)
 	updateState(func(next object) { next["modelSwitched"] = nil })
-	logInfo("fable window cleared: default model reverted to %s", target)
-	return T("scoped.reverted", scopedLabel(cfg), target)
+	return notice
 }
 
 func recordHookPulse(state object, now int64) {
