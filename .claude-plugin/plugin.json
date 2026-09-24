@@ -1,7 +1,7 @@
 {
   "name": "noctis",
   "description": "Runs long Claude Code jobs overnight within your usage limits: pauses just before the 5-hour or weekly limit, resumes the same session after the reset (or relaunches it days later) and works through a TASKS.md queue. Also runs in Codex CLI, Antigravity CLI, Droid and Copilot CLI.",
-  "version": "7.0.1",
+  "version": "7.1.0",
   "author": {
     "name": "synex"
   },
