@@ -46,7 +46,7 @@
   "selfcheck.agentTools": "%s: aggiungi %s ai suoi disallowedTools (noctis non può controllare quelle chiamate)",
   "selfcheck.message": "%s: %s — noctis doctor",
   "session.checkpoint": "%s: la sessione precedente è stata messa in pausa alle %s per un limite d'uso; nota di ripresa %s (contesto completo: %s).",
-  "session.alreadyOver": "⏸ L'uso di %s è già al %s%%: il lavoro nuovo attende fino alle %s e riprende da solo. Per continuare comunque: /noctis:pause 120.",
+  "session.alreadyOver": "⏸ L'uso %s è già al %s%%: il lavoro nuovo attende fino alle %s e riprende da solo. Per continuare comunque: /noctis:pause 120.",
   "queue.stuckNotify": "La coda non avanza: %d elementi aperti, sessione fermata (%s).",
   "queue.stuckMessage": "⛔ La coda non avanza (%d aperti); continuazione automatica fermata — vedi errors.log.",
   "queue.doneNotify": "Coda completata: %s non ha elementi aperti.",
