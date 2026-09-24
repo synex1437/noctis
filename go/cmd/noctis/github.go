@@ -215,7 +215,7 @@ func runQueue() {
 		os.Exit(1)
 	}
 	existing, _ := os.ReadFile(target)
-	fileLines := strings.Split(string(existing), "\n")
+	fileLines := strings.Split(strings.TrimPrefix(string(existing), "\uFEFF"), "\n")
 	known, bare := map[string]bool{}, map[string][]bareIssueItem{}
 	for index, line := range fileLines {
 		entry, ok := parseQueueLine(line, 0)
@@ -304,7 +304,7 @@ func syncDoneIssues(cfg object, queuePath, cwd string) {
 		return
 	}
 	open, checked := map[string]bool{}, map[string]issueID{}
-	for _, line := range strings.Split(string(content), "\n") {
+	for _, line := range strings.Split(strings.TrimPrefix(string(content), "\uFEFF"), "\n") {
 		entry, ok := parseQueueLine(line, 0)
 		issue, found := itemIssue(entry.text)
 		if !ok || !found {
