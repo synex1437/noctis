@@ -164,6 +164,14 @@ func queueDirective(cfg object, queuePath string, total int) string {
 	return directive
 }
 
+func alreadyOverNotice(wait *waitPlan) string {
+	notice := T("session.alreadyOver", wait.label, formatNumber(wait.used), formatTime(wait.until))
+	if wait.hit != "ceiling" {
+		notice += T("session.pauseHint")
+	}
+	return notice
+}
+
 func onSessionStart(input, cfg object) {
 	repairOrphanWaits()
 	now := nowSec()
@@ -254,7 +262,7 @@ func onSessionStart(input, cfg object) {
 			key := fmt.Sprintf("over:%s:%s", verdict.wait.window, formatNumber(verdict.wait.until))
 			if getMap(state, "notified")[key] == nil {
 				updateState(func(next object) { stateMap(next, "notified")[key] = float64(now) })
-				output["systemMessage"] = joinNotices(getString(output, "systemMessage"), T("session.alreadyOver", verdict.wait.label, formatNumber(verdict.wait.used), formatTime(verdict.wait.until)))
+				output["systemMessage"] = joinNotices(getString(output, "systemMessage"), alreadyOverNotice(verdict.wait))
 			}
 		}
 	}

@@ -1213,7 +1213,7 @@ func holdWait(kind, sid string, cfg object, wait *waitPlan, resumeAt float64, he
 		if !sameReset(current, wait.window, wait.until) || !getBool(current, "inHook", false) {
 			journal(sid, kind, "wait-replaced", hitLabel(wait), object{"window": getString(current, "window")})
 			logInfo("in-hook wait for %s was replaced by a %s pause it cannot wait out; stopping", sid, getString(current, "window"))
-			return waitHold{watch: watch, stop: T("wait.saved", orDefault(getString(current, "label"), wait.label), formatNumber(numberOr(current, "used", wait.used)), formatTime(numberOr(current, "resumeAt", resumeAt)), "")}
+			return waitHold{watch: watch, stop: savedNotice(cfg, orDefault(getString(current, "label"), wait.label), formatNumber(numberOr(current, "used", wait.used)), formatTime(numberOr(current, "resumeAt", resumeAt)), "")}
 		}
 		journal(sid, kind, "join-wait", hitLabel(wait), object{"window": wait.window})
 		held, owned = current, false
@@ -1223,7 +1223,7 @@ func holdWait(kind, sid string, cfg object, wait *waitPlan, resumeAt float64, he
 func joinWait(kind, sid string, cfg object, wait *waitPlan, current object, resumeAt float64, inHook bool, now int64) waitOutcome {
 	journal(sid, kind, "join-wait", hitLabel(wait), object{"window": wait.window})
 	if !inHook || !getBool(current, "inHook", false) {
-		return waitOutcome{stop: T("wait.saved", wait.label, formatNumber(wait.used), formatTime(numberOr(current, "resumeAt", resumeAt)), "")}
+		return waitOutcome{stop: savedNotice(cfg, wait.label, formatNumber(wait.used), formatTime(numberOr(current, "resumeAt", resumeAt)), "")}
 	}
 	if hold := holdWait(kind, sid, cfg, wait, resumeAt, current, false); hold.stop != "" {
 		return waitOutcome{stop: hold.stop}
@@ -1688,11 +1688,22 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 	if getString(scheduled, "method") == "sleeper" {
 		suffix = T("wait.sleeperSuffix")
 	}
-	stop := T("wait.saved", wait.label, formatNumber(wait.used), formatTime(resumeAt), suffix)
-	if kind == "prompt" {
+	return waitOutcome{stop: savedStop(cfg, kind, wait, resumeAt, suffix)}
+}
+
+func savedStop(cfg object, kind string, wait *waitPlan, resumeAt float64, suffix string) string {
+	stop := savedNotice(cfg, wait.label, formatNumber(wait.used), formatTime(resumeAt), suffix)
+	if kind == "prompt" && wait.hit != "ceiling" {
 		stop += " " + T("wait.savedHint")
 	}
-	return waitOutcome{stop: stop}
+	return stop
+}
+
+func savedNotice(cfg object, label, used, at, suffix string) string {
+	if getString(section(cfg, "resume"), "mode") == "none" {
+		return T("wait.savedManual", label, used, at)
+	}
+	return T("wait.saved", label, used, at, suffix)
 }
 
 func blindWindow(cfg object, snapshot usageView) (key string, threshold float64, guarded bool) {
