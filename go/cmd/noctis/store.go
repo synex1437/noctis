@@ -444,15 +444,43 @@ func marshalCompact(value any) []byte {
 	return bytes.TrimRight(buffer.Bytes(), "\n")
 }
 
+func linkTarget(file string) string {
+	target := file
+	for hops := 0; hops < 40; hops++ {
+		link, err := os.Readlink(target)
+		if err != nil {
+			return target
+		}
+		if !filepath.IsAbs(link) {
+			dir := filepath.Dir(target)
+			if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+				dir = resolved
+			}
+			link = filepath.Join(dir, link)
+		}
+		target = link
+	}
+	return file
+}
+
 func writeJSONAtomic(file string, value any) error {
+	file = linkTarget(file)
 	ensureDir(filepath.Dir(file))
 	encoded := marshalPretty(value)
 	if encoded == nil {
 		return errors.New("value cannot be encoded as JSON; file left unchanged")
 	}
+	mode := os.FileMode(0o600)
+	info, statErr := os.Stat(file)
+	if statErr == nil {
+		mode = info.Mode().Perm()
+	}
 	tmp := fmt.Sprintf("%s.%d.tmp", file, os.Getpid())
-	if err := os.WriteFile(tmp, encoded, 0o600); err != nil {
+	if err := os.WriteFile(tmp, encoded, mode); err != nil {
 		return err
+	}
+	if statErr == nil && !isWindows {
+		_ = os.Chmod(tmp, mode)
 	}
 
 	var err error
@@ -462,7 +490,7 @@ func writeJSONAtomic(file string, value any) error {
 		}
 		time.Sleep(time.Duration(10+attempt*10) * time.Millisecond)
 	}
-	if writeErr := os.WriteFile(file, encoded, 0o600); writeErr != nil {
+	if writeErr := os.WriteFile(file, encoded, mode); writeErr != nil {
 		if removeErr := os.Remove(tmp); removeErr != nil {
 			warn("temp file left behind: %s", tmp)
 		}
