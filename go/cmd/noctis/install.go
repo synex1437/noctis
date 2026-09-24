@@ -1119,8 +1119,8 @@ func enableMarketplaceAutoUpdate(pluginRoot string) string {
 }
 
 func pathsFor(configDir, pluginRoot string) paths {
-	saved := os.Getenv("CLAUDE_CONFIG_DIR")
-	savedRoot := os.Getenv("NOCTIS_PLUGIN_ROOT")
+	saved, hadSaved := os.LookupEnv("CLAUDE_CONFIG_DIR")
+	savedRoot, hadRoot := os.LookupEnv("NOCTIS_PLUGIN_ROOT")
 	os.Setenv("CLAUDE_CONFIG_DIR", configDir)
 	os.Setenv("NOCTIS_PLUGIN_ROOT", pluginRoot)
 
@@ -1133,7 +1133,15 @@ func pathsFor(configDir, pluginRoot string) paths {
 		delete(args.flags, "account")
 	}
 	result := files
-	os.Setenv("CLAUDE_CONFIG_DIR", saved)
-	os.Setenv("NOCTIS_PLUGIN_ROOT", savedRoot)
+	restoreEnv("CLAUDE_CONFIG_DIR", saved, hadSaved)
+	restoreEnv("NOCTIS_PLUGIN_ROOT", savedRoot, hadRoot)
 	return result
+}
+
+func restoreEnv(name, value string, had bool) {
+	if had {
+		os.Setenv(name, value)
+		return
+	}
+	os.Unsetenv(name)
 }
