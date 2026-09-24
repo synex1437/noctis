@@ -567,20 +567,47 @@ func doctorLines(cfg object) []string {
 		usageText = T("doctor.usageAt", formatTime(usageAt))
 	}
 	lines = append(lines, fixLine(usageAt > 0, T("doctor.usage", usageText), "doctor.fixUsage")...)
-	errorLines := tailFileLines(files.errors, 3)
-	errorText := T("doctor.clean")
-	if len(errorLines) > 0 {
-		last := errorLines[len(errorLines)-1]
-		if runes := []rune(last); len(runes) > 160 {
-			last = string(runes[:160])
-		}
-		errorText = T("doctor.errorsTail", len(errorLines), last)
-	}
-	lines = append(lines, checkLine(len(errorLines) == 0, T("doctor.errors", errorText)))
+	lines = append(lines, errorsDoctorLines()...)
 	for _, note := range coexistenceNotes(settings.data) {
 		lines = append(lines, "ℹ "+note)
 	}
 	return lines
+}
+
+const recentErrorsWindow = 24 * time.Hour
+
+func logEntryTime(entry string) (time.Time, bool) {
+	if len(entry) < 24 {
+		return time.Time{}, false
+	}
+	at, err := time.Parse("2006-01-02T15:04:05.000Z", entry[:24])
+	return at, err == nil
+}
+
+func errorsDoctorLines() []string {
+	entries := tailFileLines(files.errors, math.MaxInt32)
+	if len(entries) == 0 {
+		return []string{checkLine(true, T("doctor.errors", T("doctor.clean")))}
+	}
+	recent := 0
+	for _, entry := range entries {
+		if at, dated := logEntryTime(entry); !dated || time.Since(at) < recentErrorsWindow {
+			recent++
+		}
+	}
+	latest := entries[len(entries)-1]
+	if recent == 0 {
+		at, _ := logEntryTime(latest)
+		return []string{checkLine(true, T("doctor.errors", T("doctor.errorsOld", formatTime(float64(at.Unix())))))}
+	}
+	count := itoa(recent)
+	if info := statSafe(files.errors); recent == len(entries) && info != nil && info.Size() > tailLineWindowBytes {
+		count += "+"
+	}
+	if runes := []rune(latest); len(runes) > 160 {
+		latest = string(runes[:160])
+	}
+	return fixLine(false, T("doctor.errors", T("doctor.errorsRecent", count, latest)), "doctor.fixErrors", files.errors)
 }
 
 func doctorConfigLines(cfg object) []string {
@@ -1246,15 +1273,6 @@ func hostDoctorLines(cfg object, host hostSpec, lines []string) []string {
 	}
 	backend := schedulerBackend()
 	lines = append(lines, checkLine(backend != "sleeper", T("doctor.scheduler", backend)))
-	errorLines := tailFileLines(files.errors, 3)
-	errorText := T("doctor.clean")
-	if len(errorLines) > 0 {
-		last := errorLines[len(errorLines)-1]
-		if runes := []rune(last); len(runes) > 160 {
-			last = string(runes[:160])
-		}
-		errorText = T("doctor.errorsTail", len(errorLines), last)
-	}
-	lines = append(lines, checkLine(len(errorLines) == 0, T("doctor.errors", errorText)))
+	lines = append(lines, errorsDoctorLines()...)
 	return lines
 }

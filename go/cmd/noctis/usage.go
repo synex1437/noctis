@@ -720,7 +720,7 @@ func refreshFable(cfg object, now int64, reason string, maxAge float64, ignoreBa
 	if parsed["fable"] == nil {
 		next["note"] = "no-scoped-bucket-in-response"
 		if getString(cached, "note") == "" {
-			warn("scoped refresh (%s): response has no %s bucket", reason, scopedLabel(cfg))
+			logInfo("scoped refresh (%s): response has no %s bucket", reason, scopedLabel(cfg))
 		}
 	}
 	mustWriteJSON(files.fable, next)
