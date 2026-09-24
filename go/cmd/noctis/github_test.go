@@ -18,9 +18,9 @@ func fakeGhCLI(t *testing.T, listing string) string {
 	}
 	t.Setenv("NOCTIS_TEST_GH_CALLS", calls)
 	t.Setenv("NOCTIS_TEST_GH_ISSUES", issues)
-	name, script := "gh", "#!/bin/sh\necho \"gh $*\" >> \"$NOCTIS_TEST_GH_CALLS\"\nif [ \"$1\" = issue ] && [ \"$2\" = list ]; then cat \"$NOCTIS_TEST_GH_ISSUES\"; fi\n"
+	name, script := "gh", "#!/bin/sh\necho \"gh $*\" >> \"$NOCTIS_TEST_GH_CALLS\"\nif [ \"$1\" = issue ] && [ \"$2\" = list ]; then cat \"$NOCTIS_TEST_GH_ISSUES\"; fi\nif [ \"$1\" = issue ] && [ \"$2\" = close ] && [ -n \"$NOCTIS_TEST_GH_FAIL\" ] && [ -f \"$NOCTIS_TEST_GH_FAIL\" ]; then echo \"error connecting to api.github.com\" >&2; exit 1; fi\n"
 	if isWindows {
-		name, script = "gh.cmd", "@echo off\r\n>>\"%NOCTIS_TEST_GH_CALLS%\" echo gh %*\r\nif \"%~1\"==\"issue\" if \"%~2\"==\"list\" type \"%NOCTIS_TEST_GH_ISSUES%\"\r\n"
+		name, script = "gh.cmd", "@echo off\r\n>>\"%NOCTIS_TEST_GH_CALLS%\" echo gh %*\r\nif \"%~1\"==\"issue\" if \"%~2\"==\"list\" type \"%NOCTIS_TEST_GH_ISSUES%\"\r\nif \"%~1\"==\"issue\" if \"%~2\"==\"close\" if exist \"%NOCTIS_TEST_GH_FAIL%\" (echo error connecting to api.github.com 1>&2 & exit /b 1)\r\n"
 	}
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
 		t.Fatal(err)

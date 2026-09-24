@@ -1,17 +1,23 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 const issueRepoPattern = `(?:\w[\w-]*(?:\.[\w-]+)+/)?\w[\w.-]*/[\w.-]+`
+
+const (
+	closeOnDoneAttempts = 3
+	closeClaimSeconds   = 120
+)
 
 var (
 	issueRef      = lazyRegexp(`(?i)^(?:\(p\d\)\s*)?(` + issueRepoPattern + `)?#(\d+)\b`)
@@ -367,60 +373,110 @@ func syncDoneIssues(cfg object, queuePath, cwd string) {
 		return
 	}
 	prefix := queuePath + "#"
-	pending := []issueID{}
-	changed := false
+	pending, skipped := []issueID{}, []issueID{}
 	updateState(func(state object) {
+		now := float64(nowSec())
 		seen := stateMap(state, "githubSeen")
-		status := func(key string) string { return getString(getMap(seen, key), "status") }
 		for _, ref := range sortedKeys(checked) {
 			key := prefix + ref
 			if open[ref] {
 				continue
 			}
-			if status(key) == "open" {
+			record := getMap(seen, key)
+			status := getString(record, "status")
+			switch {
+			case record == nil:
+				seen[key] = object{"status": "closed", "at": now}
+			case status == "open" || status == "closing" && now-numberOr(record, "at", 0) > closeClaimSeconds:
+				if !checked[ref].trustedHost() {
+					record["status"], record["at"] = "skipped", now
+					skipped = append(skipped, checked[ref])
+					continue
+				}
+				record["status"], record["at"] = "closing", now
 				pending = append(pending, checked[ref])
-			}
-			if status(key) != "closed" {
-				seen[key] = object{"status": "closed", "at": float64(nowSec())}
-				changed = true
 			}
 		}
 		for ref := range open {
 			if key := prefix + ref; seen[key] == nil {
-				seen[key] = object{"status": "open", "at": float64(nowSec())}
-				changed = true
+				seen[key] = object{"status": "open", "at": now}
 			}
 		}
 	})
-	if !changed {
+	for _, issue := range skipped {
+		warn("not closing GitHub issue %s (checked off in %s): its host is neither github.com nor GH_HOST", issue, filepath.Base(queuePath))
+	}
+	if len(pending) == 0 {
 		return
 	}
 	comment := orDefault(getString(github, "comment"), "Completed by Claude Code (noctis queue).")
-	for _, issue := range pending {
-		if _, err := strconv.Atoi(issue.number); err != nil {
-			continue
-		}
-		if !issue.trustedHost() {
-			warn("not closing GitHub issue %s (checked off in %s): its host is neither github.com nor GH_HOST", issue, filepath.Base(queuePath))
-			continue
-		}
-		arguments := []string{"issue", "close", issue.number}
-		if issue.repo != "" {
-			arguments = append(arguments, "--repo", issue.repo)
-		}
-		child := exec.Command("gh", append(arguments, "--comment", comment)...)
-
-		child.Dir = filepath.Dir(queuePath)
-		if isAutoQueue(queuePath) && cwd != "" {
-			child.Dir = cwd
-		}
-		configureDetached(child)
-		if err := child.Start(); err != nil {
-			warn("gh issue close %s failed to start: %v", issue, err)
-			continue
-		}
-		_ = child.Process.Release()
-		journal("", "Stop", "close-issue", issue.String(), object{"file": filepath.Base(queuePath)})
-		logInfo("closing GitHub issue %s (checked off in %s)", issue, filepath.Base(queuePath))
+	dir := filepath.Dir(queuePath)
+	if isAutoQueue(queuePath) && cwd != "" {
+		dir = cwd
 	}
+	failures := make([]error, len(pending))
+	var closing sync.WaitGroup
+	for index, issue := range pending {
+		closing.Add(1)
+		go func() {
+			defer closing.Done()
+			failures[index] = closeIssue(issue, dir, comment)
+		}()
+	}
+	closing.Wait()
+	attempts := make([]float64, len(pending))
+	updateState(func(state object) {
+		now := float64(nowSec())
+		seen := stateMap(state, "githubSeen")
+		for index, issue := range pending {
+			key := prefix + issue.ref()
+			record := getMap(seen, key)
+			if record == nil {
+				record = object{}
+				seen[key] = record
+			}
+			record["at"] = now
+			if failures[index] == nil {
+				record["status"] = "closed"
+				delete(record, "error")
+				continue
+			}
+			attempts[index] = numberOr(record, "attempts", 0) + 1
+			record["attempts"], record["error"], record["status"] = attempts[index], truncateText(failures[index].Error(), 300), "open"
+			if attempts[index] >= closeOnDoneAttempts {
+				record["status"] = "failed"
+			}
+		}
+	})
+	for index, issue := range pending {
+		if failures[index] == nil {
+			journal("", "Stop", "close-issue", issue.String(), object{"file": filepath.Base(queuePath)})
+			logInfo("closed GitHub issue %s (checked off in %s)", issue, filepath.Base(queuePath))
+			continue
+		}
+		journal("", "Stop", "close-issue-failed", issue.String(), object{"file": filepath.Base(queuePath), "attempt": attempts[index], "error": truncateText(failures[index].Error(), 300)})
+		if attempts[index] >= closeOnDoneAttempts {
+			warn("GitHub issue %s (checked off in %s) could not be closed after %d attempts, giving up: %v", issue, filepath.Base(queuePath), int(attempts[index]), failures[index])
+			continue
+		}
+		warn("GitHub issue %s (checked off in %s) was not closed (attempt %d of %d), trying again at the next stop: %v", issue, filepath.Base(queuePath), int(attempts[index]), closeOnDoneAttempts, failures[index])
+	}
+}
+
+func closeIssue(issue issueID, dir, comment string) error {
+	arguments := []string{"issue", "close", issue.number}
+	if issue.repo != "" {
+		arguments = append(arguments, "--repo", issue.repo)
+	}
+	command := exec.Command("gh", append(arguments, "--comment", comment)...)
+	command.Dir = dir
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	if _, err := runWithTimeout(command, 20*time.Second); err != nil {
+		if detail := strings.TrimSpace(stderr.String()); detail != "" {
+			return fmt.Errorf("%v: %s", err, strings.Join(strings.Fields(detail), " "))
+		}
+		return err
+	}
+	return nil
 }

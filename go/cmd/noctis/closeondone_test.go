@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -68,5 +69,56 @@ func TestAnIssueInAChecklistFromThePromptIsClosedWhenTicked(t *testing.T) {
 	stopHookOutput(t, stopInput("cd4", project), cfg)
 	if closes := ghLoggedCloses(t, calls, 1); len(closes) != 1 || !strings.HasPrefix(closes[0], "gh issue close 12 ") {
 		t.Fatalf("#12 came open in the prompt's list and was ticked before the first stop; that stop ran %q, want one issue close 12", closes)
+	}
+}
+
+func issueStatus(queuePath, ref string) string {
+	return getString(getMap(getMap(readState(), "githubSeen"), queuePath+"#"+ref), "status")
+}
+
+func TestACloseGhRefusedIsTriedAgainAtTheNextStop(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, true)
+	calls := fakeGhCLI(t, "[]")
+	failing := filepath.Join(t.TempDir(), "fail")
+	t.Setenv("NOCTIS_TEST_GH_FAIL", failing)
+	queuePath := writeQueueFile(t, project, "# q\n- [ ] #12 Backend crash\n")
+	syncDoneIssues(cfg, queuePath, project)
+	tickIssueItem(t, queuePath, "#12 Backend crash")
+	if err := os.WriteFile(failing, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	syncDoneIssues(cfg, queuePath, project)
+	if status := issueStatus(queuePath, "12"); status == "closed" || len(ghLoggedCalls(calls, "close")) != 1 {
+		t.Fatalf("gh refused to close #12, yet it is recorded as %q after %d close call(s)", status, len(ghLoggedCalls(calls, "close")))
+	}
+	if err := os.Remove(failing); err != nil {
+		t.Fatal(err)
+	}
+	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, project)
+	if closes := ghLoggedCalls(calls, "close"); len(closes) != 2 || issueStatus(queuePath, "12") != "closed" {
+		t.Fatalf("after the refused close the next stops ran %d close call(s) in all and left #12 %q; want one more call and closed", len(closes), issueStatus(queuePath, "12"))
+	}
+}
+
+func TestACloseThatKeepsFailingIsGivenUpAndLogged(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, true)
+	calls := fakeGhCLI(t, "[]")
+	failing := filepath.Join(t.TempDir(), "fail")
+	t.Setenv("NOCTIS_TEST_GH_FAIL", failing)
+	if err := os.WriteFile(failing, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	queuePath := writeQueueFile(t, project, "# q\n- [ ] #12 Backend crash\n")
+	syncDoneIssues(cfg, queuePath, project)
+	tickIssueItem(t, queuePath, "#12 Backend crash")
+	for stop := 0; stop < 5; stop++ {
+		syncDoneIssues(cfg, queuePath, project)
+	}
+	if closes := ghLoggedCalls(calls, "close"); len(closes) != 3 || issueStatus(queuePath, "12") != "failed" {
+		t.Fatalf("five stops over a close gh keeps refusing ran %d close call(s) and left #12 %q; want 3 calls, then failed", len(closes), issueStatus(queuePath, "12"))
+	}
+	if errors := string(readFileOrEmpty(files.errors)); !strings.Contains(errors, "#12") || !strings.Contains(errors, "api.github.com") {
+		t.Fatalf("the refused closes are not in errors.log with gh's own words:\n%s", errors)
 	}
 }
