@@ -73,6 +73,7 @@ const (
 	waitStaleSeconds        = 2 * 86400
 	learnedBlockMisroutes   = 2
 	gitStatusLines          = 30
+	treeStatLimit           = 2000
 	hookPulseInterval       = 600
 	maxResetHorizon         = 45 * 86400
 	launchRecordTTLSeconds  = 8 * 86400

@@ -242,7 +242,7 @@ async function scenarioWorkspaceGuard(acc) {
   fs.writeFileSync(path.join(repo, 'a.txt'), 'someone edited this while it waited\n');
   await new Promise((resolve) => child.on('close', resolve));
   check('workspace guard: user notice mentions the changed tree', stdout.includes('çalışma ağacı değişti'), true);
-  check('workspace guard: the model is told to re-check', stdout.includes('"additionalContext"') && stdout.includes('git status differs from the checkpoint'), true);
+  check('workspace guard: the model is told to re-check', stdout.includes('"additionalContext"') && stdout.includes('the files, the commit or git status differ from the checkpoint'), true);
   check('workspace guard: journaled', acc.run(['why', '--last', '3']).includes('workspace-changed'), true);
   acc.statusline('wg2', 'claude-fable-5-1', 93, nowSec() + 3, 23, now + 3 * 86400);
   const quiet = await acc.hookPromise({ hook_event_name: 'UserPromptSubmit', session_id: 'wg2', cwd: repo, transcript_path: TRANSCRIPT, prompt: 'keep going with a.txt' });
@@ -267,15 +267,15 @@ async function scenarioWorkspaceGuard(acc) {
   const batch = await waitThroughAnEdit('wg4', { hook_event_name: 'PostToolBatch' }, 'b.txt');
   const batchSpecific = batch.hookSpecificOutput || {};
   check('workspace guard: PostToolBatch tells the user', String(batch.systemMessage).includes('çalışma ağacı değişti'), true);
-  check('workspace guard: PostToolBatch tells the model to re-check', batchSpecific.hookEventName === 'PostToolBatch' && String(batchSpecific.additionalContext).includes('git status differs from the checkpoint'), true);
+  check('workspace guard: PostToolBatch tells the model to re-check', batchSpecific.hookEventName === 'PostToolBatch' && String(batchSpecific.additionalContext).includes('the files, the commit or git status differ from the checkpoint'), true);
   const agent = await waitThroughAnEdit('wg5', { hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: { subagent_type: 'Explore', prompt: 'map a.txt' } }, 'c.txt');
   const agentSpecific = agent.hookSpecificOutput || {};
-  check('workspace guard: an Agent spawn after the wait keeps its model pin and tells the model to re-check', agentSpecific.permissionDecision === 'allow' && (agentSpecific.updatedInput || {}).model === 'haiku' && String(agentSpecific.additionalContext).includes('git status differs from the checkpoint') && String(agent.systemMessage).includes('çalışma ağacı değişti'), true);
+  check('workspace guard: an Agent spawn after the wait keeps its model pin and tells the model to re-check', agentSpecific.permissionDecision === 'allow' && (agentSpecific.updatedInput || {}).model === 'haiku' && String(agentSpecific.additionalContext).includes('the files, the commit or git status differ from the checkpoint') && String(agent.systemMessage).includes('çalışma ağacı değişti'), true);
   fs.writeFileSync(path.join(repo, 'TASKS.md'), '# q\n- [ ] first item\n- [ ] second item\n');
   acc.run(['queue', 'trust', '--file', path.join(repo, 'TASKS.md')]);
   const stop = await waitThroughAnEdit('wg6', { hook_event_name: 'Stop', stop_hook_active: false }, 'd.txt');
   check('workspace guard: Stop tells the user it waited and the tree changed', String(stop.systemMessage).includes('beklendi') && String(stop.systemMessage).includes('çalışma ağacı değişti'), true);
-  check('workspace guard: Stop puts the re-check note in the reason Claude reads, then continues the queue', stop.decision === 'block' && String(stop.reason).includes('git status differs from the checkpoint') && String(stop.reason).includes('Queue continues: 2 open'), true);
+  check('workspace guard: Stop puts the re-check note in the reason Claude reads, then continues the queue', stop.decision === 'block' && String(stop.reason).includes('the files, the commit or git status differ from the checkpoint') && String(stop.reason).includes('Queue continues: 2 open'), true);
   acc.run(['queue', 'untrust', '--file', path.join(repo, 'TASKS.md')]);
   for (const file of ['b.txt', 'c.txt', 'd.txt', 'TASKS.md']) fs.rmSync(path.join(repo, file), { force: true });
   acc.setConfig((config) => {
