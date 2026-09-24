@@ -291,6 +291,7 @@
   "roles.applied": "   役割: %s",
   "setup.unknownPreset": "不明なプリセット: %s（conservative | balanced | aggressive）",
   "why.empty": "まだ記録された判断はありません。",
+  "home.missing": "%s: ホームフォルダーが不明です（HOME が設定されていません）。そのためアカウントフォルダーが見つかりません。HOME を設定するか --account <フォルダー> を指定してください。",
   "unknownCommand": "不明なコマンド: %s。コマンド: %s",
   "args.unknown": "不明なオプション %s",
   "args.unknownGuess": "不明なオプション %s（%s のことですか？）",

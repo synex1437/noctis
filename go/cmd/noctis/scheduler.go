@@ -148,7 +148,7 @@ func launchdPlistBody(label, executable string, commandArgs []string, at float64
 
 func scheduleLaunchd(sid string, at float64, commandArgs []string) (object, bool) {
 	executable, err := os.Executable()
-	if err != nil {
+	if err != nil || homeDir() == "" {
 		return nil, false
 	}
 	cancelLaunchdJobs(sid)

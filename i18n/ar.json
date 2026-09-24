@@ -291,6 +291,7 @@
   "roles.applied": "   الأدوار: %s",
   "setup.unknownPreset": "مجموعة غير معروفة: %s (conservative | balanced | aggressive)",
   "why.empty": "لم تُسجَّل أي قرارات بعد.",
+  "home.missing": "%s: مجلد المنزل غير معروف (HOME غير معيّن)، لذا لا يمكن العثور على مجلد الحساب؛ عيّن HOME أو مرّر --account <مجلد>.",
   "unknownCommand": "أمر غير معروف: %s. الأوامر: %s",
   "args.unknown": "خيار غير معروف %s",
   "args.unknownGuess": "خيار غير معروف %s (هل تقصد %s؟)",

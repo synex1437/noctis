@@ -291,6 +291,7 @@
   "roles.applied": "   rôles : %s",
   "setup.unknownPreset": "préréglage inconnu : %s (conservative | balanced | aggressive)",
   "why.empty": "Aucune décision enregistrée pour l'instant.",
+  "home.missing": "%s : le dossier personnel est inconnu (HOME n'est pas défini), le dossier du compte est donc introuvable ; définis HOME ou passe --account <dossier>.",
   "unknownCommand": "Commande inconnue : %s. Commandes : %s",
   "args.unknown": "option inconnue %s",
   "args.unknownGuess": "option inconnue %s (voulais-tu dire %s ?)",

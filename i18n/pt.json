@@ -291,6 +291,7 @@
   "roles.applied": "   papéis: %s",
   "setup.unknownPreset": "predefinição desconhecida: %s (conservative | balanced | aggressive)",
   "why.empty": "Nenhuma decisão registrada ainda.",
+  "home.missing": "%s: a pasta pessoal é desconhecida (HOME não está definida), então a pasta da conta não pode ser encontrada; defina HOME ou passe --account <pasta>.",
   "unknownCommand": "Comando desconhecido: %s. Comandos: %s",
   "args.unknown": "opção desconhecida %s",
   "args.unknownGuess": "opção desconhecida %s (você quis dizer %s?)",

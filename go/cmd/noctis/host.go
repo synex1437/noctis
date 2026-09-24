@@ -91,8 +91,11 @@ func hostHome(id string) string {
 			return resolved
 		}
 	}
-	parts := append([]string{homeDir()}, spec.homeDefault...)
-	return filepath.Join(parts...)
+	home := homeDir()
+	if home == "" {
+		return ""
+	}
+	return filepath.Join(append([]string{home}, spec.homeDefault...)...)
 }
 
 func hostExecutable(id string) string {
@@ -209,10 +212,7 @@ func wireHostHooks(host, binary, accountDir string) ([]hostHookFile, error) {
 		}
 		return []hostHookFile{{file, "SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, Stop"}}, nil
 	case "antigravity":
-		file := filepath.Join(homeDir(), ".gemini", "config", "hooks.json")
-		if custom := os.Getenv("NOCTIS_ANTIGRAVITY_HOOKS"); custom != "" {
-			file = custom
-		}
+		file := antigravityHooksFile()
 		data := readJSONStrict(file)
 		if !data.ok {
 			return nil, errors.New(T("host.hooksBroken", file, data.err))
@@ -350,10 +350,7 @@ func unwireHostHooks(host, accountDir string) ([]string, error) {
 		}
 		removed = append(removed, file)
 	case "antigravity":
-		file := filepath.Join(homeDir(), ".gemini", "config", "hooks.json")
-		if custom := os.Getenv("NOCTIS_ANTIGRAVITY_HOOKS"); custom != "" {
-			file = custom
-		}
+		file := antigravityHooksFile()
 		settingsFile := filepath.Join(accountDir, "settings.json")
 		data := readJSONStrict(file)
 		if !data.ok {
@@ -408,10 +405,20 @@ func classifyErrorText(text string) string {
 }
 
 func expandHome(path string) string {
-	if strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
-		return filepath.Join(homeDir(), path[2:])
+	if home := homeDir(); home != "" && (strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`)) {
+		return filepath.Join(home, path[2:])
 	}
 	return path
+}
+
+func antigravityHooksFile() string {
+	if custom := os.Getenv("NOCTIS_ANTIGRAVITY_HOOKS"); custom != "" {
+		return custom
+	}
+	if home := homeDir(); home != "" {
+		return filepath.Join(home, ".gemini", "config", "hooks.json")
+	}
+	return ""
 }
 
 func normalizeHookInput(host string, raw object) (string, object) {
@@ -978,10 +985,7 @@ func hostHooksWired(host, accountDir string) (bool, string) {
 		content, _ := os.ReadFile(file)
 		return strings.Contains(string(content), "noctis"), file
 	case "antigravity":
-		file := filepath.Join(homeDir(), ".gemini", "config", "hooks.json")
-		if custom := os.Getenv("NOCTIS_ANTIGRAVITY_HOOKS"); custom != "" {
-			file = custom
-		}
+		file := antigravityHooksFile()
 		content, _ := os.ReadFile(file)
 		return strings.Contains(string(content), hookMarker), file
 	case "copilot":

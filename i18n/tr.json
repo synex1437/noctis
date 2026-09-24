@@ -291,6 +291,7 @@
   "roles.applied": "   roller: %s",
   "setup.unknownPreset": "bilinmeyen ön ayar: %s (conservative | balanced | aggressive)",
   "why.empty": "Henüz kayıtlı karar yok.",
+  "home.missing": "%s: ev klasörü bilinmiyor (HOME tanımlı değil), bu yüzden hesap klasörü bulunamıyor; HOME'u ayarlayın ya da --account <klasör> verin.",
   "unknownCommand": "Bilinmeyen komut: %s. Komutlar: %s",
   "args.unknown": "bilinmeyen bayrak %s",
   "args.unknownGuess": "bilinmeyen bayrak %s (%s mi demek istedin?)",
