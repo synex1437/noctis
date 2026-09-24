@@ -37,6 +37,8 @@ function payloadFor(event, sid, lab, account) {
       return { ...base, prompt: 'add a test for the parser' };
     case 'PreToolUse':
       return { ...base, tool_name: 'Write', tool_input: { file_path: 'a.txt', content: 'x' } };
+    case 'PermissionRequest':
+      return { ...base, permission_mode: 'default', tool_name: 'Read', tool_input: { file_path: path.join(lab.projectDir, 'README.md') }, permission_suggestions: [] };
     case 'PostToolUse':
       return { ...base, tool_name: 'Task', tool_input: { description: 'research' }, tool_response: { ok: true } };
     case 'PostToolBatch':

@@ -1912,6 +1912,10 @@ async function scenarioAutoQueue(acc) {
   check('auto queue: items are clean checklist lines', (listed.match(/^- \[ \] /gm) || []).length === 5 && listed.includes('- [ ] write unit tests for the payments module covering refunds') && !listed.includes('- [ ] 2.'), true);
   const stop = acc.hook({ hook_event_name: 'Stop', session_id: 'aq1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
   check('auto queue: Stop keeps the session going through the checklist', stop.includes('"decision":"block"') && stop.includes('Queue continues: 5 open') && stop.includes('add input validation'), true);
+  const askTick = (file) => acc.hook({ hook_event_name: 'PermissionRequest', session_id: 'aq1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, permission_mode: 'acceptEdits', tool_name: 'Edit', tool_input: { file_path: file } });
+  const approved = askTick(record.path);
+  check('auto queue: Claude Code\'s permission request to tick the checklist is answered', approved.includes('"hookEventName":"PermissionRequest"') && approved.includes('"behavior":"allow"'), true);
+  check('auto queue: a permission request for any other file is left to the person', askTick(path.join(acc.dir, 'settings.json')), '');
   acc.statusline('aq1', 'claude-fable-5-1', 95, now + 2 * 86400, 20, now + 3 * 86400, 30);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'aq1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   const checkpoint = acc.run(['checkpoint', '--sid', 'aq1']);
