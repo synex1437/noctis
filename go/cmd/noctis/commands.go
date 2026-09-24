@@ -551,7 +551,7 @@ func doctorLines(cfg object) []string {
 		lines = append(lines, checkLine(false, issue))
 	}
 	for _, problem := range badRoleValues(section(cfg, "roles"), providerModels(settings.data)) {
-		lines = append(lines, checkLine(false, problem))
+		lines = append(lines, fixLine(false, problem, "doctor.fixRoles")...)
 	}
 	lines = append(lines, doctorConfigLines(cfg)...)
 	usage := readJSON(files.usage)
@@ -1358,7 +1358,7 @@ func hostDoctorLines(cfg object, host hostSpec, lines []string) []string {
 		} else if message := liveRefreshError(fable, nowSec()); message != "" {
 			text = refreshProblemText(message)
 		}
-		lines = append(lines, checkLine(numberOr(fable, "fetchedAt", 0) > 0, T("doctor.usage", text)))
+		lines = append(lines, fixLine(numberOr(fable, "fetchedAt", 0) > 0, T("doctor.usage", text), "doctor.fixUsageHost", host.display)...)
 	case "antigravity":
 		usage := readJSON(files.usage)
 		usageAt := numberOr(usage, "updatedAt", 0)
@@ -1366,7 +1366,7 @@ func hostDoctorLines(cfg object, host hostSpec, lines []string) []string {
 		if usageAt > 0 {
 			text = T("doctor.usageAt", formatTime(usageAt))
 		}
-		lines = append(lines, checkLine(usageAt > 0, T("doctor.usage", text)))
+		lines = append(lines, fixLine(usageAt > 0, T("doctor.usage", text), "doctor.fixUsageHost", host.display)...)
 	default:
 		lines = append(lines, checkLine(true, T("doctor.usageOff", host.display)))
 	}

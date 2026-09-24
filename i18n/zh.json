@@ -393,6 +393,8 @@
   "doctor.fixToken": "登录一次 Claude Code，或设置 CLAUDE_CODE_OAUTH_TOKEN",
   "doctor.fixTokenExpired": "打开一次 Claude Code 让它续期登录（或运行 /login），或设置 CLAUDE_CODE_OAUTH_TOKEN",
   "doctor.fixUsage": "打开一个 Claude Code 会话，让状态行上报一次用量",
+  "doctor.fixUsageHost": "在 %s 中启动一个会话，让 noctis 能读取它的限额",
+  "doctor.fixRoles": "在 config.json 的 roles 部分修正该角色，或运行 /noctis:setup 重新选择角色",
   "doctor.fixErrors": "记录在 %s；处理完后删除该文件（超过一天的记录不再计入）",
   "status.launchFailed": "!!  %s 的自动重启在 %s 失败了 — 请用以下命令恢复：%s",
   "doctor.schedulerSleeper": "（正常：这里没有 launchd/systemd/schtasks，因此改用一个轻量的休眠进程）",

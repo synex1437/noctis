@@ -155,3 +155,28 @@ func TestTheOtherToolsDoctorsNameWhatTheirSelfCheckNames(t *testing.T) {
 		})
 	}
 }
+
+func TestTheUsageAndRoleLinesSayWhatToRun(t *testing.T) {
+	for _, host := range []string{"codex", "antigravity"} {
+		t.Run(host, func(t *testing.T) {
+			doctorRemedySandbox(t)
+
+			lines := doctorRun(t, host, object{})
+
+			if _, fix := remedyFor(t, lines, "usage.json:"); fix != "" && !strings.Contains(fix, hostOf(host).display) {
+				t.Errorf("the usage remedy does not name the tool to start: %q", fix)
+			}
+		})
+	}
+	t.Run("roles", func(t *testing.T) {
+		doctorRemedySandbox(t)
+
+		lines := doctorRun(t, "claude", object{"roles": object{"code": object{"model": "opsu", "effort": "max"}, "digest": object{"model": "haiku", "effort": "hgih"}}})
+
+		for role, marker := range map[string]string{"code": "opsu", "digest": "hgih"} {
+			if _, fix := remedyFor(t, lines, marker); fix != "" && (!strings.Contains(fix, "roles") || !strings.Contains(fix, "config.json") || !strings.Contains(fix, "/noctis:setup")) {
+				t.Errorf("the %s role's remedy does not say where to correct it: %q", role, fix)
+			}
+		}
+	})
+}
