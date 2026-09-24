@@ -84,6 +84,9 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 		lines = append(lines, T("status.thresholdsBad", strings.Join(unguarded, ", ")))
 	}
 	lines = append(lines, T("status.credits", creditsText(cfg)))
+	if currentHost().id == "claude" {
+		lines = append(lines, leanStatusLines(cfg)...)
+	}
 	modelLine := T("status.model", orDefault(settingsModel(), T("status.modelNone")), getString(models, "primary"), getString(models, "fallback"), getString(models, "effort"))
 	if switched := getMap(state, "modelSwitched"); switched != nil {
 		modelLine += T("status.switched", formatTime(numberOr(switched, "at", 0)))
@@ -529,6 +532,7 @@ func doctorLines(cfg object) []string {
 		thresholdText = T("doctor.thresholdsFixed", strings.Join(repaired, ", "))
 	}
 	lines = append(lines, fixLine(len(repaired)+len(unguarded) == 0, thresholdText, "doctor.fixThresholds")...)
+	lines = append(lines, leanDoctorLines(cfg)...)
 	lines = append(lines, fixLine(!paidCreditsAllowed(cfg), T("doctor.credits", creditsText(cfg)), "doctor.fixCredits")...)
 	lines = append(lines, "    "+T("doctor.creditsNote"))
 	if isWindows {
