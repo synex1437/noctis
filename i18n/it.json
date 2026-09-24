@@ -179,6 +179,8 @@
   "lean.early": "attiva, compatta presto al %s del contesto",
   "lean.noEarly": "attiva, nessuna compattazione anticipata (compaction.compactAtPercent è spento)",
   "lean.off": "spenta (compaction.lean è false)",
+  "lean.trimmed": " · compattazioni sfoltite: %d, ~%s caratteri",
+  "lean.trimmedNone": " · ancora nessuna compattazione sfoltita",
   "doctor.leanSwitch": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: %s",
   "doctor.fixLeanSwitch": "la compattazione snella è attiva ma Claude Code non caricherà il suo modulo: esegui /noctis:setup (scrive 1 quando l'interruttore manca) o impostalo tu a 1 in settings.json → env; oppure imposta compaction.lean a false",
   "doctor.credits": "crediti di utilizzo a pagamento: %s",

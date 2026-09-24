@@ -179,6 +179,8 @@
   "lean.early": "açık, bağlam %s dolunca erken sıkıştırır",
   "lean.noEarly": "açık, erken sıkıştırma yok (compaction.compactAtPercent kapalı)",
   "lean.off": "kapalı (compaction.lean false)",
+  "lean.trimmed": " · budanan sıkıştırma: %d, ~%s karakter",
+  "lean.trimmedNone": " · henüz budanan sıkıştırma yok",
   "doctor.leanSwitch": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: %s",
   "doctor.fixLeanSwitch": "yalın sıkıştırma açık ama Claude Code modülünü yüklemeyecek: /noctis:setup çalıştır (anahtar yoksa 1 yazar) ya da settings.json → env içinde kendin 1 yap; veya compaction.lean değerini false yap",
   "doctor.credits": "ücretli kullanım kredisi: %s",

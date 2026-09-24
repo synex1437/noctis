@@ -8,8 +8,8 @@ Two flags work with every command: `--account <dir>` is the account folder whose
 
 | Command | Flags | What it does |
 |---|---|---|
-| `status` | — | What the plugin sees now: usage windows and their resets, pause points, the credit ceiling, lean compaction (Claude Code), models and roles, the router, pending waits and hand-offs, the last errors |
-| `why` | `--last N` (20), `--json` | The last decisions from `decisions.jsonl` with the reason for each; `--json` prints the raw lines |
+| `status` | — | What the plugin sees now: usage windows and their resets, pause points, the credit ceiling, lean compaction (Claude Code: how it is set and how many compactions it trimmed, from `compact.log`), models and roles, the router, pending waits and hand-offs, the last errors |
+| `why` | `--last N` (20), `--json` | The last decisions from `decisions.jsonl` with the reason for each, in time order with the compactions the lean module trimmed (`compact.log`), shown as action `compact` with the trigger, rows, rows changed, characters trimmed, the token counts and `ctx` for an early one; `--json` prints the raw lines, a compaction as a journal line (`event` `session.compact`, `action` `compact`, `reason`) that keeps its own fields |
 | `doctor` | — | Checks the wiring and says what to fix; exits 1 when something needs fixing |
 | `selftest` | `--skip-task` | The doctor checks, plus the Claude Code version against the tested range, the time since the last hook, the speed of one hook call, a test notification, and a check that a background run fires: on Windows a real Task Scheduler task it waits for (a minute or two; `--skip-task` skips it), elsewhere a detached process |
 | `check` | `--json`, `--sid <id>` | The exit-code gate described below; `--sid` judges with that session's model, `--json` prints the facts behind the verdict |
@@ -167,7 +167,7 @@ Install for another tool from the zip or clone: `./scripts/install.sh --host cod
 | `checkpoints/<sid>.md` | The checkpoint of each paused session, kept 7 days |
 | `queues/<session>.md` | Checklists noctis wrote from long prompts; one is removed when its job is done or you steer the session by hand, otherwise 7 days after it last changed, and never while its session waits on a pause |
 | `quiet/<session>.json` | Markers for the quiet fast path |
-| `compact.log` | One JSON line per compaction the lean module trimmed: `at`, `sid`, `trigger` (`auto`, `manual`, `plugin`), `rows`, `changed`, `trimmed` (characters), the `tokensBefore` and `tokensAfter` Claude Code reported, `agent` for a subagent's own compaction and, for an early one, `ctx`, the context fill that asked for it; the last 200 are kept |
+| `compact.log` | One JSON line per compaction the lean module trimmed: `at`, `sid`, `trigger` (`auto`, `manual`, `plugin`), `rows`, `changed`, `trimmed` (characters), the `tokensBefore` and `tokensAfter` Claude Code reported, `agent` for a subagent's own compaction and, for an early one, `ctx`, the context fill that asked for it; the last 200 are kept. `noctis status` counts them, `noctis why` lists them |
 | `lean.json` | The sessions the lean module ran in, the last 50 |
 | `launches/` | Relaunch scripts, pid files, selftest markers |
 | `pending/` | The `StopFailure` payload of a `claude -p` or Agent SDK run while the detached copy it was handed to stores the retry; removed when the copy finishes. One the copy never removed is swept once it is an hour old, a half-written one after five minutes |

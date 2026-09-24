@@ -179,6 +179,8 @@
   "lean.early": "켜짐, 컨텍스트가 %s에 이르면 미리 압축",
   "lean.noEarly": "켜짐, 미리 압축하지 않음 (compaction.compactAtPercent 꺼짐)",
   "lean.off": "꺼짐 (compaction.lean이 false)",
+  "lean.trimmed": " · 줄인 압축: %d회, 약 %s자",
+  "lean.trimmedNone": " · 아직 줄인 압축이 없습니다",
   "doctor.leanSwitch": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: %s",
   "doctor.fixLeanSwitch": "경량 압축이 켜져 있지만 Claude Code가 그 모듈을 불러오지 않습니다: /noctis:setup을 실행하거나(스위치가 없으면 1을 씁니다) settings.json → env에서 직접 1로 설정하세요. 또는 compaction.lean을 false로 설정하세요",
   "doctor.credits": "유료 사용 크레딧: %s",

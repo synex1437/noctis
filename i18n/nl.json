@@ -179,6 +179,8 @@
   "lean.early": "aan, compacteert vroeg bij %s van de context",
   "lean.noEarly": "aan, geen vroege compactie (compaction.compactAtPercent staat uit)",
   "lean.off": "uit (compaction.lean is false)",
+  "lean.trimmed": " · ingekorte compacties: %d, ~%s tekens",
+  "lean.trimmedNone": " · nog geen compactie ingekort",
   "doctor.leanSwitch": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: %s",
   "doctor.fixLeanSwitch": "slanke compactie staat aan, maar Claude Code laadt de module niet: voer /noctis:setup uit (het schrijft 1 als de schakelaar ontbreekt) of zet hem zelf op 1 in settings.json → env; of zet compaction.lean op false",
   "doctor.credits": "betaalde gebruikscredits: %s",
