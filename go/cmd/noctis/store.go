@@ -1072,6 +1072,7 @@ func withFileLock(lockFile string, work func()) bool {
 	for lock == nil {
 		handle, err := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
+			holdLock(handle)
 			_, _ = handle.WriteString(strconv.Itoa(os.Getpid()))
 			lock = handle
 			break
@@ -1082,15 +1083,13 @@ func withFileLock(lockFile string, work func()) bool {
 		}
 		owner, age, present := lockHolder(lockFile)
 		if present && holderStale(owner, age) {
-			if again, _, stillThere := lockHolder(lockFile); !stillThere || again == owner {
-				removeErr := os.Remove(lockFile)
-				if removeErr == nil || errors.Is(removeErr, os.ErrNotExist) {
-					continue
-				}
-				if !isWindows {
-					fail("stale %s cannot be removed: %v; not written", filepath.Base(lockFile), removeErr)
-					return false
-				}
+			removeErr := removeStaleLock(lockFile)
+			if removeErr == nil || errors.Is(removeErr, os.ErrNotExist) {
+				continue
+			}
+			if !isWindows && !errors.Is(removeErr, errLockLive) {
+				fail("stale %s cannot be removed: %v; not written", filepath.Base(lockFile), removeErr)
+				return false
 			}
 		}
 		if owner != holder {
@@ -1104,25 +1103,15 @@ func withFileLock(lockFile string, work func()) bool {
 		time.Sleep(lockPollDelay(time.Since(begin)))
 	}
 	defer func() {
-		if lock == nil {
-			return
-		}
-		lock.Close()
-		for attempt := 0; ; attempt++ {
-			err := os.Remove(lockFile)
-			if err == nil || errors.Is(err, os.ErrNotExist) {
-				return
-			}
-			if attempt == 5 {
-				warn("lock release failed: %v", err)
-				return
-			}
-			time.Sleep(time.Duration(10+attempt*15) * time.Millisecond)
+		if lock != nil {
+			releaseLock(lock, lockFile)
 		}
 	}()
 	work()
 	return true
 }
+
+var errLockLive = errors.New("the lock is held")
 
 var (
 	prunedRunners   []object

@@ -161,7 +161,7 @@ Install for another tool from the zip or clone: `./scripts/install.sh --host cod
 | `quiet/<session>.json` | Markers for the quiet fast path |
 | `launches/` | Relaunch scripts, pid files, selftest markers |
 | `runner.cmd` | Windows: the launcher the scheduled task runs; it switches its console to UTF-8 (code page 65001) first, so a profile path with letters such as Ç, ü or Cyrillic still resolves |
-| `*.lock` | `state`, `usage`, `fable`, `settings`, `schedule-<hash>` |
+| `*.lock` | `state`, `usage`, `fable`, `settings`, `schedule-<hash>`. On macOS and Linux the process that holds one also keeps an `flock` on it; a lock left by a process that died is removed only when nobody holds that flock and only if it is still the file that was judged stale, and a process lets go of a lock only while the file is still its own. The exception: a lock more than two minutes old whose recorded pid is a running process counts as hung and is taken over without the `flock` test — also when that process is a new one that got the dead holder's pid |
 | `noctis-bundle-<time>.zip` | `noctis report --bundle` without a file name |
 
 Outside that folder: `<account>/settings.json.bak-<time>` (setup and install back up `settings.json` before they change it), `<account>/skills/noctis/` (a clone install), and, only while a resume is pending, the Task Scheduler task `Noctis-<hash>`, `~/Library/LaunchAgents/com.synex.noctis.<hash>.<epoch>.plist` (one per scheduled resume) or the systemd user unit `noctis-<hash>-<epoch>` (one per scheduled resume).
