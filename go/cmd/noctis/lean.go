@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -140,8 +141,68 @@ func leanDoctorLines(cfg object) []string {
 	return lines
 }
 
+const leanLogLines = 200
+
+func compactLogFile() string {
+	return filepath.Join(files.guardDir, "compact.log")
+}
+
+func leanCompactions(count int) []object {
+	entries := []object{}
+	for _, line := range tailFileLines(compactLogFile(), count) {
+		var entry object
+		if jsonUnmarshalObject([]byte(line), &entry) == nil && entry != nil {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
+}
+
+func approxCount(value float64) string {
+	switch {
+	case value >= 1e6:
+		return strconv.FormatFloat(value/1e6, 'f', 1, 64) + "M"
+	case value >= 1e3:
+		return formatNumber(math.Round(value/1e3)) + "k"
+	}
+	return formatNumber(math.Round(value))
+}
+
+func leanTally() string {
+	entries := leanCompactions(leanLogLines)
+	if len(entries) == 0 {
+		return T("lean.trimmedNone")
+	}
+	total := 0.0
+	for _, entry := range entries {
+		total += numberOr(entry, "trimmed", 0)
+	}
+	return T("lean.trimmed", len(entries), approxCount(total))
+}
+
+func compactionReason(entry object) string {
+	reason := fmt.Sprintf("%s: %s rows, %s changed, %s characters trimmed", orDefault(getString(entry, "trigger"), "?"), formatNumber(numberOr(entry, "rows", 0)), formatNumber(numberOr(entry, "changed", 0)), formatNumber(numberOr(entry, "trimmed", 0)))
+	before, hasBefore := getNumber(entry, "tokensBefore")
+	after, hasAfter := getNumber(entry, "tokensAfter")
+	if hasBefore && hasAfter {
+		reason += fmt.Sprintf(", %s → %s tokens", formatNumber(before), formatNumber(after))
+	}
+	if agent := getString(entry, "agent"); agent != "" {
+		reason += ", agent " + agent
+	}
+	return reason
+}
+
+func compactionJournalEntry(entry object) object {
+	shaped := cloneObject(entry)
+	shaped["event"] = "session.compact"
+	shaped["action"] = "compact"
+	shaped["reason"] = compactionReason(entry)
+	return shaped
+}
+
 func leanStatusLines(cfg object) []string {
-	lines := []string{T("status.lean", leanDescription(cfg))}
+	lines := []string{T("status.lean", leanDescription(cfg)+leanTally())}
 	if repaired := repairedCompaction(cfg); len(repaired) > 0 {
 		lines = append(lines, T("status.leanFixed", strings.Join(repaired, ", ")))
 	}

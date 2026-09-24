@@ -179,6 +179,8 @@
   "lean.early": "włączone, kompaktuje wcześnie przy %s kontekstu",
   "lean.noEarly": "włączone, bez wczesnego kompaktowania (compaction.compactAtPercent wyłączone)",
   "lean.off": "wyłączone (compaction.lean ma wartość false)",
+  "lean.trimmed": " · przycięte kompaktowania: %d, ~%s znaków",
+  "lean.trimmedNone": " · jeszcze żadne kompaktowanie nie zostało przycięte",
   "doctor.leanSwitch": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: %s",
   "doctor.fixLeanSwitch": "lekkie kompaktowanie jest włączone, ale Claude Code nie załaduje jego modułu: uruchom /noctis:setup (zapisze 1, gdy przełącznika brak) albo sam ustaw go na 1 w settings.json → env; albo ustaw compaction.lean na false",
   "doctor.credits": "płatne kredyty użycia: %s",

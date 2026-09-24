@@ -179,6 +179,8 @@
   "lean.early": "مفعّل، يضغط مبكرًا عند %s من السياق",
   "lean.noEarly": "مفعّل، بلا ضغط مبكر (compaction.compactAtPercent متوقف)",
   "lean.off": "متوقف (compaction.lean قيمته false)",
+  "lean.trimmed": " · عمليات الضغط المشذّبة: %d، نحو %s حرف",
+  "lean.trimmedNone": " · لم تُشذَّب أي عملية ضغط بعد",
   "doctor.leanSwitch": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: %s",
   "doctor.fixLeanSwitch": "الضغط الخفيف مفعّل لكن Claude Code لن يحمّل وحدته: نفّذ ‎/noctis:setup‎ (يكتب 1 عندما يغيب المفتاح) أو اضبطه بنفسك على 1 في settings.json → env؛ أو اضبط compaction.lean على false",
   "doctor.credits": "أرصدة الاستخدام المدفوعة: %s",

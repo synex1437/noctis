@@ -179,6 +179,8 @@
   "lean.early": "オン、コンテキストが %s に達すると早めに圧縮",
   "lean.noEarly": "オン、早期圧縮なし (compaction.compactAtPercent がオフ)",
   "lean.off": "オフ (compaction.lean が false)",
+  "lean.trimmed": " · 刈り込んだ圧縮: %d 回、約 %s 文字",
+  "lean.trimmedNone": " · まだ刈り込んだ圧縮はありません",
   "doctor.leanSwitch": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: %s",
   "doctor.fixLeanSwitch": "軽量圧縮はオンですが Claude Code はそのモジュールを読み込みません: /noctis:setup を実行する（スイッチがなければ 1 を書きます）か、settings.json → env で自分で 1 にしてください。または compaction.lean を false にしてください",
   "doctor.credits": "有料の使用クレジット: %s",

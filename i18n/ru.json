@@ -179,6 +179,8 @@
   "lean.early": "включено, сжимает заранее при %s контекста",
   "lean.noEarly": "включено, без раннего сжатия (compaction.compactAtPercent выключен)",
   "lean.off": "выключено (compaction.lean = false)",
+  "lean.trimmed": " · урезанных сжатий: %d, ~%s символов",
+  "lean.trimmedNone": " · пока ни одно сжатие не урезано",
   "doctor.leanSwitch": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: %s",
   "doctor.fixLeanSwitch": "облегчённое сжатие включено, но Claude Code не загрузит его модуль: запусти /noctis:setup (он пишет 1, если переключателя нет) или сам поставь 1 в settings.json → env; либо поставь compaction.lean = false",
   "doctor.credits": "платные кредиты использования: %s",

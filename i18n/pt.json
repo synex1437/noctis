@@ -179,6 +179,8 @@
   "lean.early": "ativada, compacta cedo a %s do contexto",
   "lean.noEarly": "ativada, sem compactação antecipada (compaction.compactAtPercent desligado)",
   "lean.off": "desativada (compaction.lean é false)",
+  "lean.trimmed": " · compactações enxugadas: %d, ~%s caracteres",
+  "lean.trimmedNone": " · nenhuma compactação enxugada ainda",
   "doctor.leanSwitch": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: %s",
   "doctor.fixLeanSwitch": "a compactação enxuta está ligada, mas o Claude Code não vai carregar o módulo dela: rode /noctis:setup (ele escreve 1 quando a chave falta) ou defina-a como 1 você mesmo em settings.json → env; ou defina compaction.lean como false",
   "doctor.credits": "créditos de uso pagos: %s",
