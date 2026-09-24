@@ -552,6 +552,9 @@ func doctorLines(cfg object) []string {
 	for _, issue := range unguardedAgentTools(cfg) {
 		lines = append(lines, checkLine(false, issue))
 	}
+	for _, problem := range badRoleValues(section(cfg, "roles")) {
+		lines = append(lines, checkLine(false, problem))
+	}
 	lines = append(lines, doctorConfigLines(cfg)...)
 	usage := readJSON(files.usage)
 	usageAt := numberOr(usage, "updatedAt", 0)

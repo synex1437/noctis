@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -14,6 +15,8 @@ var roleNames = []string{"code", "research", "planning", "digest", "explore", "f
 var validEfforts = map[string]bool{"low": true, "medium": true, "high": true, "xhigh": true, "max": true}
 
 var effortlessRoles = map[string]bool{"planning": true, "explore": true}
+
+var roleModelPattern = lazyRegexp(`^[A-Za-z0-9._:@/\[\]-]+$`)
 
 var frontmatterLine = lazyRegexp(`(?m)^(model|effort):[^\n]*\n`)
 
@@ -86,6 +89,9 @@ func roleFlagError(role, value string) error {
 	parts := strings.SplitN(strings.TrimSpace(value), ":", 2)
 	if strings.TrimSpace(parts[0]) == "" {
 		return errors.New(T("roles.badValue", role, value))
+	}
+	if model := strings.TrimSpace(parts[0]); !roleModelPattern.MatchString(model) {
+		return errors.New(T("roles.badModel", role, strconv.Quote(model)))
 	}
 	if len(parts) == 2 && !validEfforts[strings.ToLower(strings.TrimSpace(parts[1]))] {
 		return errors.New(T("roles.badEffort", role, parts[1]))
@@ -320,11 +326,35 @@ func retunedNotice(profile string) string {
 	return T("roles.retuned", profile, pluginVersion, roleSummary(roleProfiles[profile], func(role string) string { return role }), profile)
 }
 
+func badRoleValue(role string, spec object) string {
+	if model := getString(spec, "model"); model != "" && !roleModelPattern.MatchString(model) {
+		return T("roles.badModel", role, strconv.Quote(model))
+	}
+	if effort := getString(spec, "effort"); effort != "" && !validEfforts[effort] {
+		return T("roles.badEffort", role, strings.Trim(strconv.Quote(effort), `"`))
+	}
+	return ""
+}
+
+func badRoleValues(roles object) []string {
+	problems := []string{}
+	for _, role := range roleNames {
+		if problem := badRoleValue(role, getMap(roles, role)); problem != "" {
+			problems = append(problems, problem)
+		}
+	}
+	return problems
+}
+
 func syncAgentFiles(pluginRoot string, roles object) int {
 	changed := 0
 	for role, file := range map[string]string{"research": "lite.md", "digest": "digest.md"} {
 		spec := getMap(roles, role)
 		if spec == nil || getString(spec, "model") == "" {
+			continue
+		}
+		if problem := badRoleValue(role, spec); problem != "" {
+			warn("agents/%s left unchanged: %s", file, problem)
 			continue
 		}
 		target := filepath.Join(pluginRoot, "agents", file)

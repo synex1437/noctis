@@ -287,6 +287,7 @@
   "roles.explore": "búsqueda de archivos (subagente Explore)",
   "roles.fallback": "respaldo cuando se agota la cuota por modelo",
   "roles.badValue": "%s: modelo vacío en '%s'",
+  "roles.badModel": "%s: %s no es un nombre de modelo (solo letras, dígitos y . _ : @ / [ ] -)",
   "roles.badEffort": "%s: esfuerzo desconocido '%s' (low, medium, high, xhigh, max)",
   "roles.effortIgnored": "%s solo acepta un modelo; el effort %s se ignora (la herramienta Agent no tiene effort)",
   "roles.modelNoEffort": "%s: %s no admite niveles de effort; el effort %s se ignora",
