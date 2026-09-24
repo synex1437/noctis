@@ -334,7 +334,7 @@ func firstRunSetup(defaults object) {
 				statusline = object{}
 				config["statusline"] = statusline
 			}
-			if getString(statusline, "chainCommand") == "" {
+			if getString(statusline, "chainCommand") != current {
 				statusline["chainCommand"] = current
 				if err := writeJSONAtomic(files.config, config); err != nil {
 					warn("ensure: statusLine left as it is: its chain could not be saved in config.json (%v)", err)
@@ -462,7 +462,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	}
 	chained := ""
 	previous := getString(getMap(data, "statusLine"), "command")
-	if previous != "" && !strings.Contains(previous, "guard.js") && !strings.Contains(previous, "noctis") && getString(section(config, "statusline"), "chainCommand") == "" {
+	if previous != "" && !strings.Contains(previous, "guard.js") && !strings.Contains(previous, "noctis") && getString(section(config, "statusline"), "chainCommand") != previous {
 		statusline := section(config, "statusline")
 		statusline["chainCommand"] = previous
 		config["statusline"] = statusline
