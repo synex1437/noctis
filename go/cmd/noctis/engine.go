@@ -213,12 +213,43 @@ func queueFile(cfg object, dirs ...string) string {
 				continue
 			}
 			file := filepath.Join(dir, name)
-			if info := statSafe(file); info != nil && info.Mode().IsRegular() {
-				return file
+			if info := statSafe(file); info == nil || !info.Mode().IsRegular() {
+				continue
 			}
+			if resolved, err := filepath.EvalSymlinks(file); err != nil || !linkedWithin(dir, resolved) {
+				reportLinkedOutQueue(file, dir, resolved)
+				continue
+			}
+			return file
 		}
 	}
 	return ""
+}
+
+func reportLinkedOutQueue(file, dir, resolved string) {
+	key := "queue:link:" + dir + " -> " + orDefault(resolved, file)
+	first := false
+	if getMap(readState(), "notified")[key] == nil {
+		updateState(func(next object) {
+			if notified := stateMap(next, "notified"); notified[key] == nil {
+				notified[key], first = float64(nowSec()), true
+			}
+		})
+	}
+	report := logInfo
+	if first {
+		report = warn
+	}
+	report("queue file %s leads out of %s (to %s); it is not used as a queue", file, dir, resolved)
+}
+
+func linkedWithin(root, resolved string) bool {
+	base, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	relative, err := filepath.Rel(base, resolved)
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 func queueDirs(input object) []string {

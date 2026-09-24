@@ -63,6 +63,7 @@
   "queue.ghFailed": "gh issue list nie powiodło się: %v (czy GitHub CLI jest zainstalowane i zalogowane?)",
   "queue.importNone": "nic nowego: wszystkie %d otwartych zgłoszeń są już w %s",
   "queue.importDone": "zaimportowano %[1]d zgłoszeń do %[3]s (%[2]d już było)",
+  "queue.importLink": "queue import niczego nie zapisał: %s to dowiązanie, które prowadzi poza %s (do %s). Aby importować do tego pliku: podać jego ścieżkę w --file.",
   "stopfailure.reason": "błąd API (%s), wznowienie %s",
   "overload.notify": "API %s; ponawiam z backoffem, następna próba o %s.",
   "overload.giveup": "API pozostawało %s przez cały budżet ponowień (%s prób); sesja zatrzymana — sprawdź status.claude.com.",

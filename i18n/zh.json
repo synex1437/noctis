@@ -63,6 +63,7 @@
   "queue.ghFailed": "gh issue list 失败：%v（GitHub CLI 是否已安装并登录？）",
   "queue.importNone": "没有新内容：%d 个开放议题都已在 %s 中",
   "queue.importDone": "已将 %[1]d 个议题导入 %[3]s（%[2]d 个此前已存在）",
+  "queue.importLink": "queue import 未写入任何内容：%s 是指向 %s 之外（%s）的链接。要导入到该文件，请用 --file 传入它的路径。",
   "stopfailure.reason": "API 错误（%s），恢复 %s",
   "overload.notify": "API %s；按退避重试，下次尝试 %s。",
   "overload.giveup": "API 在整个重试预算内持续 %s（%s 次尝试）；会话已停止 — 请查看 status.claude.com。",

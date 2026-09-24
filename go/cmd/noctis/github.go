@@ -189,11 +189,18 @@ func runQueue() {
 		runQueueTrust(cfg, cwd, action)
 		return
 	}
-	target := flagString("file")
+	target, folder := flagString("file"), cwd
 	if target == "" {
 		if target = queueFile(cfg, cwd); target == "" {
 			target = filepath.Join(cwd, "TASKS.md")
 		}
+	} else {
+		folder = filepath.Dir(target)
+	}
+	destination, leads := importDestination(folder, target)
+	if destination == "" {
+		fmt.Fprintln(os.Stderr, T("queue.importLink", target, folder, leads))
+		os.Exit(1)
 	}
 	limit := "200"
 	if value, ok := toNumber(flagString("limit")); ok && value >= 1 {
@@ -221,7 +228,7 @@ func runQueue() {
 		fmt.Fprintln(os.Stderr, T("queue.ghFailed", err))
 		os.Exit(1)
 	}
-	existing, _ := os.ReadFile(target)
+	existing, _ := os.ReadFile(destination)
 	fileLines := strings.Split(strings.TrimPrefix(string(existing), "\uFEFF"), "\n")
 	known, bare := map[string]bool{}, map[string][]bareIssueItem{}
 	fenced := false
@@ -294,7 +301,7 @@ func runQueue() {
 		content += strings.Join(lines, "\n") + "\n"
 	}
 	if content != string(existing) {
-		if err := os.WriteFile(target, []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(destination, []byte(content), 0o644); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -357,6 +364,28 @@ func rememberOpenIssues(cfg object, queuePath string) {
 			}
 		}
 	})
+}
+
+func importDestination(folder, target string) (string, string) {
+	if _, err := os.Lstat(target); err != nil {
+		parent, err := filepath.EvalSymlinks(filepath.Dir(target))
+		switch {
+		case err != nil:
+			return target, ""
+		case !linkedWithin(folder, parent):
+			return "", parent
+		}
+		return filepath.Join(parent, filepath.Base(target)), ""
+	}
+	resolved, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		leads, _ := os.Readlink(target)
+		return "", leads
+	}
+	if !linkedWithin(folder, resolved) {
+		return "", resolved
+	}
+	return resolved, ""
 }
 
 func syncDoneIssues(cfg object, queuePath, cwd string) {

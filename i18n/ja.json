@@ -63,6 +63,7 @@
   "queue.ghFailed": "gh issue list が失敗しました: %v（GitHub CLI はインストール済みでログインしていますか？）",
   "queue.importNone": "新しいものはありません: %d 件の未解決 issue はすべてすでに %s にあります",
   "queue.importDone": "%[3]s に %[1]d 件の issue を取り込みました（%[2]d 件はすでに存在）",
+  "queue.importLink": "queue import は何も書き込みませんでした: %s は %s の外（%s）を指すリンクです。そのファイルに取り込むには、パスを --file で指定します。",
   "stopfailure.reason": "API エラー（%s）、再開 %s",
   "overload.notify": "API %s。バックオフで再試行、次回は %s です。",
   "overload.giveup": "API の %s が再試行予算いっぱい続きました（%s 回）。セッションは停止中です — status.claude.com を確認してください。",

@@ -63,6 +63,7 @@
   "queue.ghFailed": "gh issue list fehlgeschlagen: %v (ist die GitHub-CLI installiert und angemeldet?)",
   "queue.importNone": "nichts Neues: alle %d offenen Issues stehen bereits in %s",
   "queue.importDone": "%[1]d Issue(s) nach %[3]s importiert (%[2]d waren schon da)",
+  "queue.importLink": "queue import hat nichts geschrieben: %s ist ein Link, der aus %s hinausführt (nach %s). Zum Importieren in diese Datei: ihren Pfad mit --file angeben.",
   "stopfailure.reason": "API-Fehler (%s), Fortsetzung %s",
   "overload.notify": "API %s; erneuter Versuch mit Backoff, nächster Versuch um %s.",
   "overload.giveup": "API-%s hielt das ganze Wiederholungsbudget an (%s Versuche); Sitzung gestoppt — status.claude.com prüfen.",
