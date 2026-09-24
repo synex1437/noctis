@@ -543,12 +543,7 @@ func doctorLines(cfg object) []string {
 		}
 		lines = append(lines, checkLine(result.ok, T("doctor.powershell", psText)))
 	}
-	backend := schedulerBackend()
-
-	lines = append(lines, checkLine(true, T("doctor.scheduler", backend)))
-	if backend == "sleeper" {
-		lines = append(lines, "    "+T("doctor.schedulerSleeper"))
-	}
+	lines = append(lines, schedulerDoctorLines()...)
 	installRoot := files.pluginRoot
 	agent := orDefault(getString(section(cfg, "router"), "agent"), "lite")
 	lines = append(lines, checkLine(statSafe(filepath.Join(installRoot, "hooks", "hooks.json")) != nil, T("doctor.pluginRoot", installRoot)))
@@ -608,6 +603,15 @@ func errorsDoctorLines() []string {
 		latest = string(runes[:160])
 	}
 	return fixLine(false, T("doctor.errors", T("doctor.errorsRecent", count, latest)), "doctor.fixErrors", files.errors)
+}
+
+func schedulerDoctorLines() []string {
+	backend := schedulerBackend()
+	lines := []string{checkLine(true, T("doctor.scheduler", backend))}
+	if backend == "sleeper" {
+		lines = append(lines, "    "+T("doctor.schedulerSleeper"))
+	}
+	return lines
 }
 
 func doctorConfigLines(cfg object) []string {
@@ -1271,8 +1275,7 @@ func hostDoctorLines(cfg object, host hostSpec, lines []string) []string {
 	default:
 		lines = append(lines, checkLine(true, T("doctor.usageOff", host.display)))
 	}
-	backend := schedulerBackend()
-	lines = append(lines, checkLine(backend != "sleeper", T("doctor.scheduler", backend)))
+	lines = append(lines, schedulerDoctorLines()...)
 	lines = append(lines, errorsDoctorLines()...)
 	return lines
 }
