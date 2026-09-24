@@ -527,6 +527,7 @@ func onUserPromptSubmit(input, cfg object) {
 		output["hookSpecificOutput"] = object{"hookEventName": "UserPromptSubmit", "additionalContext": strings.Join(contexts, "\n")}
 	}
 	systemMessage = joinNotices(systemMessage, result.notice)
+	systemMessage = joinNotices(systemMessage, leanNotice(cfg, state, sid))
 	if systemMessage != "" {
 		output["systemMessage"] = systemMessage
 	}
