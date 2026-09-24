@@ -2139,6 +2139,39 @@ async function scenarioVisibleRelaunch(acc) {
   const fakeTerminal = path.join(acc.lab.binDir, 'x-terminal-emulator');
   fs.writeFileSync(fakeTerminal, ['#!/usr/bin/env sh', '# runs the launcher like a terminal tab would: detached, in the background', 'shift', 'nohup "$@" >/dev/null 2>&1 &', 'exit 0', ''].join('\n'));
   fs.chmodSync(fakeTerminal, 0o755);
+  const fakeOsascript = path.join(acc.lab.binDir, 'osascript');
+  if (process.platform === 'darwin') {
+    fs.writeFileSync(fakeOsascript, [
+      '#!/bin/sh',
+      'die() { printf \'osascript: %s\\n\' "$*" >> "$0.log"; printf \'osascript: %s\\n\' "$*" >&2; exit 1; }',
+      'case "$*" in *\'tell application "Terminal"\'*) ;; *) exec /usr/bin/osascript "$@" ;; esac',
+      'prefix=\'tell application "Terminal" to do script "\'',
+      '[ "$#" -eq 4 ] && [ "$1" = -e ] && [ "$3" = -e ] && [ "$4" = \'tell application "Terminal" to activate\' ] || die "unexpected arguments: $*"',
+      'case "$2" in "$prefix"*\'"\') ;; *) die "not a do script command: $2" ;; esac',
+      'literal=${2#"$prefix"}',
+      'literal=${literal%\'"\'}',
+      'command=',
+      'while [ -n "$literal" ]; do',
+      '  rest=${literal#?}; char=${literal%"$rest"}',
+      '  case "$char" in \'"\') die "the do script string ends before its closing quote: $2" ;; esac',
+      '  if [ "$char" = \'\\\' ]; then',
+      '    literal=$rest; rest=${literal#?}; char=${literal%"$rest"}',
+      '    case "$char" in \'\\\' | \'"\') ;; *) die "unexpected escape in the do script string: $2" ;; esac',
+      '  fi',
+      '  command=$command$char; literal=$rest',
+      'done',
+      'nohup sh -c "$command" </dev/null >/dev/null 2>&1 &',
+      'exit 0',
+      '',
+    ].join('\n'));
+    fs.chmodSync(fakeOsascript, 0o755);
+  }
+  const launchNotes = () => {
+    const guardLog = path.join(acc.guardDir, 'guard.log');
+    const stubLog = `${fakeOsascript}.log`;
+    const lines = fs.existsSync(guardLog) ? fs.readFileSync(guardLog, 'utf8').split('\n').filter((line) => /terminal|headless|launcher/.test(line)).slice(-4) : [];
+    return [...lines, ...(fs.existsSync(stubLog) ? fs.readFileSync(stubLog, 'utf8').trim().split('\n') : [])].join(' | ');
+  };
   acc.setConfig((config) => {
     config.wait.maxInHookMinutes = 0;
     config.resume.mode = 'window';
@@ -2188,6 +2221,7 @@ async function scenarioVisibleRelaunch(acc) {
   await runner;
   acc.fastClaude = wasFast;
   acc.timeOffset = 0;
+  if (!callsLog().some((line) => line.includes('--resume vr1') && !line.includes('args=[-p '))) process.stdout.write(`  visible relaunch: no window ran vr1: ${launchNotes()}\n`);
   check('visible relaunch: claude ran through the terminal launcher', callsLog().some((line) => line.includes('--resume vr1') && line.includes('HANDOFF=vr1') && !line.includes('args=[-p ')), true);
   check('visible relaunch: the window\'s claude runs without the Claude session markers the runner inherited from the hook', (callsLog().find((line) => line.includes('--resume vr1')) || '').includes(' CHILD= '), true);
   await new Promise((resolve) => {
@@ -2228,6 +2262,7 @@ async function scenarioVisibleRelaunch(acc) {
   await acc.runPromise(['resume', '--sid', 'vr4', '--account', acc.dir], null, { NOCTIS_NO_TERMINAL: '', DISPLAY: ':9', ...HOOK_SESSION_MARKERS });
   acc.timeOffset = 0;
   const retried = acc.state().waits.vr4 || {};
+  if (!callsLog().some((line) => line.includes('--resume vr4') && !line.includes('args=[-p '))) process.stdout.write(`  visible relaunch: no window ran vr4: ${launchNotes()}\n`);
   check('visible relaunch: a window whose claude closed at once without touching the session is retried, not taken for a resume', callsLog().some((line) => line.includes('--resume vr4') && !line.includes('args=[-p ')) && retried.launchAttempts === 1 && retried.hit === 'relaunch', true);
   check('visible relaunch: and the retry is journaled', acc.run(['why', '--last', '6']).includes('launch-no-progress'), true);
   acc.run(['cancel', 'vr4']);
@@ -2247,6 +2282,8 @@ async function scenarioVisibleRelaunch(acc) {
   acc.run(['resume', '--sid', 'vr3', '--account', acc.dir]);
   check('visible relaunch: a launch record older than any wait is ignored', true, true);
   fs.unlinkSync(fakeTerminal);
+  fs.rmSync(fakeOsascript, { force: true });
+  fs.rmSync(`${fakeOsascript}.log`, { force: true });
   fs.rmSync(vr1Transcript, { force: true });
   fs.rmSync(vr4Transcript, { force: true });
   acc.setConfig((config) => {
