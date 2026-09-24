@@ -393,6 +393,8 @@
   "doctor.fixToken": "Claude Code'a bir kez giriş yap veya CLAUDE_CODE_OAUTH_TOKEN ayarla",
   "doctor.fixTokenExpired": "oturum açmayı yenilemesi için Claude Code'u bir kez aç (ya da /login çalıştır) veya CLAUDE_CODE_OAUTH_TOKEN ayarla",
   "doctor.fixUsage": "durum çubuğu bir kez kullanım bildirsin diye bir Claude Code oturumu aç",
+  "doctor.fixUsageHost": "noctis'in limitleri okuyabilmesi için %s içinde bir oturum başlat",
+  "doctor.fixRoles": "o rolü config.json'daki roles bölümünde düzelt ya da rolleri yeniden seçmek için /noctis:setup çalıştır",
   "doctor.fixErrors": "kayıtlar şurada: %s; çözülünce dosyayı sil (bir günden eski kayıtlar sayılmaz)",
   "status.launchFailed": "!!  %s oturumunun otomatik devamı başarısız oldu (%s) — şununla devam ettir: %s",
   "doctor.schedulerSleeper": "(normal: burada launchd/systemd/schtasks yok, yerine hafif bir uyuyucu süreç kullanılıyor)",

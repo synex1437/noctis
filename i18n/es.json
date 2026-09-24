@@ -393,6 +393,8 @@
   "doctor.fixToken": "inicia sesión una vez en Claude Code, o define CLAUDE_CODE_OAUTH_TOKEN",
   "doctor.fixTokenExpired": "abre Claude Code una vez para que renueve el inicio de sesión (o ejecuta /login), o define CLAUDE_CODE_OAUTH_TOKEN",
   "doctor.fixUsage": "abre una sesión de Claude Code para que la línea de estado informe del uso una vez",
+  "doctor.fixUsageHost": "inicia una sesión en %s para que noctis pueda leer sus límites",
+  "doctor.fixRoles": "corrige ese rol en la sección roles de config.json o ejecuta /noctis:setup para volver a elegir los roles",
   "doctor.fixErrors": "las entradas están en %s; borra el archivo cuando estén resueltas (las de más de un día dejan de contar)",
   "status.launchFailed": "!!  el reinicio automático de %s falló a las %s — reanúdalo con: %s",
   "doctor.schedulerSleeper": "(normal: aquí no hay launchd/systemd/schtasks, así que se usa un proceso durmiente ligero)",
