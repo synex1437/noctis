@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"math"
+	"os"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -129,7 +132,12 @@ func leanDoctorLines(cfg object) []string {
 	if repaired := repairedCompaction(cfg); len(repaired) > 0 {
 		return fixLine(false, T("doctor.leanFixed", strings.Join(repaired, ", ")), "doctor.fixLean")
 	}
-	return []string{checkLine(true, T("doctor.lean", leanDescription(cfg)))}
+	lines := []string{checkLine(true, T("doctor.lean", leanDescription(cfg)))}
+	if leanPolicyOf(cfg).on {
+		value := leanSwitchValue()
+		lines = append(lines, fixLine(switchIsOn(value), T("doctor.leanSwitch", orDefault(value, T("doctor.none"))), "doctor.fixLeanSwitch")...)
+	}
+	return lines
 }
 
 func leanStatusLines(cfg object) []string {
@@ -138,4 +146,69 @@ func leanStatusLines(cfg object) []string {
 		lines = append(lines, T("status.leanFixed", strings.Join(repaired, ", ")))
 	}
 	return lines
+}
+
+const functionHooksVar = "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"
+
+func switchIsOn(value any) bool {
+	switch typed := value.(type) {
+	case string:
+		return slices.Contains([]string{"1", "true", "yes", "on"}, strings.ToLower(strings.TrimSpace(typed)))
+	case bool:
+		return typed
+	case float64:
+		return typed == 1
+	}
+	return false
+}
+
+func ownLeanSwitch(config, env object) bool {
+	managed := getMap(config, "managedFunctionHooks")
+	value, present := env[functionHooksVar]
+	return managed != nil && present && value == managed["set"]
+}
+
+func takeBackLeanSwitch(config, env object) bool {
+	if !ownLeanSwitch(config, env) {
+		return false
+	}
+	if previous := getMap(config, "managedFunctionHooks")["previous"]; previous != nil {
+		env[functionHooksVar] = previous
+	} else {
+		delete(env, functionHooksVar)
+	}
+	return true
+}
+
+func wireLeanSwitch(config, env object) string {
+	if args.present["no-lean"] {
+		compaction := section(config, "compaction")
+		compaction["lean"] = false
+		config["compaction"] = compaction
+	}
+	if !leanPolicyOf(config).on {
+		removed := takeBackLeanSwitch(config, env)
+		delete(config, "managedFunctionHooks")
+		if removed {
+			return T("install.leanOffRemoved")
+		}
+		return T("install.leanOff")
+	}
+	current, present := env[functionHooksVar]
+	switch {
+	case !present || current == "":
+		config["managedFunctionHooks"] = object{"previous": current, "set": "1"}
+		env[functionHooksVar] = "1"
+	case !switchIsOn(current):
+		return T("install.leanKept", fmt.Sprint(current))
+	}
+	return T("install.lean")
+}
+
+func leanSwitchValue() string {
+	settings := readJSONStrict(files.settings)
+	if value, present := getMap(settings.data, "env")[functionHooksVar]; present {
+		return fmt.Sprint(value)
+	}
+	return os.Getenv(functionHooksVar)
 }
