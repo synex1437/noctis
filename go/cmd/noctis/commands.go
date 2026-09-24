@@ -885,6 +885,7 @@ func collectReport(cfg object, days float64) reportData {
 	transcripts := walkTranscripts(filepath.Join(files.configDir, "projects"), since)
 	data.transcripts = len(transcripts)
 	primary := regexp.MustCompile("(?i)" + regexp.QuoteMeta(getString(section(cfg, "models"), "primary")))
+	counted := map[string]bool{}
 	for _, file := range transcripts {
 		info := statSafe(file)
 		if info == nil || info.Size() > 64*1024*1024 {
@@ -906,6 +907,12 @@ func collectReport(cfg object, days float64) reportData {
 			usage := getMap(message, "usage")
 			if usage == nil {
 				continue
+			}
+			if response := orDefault(getString(message, "id"), getString(raw, "requestId")); response != "" {
+				if counted[response] {
+					continue
+				}
+				counted[response] = true
 			}
 			at, parseErr := time.Parse(time.RFC3339Nano, getString(raw, "timestamp"))
 			if parseErr == nil && at.Before(since) {
