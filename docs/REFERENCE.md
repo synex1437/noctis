@@ -111,7 +111,7 @@ Claude Code hook events wired in `hooks/hooks.json`: `SessionStart` (on `startup
 | `NOCTIS_TIME_OFFSET` | Shift the engine's clock (seconds) — test use |
 | `NOCTIS_USAGE_URL` | Point the usage fetch elsewhere; only the real endpoint's host or localhost is accepted, because the request carries your OAuth token |
 | `NOCTIS_UPDATE_URL` | Version-check URL, or `off` |
-| `NOCTIS_PLUGIN_ROOT` | Plugin root, if it must be found somewhere other than next to the binary; ignored unless it really is one |
+| `NOCTIS_PLUGIN_ROOT` | Plugin root, if it must be found somewhere other than next to the binary; ignored unless it really is one. On Windows the toast and relaunch scripts (`scripts\notify.ps1`, `scripts\launch.ps1`) run only from this root or from the plugin folder whose `bin\` holds the running binary: a `noctis.exe` copied anywhere else shows no toast and relaunches headless |
 | `CLAUDE_PLUGIN_ROOT` | Accepted like `NOCTIS_PLUGIN_ROOT` (which is checked first) |
 | `NOCTIS_DEBUG_HOOKS` | Append every raw hook payload to `hooks-debug.log` (prompts and tool output land in that file) |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Token for the usage API, instead of the credentials file or the macOS Keychain |
