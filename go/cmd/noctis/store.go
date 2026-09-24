@@ -75,6 +75,7 @@ const (
 	gitStatusLines          = 30
 	treeStatLimit           = 2000
 	sameWindowSeconds       = 120
+	workflowScriptMaxBytes  = 1024 * 1024
 	hookPulseInterval       = 600
 	maxResetHorizon         = 45 * 86400
 	launchRecordTTLSeconds  = 8 * 86400

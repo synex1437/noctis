@@ -63,11 +63,11 @@ func TestAWorkflowNeedsRoomBeforeItFansOut(t *testing.T) {
 	cfg := creditsConfig()
 	cfg["workflow"] = object{"gate": true}
 	crowded := decision{usage: usageFrom(20, 70, float64(nowSec()+3600))}
-	if reason := gateWorkflowLaunch(cfg, crowded); reason == "" {
+	if reason := gateWorkflowLaunch(cfg, crowded, nil); reason == "" {
 		t.Fatal("a workflow was allowed with 19 points left on the weekly window; hundreds of agents can burn that between two hook calls")
 	}
 	roomy := decision{usage: usageFrom(20, 30, float64(nowSec()+3600))}
-	if reason := gateWorkflowLaunch(cfg, roomy); reason != "" {
+	if reason := gateWorkflowLaunch(cfg, roomy, nil); reason != "" {
 		t.Fatalf("a workflow with 59 points of room was refused: %s", reason)
 	}
 }
