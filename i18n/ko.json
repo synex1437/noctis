@@ -34,6 +34,7 @@
   "scoped.savedManual": "🔁 %s %s%%: 작업 저장됨, 기본 모델이 %s로 바뀌었습니다. /model %s 로 계속하세요.",
   "scoped.savedRelaunch": "🔁 %s %s%%: 작업 저장됨, 약 1분 뒤 새 창에서 %s로 재개합니다.",
   "scoped.reverted": "🔁 %s 주간 할당량이 초기화되어 기본 모델이 다시 %s입니다.",
+  "scoped.revertedDefault": "🔁 %s 주간 할당량이 초기화되어 settings.json에 다시 모델이 지정되지 않으므로 Claude Code 자체 기본 모델이 사용됩니다.",
   "notice.noUsage": "%s: 사용량 데이터가 없습니다 (statusLine이 설치되어 있나요? noctis doctor).",
   "notice.configError": "%s: config.json을 읽을 수 없어 기본값을 사용합니다.",
   "notice.routed": "🔀 조사를 서브에이전트 %s에 넘겼습니다. %s는 코딩용으로 남겨 둡니다.",

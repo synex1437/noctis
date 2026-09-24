@@ -34,6 +34,7 @@
   "scoped.savedManual": "🔁 %s %s%%: Arbeit gesichert, Standardmodell ist jetzt %s; weiter mit /model %s.",
   "scoped.savedRelaunch": "🔁 %s %s%%: Arbeit gesichert, in ~1 Min. geht es mit %s in einem neuen Fenster weiter.",
   "scoped.reverted": "🔁 Wochenkontingent von %s zurückgesetzt; Standardmodell ist wieder %s.",
+  "scoped.revertedDefault": "🔁 Wochenkontingent von %s zurückgesetzt; settings.json nennt wieder kein Modell, also gilt der Standard von Claude Code.",
   "notice.noUsage": "%s: keine Verbrauchsdaten (ist statusLine eingerichtet? noctis doctor).",
   "notice.configError": "%s: config.json unlesbar, Standardwerte werden verwendet.",
   "notice.routed": "🔀 Recherche an den Subagenten %s weitergeleitet; %s bleibt fürs Programmieren.",
