@@ -392,6 +392,7 @@
   "queue.trustGranted": "此文件可以驱动会话：%s",
   "queue.trustRevoked": "此文件不再驱动会话：%s",
   "queue.trustNone": "这里没有队列文件（查找过：%s）。",
+  "queue.fileMissing": "%s 处没有队列文件 — 未做任何更改。请检查文件名，或用 --cwd 指定项目文件夹。",
   "doctor.disabled": "保护已暂停至 %s（noctis off）",
   "doctor.fixDisabled": "noctis on（或 /noctis:resume）可立即重新开启保护",
   "doctor.fixClaude": "安装 Claude Code，或把 claude 加入 PATH；重启已暂停的会话需要它",

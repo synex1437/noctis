@@ -392,6 +392,7 @@
   "queue.trustGranted": "Diese Datei darf Sitzungen steuern: %s",
   "queue.trustRevoked": "Diese Datei steuert keine Sitzungen mehr: %s",
   "queue.trustNone": "Keine Warteschlangendatei hier (gesucht wurde: %s).",
+  "queue.fileMissing": "Keine Warteschlangendatei unter %s — nichts geändert. Prüf den Namen, oder gib den Projektordner mit --cwd an.",
   "doctor.disabled": "Schutz pausiert bis %s (noctis off)",
   "doctor.fixDisabled": "noctis on (oder /noctis:resume) schaltet den Schutz sofort wieder ein",
   "doctor.fixClaude": "installiere Claude Code oder nimm claude in den PATH auf; ohne claude kann eine pausierte Sitzung nicht neu starten",

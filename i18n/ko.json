@@ -392,6 +392,7 @@
   "queue.trustGranted": "이 파일은 세션을 이끌 수 있습니다: %s",
   "queue.trustRevoked": "이 파일은 더 이상 세션을 이끌지 않습니다: %s",
   "queue.trustNone": "여기에는 큐 파일이 없습니다(찾은 곳: %s).",
+  "queue.fileMissing": "%s 에 큐 파일이 없습니다 — 아무것도 바꾸지 않았습니다. 이름을 확인하거나 --cwd로 프로젝트 폴더를 지정하세요.",
   "doctor.disabled": "보호가 %s 까지 일시 중지됨 (noctis off)",
   "doctor.fixDisabled": "noctis on (또는 /noctis:resume)으로 보호를 바로 다시 켤 수 있습니다",
   "doctor.fixClaude": "Claude Code를 설치하거나 claude를 PATH에 추가하세요. 일시 중지된 세션을 다시 시작하려면 필요합니다",

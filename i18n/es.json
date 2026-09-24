@@ -392,6 +392,7 @@
   "queue.trustGranted": "Este archivo puede dirigir sesiones: %s",
   "queue.trustRevoked": "Este archivo ya no dirige sesiones: %s",
   "queue.trustNone": "No hay archivo de cola aquí (se buscó: %s).",
+  "queue.fileMissing": "No hay archivo de cola en %s — no se cambió nada. Revisa el nombre, o indica la carpeta del proyecto con --cwd.",
   "doctor.disabled": "protección en pausa hasta %s (noctis off)",
   "doctor.fixDisabled": "noctis on (o /noctis:resume) vuelve a activar la protección ahora",
   "doctor.fixClaude": "instala Claude Code o pon claude en el PATH; una sesión en pausa lo necesita para reiniciarse",

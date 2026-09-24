@@ -392,6 +392,7 @@
   "queue.trustGranted": "This file may drive sessions: %s",
   "queue.trustRevoked": "This file no longer drives sessions: %s",
   "queue.trustNone": "No queue file here (looked for: %s).",
+  "queue.fileMissing": "No queue file at %s — nothing changed. Check the name, or name the project folder with --cwd.",
   "doctor.disabled": "guard paused until %s (noctis off)",
   "doctor.fixDisabled": "noctis on (or /noctis:resume) turns the guard back on now",
   "doctor.fixClaude": "install Claude Code or put claude on PATH; relaunching a paused session needs it",

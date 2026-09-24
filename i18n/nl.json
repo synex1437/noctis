@@ -392,6 +392,7 @@
   "queue.trustGranted": "Dit bestand mag sessies aansturen: %s",
   "queue.trustRevoked": "Dit bestand stuurt geen sessies meer aan: %s",
   "queue.trustNone": "Hier staat geen wachtrijbestand (gezocht naar: %s).",
+  "queue.fileMissing": "Geen wachtrijbestand op %s — er is niets veranderd. Controleer de naam, of geef de projectmap op met --cwd.",
   "doctor.disabled": "bescherming gepauzeerd tot %s (noctis off)",
   "doctor.fixDisabled": "noctis on (of /noctis:resume) zet de bescherming meteen weer aan",
   "doctor.fixClaude": "installeer Claude Code of zet claude in het PATH; een gepauzeerde sessie heeft het nodig om te herstarten",
