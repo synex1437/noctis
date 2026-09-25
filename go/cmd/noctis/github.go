@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -220,7 +222,8 @@ func runQueue() {
 		fmt.Fprintln(os.Stderr, T("queue.usage"))
 		os.Exit(2)
 	}
-	arguments := []string{"issue", "list", "--state", "open", "--limit", limit, "--json", "number,title,labels"}
+	authors, named := importAuthors(cwd, repo)
+	arguments := []string{"issue", "list", "--state", "open", "--limit", limit, "--json", "number,title,labels,author"}
 	if repo != "" {
 		arguments = append(arguments, "--repo", repo)
 	}
@@ -266,7 +269,7 @@ func runQueue() {
 			bare[issue.number] = append(bare[issue.number], bareIssueItem{line: index, hash: hash, text: strings.TrimSpace(line[hash+1+len(issue.number):])})
 		}
 	}
-	lines, qualified := []string{}, 0
+	lines, qualified, skipped, others := []string{}, 0, 0, []string{}
 	for _, raw := range issues {
 		issue := toObject(raw)
 		number, ok := getNumber(issue, "number")
@@ -288,6 +291,13 @@ func runQueue() {
 			}
 		}
 		if present {
+			continue
+		}
+		if author := strings.ToLower(getString(getMap(issue, "author"), "login")); !authors[author] {
+			skipped++
+			if author != "" && !slices.Contains(others, author) {
+				others = append(others, author)
+			}
 			continue
 		}
 		labels := []string{}
@@ -322,10 +332,57 @@ func runQueue() {
 		logInfo("queue import: %d item(s) in %s that an older import wrote as a bare #N now name %s", qualified, filepath.Base(target), repo)
 	}
 	if len(lines) == 0 {
-		fmt.Println(T("queue.importNone", len(issues), filepath.Base(target)))
-		return
+		fmt.Println(T("queue.importNone", len(issues)-skipped, filepath.Base(target)))
+	} else {
+		fmt.Println(T("queue.importDone", len(lines), len(issues)-skipped-len(lines), filepath.Base(target)))
 	}
-	fmt.Println(T("queue.importDone", len(lines), len(issues)-len(lines), filepath.Base(target)))
+	if skipped > 0 {
+		if len(others) == 0 {
+			others = []string{"?"}
+		}
+		fmt.Println(T("queue.importSkipped", skipped, strings.Join(others, ", "), named))
+	}
+}
+
+func importAuthors(cwd, repo string) (map[string]bool, string) {
+	authors, names := map[string]bool{}, []string{}
+	if args.present["author"] {
+		for _, value := range args.values["author"] {
+			for _, login := range strings.Split(value, ",") {
+				if login = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(login), "@")); login != "" && !authors[login] {
+					authors[login] = true
+					names = append(names, login)
+				}
+			}
+		}
+		if len(names) == 0 {
+			fmt.Fprintln(os.Stderr, T("queue.usage"))
+			os.Exit(2)
+		}
+		return authors, strings.Join(names, ", ")
+	}
+	arguments := []string{"api", "user", "--jq", ".login"}
+	if strings.Count(repo, "/") >= 2 {
+		host, _, _ := strings.Cut(repo, "/")
+		arguments = []string{"api", "--hostname", host, "user", "--jq", ".login"}
+	}
+	command := exec.Command("gh", arguments...)
+	command.Dir = cwd
+	var complaint bytes.Buffer
+	command.Stderr = &complaint
+	output, err := runWithTimeout(command, 20*time.Second)
+	login := strings.ToLower(strings.TrimSpace(string(output)))
+	if err == nil && login == "" {
+		err = errors.New("gh api user printed no login")
+	}
+	if err != nil {
+		if text := strings.TrimSpace(complaint.String()); text != "" {
+			err = errors.New(text)
+		}
+		fmt.Fprintln(os.Stderr, T("queue.importWho", err))
+		os.Exit(1)
+	}
+	return map[string]bool{login: true}, login
 }
 
 func queueIssueItems(content string) (map[string]bool, map[string]issueID) {

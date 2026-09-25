@@ -18,9 +18,9 @@ func fakeGhCLI(t *testing.T, listing string) string {
 	}
 	t.Setenv("NOCTIS_TEST_GH_CALLS", calls)
 	t.Setenv("NOCTIS_TEST_GH_ISSUES", issues)
-	name, script := "gh", "#!/bin/sh\necho \"gh $*\" >> \"$NOCTIS_TEST_GH_CALLS\"\nif [ \"$1\" = issue ] && [ \"$2\" = list ]; then cat \"$NOCTIS_TEST_GH_ISSUES\"; fi\nif [ \"$1\" = issue ] && [ \"$2\" = close ] && [ -n \"$NOCTIS_TEST_GH_FAIL\" ] && [ -f \"$NOCTIS_TEST_GH_FAIL\" ]; then echo \"error connecting to api.github.com\" >&2; exit 1; fi\n"
+	name, script := "gh", "#!/bin/sh\necho \"gh $*\" >> \"$NOCTIS_TEST_GH_CALLS\"\nif [ \"$1\" = issue ] && [ \"$2\" = list ]; then cat \"$NOCTIS_TEST_GH_ISSUES\"; fi\nif [ \"$1\" = issue ] && [ \"$2\" = close ] && [ -n \"$NOCTIS_TEST_GH_FAIL\" ] && [ -f \"$NOCTIS_TEST_GH_FAIL\" ]; then echo \"error connecting to api.github.com\" >&2; exit 1; fi\nif [ \"$1\" = api ] && [ -n \"$NOCTIS_TEST_GH_WHO_FAILS\" ]; then echo \"HTTP 401: Bad credentials\" >&2; exit 1; fi\nif [ \"$1\" = api ]; then echo \"${NOCTIS_TEST_GH_LOGIN:-owner}\"; fi\n"
 	if isWindows {
-		name, script = "gh.cmd", "@echo off\r\n>>\"%NOCTIS_TEST_GH_CALLS%\" echo gh %*\r\nif \"%~1\"==\"issue\" if \"%~2\"==\"list\" type \"%NOCTIS_TEST_GH_ISSUES%\"\r\nif \"%~1\"==\"issue\" if \"%~2\"==\"close\" if exist \"%NOCTIS_TEST_GH_FAIL%\" (echo error connecting to api.github.com 1>&2 & exit /b 1)\r\n"
+		name, script = "gh.cmd", "@echo off\r\n>>\"%NOCTIS_TEST_GH_CALLS%\" echo gh %*\r\nif \"%~1\"==\"issue\" if \"%~2\"==\"list\" type \"%NOCTIS_TEST_GH_ISSUES%\"\r\nif \"%~1\"==\"issue\" if \"%~2\"==\"close\" if exist \"%NOCTIS_TEST_GH_FAIL%\" (echo error connecting to api.github.com 1>&2 & exit /b 1)\r\nif \"%~1\"==\"api\" if defined NOCTIS_TEST_GH_WHO_FAILS (echo HTTP 401: Bad credentials 1>&2 & exit /b 1)\r\nif \"%~1\"==\"api\" if defined NOCTIS_TEST_GH_LOGIN (echo %NOCTIS_TEST_GH_LOGIN%& exit /b 0)\r\nif \"%~1\"==\"api\" (echo owner& exit /b 0)\r\n"
 	}
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -138,7 +138,7 @@ func TestAnIssueStaysOpenUntilEveryItemCarryingItIsTicked(t *testing.T) {
 
 func TestImportAddsAnIssueThatIsOnlyMentionedInTheFile(t *testing.T) {
 	_, project := queueTrustSandbox(t, false)
-	fakeGhCLI(t, `[{"number":12,"title":"Follow-up to #45","labels":[]},{"number":45,"title":"Flaky login test","labels":[]},{"number":7,"title":"Ship the release","labels":[]}]`)
+	fakeGhCLI(t, `[{"number":12,"author":{"login":"owner"},"title":"Follow-up to #45","labels":[]},{"number":45,"author":{"login":"owner"},"title":"Flaky login test","labels":[]},{"number":7,"author":{"login":"owner"},"title":"Ship the release","labels":[]}]`)
 	queuePath := writeQueueFile(t, project, "# Release #7 checklist\n- [ ] #12 Follow-up to #45\n")
 	queueImportOutput(t, "queue", "import", "--cwd", project)
 	content := issueQueueText(t, queuePath)
@@ -218,7 +218,7 @@ func TestImportRepoAcceptsTheFormsGhTakes(t *testing.T) {
 
 func TestARepoImportIsClosedInThatRepository(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, true)
-	calls := fakeGhCLI(t, `[{"number":12,"title":"Backend crash","labels":[{"name":"P1"}]}]`)
+	calls := fakeGhCLI(t, `[{"number":12,"author":{"login":"owner"},"title":"Backend crash","labels":[{"name":"P1"}]}]`)
 	queuePath := filepath.Join(project, "TASKS.md")
 	queueImportOutput(t, "queue", "import", "--repo", "org/backend", "--cwd", project)
 	if lists := ghLoggedCalls(calls, "list"); len(lists) != 1 || !strings.Contains(lists[0]+" ", " --repo org/backend ") {
@@ -238,7 +238,7 @@ func TestARepoImportIsClosedInThatRepository(t *testing.T) {
 
 func TestARepoImportIsNotHiddenByTheCheckoutsOwnIssue(t *testing.T) {
 	_, project := queueTrustSandbox(t, false)
-	fakeGhCLI(t, `[{"number":12,"title":"Backend crash","labels":[]},{"number":13,"title":"Backend leak","labels":[]}]`)
+	fakeGhCLI(t, `[{"number":12,"author":{"login":"owner"},"title":"Backend crash","labels":[]},{"number":13,"author":{"login":"owner"},"title":"Backend leak","labels":[]}]`)
 	queuePath := writeQueueFile(t, project, "# q\n- [ ] #12 Local crash\n- [x] Org/Backend#13 Backend leak\n")
 	queueImportOutput(t, "queue", "import", "--repo", "org/backend", "--cwd", project)
 	content := issueQueueText(t, queuePath)
@@ -298,7 +298,7 @@ func TestAnIssueOnGhHostIsClosedThere(t *testing.T) {
 
 func TestARepoImportQualifiesTheItemsAnOlderImportWroteAsABareNumber(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, true)
-	calls := fakeGhCLI(t, `[{"number":12,"title":"Backend crash","labels":[{"name":"P1"}]},{"number":13,"title":"Backend leak","labels":[]},{"number":14,"title":"Backend lag","labels":[]},{"number":15,"title":"Backend flake","labels":[]}]`)
+	calls := fakeGhCLI(t, `[{"number":12,"author":{"login":"owner"},"title":"Backend crash","labels":[{"name":"P1"}]},{"number":13,"author":{"login":"owner"},"title":"Backend leak","labels":[]},{"number":14,"author":{"login":"owner"},"title":"Backend lag","labels":[]},{"number":15,"author":{"login":"owner"},"title":"Backend flake","labels":[]}]`)
 	queuePath := writeQueueFile(t, project, "# q\n- [ ] (P1) #12 Backend crash\n- [x] #13 Backend leak #backend (after #12)\n- [ ] #14 Local lag\n- [ ] #15 Backend flake\n- [ ] org/backend#15 Backend flake\n")
 	output := queueImportOutput(t, "queue", "import", "--repo", "org/backend", "--cwd", project)
 	want := "# q\n- [ ] (P1) org/backend#12 Backend crash\n- [x] org/backend#13 Backend leak #backend (after #12)\n- [ ] #14 Local lag\n- [ ] #15 Backend flake\n- [ ] org/backend#15 Backend flake\n\n## GitHub issues\n- [ ] org/backend#14 Backend lag\n"
