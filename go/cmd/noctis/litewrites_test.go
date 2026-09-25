@@ -174,3 +174,76 @@ func TestTheLiteAgentMayNotWriteThroughALinkNoctisCannotFollow(t *testing.T) {
 		t.Errorf("the lite agent was refused hop1.md, a chain of eight links to a document: %v", output)
 	}
 }
+
+func TestTheLiteAgentMayNotWriteInAClaudeConfigFolderWithAnotherName(t *testing.T) {
+	cfg, project := agentSessionSandbox(t, 10)
+	account := filepath.Join(t.TempDir(), "claude-work")
+	personal := filepath.Join(t.TempDir(), "claude-personal")
+	for _, dir := range []string{filepath.Join(account, pluginName, "queues"), personal} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files.configDir, files.guardDir = account, filepath.Join(account, pluginName)
+	t.Setenv(claudeConfigEnv, personal)
+	for _, file := range []string{
+		filepath.Join(account, "agents", "helper.md"),
+		filepath.Join(account, "commands", "ship.md"),
+		filepath.Join(account, "projects", "-work-app", "memory", "MEMORY.md"),
+		filepath.Join(autoQueueDir(), "lw1.md"),
+		filepath.Join(personal, "agents", "helper.md"),
+		filepath.Join(personal, "skills", "deploy", "SKILL.md"),
+	} {
+		if output := liteWrite(t, cfg, project, file); permissionOf(output) != "deny" || !strings.Contains(reasonOf(output), "steer the main model") {
+			t.Errorf("the lite agent was allowed to write %s in a Claude config folder with another name: %v", file, output)
+		}
+	}
+	for _, file := range []string{filepath.Join(project, "notes.md"), filepath.Join(filepath.Dir(account), "claude-work-notes.md")} {
+		if output := liteWrite(t, cfg, project, file); output != nil {
+			t.Errorf("the lite agent was refused the plain document %s: %v", file, output)
+		}
+	}
+}
+
+func TestTheLiteAgentMayNotWriteAClaudeConfigFolderThroughALinkOrUnderItsRealName(t *testing.T) {
+	cfg, project := agentSessionSandbox(t, 10)
+	account := filepath.Join(t.TempDir(), "claude-work")
+	dotfiles := filepath.Join(t.TempDir(), "dotfiles", "claude")
+	for _, dir := range []string{account, dotfiles} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files.configDir, files.guardDir = account, filepath.Join(account, pluginName)
+	symlinkOrSkip(t, filepath.Join(account, "agents", "helper.md"), filepath.Join(project, "notes.md"))
+	if output := liteWrite(t, cfg, project, filepath.Join(project, "notes.md")); permissionOf(output) != "deny" || !strings.Contains(reasonOf(output), "steer the main model") {
+		t.Errorf("the lite agent was allowed to write through notes.md, a link to the missing agents/helper.md of the config folder: %v", output)
+	}
+	home := filepath.Join(t.TempDir(), "home")
+	symlinkOrSkip(t, dotfiles, filepath.Join(home, ".claude"))
+	t.Setenv(claudeConfigEnv, filepath.Join(home, ".claude"))
+	if output := liteWrite(t, cfg, project, filepath.Join(dotfiles, "agents", "helper.md")); permissionOf(output) != "deny" || !strings.Contains(reasonOf(output), "steer the main model") {
+		t.Errorf("the lite agent was allowed to write dotfiles/claude/agents/helper.md, the folder the config folder .claude links to: %v", output)
+	}
+}
+
+func TestTheLiteAgentMayNotWriteThePluginsOwnFolder(t *testing.T) {
+	cfg, project := agentSessionSandbox(t, 10)
+	root := filepath.Join(t.TempDir(), "noctis-checkout")
+	cliWrite(t, filepath.Join(root, "config.default.json"), []byte("{}\n"))
+	cliWrite(t, filepath.Join(root, "hooks", "hooks.json"), []byte("{}\n"))
+	files.pluginRoot = root
+	for _, file := range []string{
+		filepath.Join(root, "agents", "lite.md"),
+		filepath.Join(root, "skills", pluginName, "SKILL.md"),
+		filepath.Join(root, "commands", "pause.md"),
+	} {
+		if output := liteWrite(t, cfg, project, file); permissionOf(output) != "deny" || !strings.Contains(reasonOf(output), "steer the main model") {
+			t.Errorf("the lite agent was allowed to write %s in the plugin's own folder: %v", file, output)
+		}
+	}
+	files.pluginRoot = filepath.Dir(project)
+	if output := liteWrite(t, cfg, project, filepath.Join(project, "notes.md")); output != nil {
+		t.Errorf("the lite agent was refused notes.md because %s, which holds no plugin, was taken for the plugin's folder: %v", files.pluginRoot, output)
+	}
+}

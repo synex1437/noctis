@@ -841,6 +841,7 @@ async function scenarioQueueMode(acc) {
   });
   if (linked) check('lite may not write through a link to a missing .claude file or to code', liteLinks.map(([name]) => acc.hook({ hook_event_name: 'PreToolUse', session_id: 'q1', agent_id: 'l1', agent_type: liteType, tool_name: 'Write', tool_input: { file_path: path.join(PROJECT_DIR, name), content: 'x' } }).includes('"permissionDecision":"deny"')), [true, true]);
   for (const [name] of liteLinks) fs.rmSync(path.join(PROJECT_DIR, name), { force: true });
+  check('lite may not write the account folder under another name, nor noctis\'s queues in it', [path.join(acc.dir, 'agents', 'helper.md'), path.join(acc.guardDir, 'queues', 'q1.md')].map((file) => acc.hook({ hook_event_name: 'PreToolUse', session_id: 'q1', agent_id: 'l1', agent_type: liteType, tool_name: 'Write', tool_input: { file_path: file, content: '- [ ] x' } }).includes('steer the main model')), [true, true]);
   check('other subagents unaffected', acc.hook({ hook_event_name: 'PreToolUse', session_id: 'q1', agent_id: 'g1', agent_type: 'general-purpose', tool_name: 'Write', tool_input: { file_path: path.join(PROJECT_DIR, 'src', 'parser.cs') } }), '');
   check('main thread Write untouched', acc.hook({ hook_event_name: 'PreToolUse', session_id: 'q1', tool_name: 'Write', tool_input: { file_path: path.join(PROJECT_DIR, 'src', 'parser.cs') } }), '');
   fs.unlinkSync(queueFile);
