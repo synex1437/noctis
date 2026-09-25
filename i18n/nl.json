@@ -267,6 +267,7 @@
   "install.permissionsOther": "   permissions.defaultMode=%s (voor de setup: %s, een modus die de setup niet kan instellen; zet het weer in settings.json om terug te gaan)",
   "install.permissionsKept": "   permissions.defaultMode blijft %s (de setup wijzigt het alleen bij de eerste setup van het account of met --permissions)",
   "install.permissionsNone": "   permissions.defaultMode blijft leeg (de setup wijzigt het alleen bij de eerste setup van het account of met --permissions)",
+  "install.relaunchInherit": "   resume.permissionMode=inherit (was auto): een opnieuw gestarte sessie houdt de machtigingsmodus waarin ze liep",
   "install.lean": "   env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1: slanke compactie kan draaien (de functie-hooks van Claude Code, in vroege toegang; dit laadt de hook-module van elke geïnstalleerde plugin; --no-lean om het uit te laten)",
   "install.leanKept": "   slanke compactie kan niet draaien: settings.json zet CLAUDE_CODE_ENABLE_FUNCTION_HOOKS op %s, en setup laat jouw waarde staan (met 1 draait ze)",
   "install.leanOff": "   slanke compactie uit: compaction.lean is false, en CLAUDE_CODE_ENABLE_FUNCTION_HOOKS blijft zoals het is",

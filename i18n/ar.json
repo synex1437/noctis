@@ -267,6 +267,7 @@
   "install.permissionsOther": "   permissions.defaultMode=%s (قبل الإعداد: %s، وهو وضع لا يستطيع الإعداد ضبطه؛ للعودة اكتبه مجددًا في settings.json)",
   "install.permissionsKept": "   بقي permissions.defaultMode على %s (لا يغيّره الإعداد إلا في أول إعداد للحساب أو مع ‎--permissions‎)",
   "install.permissionsNone": "   بقي permissions.defaultMode غير مضبوط (لا يغيّره الإعداد إلا في أول إعداد للحساب أو مع ‎--permissions‎)",
+  "install.relaunchInherit": "   resume.permissionMode=inherit (كان auto): الجلسة التي يُعاد تشغيلها تحتفظ بوضع الأذونات الذي كانت تعمل به",
   "install.lean": "   env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1: يمكن أن يعمل الضغط الخفيف (خطافات الدوال في Claude Code ضمن الوصول المبكر؛ هذا يحمّل وحدة الخطافات لكل إضافة مثبتة؛ استخدم ‎--no-lean‎ لتركه متوقفًا)",
   "install.leanKept": "   لا يمكن أن يعمل الضغط الخفيف: يضبط settings.json قيمة CLAUDE_CODE_ENABLE_FUNCTION_HOOKS على %s، ويترك الإعداد قيمتك كما هي (يعمل مع 1)",
   "install.leanOff": "   الضغط الخفيف متوقف: compaction.lean قيمته false، ويبقى CLAUDE_CODE_ENABLE_FUNCTION_HOOKS كما هو",

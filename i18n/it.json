@@ -267,6 +267,7 @@
   "install.permissionsOther": "   permissions.defaultMode=%s (prima della configurazione: %s, una modalità che la configurazione non può impostare; rimettila in settings.json per tornare indietro)",
   "install.permissionsKept": "   permissions.defaultMode lasciato a %s (la configurazione lo cambia solo alla prima configurazione dell'account o con --permissions)",
   "install.permissionsNone": "   permissions.defaultMode lasciato non impostato (la configurazione lo cambia solo alla prima configurazione dell'account o con --permissions)",
+  "install.relaunchInherit": "   resume.permissionMode=inherit (prima auto): una sessione rilanciata mantiene la modalità di autorizzazione in cui girava",
   "install.lean": "   env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1: la compattazione snella può funzionare (gli hook di funzione di Claude Code, in accesso anticipato; carica il modulo di hook di ogni plugin installato; --no-lean per lasciarla spenta)",
   "install.leanKept": "   la compattazione snella non può funzionare: settings.json imposta CLAUDE_CODE_ENABLE_FUNCTION_HOOKS a %s e il setup lascia il tuo valore (con 1 funziona)",
   "install.leanOff": "   compattazione snella spenta: compaction.lean è false e CLAUDE_CODE_ENABLE_FUNCTION_HOOKS resta com'è",

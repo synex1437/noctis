@@ -267,6 +267,7 @@
   "install.permissionsOther": "   permissions.defaultMode=%s (setup öncesinde: %s — setup bu modu ayarlayamaz; geri dönmek için settings.json içinde yeniden ayarlayın)",
   "install.permissionsKept": "   permissions.defaultMode olduğu gibi bırakıldı: %s (setup bunu yalnızca hesaptaki ilk kurulumda ya da --permissions ile değiştirir)",
   "install.permissionsNone": "   permissions.defaultMode ayarsız bırakıldı (setup bunu yalnızca hesaptaki ilk kurulumda ya da --permissions ile değiştirir)",
+  "install.relaunchInherit": "   resume.permissionMode=inherit (önceden auto): yeniden başlatılan oturum, çalıştığı izin modunu korur",
   "install.lean": "   env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1: yalın sıkıştırma çalışabilir (Claude Code'un erken erişimdeki fonksiyon hook'ları; bu, kurulu her eklentinin hook modülünü yükler; kapalı bırakmak için --no-lean)",
   "install.leanKept": "   yalın sıkıştırma çalışamaz: settings.json, CLAUDE_CODE_ENABLE_FUNCTION_HOOKS için %s diyor ve kurulum senin değerine dokunmaz (1 olursa çalışır)",
   "install.leanOff": "   yalın sıkıştırma kapalı: compaction.lean false, CLAUDE_CODE_ENABLE_FUNCTION_HOOKS olduğu gibi bırakıldı",

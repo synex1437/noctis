@@ -267,6 +267,7 @@
   "install.permissionsOther": "   permissions.defaultMode=%s（安装前：%s，安装无法设置此模式；如需恢复，请在 settings.json 中重新写入）",
   "install.permissionsKept": "   permissions.defaultMode 保持为 %s（安装只在该账户首次安装或指定 --permissions 时更改它）",
   "install.permissionsNone": "   permissions.defaultMode 保持未设置（安装只在该账户首次安装或指定 --permissions 时更改它）",
+  "install.relaunchInherit": "   resume.permissionMode=inherit（原为 auto）：重新启动的会话保持其运行时的权限模式",
   "install.lean": "   env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1：精简压缩可以运行（Claude Code 抢先体验的函数钩子；这会加载每个已安装插件的钩子模块；用 --no-lean 保持关闭）",
   "install.leanKept": "   精简压缩无法运行：settings.json 把 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS 设为 %s，设置会保留你的值（设为 1 即可运行）",
   "install.leanOff": "   精简压缩已关闭：compaction.lean 为 false，CLAUDE_CODE_ENABLE_FUNCTION_HOOKS 保持原样",

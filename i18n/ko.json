@@ -267,6 +267,7 @@
   "install.permissionsOther": "   permissions.defaultMode=%s(설치 전: %s. 설치가 설정할 수 없는 모드입니다. 되돌리려면 settings.json 에 다시 넣으세요)",
   "install.permissionsKept": "   permissions.defaultMode 를 그대로 두었습니다: %s(설치는 계정의 첫 설치 때나 --permissions 를 줄 때만 이 값을 바꿉니다)",
   "install.permissionsNone": "   permissions.defaultMode 를 설정하지 않은 채로 두었습니다(설치는 계정의 첫 설치 때나 --permissions 를 줄 때만 이 값을 바꿉니다)",
+  "install.relaunchInherit": "   resume.permissionMode=inherit(이전 auto): 다시 시작한 세션은 실행되던 권한 모드를 그대로 유지합니다",
   "install.lean": "   env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1: 경량 압축을 실행할 수 있습니다(Claude Code의 얼리 액세스 함수 훅. 설치된 모든 플러그인의 훅 모듈을 불러옵니다. 끈 채로 두려면 --no-lean)",
   "install.leanKept": "   경량 압축을 실행할 수 없습니다: settings.json의 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS 값은 %s 이며, 설정은 그 값을 바꾸지 않습니다(1이면 실행됩니다)",
   "install.leanOff": "   경량 압축 꺼짐: compaction.lean이 false이며 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS는 그대로 둡니다",
