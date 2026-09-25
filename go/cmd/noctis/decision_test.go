@@ -79,6 +79,24 @@ func TestEvaluateStopsEarlyWhenCompactionIsImminent(t *testing.T) {
 	}
 }
 
+func TestAnImminentCompactionPausesForTheFiveHourWindowButNotForTheWeek(t *testing.T) {
+	cfg := testConfig()
+	five := evaluate(cfg, usageFrom(92-compactionBand, 10, 1000), "claude-opus-5", 90, true)
+	if five.wait == nil || five.wait.hit != "compaction" || five.wait.window != "five_hour" {
+		t.Fatalf("the five-hour window 6 points from its pause point did not pause before an imminent compaction: %+v", five.wait)
+	}
+	for _, week := range []float64{89 - compactionBand, 88} {
+		weekly := evaluate(cfg, usageFrom(10, week, 1000), "claude-opus-5", 90, true)
+		if weekly.wait != nil {
+			t.Fatalf("weekly at %v%% with the context 90%% full parks the session until the weekly reset: %+v", week, weekly.wait)
+		}
+	}
+	reached := evaluate(cfg, usageFrom(10, 89, 1000), "claude-opus-5", 90, true)
+	if reached.wait == nil || reached.wait.window != "seven_day" || reached.wait.hit != "threshold" {
+		t.Fatalf("the weekly pause point itself no longer pauses: %+v", reached.wait)
+	}
+}
+
 func TestEdgePollGetsStricterCloserToTheWall(t *testing.T) {
 	cfg := testConfig()
 	far := edgePollSeconds(cfg, usageFrom(50, 10, 1000))

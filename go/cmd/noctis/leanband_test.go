@@ -8,21 +8,20 @@ import (
 	"testing"
 )
 
-func TestTheLeanModuleKeepsTheGuardsCompactionBandAndBuiltinPausePoints(t *testing.T) {
+func TestTheLeanModuleKeepsTheGuardsCompactionBandAndItsFiveHourPausePointOnly(t *testing.T) {
 	source, err := os.ReadFile(filepath.Join(repoRoot(), "hooks", "lean.js"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	band := regexp.MustCompile(`const COMPACTION_BAND = (\d+)`).FindStringSubmatch(string(source))
-	points := regexp.MustCompile(`const BUILTIN_THRESHOLDS = Object\.freeze\(\{ session5h: (\d+), weeklyAll: (\d+) \}\)`).FindStringSubmatch(string(source))
-	windows := regexp.MustCompile(`const WINDOW_THRESHOLDS = new Map\(\[\["five_hour", "session5h"\], \["seven_day", "weeklyAll"\]\]\)`).MatchString(string(source))
+	points := regexp.MustCompile(`const BUILTIN_THRESHOLDS = Object\.freeze\(\{ session5h: (\d+) \}\)`).FindStringSubmatch(string(source))
+	windows := regexp.MustCompile(`const WINDOW_THRESHOLDS = new Map\(\[\["five_hour", "session5h"\]\]\)`).MatchString(string(source))
 	if band == nil || points == nil || !windows {
-		t.Fatal("hooks/lean.js no longer spells COMPACTION_BAND, BUILTIN_THRESHOLDS and WINDOW_THRESHOLDS the way this test reads them")
+		t.Fatal("hooks/lean.js no longer spells COMPACTION_BAND, BUILTIN_THRESHOLDS and WINDOW_THRESHOLDS the way this test reads them, with the five-hour window alone")
 	}
 	for name, pair := range map[string][2]string{
 		"COMPACTION_BAND":              {band[1], fmt.Sprint(compactionBand)},
 		"BUILTIN_THRESHOLDS.session5h": {points[1], fmt.Sprint(builtinThresholds["session5h"])},
-		"BUILTIN_THRESHOLDS.weeklyAll": {points[2], fmt.Sprint(builtinThresholds["weeklyAll"])},
 	} {
 		if pair[0] != pair[1] {
 			t.Errorf("hooks/lean.js has %s = %s, the guard %s", name, pair[0], pair[1])
@@ -57,7 +56,7 @@ func TestTheGuardPausesBeforeACompactionWhereTheLeanModulePutsItsEarlyCompaction
 		{object{"session5h": "0"}, shipped, "five_hour", 99, false},
 		{nil, nil, "five_hour", 99, false},
 		{"not an object", nil, "five_hour", 99, false},
-		{object{"weeklyAll": float64(70)}, shipped, "seven_day", 64, true},
+		{object{"weeklyAll": float64(70)}, shipped, "seven_day", 64, false},
 		{object{"weeklyAll": float64(70)}, shipped, "seven_day", 63.9, false},
 	}
 	for _, testCase := range cases {
