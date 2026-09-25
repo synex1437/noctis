@@ -92,7 +92,7 @@ Checkpoint model çağrısı yapmadan transcript'ten üretilir; `--resume` tam b
 | 19 | Laptop pilde | `AllowStartIfOnBatteries`, `DontStopIfGoingOnBatteries`, `WakeToRun` |
 | 20 | Runner çalışırken hata fırlattı | `main`'deki `recover` → errors.log'a `fatal:` satırı; yeniden başlatma olmazsa (claude yok, klasör yok, başlatma başarısız) bildirim elle çalıştırılacak komutu verir |
 | 21 | Runner tekrar 429 yiyor (veri yok) | Deneme sayacı, 10/20/30/45 dk geri çekilme (`wait.retryMinutes`), beşinci bakışta bildirimle durma |
-| 22 | OAuth token yok/expired/401/429 | Geri çekilme: token yoksa ve 401/403'te 30 dk, 429'da ve tanınmayan yanıt biçiminde 10 dk, diğer hatalarda 2 dk; Fable kuralı pasif, token asla log'a yazılmaz |
+| 22 | OAuth token yok/expired/401/429 | Geri çekilme: token yoksa ve 401/403'te 30 dk, 429'da 10 dk ya da `Retry-After` daha uzunsa o kadar (saniye ya da HTTP tarihi; en fazla 60 dk), tanınmayan yanıt biçiminde 10 dk, diğer hatalarda 2 dk; 429 geri çekilmesi sürerken kör nokta yoklaması istek göndermez, geri çekilme yoklama turlarından uzunsa hemen duraklatır; Fable kuralı pasif, token asla log'a yazılmaz |
 | 23 | OAuth yanıt şeması değişti | `limits[]` + düz alanlar birlikte denenir; Fable kovası bulunamazsa `note` ile görünür kılınır |
 | 24 | Fable eşiğinde `-p` (yönetici) çağrısı | Prompt bloklanır, mesaj çıktıya düşer; yönetici `noctis model` ile Opus seçer |
 | 25 | Devam prompt'unda tırnak/`%`/`^`/satır sonu | `sanitizePrompt` + tam cmd meta-karakter tırnaklaması; Windows pencere modu JSON spec + `Start-Process` (kabuk yok) |
