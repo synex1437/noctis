@@ -221,8 +221,6 @@ func onSessionStart(input, cfg object) {
 					queueNotice = T("queue.trustLegacy", filepath.Base(queuePath), pluginName)
 				case len(changed) > 0:
 					queueNotice = T("queue.trustChanged", filepath.Base(queuePath), len(changed), pluginName)
-				default:
-					queueNotice = T("queue.trustAsk", filepath.Base(queuePath), snapshot.total, pluginName)
 				}
 			}
 			logInfo("queue file %s found but not trusted (%d open, %d added or changed since a trust, record from an older noctis: %t): no directive injected", queuePath, snapshot.total, len(changed), legacy)
@@ -231,7 +229,7 @@ func onSessionStart(input, cfg object) {
 		} else {
 			rememberOpenIssues(cfg, queuePath)
 			if isAutoQueue(queuePath) {
-				contexts = append(contexts, autoQueueDirective(queuePath, snapshot.total))
+				contexts = append(contexts, sessionQueueDirective(sid, queuePath, snapshot.total))
 			} else {
 				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total))
 				touchQueueTrust(queuePath, now)
@@ -399,7 +397,7 @@ func joinNotices(parts ...string) string {
 	return strings.Join(kept, " ")
 }
 
-var controlSkills = map[string]bool{"pause": true, "resume": true, "setup": true, "status": true}
+var controlSkills = map[string]bool{"pause": true, "resume": true, "setup": true, "status": true, "start": true, "stop": true}
 
 func controlCommand(prompt string) string {
 	fields := strings.Fields(prompt)
@@ -428,8 +426,15 @@ func onControlPrompt(input, cfg object, result decision, command string) {
 		journal(sid, "UserPromptSubmit", "control-prompt", command+": "+hitLabel(result.wait), facts)
 		logInfo("%s for %s passes the pause point: %s %s%%", command, sid, result.wait.window, formatNumber(result.wait.used))
 	}
-	if !observing && result.notice != "" {
-		emit(object{"systemMessage": result.notice})
+	notice := result.notice
+	if observing {
+		notice = ""
+	}
+	switch {
+	case command == "/"+pluginName+":start":
+		onStartPrompt(input, cfg, sid, notice)
+	case notice != "":
+		emit(object{"systemMessage": notice})
 	}
 }
 
@@ -513,8 +518,15 @@ func onUserPromptSubmit(input, cfg object) {
 	now := nowSec()
 	sid := sessionKey(input)
 	state := readState()
+	if controlCommand(getString(input, "prompt")) == "/"+pluginName+":stop" {
+		onStopPrompt(input, cfg, sid)
+		return
+	}
 	if guardPaused(cfg, state, now) {
 		retireOwnCheckpoint(state, sid)
+		if controlCommand(getString(input, "prompt")) == "/"+pluginName+":start" {
+			emit(object{"decision": "block", "reason": T("queue.startPaused", formatTime(numberOr(state, "disabledUntil", 0)), pluginName)})
+		}
 		return
 	}
 	clearDeadHandoffs(state)
@@ -582,7 +594,7 @@ func onUserPromptSubmit(input, cfg object) {
 			logInfo("warn band for %s: %s %%%s", sid, result.warnWindow.window, formatNumber(result.warnWindow.used))
 		}
 	}
-	if getBool(section(cfg, "queue"), "auto", true) && getBool(section(cfg, "queue"), "enabled", true) && !observing && !promptFromPlugin && queueFile(cfg, queueDirs(input)...) == "" {
+	if getBool(section(cfg, "queue"), "auto", true) && getBool(section(cfg, "queue"), "enabled", true) && !observing && !promptFromPlugin && getString(getMap(getMap(state, "autoQueues"), sid), "source") == "" && followedQueueFile(cfg, queueDirs(input)...) == "" {
 		if items := autoQueueItems(getString(input, "prompt")); len(items) > 0 {
 			if path := startAutoQueue(sid, getString(input, "cwd"), items, now); path != "" {
 				rememberOpenIssues(cfg, path)
@@ -1463,7 +1475,7 @@ func onStop(input, cfg object) {
 	}
 	queueLabel := filepath.Base(queuePath)
 	if isAutoQueue(queuePath) {
-		queueLabel = T("queue.autoLabel")
+		queueLabel = sessionQueueLabel(sid)
 	}
 	snapshot := queueSnapshotOf(queuePath, content)
 	syncDoneIssues(cfg, queuePath, content, getString(input, "cwd"))

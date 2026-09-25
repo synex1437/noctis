@@ -202,6 +202,14 @@ func queueFileNames(cfg object) []string {
 }
 
 func queueFile(cfg object, dirs ...string) string {
+	return queueFileWhere(cfg, nil, dirs...)
+}
+
+func followedQueueFile(cfg object, dirs ...string) string {
+	return queueFileWhere(cfg, func(file string) bool { return queueFollowed(cfg, file) }, dirs...)
+}
+
+func queueFileWhere(cfg object, keep func(string) bool, dirs ...string) string {
 	queue := section(cfg, "queue")
 	if !getBool(queue, "enabled", true) {
 		return ""
@@ -221,6 +229,9 @@ func queueFile(cfg object, dirs ...string) string {
 			}
 			if resolved, err := filepath.EvalSymlinks(file); err != nil || !linkedWithin(dir, resolved) {
 				reportLinkedOutQueue(file, dir, resolved)
+				continue
+			}
+			if keep != nil && !keep(file) {
 				continue
 			}
 			return file

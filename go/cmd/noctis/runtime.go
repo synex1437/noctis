@@ -975,7 +975,7 @@ func resumeWait(sid, release string) {
 		view, trusted = trustedQueueSnapshot(cfg, queuePath)
 	}
 	if trusted {
-		if len(dirs) > 1 && queueFile(cfg, dirs[1]) == queuePath {
+		if len(dirs) > 1 && followedQueueFile(cfg, dirs[1]) == queuePath {
 			launchDir = dirs[1]
 		}
 		if !queueHeld(cfg, readState(), queuePath) {

@@ -805,9 +805,9 @@ async function scenarioQueueMode(acc) {
   fs.writeFileSync(queueFile, ['# release queue', '- [x] Fix the date parser for ISO weeks', '- [ ] Retry failed uploads with backoff', '- [ ] Write the migration guide (10 sections)', '1. [ ] Settings page: export button', 'TODO: rollout notes for the beta channel', '- [x] Landing page mockup', ''].join('\n'));
   const untrusted = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'q0', cwd: PROJECT_DIR });
   check('untrusted queue file injects no directive', untrusted.includes('Queue mode'), false);
-  check('untrusted queue file is reported instead', untrusted.includes('noctis queue trust'), true);
+  check('untrusted queue file is not brought up either', untrusted.includes('TASKS.md') || untrusted.includes('noctis queue trust'), false);
   const untrustedAgain = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'q0b', cwd: PROJECT_DIR });
-  check('and reported again next session, not once a week', untrustedAgain.includes('noctis queue trust'), true);
+  check('nor at the next session', untrustedAgain.includes('TASKS.md') || untrustedAgain.includes('noctis queue trust'), false);
   const untrustedStop = acc.hook({ hook_event_name: 'Stop', session_id: 'u0', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
   check('untrusted queue file does not drive the Stop hook', !untrustedStop.includes('Queue continues') && (acc.state().stopGuard || {}).u0 === undefined, true);
   acc.statusline('u0', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400);
@@ -2046,10 +2046,18 @@ async function scenarioAutoQueue(acc) {
   check('auto queue: four long imperative sentences are a job', proseOut.includes('multi-step job (4 items)') && acc.state().autoQueues.aq3 !== undefined, true);
   acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq3', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'actually, just tell me the current git branch' });
   check('auto queue: a manual prompt while a job is open ends the job (the person is steering)', acc.state().autoQueues.aq3, undefined);
-  fs.writeFileSync(path.join(PROJECT_DIR, 'TASKS.md'), '# q\n- [ ] real file item\n');
+  const realFile = path.join(PROJECT_DIR, 'TASKS.md');
+  fs.writeFileSync(realFile, '# q\n- [ ] real file item\n');
+  acc.run(['queue', 'untrust', '--file', realFile]);
+  acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq4u', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: job });
+  check('auto queue: a TASKS.md nobody trusted does not keep a prompt job from its checklist', acc.state().autoQueues.aq4u !== undefined, true);
+  const stopped = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq4u', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: '/noctis:stop' });
+  check('auto queue: /noctis:stop ends the prompt job and says how far it got', stopped.includes('"decision":"block"') && acc.state().autoQueues.aq4u === undefined, true);
+  acc.run(['queue', 'trust', '--file', realFile]);
   acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq4', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: job });
-  check('auto queue: a real TASKS.md always wins over a prompt job', acc.state().autoQueues.aq4, undefined);
-  fs.unlinkSync(path.join(PROJECT_DIR, 'TASKS.md'));
+  check('auto queue: a TASKS.md the user trusted wins over a prompt job', acc.state().autoQueues.aq4, undefined);
+  acc.run(['queue', 'untrust', '--file', realFile]);
+  fs.unlinkSync(realFile);
   acc.setConfig((config) => {
     config.queue.auto = false;
   });
