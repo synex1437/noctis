@@ -61,6 +61,8 @@
   "queue.doneMessage": "✔ Cola terminada — %s no tiene elementos abiertos; parada limpia.",
   "queue.blockedNotify": "Cola bloqueada: %d elementos abiertos en %s esperan dependencias sin terminar.",
   "queue.blockedMessage": "⛔ Cola bloqueada: %d elemento(s) abierto(s) esperan dependencias (after …) que nunca se completaron; parando.",
+  "queue.unmatched": "⚠ (after …) ignorado en %s — ninguna etiqueta, incidencia o número de elemento coincide: %s. Revisa la ortografía.",
+  "queue.unmatchedMore": "%s y %d más",
   "queue.modeNotice": "☰ Modo cola: %s tiene %d elemento(s) abierto(s) — Claude los resuelve sin preguntar (/%s:pause para parar; renombra el archivo o ajusta queue.files para desactivarlo).",
   "queue.autoNotice": "☰ Trabajo de %d pasos detectado — registrado como lista de comprobación; Claude termina cada paso sin preguntar (/%s:pause para parar).",
   "queue.autoLabel": "el trabajo de tu petición",

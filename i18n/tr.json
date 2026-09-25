@@ -61,6 +61,8 @@
   "queue.doneMessage": "✔ Kuyruk bitti — %s içinde açık madde kalmadı; temiz duruluyor.",
   "queue.blockedNotify": "Kuyruk tıkalı: %[2]s içindeki %[1]d açık madde tamamlanmamış bağımlılıkları bekliyor.",
   "queue.blockedMessage": "⛔ Kuyruk tıkalı: %d açık madde hiç tamamlanmayan (after …) bağımlılıklarını bekliyor; duruluyor.",
+  "queue.unmatched": "⚠ %s içinde (after …) yok sayıldı — hiçbir etiket, issue ya da madde numarası eşleşmiyor: %s. Yazımı kontrol et.",
+  "queue.unmatchedMore": "%s ve %d tane daha",
   "queue.modeNotice": "☰ Kuyruk modu: %s içinde %d açık madde var — Claude sormadan sırayla yapar (/%s:pause durdurur; dosyayı yeniden adlandır ya da queue.files ile kapat).",
   "queue.autoNotice": "☰ %d adımlık iş algılandı — checklist olarak izleniyor; Claude her adımı sormadan bitirir (/%s:pause durdurur).",
   "queue.autoLabel": "prompt'taki iş",

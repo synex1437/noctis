@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1251,6 +1252,17 @@ func onStop(input, cfg object) {
 	if observed(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), nil) {
 		return
 	}
+	told, unmatched := getList(guard, "unmatched"), []string{}
+	for _, reference := range snapshot.unmatched {
+		if !slices.ContainsFunc(told, func(named any) bool { return strings.EqualFold(fmt.Sprint(named), reference) }) {
+			unmatched = append(unmatched, reference)
+		}
+	}
+	if len(snapshot.unmatched) > 0 {
+		guard["unmatched"] = toAnyList(snapshot.unmatched)
+	} else {
+		delete(guard, "unmatched")
+	}
 	guard["forced"] = numberOr(guard, "forced", 0) + 1
 	updateState(func(next object) { stateMap(next, "stopGuard")[sid] = guard })
 	if !isAutoQueue(queuePath) {
@@ -1272,6 +1284,17 @@ func onStop(input, cfg object) {
 	if snapshot.plain {
 		blockedNote += " This list has no checkboxes: first rewrite every open item as \"- [ ] …\" (finished ones as \"- [x] …\") so progress can be tracked, then continue."
 	}
+	unmatchedNotice := ""
+	if len(unmatched) > 0 {
+		shown := unmatched[:min(len(unmatched), queueUnmatchedNamed)]
+		list, more := strings.Join(shown, ", "), len(unmatched)-len(shown)+snapshot.unmatchedMore
+		note, notice := list, list
+		if more > 0 {
+			note, notice = fmt.Sprintf("%s and %d more", list, more), T("queue.unmatchedMore", list, more)
+		}
+		blockedNote += fmt.Sprintf(" These (after …) references match no tag, issue or item number, so nothing waits for them: %s. Mention them to the user so the file can be fixed.", note)
+		unmatchedNotice = T("queue.unmatched", queueLabel, notice)
+	}
 	where := filepath.Base(queuePath)
 	if isAutoQueue(queuePath) {
 		where = queuePath
@@ -1281,7 +1304,7 @@ func onStop(input, cfg object) {
 		reason = waitContext + "\n" + reason
 	}
 	output := object{"decision": "block", "reason": reason}
-	if systemMessage = joinNotices(systemMessage, result.notice); systemMessage != "" {
+	if systemMessage = joinNotices(systemMessage, result.notice, unmatchedNotice); systemMessage != "" {
 		output["systemMessage"] = systemMessage
 	}
 	emit(output)

@@ -61,6 +61,8 @@
   "queue.doneMessage": "✔ Kolejka ukończona — %s nie ma otwartych pozycji; czyste zatrzymanie.",
   "queue.blockedNotify": "Kolejka zablokowana: %d otwartych pozycji w %s czeka na nieukończone zależności.",
   "queue.blockedMessage": "⛔ Kolejka zablokowana: %d otwarta/e pozycja/e czeka na zależności (after …), które nigdy nie zostały ukończone; zatrzymuję.",
+  "queue.unmatched": "⚠ (after …) pominięte w %s — żaden tag, zgłoszenie ani numer pozycji nie pasuje: %s. Sprawdź pisownię.",
+  "queue.unmatchedMore": "%s i jeszcze %d",
   "queue.modeNotice": "☰ Tryb kolejki: %s ma %d otwartą pozycję/e — Claude przerabia je bez pytania (/%s:pause aby przerwać; zmień nazwę pliku lub ustaw queue.files, by wyłączyć).",
   "queue.autoNotice": "☰ Wykryto zadanie na %d kroków — zapisane jako lista kontrolna; Claude kończy każdy krok bez pytania (/%s:pause aby przerwać).",
   "queue.autoLabel": "zadanie z twojego polecenia",
