@@ -739,6 +739,11 @@ func uninstallFrom(configDir string) error {
 		if err := undoSetupSettings(settingsFile, settings.data, stored.data); err != nil {
 			return err
 		}
+	}
+	if line := undoMarketplaceAutoUpdate(configDir, stored.data); line != "" {
+		fmt.Println(line)
+	}
+	if settings.data != nil {
 		forgetSetupRecords(configFile, stored.data)
 	}
 	installRoot := filepath.Join(configDir, "skills", pluginName)
@@ -787,7 +792,7 @@ func settleStateDir(configDir string) {
 	fmt.Println(T("install.purged", guardDir))
 }
 
-var setupRecords = []string{"managedModel", "managedEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep", "managedFunctionHooks"}
+var setupRecords = []string{"managedModel", "managedEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep", "managedFunctionHooks", "managedAutoUpdate"}
 
 func forgetSetupRecords(configFile string, config object) {
 	forgotten := false
@@ -1308,6 +1313,75 @@ func marketplaceNameFor(pluginRoot string) string {
 	return strings.SplitN(rest, "/", 2)[0]
 }
 
+func marketplaceOwnerFor(pluginRoot string) string {
+	normalized := filepath.ToSlash(pluginRoot)
+	index := strings.Index(normalized, "/plugins/cache/")
+	if index <= 0 {
+		return ""
+	}
+	return filepath.FromSlash(normalized[:index])
+}
+
+func knownMarketplacesFile(configDir string) string {
+	return filepath.Join(configDir, "plugins", "known_marketplaces.json")
+}
+
+func marketplaceAutoUpdate(configDir, market string) (any, bool) {
+	if configDir == "" {
+		return nil, false
+	}
+	value, had := getMap(readJSON(knownMarketplacesFile(configDir)), market)["autoUpdate"]
+	return value, had
+}
+
+func recordMarketplaceAutoUpdate(owner, market string, previous any, hadPrevious bool) string {
+	configFile := filepath.Join(owner, pluginName, "config.json")
+	stored := readJSONStrict(configFile)
+	if !stored.ok || !stored.exists || stored.data == nil {
+		return T("update.autoNotRecorded", market)
+	}
+	if _, recorded := stored.data["managedAutoUpdate"]; recorded {
+		return ""
+	}
+	record := object{"marketplace": market}
+	if hadPrevious {
+		record["previous"] = previous
+	}
+	stored.data["managedAutoUpdate"] = record
+	if err := writeJSONAtomic(configFile, stored.data); err != nil {
+		warn("setup: the marketplace auto-update it switched on is not recorded in %s: %v", configFile, err)
+		return T("update.autoNotRecorded", market)
+	}
+	return ""
+}
+
+func undoMarketplaceAutoUpdate(configDir string, config object) string {
+	record := getMap(config, "managedAutoUpdate")
+	market := getString(record, "marketplace")
+	if market == "" {
+		return ""
+	}
+	knownFile := knownMarketplacesFile(configDir)
+	known := readJSONStrict(knownFile)
+	if !known.ok {
+		return T("install.autoUpdateLeft", market, knownFile)
+	}
+	marketplace := getMap(known.data, market)
+	if marketplace == nil || marketplace["autoUpdate"] != true {
+		return ""
+	}
+	if previous, had := record["previous"]; had {
+		marketplace["autoUpdate"] = previous
+	} else {
+		delete(marketplace, "autoUpdate")
+	}
+	if err := writeJSONAtomic(knownFile, known.data); err != nil {
+		warn("uninstall: marketplace auto-update for %s not set back: %v", market, err)
+		return T("install.autoUpdateLeft", market, knownFile)
+	}
+	return T("install.autoUpdateBack", market)
+}
+
 func enableMarketplaceAutoUpdate(pluginRoot string) string {
 	if choice := choiceOf(updateChoices, flagString("updates")); choice == "keep" || choice == "off" {
 		return ""
@@ -1320,12 +1394,20 @@ func enableMarketplaceAutoUpdate(pluginRoot string) string {
 	if claudePath == "" {
 		return T("update.autoFailed", market)
 	}
+	owner := marketplaceOwnerFor(pluginRoot)
+	before, hadBefore := marketplaceAutoUpdate(owner, market)
 	if _, err := runWithTimeout(inGuardDir(claudeCommand(claudePath, []string{"plugin", "marketplace", "update", market, "--auto-update"})), 45*time.Second); err != nil {
 		warn("marketplace auto-update could not be enabled for %s: %v", market, err)
 		return T("update.autoFailed", market)
 	}
 	logInfo("marketplace auto-update enabled for %s", market)
-	return T("update.autoEnabled", market)
+	enabled := T("update.autoEnabled", market)
+	if after, _ := marketplaceAutoUpdate(owner, market); owner != "" && before != true && after == true {
+		if note := recordMarketplaceAutoUpdate(owner, market, before, hadBefore); note != "" {
+			enabled += "\n" + note
+		}
+	}
+	return enabled
 }
 
 func pathsFor(configDir, pluginRoot string) paths {
