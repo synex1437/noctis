@@ -349,8 +349,19 @@ func queueTrusted(cfg object, path string) bool {
 	return trusted
 }
 
+func queueNeedsTrust(cfg object, path string) bool {
+	return !isAutoQueue(path) && getBool(section(cfg, "queue"), "requireTrust", true)
+}
+
+func queueEditRule(cfg object, path string) string {
+	if !queueNeedsTrust(cfg, path) {
+		return ""
+	}
+	return " When an item is done, change only its checkbox to [x]; do not add, edit or remove any other text in the file, since any other change makes noctis wait until the user trusts the file again."
+}
+
 func queueTrustGap(cfg object, path string) (bool, []string, bool) {
-	if isAutoQueue(path) || !getBool(section(cfg, "queue"), "requireTrust", true) {
+	if !queueNeedsTrust(cfg, path) {
 		return true, nil, false
 	}
 	record := getMap(getMap(readState(), "queueTrust"), queueTrustKey(path))

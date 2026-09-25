@@ -162,9 +162,9 @@ func selfCheckIssues(cfg object) []string {
 
 func queueDirective(cfg object, queuePath string, total int) string {
 	if !currentHost().agents {
-		return fmt.Sprintf(`[noctis] Queue mode (%s: %d open). Work items in order; mark each done in the file before starting the next. Do not stop or ask for confirmation between items; decide yourself.`, filepath.Base(queuePath), total)
+		return fmt.Sprintf(`[noctis] Queue mode (%s: %d open). Work items in order; mark each done in the file before starting the next.%s Do not stop or ask for confirmation between items; decide yourself.`, filepath.Base(queuePath), total, queueEditRule(cfg, queuePath))
 	}
-	directive := fmt.Sprintf(`[noctis] Queue mode (%s: %d open). Work items in order; mark each done in the file before starting the next. Items needing no code or file edits (research, copy, docs, analysis) go to "%s" in one Agent call each; code stays with you.`, filepath.Base(queuePath), total, liteAgentType(cfg))
+	directive := fmt.Sprintf(`[noctis] Queue mode (%s: %d open). Work items in order; mark each done in the file before starting the next.%s Items needing no code or file edits (research, copy, docs, analysis) go to "%s" in one Agent call each; code stays with you.`, filepath.Base(queuePath), total, queueEditRule(cfg, queuePath), liteAgentType(cfg))
 	if digestEnabled(cfg) {
 		directive += fmt.Sprintf(` Long test runs, big diffs and noisy logs go to "%s" (it runs the command and returns a short digest) so your context stays small.`, digestAgentType(cfg))
 	}
@@ -1430,7 +1430,7 @@ func onStop(input, cfg object) {
 		systemMessage = joinNotices(systemMessage, workflowNotice(cfg, "notice.workflowQueue", result.usage))
 	}
 	if snapshot.plain {
-		blockedNote += " This list has no checkboxes: first rewrite every open item as \"- [ ] …\" (finished ones as \"- [x] …\") so progress can be tracked, then continue."
+		blockedNote += " This list has no checkboxes: first rewrite every open item as \"- [ ] …\" (finished ones as \"- [x] …\") without changing their text, so progress can be tracked, then continue."
 	}
 	unmatchedNotice := ""
 	if len(unmatched) > 0 {
@@ -1447,7 +1447,7 @@ func onStop(input, cfg object) {
 	if isAutoQueue(queuePath) {
 		where = queuePath
 	}
-	reason := fmt.Sprintf(queueContinuesPrefix+": %d open in %s. Take the next eligible item%s (priority and (after …) dependencies already applied), finish it completely, mark it done in the file, then move to the following one.%s Do not stop or ask for confirmation; decide yourself.", snapshot.total, where, nextItem, blockedNote)
+	reason := fmt.Sprintf(queueContinuesPrefix+": %d open in %s. Take the next eligible item%s (priority and (after …) dependencies already applied), finish it completely, mark it done in the file, then move to the following one.%s%s Do not stop or ask for confirmation; decide yourself.", snapshot.total, where, nextItem, blockedNote, queueEditRule(cfg, queuePath))
 	if waitContext != "" {
 		reason = waitContext + "\n" + reason
 	}
