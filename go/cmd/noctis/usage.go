@@ -1125,7 +1125,7 @@ func evaluate(cfg object, usage usageView, model string, contextPercent float64,
 		win := usage.byKey(spec.key)
 		hit := windowHit(win, spec.threshold)
 		limit, _ := toNumber(spec.threshold)
-		if hit == "" && compactionImminent && win != nil && validThreshold(spec.threshold) && win.used >= limit-compactionBand {
+		if hit == "" && compactionImminent && spec.key == "five_hour" && win != nil && validThreshold(spec.threshold) && win.used >= limit-compactionBand {
 			hit = "compaction"
 		}
 		if hit != "" {

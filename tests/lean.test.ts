@@ -259,7 +259,7 @@ const PAUSE_POINTS: [unknown, unknown, string, number, boolean][] = [
   [{ session5h: "0" }, { session5h: 92, weeklyAll: 89 }, "five_hour", 99, true],
   [undefined, undefined, "five_hour", 99, true],
   ["not an object", undefined, "five_hour", 99, true],
-  [{ weeklyAll: 70 }, { session5h: 92, weeklyAll: 89 }, "seven_day", 64, false],
+  [{ weeklyAll: 70 }, { session5h: 92, weeklyAll: 89 }, "seven_day", 64, true],
   [{ weeklyAll: 70 }, { session5h: 92, weeklyAll: 89 }, "seven_day", 63.9, true],
 ]
 
@@ -575,7 +575,7 @@ describe("register: turn.complete", () => {
     }
   })
 
-  test("the early compaction waits while a 5-hour or weekly window is within 6 points of its pause point, and a later turn asks once it is clear", async () => {
+  test("the early compaction waits while the 5-hour window is within 6 points of its pause point, and a later turn asks once it is clear; the weekly window near its pause point does not hold it back", async () => {
     const soon = new Date(1_790_000_000_000 + 3_600_000).toISOString()
     const w = world()
     const on = hooks()
@@ -584,11 +584,15 @@ describe("register: turn.complete", () => {
       await on["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
     }
     await turn([{ kind: "five_hour", percentUsed: 86, resetsAt: soon }])
-    await turn([{ kind: "seven_day", percentUsed: 83, resetsAt: soon }])
     await turn([{ kind: "five_hour", percentUsed: 97, resetsAt: soon }, { kind: "seven_day", percentUsed: 10, resetsAt: soon }])
     expect(w.compacts).toEqual([])
     await turn([{ kind: "five_hour", percentUsed: 85.9, resetsAt: soon }, { kind: "seven_day", percentUsed: 82.9, resetsAt: soon }])
     expect(w.compacts).toEqual([{}])
+    for (const used of [83, 88]) {
+      const weekly = world({ usage: { context: { percent: 75, window: 200000 }, rateLimits: [{ kind: "seven_day", percentUsed: used, resetsAt: soon }, { kind: "five_hour", percentUsed: 10, resetsAt: soon }] } })
+      await hooks()["turn.complete"](engine(weekly), TURN, async () => ({ text: "done" }))
+      expect({ used, compacts: weekly.compacts }).toEqual({ used, compacts: [{}] })
+    }
   })
 
   test("the pause points are the thresholds the guard reads: the account's own, the shipped one for a wrong value, the built-in one when neither is right, none for a window switched off or without a threshold", async () => {
@@ -799,7 +803,21 @@ describe("through the engine", () => {
     expect(asked).toEqual([])
   })
 
-  test("a full turn next to a usage limit leaves the compaction for later", async ($, on) => {
+  test("a full turn next to the 5-hour limit leaves the compaction for later", async ($, on) => {
+    kit(on)
+    const soon = new Date(1_790_000_000_000 + 3_600_000).toISOString()
+    on("session.usage", () => ({ value: { startedAt: 0, context: { window: 200000, tokens: 150000, percent: 75 }, rateLimits: [{ kind: "five_hour", percentUsed: 91, resetsAt: soon }] } }))
+    on("turn.complete", ($: any, e: any) => ({ text: e.answer }))
+    const asked: any[] = []
+    on("session.compact", ($: any, e: any) => {
+      asked.push(e)
+      return { messages: [SUMMARY] }
+    })
+    await $.turn.complete({ answer: "done", durationMs: 1, isAborted: false, turnId: "t4", reason: "answer" } as any)
+    expect(asked).toEqual([])
+  })
+
+  test("a full turn next to the weekly limit asks for the compaction", async ($, on) => {
     kit(on)
     const soon = new Date(1_790_000_000_000 + 3_600_000).toISOString()
     on("session.usage", () => ({ value: { startedAt: 0, context: { window: 200000, tokens: 150000, percent: 75 }, rateLimits: [{ kind: "seven_day", percentUsed: 88, resetsAt: soon }] } }))
@@ -810,7 +828,7 @@ describe("through the engine", () => {
       return { messages: [SUMMARY] }
     })
     await $.turn.complete({ answer: "done", durationMs: 1, isAborted: false, turnId: "t4", reason: "answer" } as any)
-    expect(asked).toEqual([])
+    expect(asked).toEqual([{}])
   })
 
   test("a turn below compactAtPercent asks for nothing", async ($, on) => {

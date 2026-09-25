@@ -7,8 +7,8 @@ const LOG_LINES = 200
 const SESSIONS_KEPT = 50
 const PRECOMPUTE_SKIP = "noctis lean compaction prunes the conversation when it compacts, so a summary computed ahead would be thrown away"
 const COMPACTION_BAND = 6
-const BUILTIN_THRESHOLDS = Object.freeze({ session5h: 92, weeklyAll: 89 })
-const WINDOW_THRESHOLDS = new Map([["five_hour", "session5h"], ["seven_day", "weeklyAll"]])
+const BUILTIN_THRESHOLDS = Object.freeze({ session5h: 92 })
+const WINDOW_THRESHOLDS = new Map([["five_hour", "session5h"]])
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -396,7 +396,7 @@ export function register(on, options) {
       }
       if (disarmed.has(context.sid) || (await ownCompactionOff($, context.account))) return answered
       if (nearPausePoint(usage.rateLimits, context.pausePoints, await $.clock.now())) {
-        debug($, `early compaction at ${percent}% put off: a usage window is within ${COMPACTION_BAND} points of its pause point`)
+        debug($, `early compaction at ${percent}% put off: the 5-hour window is within ${COMPACTION_BAND} points of its pause point`)
         return answered
       }
       disarmed.add(context.sid)
