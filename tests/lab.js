@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { spawn, spawnSync } = require('child_process');
-const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, isAlive, processTable } = require('./harness');
+const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, isAlive, processStarted, processTable } = require('./harness');
 const { leanChecks } = require('./lean');
 const PLUGIN_VERSION = readJson(path.join(SOURCE_ROOT, '.claude-plugin', 'plugin.json')).version;
 const SHIPPED_THRESHOLDS = readJson(path.join(SOURCE_ROOT, 'config.default.json')).thresholds;
@@ -2308,7 +2308,7 @@ async function scenarioVisibleRelaunch(acc) {
   const [engine] = acc.engine();
   const watcher = spawn(engine, ['hook'], { stdio: ['pipe', 'ignore', 'ignore'], env: acc.env() });
   acc.editState((state) => {
-    state.launched.vr1 = { pid: previous.pid, at: now - 3600, how: 'terminal', runner: watcher.pid };
+    state.launched.vr1 = { pid: previous.pid, started: processStarted(previous.pid), at: now - 3600, how: 'terminal', runner: watcher.pid };
     state.waits.vr1.resumeAt = now - 5;
     state.waits.vr1.until = now - 10;
   });

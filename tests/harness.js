@@ -87,6 +87,19 @@ function isAlive(pid) {
   }
 }
 
+function processStarted(pid) {
+  try {
+    if (fs.existsSync('/proc/self/stat')) {
+      const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+      return stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[19] || '';
+    }
+    const listed = spawnSync('ps', ['-p', String(pid), '-o', 'lstart='], { encoding: 'utf8', env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' } });
+    return (listed.stdout || '').trim().split(/\s+/).join(' ');
+  } catch {
+    return '';
+  }
+}
+
 function refreshChecksums(root = SOURCE_ROOT) {
   const binDir = path.join(root, 'bin');
   const lines = [];
@@ -615,4 +628,4 @@ function waitKey(sid) {
 }
 
 module.exports = {
-  refreshChecksums, PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, Account, sleep, nowSec, readJson, writeJson, isAlive, processTable, waitKey };
+  refreshChecksums, PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, Account, sleep, nowSec, readJson, writeJson, isAlive, processStarted, processTable, waitKey };
