@@ -408,6 +408,7 @@
   "queue.trustAsk": "☰ Bu klasördeki %s dosyasında %d açık madde var. Bu oturumu sürüklemiyor: bir görev listesi depoyla birlikte gelmiş olabilir ve sürüklemek, sormadan maddeleri işlemek demek. Sürüklemesine izin vermek için: noctis queue trust (%s)",
   "queue.trustChanged": "☰ %s dosyasında, güvendiğinden beri eklenmiş ya da değişmiş %d açık madde var; bir pull ya da dal değişimi getirmiş olabilir. Onları okuyup dosyaya yeniden güvenene kadar bu oturumu sürüklemiyor: noctis queue trust (%s)",
   "queue.importTrust": "%[2]s dosyasında henüz güven vermediğin %[1]d açık madde var: okuyup noctis queue trust komutunu yeniden çalıştırana kadar hiçbir oturumu sürüklemezler.",
+  "queue.trustByModel": "🔒 Claude noctis queue trust komutunu kendisi çalıştırmaya çalıştı; noctis izin vermedi, çünkü güvenilen bir kuyruk dosyası oturumları sormadan sürükler ve ona yalnızca sen, okuduktan sonra güvenmelisin. Kendin güvenmek için: !noctis queue trust (%s)",
   "queue.trustGranted": "Bu dosya oturumları sürükleyebilir: %s",
   "queue.trustRevoked": "Bu dosya artık oturumları sürüklemiyor: %s",
   "queue.trustNone": "Burada kuyruk dosyası yok (aranan: %s).",

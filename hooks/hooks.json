@@ -76,6 +76,19 @@
             "statusMessage": "noctis"
           }
         ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/noctis",
+            "args": [
+              "hook"
+            ],
+            "timeout": 21600
+          }
+        ]
       }
     ],
     "PermissionRequest": [
