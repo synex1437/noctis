@@ -195,7 +195,11 @@ async function scenarioWarnAndBurst(acc) {
   check('warn context once', warn.includes('auto-pause at 92%'), true);
   check('warn does not stop', warn.includes('"decision":"block"'), false);
   check('warn not repeated', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', cwd: PROJECT_DIR, prompt: 'continue editing auth.js and keep the tests green' }), '');
-  for (const used of [60, 78, 85]) acc.statusline('s1', 'claude-fable-5-1', used, now + 2 * 86400, 23, now + 3 * 86400);
+  [60, 78, 85].forEach((used, index, readings) => {
+    acc.timeOffset = (index - readings.length + 1) * 60;
+    acc.statusline('s1', 'claude-fable-5-1', used, now + 2 * 86400, 23, now + 3 * 86400);
+  });
+  acc.timeOffset = 0;
   const out = acc.hook({ hook_event_name: 'PostToolBatch', session_id: 's1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('burst projection stops early (85% + 18% burst)', out.includes('"continue":false'), true);
   check('burst reason logged', fs.readFileSync(path.join(acc.guardDir, 'guard.log'), 'utf8').includes('ani yükseliş öngörüsü'), true);
@@ -779,9 +783,17 @@ async function scenarioAgentGateAndWarnBand(accA) {
   accA.run(['cancel', 'fo2']);
   accA.statusline('fo2', 'claude-fable-5-1', 40, now + 7200, 10, now + 3 * 86400);
   check('subagent spawn allowed below threshold', accA.hook({ hook_event_name: 'PreToolUse', session_id: 'fo2', cwd: PROJECT_DIR, tool_name: 'Agent', tool_input: {} }), '');
-  for (const used of [75, 82]) accA.statusline('fo3', 'claude-opus-5', used, now + 7300, 10, now + 3 * 86400);
+  [75, 82].forEach((used, index, readings) => {
+    accA.timeOffset = (index - readings.length + 1) * 60;
+    accA.statusline('fo3', 'claude-opus-5', used, now + 7300, 10, now + 3 * 86400);
+  });
+  accA.timeOffset = 0;
   check('adaptive warn band widens with burst', accA.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'fo3', cwd: PROJECT_DIR, prompt: 'continue editing auth.js' }).includes('auto-pause at 92%'), true);
-  for (const used of [79, 80, 81, 82]) accA.statusline('fo4', 'claude-opus-5', used, now + 7400, 10, now + 3 * 86400);
+  [79, 80, 81, 82].forEach((used, index, readings) => {
+    accA.timeOffset = (index - readings.length + 1) * 60;
+    accA.statusline('fo4', 'claude-opus-5', used, now + 7400, 10, now + 3 * 86400);
+  });
+  accA.timeOffset = 0;
   check('calm usage keeps the default warn band', accA.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'fo4', cwd: PROJECT_DIR, prompt: 'continue editing auth.js' }), '');
   accA.statusline('fo4', 'claude-opus-5', 10, now + 7400, 10, now + 3 * 86400);
 }
