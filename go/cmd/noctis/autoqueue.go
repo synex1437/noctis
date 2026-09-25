@@ -492,6 +492,19 @@ var codeRunners = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash":
 
 var heredocReaders = map[string]bool{"cat": true, "tee": true, "git": true, "gh": true}
 
+type protectedCommand struct {
+	words   []string
+	message string
+	journal string
+	logName string
+	reason  string
+}
+
+var protectedNoctis = []protectedCommand{
+	{[]string{"queue", "trust"}, "queue.trustByModel", "deny-queue-trust", "noctis queue trust", "Only the user may trust a queue file: a trusted file drives sessions without asking, so a person reads its items first. Do not run noctis queue trust yourself and do not trust the file another way. Tell the user the file waits for their trust; after reading it they can type !noctis queue trust themselves."},
+	{[]string{"state-write"}, "queue.stateWriteByModel", "deny-state-write", "noctis state-write", "noctis state-write is for the test harness: it replaces noctis's whole state file, including the queue trust records, without asking. Do not run it, and do not write noctis's state another way. It is not a way to trust a queue file; only the user does that, with !noctis queue trust after reading the file."},
+}
+
 var (
 	pythonRunner = lazyRegexp(`^python[0-9.]*$`)
 	dotSourcing  = lazyRegexp(`(?m)(?:^|[;&|({])[ \t]*\.[ \t]`)
@@ -501,39 +514,52 @@ var (
 
 func denyQueueTrustByModel(input object) {
 	command := getString(getMap(input, "tool_input"), "command")
-	if !runsQueueTrust(command, getString(input, "tool_name") == "PowerShell") {
+	target := deniedNoctisCommand(command, getString(input, "tool_name") == "PowerShell")
+	if target == nil {
 		return
 	}
 	cfg := loadConfig()
 	sid := sessionKey(input)
 	applySessionLocale(cfg, readState(), sid)
-	journal(sid, "PreToolUse", "deny-queue-trust", truncateText(command, 200), nil)
-	logInfo("denied noctis queue trust run by the model in %s", sid)
+	journal(sid, "PreToolUse", target.journal, truncateText(command, 200), nil)
+	logInfo("denied %s run by the model in %s", target.logName, sid)
 	emit(object{
-		"systemMessage":      T("queue.trustByModel", pluginName),
-		"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "Only the user may trust a queue file: a trusted file drives sessions without asking, so a person reads its items first. Do not run noctis queue trust yourself and do not trust the file another way. Tell the user the file waits for their trust; after reading it they can type !noctis queue trust themselves."},
+		"systemMessage":      T(target.message, pluginName),
+		"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": target.reason},
 	})
 }
 
-func runsQueueTrust(command string, powershell bool) bool {
+func deniedNoctisCommand(command string, powershell bool) *protectedCommand {
 	plain := strings.ReplaceAll(strings.ToLower(shellQuotes.Replace(command)), `\`, "")
-	if !strings.Contains(plain, "trust") || !strings.Contains(plain, pluginName) {
-		return false
+	if !strings.Contains(plain, pluginName) {
+		return nil
+	}
+	live := []protectedCommand{}
+	for _, target := range protectedNoctis {
+		if strings.Contains(plain, target.words[len(target.words)-1]) {
+			live = append(live, target)
+		}
+	}
+	if len(live) == 0 {
+		return nil
 	}
 	text := command
 	if reduced := withoutHeredocData(command); reduced != command && !runsCodeAnotherWay(reduced, shellTokens(reduced), powershell, true) {
 		text = reduced
 	}
-	if namesQueueTrust(text, 0) {
-		return true
+	if target := namesProtected(text, live, 0); target != nil {
+		return target
 	}
 	words := shellTokens(text)
-	return runsCodeAnotherWay(text, words, powershell, false) && trustFollowsNoctis(words)
+	if !runsCodeAnotherWay(text, words, powershell, false) {
+		return nil
+	}
+	return protectedFollowsNoctis(words, live)
 }
 
-func namesQueueTrust(command string, depth int) bool {
+func namesProtected(command string, live []protectedCommand, depth int) *protectedCommand {
 	if depth > 3 {
-		return false
+		return nil
 	}
 	for _, words := range looseShellSegments(command) {
 		shell := false
@@ -544,17 +570,34 @@ func namesQueueTrust(command string, depth int) bool {
 				for _, next := range words[index+1:] {
 					rest = append(rest, plainWord(next.text))
 				}
-				if parsed := parseArgs(rest); len(parsed.positional) >= 2 && parsed.positional[0] == "queue" && parsed.positional[1] == "trust" {
-					return true
+				positional := parseArgs(rest).positional
+				for i := range live {
+					if hasWordPrefix(positional, live[i].words) {
+						return &live[i]
+					}
 				}
 			}
-			if shell && word.quoted && namesQueueTrust(word.text, depth+1) {
-				return true
+			if shell && word.quoted {
+				if target := namesProtected(word.text, live, depth+1); target != nil {
+					return target
+				}
 			}
 			shell = shell || nestedShells[plain] || nestedShells[path]
 		}
 	}
-	return false
+	return nil
+}
+
+func hasWordPrefix(words, prefix []string) bool {
+	if len(words) < len(prefix) {
+		return false
+	}
+	for i, want := range prefix {
+		if words[i] != want {
+			return false
+		}
+	}
+	return true
 }
 
 func plainWord(word string) string {
@@ -671,25 +714,58 @@ func flagArgument(before string) bool {
 	return false
 }
 
-func trustFollowsNoctis(words []shellToken) bool {
-	xargs, trust := false, false
+func protectedFollowsNoctis(words []shellToken, live []protectedCommand) *protectedCommand {
+	xargs := false
+	present := map[string]bool{}
 	for _, word := range words {
 		xargs = xargs || word.names(func(name string) bool { return name == "xargs" })
-		trust = trust || word.plain == "trust"
+		present[word.plain] = true
 	}
 	for index, word := range words {
 		if !word.names(func(name string) bool { return name == pluginName }) {
 			continue
 		}
-		rest, ok := afterWord(words[index+1:], "queue")
-		if !ok {
-			continue
-		}
-		if _, ok := afterWord(rest, "trust"); ok || xargs && trust {
-			return true
+		for i := range live {
+			if _, ok := afterWords(words[index+1:], live[i].words); ok {
+				return &live[i]
+			}
+			if xargs && missingWordsAppear(words[index+1:], live[i].words, present) {
+				return &live[i]
+			}
 		}
 	}
-	return false
+	return nil
+}
+
+func afterWords(words []shellToken, targets []string) ([]shellToken, bool) {
+	for _, want := range targets {
+		next, ok := afterWord(words, want)
+		if !ok {
+			return nil, false
+		}
+		words = next
+	}
+	return words, true
+}
+
+func missingWordsAppear(words []shellToken, targets []string, present map[string]bool) bool {
+	matched := 0
+	for matched < len(targets) {
+		next, ok := afterWord(words, targets[matched])
+		if !ok {
+			break
+		}
+		words, matched = next, matched+1
+	}
+	if matched == 0 && len(targets) > 1 {
+		return false
+	}
+	for _, want := range targets[matched:] {
+		if !present[want] {
+			return false
+		}
+	}
+	return true
 }
 
 func afterWord(words []shellToken, want string) ([]shellToken, bool) {

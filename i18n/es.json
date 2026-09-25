@@ -429,6 +429,7 @@
   "queue.importTrust": "%[2]s tiene ahora %[1]d elemento(s) o línea(s) en los que no has confiado: el archivo no dirige ninguna sesión hasta que los leas y vuelvas a ejecutar noctis queue trust.",
   "queue.trustByModel": "🔒 Claude intentó ejecutar noctis queue trust por su cuenta; noctis lo rechazó, porque un archivo de confianza dirige sesiones sin preguntar y solo tú deberías confiar en él, después de leerlo. Para confiar en él: !noctis queue trust (%s)",
   "queue.dayLimitMessage": "⛔ Cola: esta sesión se continuó %s veces hoy y alcanzó el límite diario (queue.maxContinuesPerDay); continuación automática detenida hasta la medianoche, %d elemento(s) abierto(s).",
+  "queue.stateWriteByModel": "🔒 Claude intentó escribir por su cuenta el archivo de estado de noctis (noctis state-write); noctis lo rechazó, porque ese archivo guarda en qué archivos de cola confías y no debe fijarse sin ti. Para confiar en un archivo de cola, léelo y escribe: !noctis queue trust (%s)",
   "queue.trustGranted": "Este archivo puede dirigir sesiones: %s",
   "queue.trustRevoked": "Este archivo ya no dirige sesiones: %s",
   "queue.trustNone": "No hay archivo de cola aquí (se buscó: %s).",

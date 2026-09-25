@@ -429,6 +429,7 @@
   "queue.importTrust": "%[2]s now holds %[1]d item(s) or line(s) you have not trusted: the file drives no session until you read them and run noctis queue trust again.",
   "queue.trustByModel": "🔒 Claude tried to run noctis queue trust itself; noctis refused, because a trusted queue file drives sessions without asking and only you should trust one, after reading it. To trust it yourself: !noctis queue trust (%s)",
   "queue.dayLimitMessage": "⛔ Queue: this session was continued %s times today and reached the daily limit (queue.maxContinuesPerDay); auto-continue stopped until midnight, %d item(s) open.",
+  "queue.stateWriteByModel": "🔒 Claude tried to write noctis's state file itself (noctis state-write); noctis refused, because that file holds which queue files you trusted and it must not be set without you. To trust a queue file, read it and type: !noctis queue trust (%s)",
   "queue.trustGranted": "This file may drive sessions: %s",
   "queue.trustRevoked": "This file no longer drives sessions: %s",
   "queue.trustNone": "No queue file here (looked for: %s).",

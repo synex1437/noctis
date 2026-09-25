@@ -429,6 +429,7 @@
   "queue.importTrust": "%[2]s contient maintenant %[1]d élément(s) ou ligne(s) auxquels tu n'as pas fait confiance : le fichier ne pilote aucune session tant que tu ne les as pas lus et relancé noctis queue trust.",
   "queue.trustByModel": "🔒 Claude a voulu lancer noctis queue trust lui-même ; noctis a refusé, car un fichier de confiance pilote les sessions sans demander et c'est à toi de lui faire confiance, après l'avoir lu. Pour lui faire confiance : !noctis queue trust (%s)",
   "queue.dayLimitMessage": "⛔ File : cette session a été relancée %s fois aujourd'hui et a atteint la limite quotidienne (queue.maxContinuesPerDay) ; poursuite automatique arrêtée jusqu'à minuit, %d élément(s) ouvert(s).",
+  "queue.stateWriteByModel": "🔒 Claude a voulu écrire lui-même le fichier d'état de noctis (noctis state-write) ; noctis a refusé, car ce fichier retient à quels fichiers de file d'attente tu fais confiance et ne doit pas être défini sans toi. Pour faire confiance à un fichier de file d'attente, lis-le et tape : !noctis queue trust (%s)",
   "queue.trustGranted": "Ce fichier peut piloter les sessions : %s",
   "queue.trustRevoked": "Ce fichier ne pilote plus les sessions : %s",
   "queue.trustNone": "Aucun fichier de file ici (cherché : %s).",

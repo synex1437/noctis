@@ -429,6 +429,7 @@
   "queue.importTrust": "%[2]s enthält jetzt %[1]d Punkt(e) oder Zeile(n), denen du nicht vertraut hast: die Datei steuert keine Sitzung, bis du sie gelesen und noctis queue trust erneut ausgeführt hast.",
   "queue.trustByModel": "🔒 Claude wollte noctis queue trust selbst ausführen; noctis hat es abgelehnt, denn eine Datei, der vertraut wird, steuert Sitzungen ohne Rückfrage, und nur du solltest ihr vertrauen, nachdem du sie gelesen hast. Um ihr selbst zu vertrauen: !noctis queue trust (%s)",
   "queue.dayLimitMessage": "⛔ Warteschlange: Diese Sitzung wurde heute %s-mal fortgesetzt und hat das Tageslimit erreicht (queue.maxContinuesPerDay); automatisches Weitermachen bis Mitternacht gestoppt, %d Punkt(e) offen.",
+  "queue.stateWriteByModel": "🔒 Claude wollte noctis' Statusdatei selbst schreiben (noctis state-write); noctis hat es abgelehnt, denn diese Datei hält fest, welchen Warteschlangendateien du vertraust, und darf nicht ohne dich gesetzt werden. Um einer Warteschlangendatei zu vertrauen, lies sie und tippe: !noctis queue trust (%s)",
   "queue.trustGranted": "Diese Datei darf Sitzungen steuern: %s",
   "queue.trustRevoked": "Diese Datei steuert keine Sitzungen mehr: %s",
   "queue.trustNone": "Keine Warteschlangendatei hier (gesucht wurde: %s).",

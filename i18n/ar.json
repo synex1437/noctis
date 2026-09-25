@@ -429,6 +429,7 @@
   "queue.importTrust": "يحتوي %[2]s الآن على %[1]d من العناصر أو الأسطر لم تثق بها: لن يقود الملف أي جلسة حتى تقرأها وتشغّل noctis queue trust من جديد.",
   "queue.trustByModel": "🔒 حاول Claude تشغيل noctis queue trust بنفسه فرفض noctis، لأن الملف الموثوق يقود الجلسات دون أن يسأل، والثقة به قرارك أنت بعد قراءته. للثقة به: !noctis queue trust (%s)",
   "queue.dayLimitMessage": "⛔ قائمة المهام: استُكملت هذه الجلسة %s مرة اليوم وبلغت الحد اليومي (queue.maxContinuesPerDay)؛ توقفت المتابعة التلقائية حتى منتصف الليل، %d عنصر مفتوح.",
+  "queue.stateWriteByModel": "🔒 حاول Claude كتابة ملف حالة noctis بنفسه (noctis state-write) فرفض noctis، لأن هذا الملف يحفظ ملفات الطابور التي وثقت بها ولا يجوز ضبطه من دونك. للثقة بملف طابور، اقرأه واكتب: !noctis queue trust (%s)",
   "queue.trustGranted": "يمكن لهذا الملف أن يقود الجلسات: %s",
   "queue.trustRevoked": "لم يعد هذا الملف يقود الجلسات: %s",
   "queue.trustNone": "لا ملف طابور هنا (بحثنا عن: %s).",

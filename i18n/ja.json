@@ -429,6 +429,7 @@
   "queue.importTrust": "%[2]s には、まだ信頼していない項目または行が %[1]d 件あります。それらを読んで noctis queue trust をもう一度実行するまで、このファイルはどのセッションも進行させません。",
   "queue.trustByModel": "🔒 Claude が noctis queue trust を自分で実行しようとしたので、noctis が拒否しました。信頼されたファイルは確認なしでセッションを進行させるため、読んだうえで信頼するのはあなたの役目です。信頼するには: !noctis queue trust（%s）",
   "queue.dayLimitMessage": "⛔ キュー: このセッションは今日 %s 回継続され、1 日の上限に達しました (queue.maxContinuesPerDay)。自動継続は深夜 0 時まで停止します（未完了 %d 件）。",
+  "queue.stateWriteByModel": "🔒 Claude が noctis の状態ファイルを自分で書き込もうとしたので（noctis state-write）、noctis が拒否しました。このファイルはどのキューファイルを信頼したかを保持するため、あなた抜きで設定してはいけません。キューファイルを信頼するには、読んだうえで入力してください: !noctis queue trust（%s）",
   "queue.trustGranted": "このファイルはセッションを進行させられます: %s",
   "queue.trustRevoked": "このファイルはもうセッションを進行させません: %s",
   "queue.trustNone": "ここにキューのファイルはありません（探した場所: %s）。",
