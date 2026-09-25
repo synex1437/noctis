@@ -753,6 +753,76 @@ func steersMainModel(cfg object, targets []string) bool {
 	return false
 }
 
+var ownFileTools = map[string]bool{"Write": true, "Edit": true, "MultiEdit": true}
+
+func denyOwnFileWrite(input, cfg object) bool {
+	if !ownFileTools[getString(input, "tool_name")] {
+		return false
+	}
+	toolInput := getMap(input, "tool_input")
+	file := getString(toolInput, "file_path")
+	if file == "" {
+		file = getString(toolInput, "notebook_path")
+	}
+	kind := noctisOwnFile(file, getString(input, "cwd"))
+	if kind == "" {
+		return false
+	}
+	sid := sessionKey(input)
+	applySessionLocale(cfg, readState(), sid)
+	message, reason := "queue.stateFileByModel", "This is noctis's own state file: it records which queue files the user trusted and other guard state, and it is not yours to write. Do not write it with a file tool and do not change it another way. If a queue file needs trusting, tell the user to read it and run !noctis queue trust themselves."
+	if kind == "config" {
+		message, reason = "queue.configFileByModel", "This is noctis's own config.json: it sets how the guard behaves, including whether queue files need trust and any verify command it runs, so only the user changes it. Do not edit it with a file tool and do not change it another way. If the user wants a setting changed, tell them to run noctis setup or edit it themselves."
+	}
+	journal(sid, "PreToolUse", "deny-own-"+kind, truncateText(file, 200), nil)
+	logInfo("denied a %s write to noctis's own %s in %s", getString(input, "tool_name"), kind, sid)
+	emit(object{
+		"systemMessage":      T(message, pluginName),
+		"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason},
+	})
+	return true
+}
+
+func noctisOwnFile(file, cwd string) string {
+	if file == "" {
+		return ""
+	}
+	abs := file
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(cwd, abs)
+	}
+	candidates := map[string]bool{filepath.Clean(abs): true}
+	if resolved := resolvedWritePath(abs); resolved != "" {
+		candidates[resolved] = true
+	}
+	for _, target := range []struct{ path, kind string }{{files.state, "state"}, {files.stateBackup, "state"}, {files.config, "config"}} {
+		if target.path == "" {
+			continue
+		}
+		for _, known := range []string{filepath.Clean(target.path), resolvedWritePath(target.path)} {
+			if known != "" && candidates[known] {
+				return target.kind
+			}
+		}
+	}
+	return ""
+}
+
+func resolvedWritePath(file string) string {
+	dir, rest := file, ""
+	for {
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			return filepath.Join(resolved, rest)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		rest = filepath.Join(filepath.Base(dir), rest)
+		dir = parent
+	}
+}
+
 func steeringFolders() []os.FileInfo {
 	dirs := []string{files.configDir, hostHome("claude"), files.guardDir}
 	if looksLikePluginRoot(files.pluginRoot) {
@@ -1063,6 +1133,14 @@ func onSubagentBatch(input, cfg object) {
 
 func onPreToolUse(input, cfg object) {
 	toolName := getString(input, "tool_name")
+	if ownFileTools[toolName] {
+		if denyOwnFileWrite(input, cfg) {
+			return
+		}
+		if toolName != "Write" {
+			return
+		}
+	}
 	if insideSubagent(input) {
 		if !denySubagentTool(input, cfg) {
 			agentWritePolicy(input, cfg)

@@ -430,6 +430,8 @@
   "queue.trustByModel": "🔒 Claude wilde noctis queue trust zelf uitvoeren; noctis weigerde, want een vertrouwd bestand stuurt sessies aan zonder te vragen en alleen jij hoort het te vertrouwen, nadat je het hebt gelezen. Om het te vertrouwen: !noctis queue trust (%s)",
   "queue.dayLimitMessage": "⛔ Wachtrij: deze sessie is vandaag %s keer voortgezet en heeft de daglimiet bereikt (queue.maxContinuesPerDay); automatisch doorgaan gestopt tot middernacht, %d item(s) open.",
   "queue.stateWriteByModel": "🔒 Claude wilde noctis' statusbestand zelf schrijven (noctis state-write); noctis weigerde, want dat bestand houdt bij welke wachtrijbestanden jij vertrouwt en mag niet zonder jou worden gezet. Om een wachtrijbestand te vertrouwen, lees het en typ: !noctis queue trust (%s)",
+  "queue.stateFileByModel": "🔒 Claude wilde noctis' statusbestand met een bestandstool schrijven; noctis weigerde, want dat bestand houdt bij welke wachtrijbestanden jij vertrouwt en andere bewaakstatus, en alleen noctis hoort het te schrijven. Als een wachtrijbestand vertrouwen nodig heeft, lees het en typ: !noctis queue trust (%s)",
+  "queue.configFileByModel": "🔒 Claude wilde noctis' config.json met een bestandstool bewerken; noctis weigerde, want dat bestand bepaalt hoe de bewaking werkt, ook of wachtrijbestanden vertrouwen nodig hebben, dus alleen jij wijzigt het. Voer noctis setup uit of bewerk het zelf (%s).",
   "queue.trustGranted": "Dit bestand mag sessies aansturen: %s",
   "queue.trustRevoked": "Dit bestand stuurt geen sessies meer aan: %s",
   "queue.trustNone": "Hier staat geen wachtrijbestand (gezocht naar: %s).",

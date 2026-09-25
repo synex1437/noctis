@@ -430,6 +430,8 @@
   "queue.trustByModel": "🔒 Claude が noctis queue trust を自分で実行しようとしたので、noctis が拒否しました。信頼されたファイルは確認なしでセッションを進行させるため、読んだうえで信頼するのはあなたの役目です。信頼するには: !noctis queue trust（%s）",
   "queue.dayLimitMessage": "⛔ キュー: このセッションは今日 %s 回継続され、1 日の上限に達しました (queue.maxContinuesPerDay)。自動継続は深夜 0 時まで停止します（未完了 %d 件）。",
   "queue.stateWriteByModel": "🔒 Claude が noctis の状態ファイルを自分で書き込もうとしたので（noctis state-write）、noctis が拒否しました。このファイルはどのキューファイルを信頼したかを保持するため、あなた抜きで設定してはいけません。キューファイルを信頼するには、読んだうえで入力してください: !noctis queue trust（%s）",
+  "queue.stateFileByModel": "🔒 Claude がファイルツールで noctis の状態ファイルを書き込もうとしたので、noctis が拒否しました。このファイルはどのキューファイルを信頼したかなどの保護状態を保持するため、書き込めるのは noctis だけです。キューファイルの信頼が必要なら、読んだうえで入力してください: !noctis queue trust（%s）",
+  "queue.configFileByModel": "🔒 Claude がファイルツールで noctis の config.json を編集しようとしたので、noctis が拒否しました。このファイルは保護の動作、キューファイルに信頼が必要かどうかも含めて決めるため、変えられるのはあなただけです。noctis setup を実行するか自分で編集してください（%s）。",
   "queue.trustGranted": "このファイルはセッションを進行させられます: %s",
   "queue.trustRevoked": "このファイルはもうセッションを進行させません: %s",
   "queue.trustNone": "ここにキューのファイルはありません（探した場所: %s）。",

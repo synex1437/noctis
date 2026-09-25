@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -131,6 +133,80 @@ func TestClaudeMayNotRunStateWriteThroughAShellCall(t *testing.T) {
 		run := runHostHook(t, "claude", shellToolCall("sw1", project, call.tool, call.command), "sw1", 10*time.Second)
 		if permissionOf(run.answer) != "deny" || getString(run.answer, "systemMessage") != T("queue.stateWriteByModel", pluginName) {
 			t.Errorf("Claude's %s call %q writes noctis state directly, and noctis did not deny it: %v", call.tool, call.command, run.answer)
+		}
+	}
+}
+
+func fileToolCall(sid, tool, filePath string) object {
+	toolInput := object{"file_path": filePath}
+	switch tool {
+	case "Edit":
+		toolInput["old_string"], toolInput["new_string"] = "a", "b"
+	case "MultiEdit":
+		toolInput["edits"] = []any{object{"old_string": "a", "new_string": "b"}}
+	case "Write":
+		toolInput["content"] = "x"
+	case "NotebookEdit":
+		toolInput = object{"notebook_path": filePath, "new_source": "x"}
+	}
+	return object{"hook_event_name": "PreToolUse", "session_id": sid, "cwd": "/tmp", "tool_name": tool, "tool_input": toolInput}
+}
+
+func TestClaudeMayNotWriteNoctisOwnStateFile(t *testing.T) {
+	queueTrustSandbox(t, false)
+	if err := os.WriteFile(files.state, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "state-link.json")
+	if err := os.Symlink(files.state, link); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ tool, path string }{
+		{"Write", files.state},
+		{"Edit", files.state},
+		{"MultiEdit", files.state},
+		{"Write", files.stateBackup},
+		{"Write", link},
+	} {
+		run := runHostHook(t, "claude", fileToolCall("of1", tc.tool, tc.path), "of1", 10*time.Second)
+		if permissionOf(run.answer) != "deny" || getString(run.answer, "systemMessage") != T("queue.stateFileByModel", pluginName) {
+			t.Errorf("Claude's %s to noctis's state file %q was not denied: %v", tc.tool, tc.path, run.answer)
+		}
+	}
+}
+
+func TestClaudeMayNotEditNoctisConfigFile(t *testing.T) {
+	queueTrustSandbox(t, false)
+	if err := os.WriteFile(files.config, []byte(`{"queue":{"requireTrust":true}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range []string{"Edit", "Write", "MultiEdit"} {
+		run := runHostHook(t, "claude", fileToolCall("of2", tool, files.config), "of2", 10*time.Second)
+		if permissionOf(run.answer) != "deny" || getString(run.answer, "systemMessage") != T("queue.configFileByModel", pluginName) {
+			t.Errorf("Claude's %s to noctis's config.json was not denied: %v", tool, run.answer)
+		}
+	}
+}
+
+func TestNoctisGuardsOnlyItsOwnStateAndConfig(t *testing.T) {
+	_, project := queueTrustSandbox(t, false)
+	for _, tc := range []struct{ tool, path string }{
+		{"Write", filepath.Join(project, "notes.md")},
+		{"Edit", filepath.Join(project, "main.go")},
+		{"Write", filepath.Join(project, "config.json")},
+		{"NotebookEdit", files.config},
+	} {
+		if run := runHostHook(t, "claude", fileToolCall("of3", tc.tool, tc.path), "of3", 10*time.Second); run.answer != nil {
+			t.Errorf("noctis answered a %s to %q that is not its own state or config: %v", tc.tool, tc.path, run.answer)
+		}
+	}
+}
+
+func TestTheShippedHooksSeeEditsToNoctisOwnFiles(t *testing.T) {
+	matches := preToolUseMatches(t)
+	for _, tool := range []string{"Write", "Edit", "MultiEdit"} {
+		if !matches(tool) {
+			t.Errorf("hooks/hooks.json does not start the PreToolUse hook for %s, so Claude's edit of noctis's config.json goes through", tool)
 		}
 	}
 }

@@ -430,6 +430,8 @@
   "queue.trustByModel": "🔒 Claude próbował sam uruchomić noctis queue trust; noctis odmówił, bo zaufany plik prowadzi sesje bez pytania, a zaufać mu możesz tylko ty, po jego przeczytaniu. Aby mu zaufać: !noctis queue trust (%s)",
   "queue.dayLimitMessage": "⛔ Kolejka: ta sesja była dziś kontynuowana %s razy i osiągnęła dzienny limit (queue.maxContinuesPerDay); automatyczna kontynuacja zatrzymana do północy, otwartych pozycji: %d.",
   "queue.stateWriteByModel": "🔒 Claude próbował sam zapisać plik stanu noctisa (noctis state-write); noctis odmówił, bo ten plik przechowuje, którym plikom kolejki ufasz, i nie może zostać ustawiony bez ciebie. Aby zaufać plikowi kolejki, przeczytaj go i wpisz: !noctis queue trust (%s)",
+  "queue.stateFileByModel": "🔒 Claude próbował zapisać plik stanu noctisa narzędziem plikowym; noctis odmówił, bo ten plik przechowuje, którym plikom kolejki ufasz, oraz inny stan ochrony, i tylko noctis powinien go zapisywać. Jeśli plik kolejki wymaga zaufania, przeczytaj go i wpisz: !noctis queue trust (%s)",
+  "queue.configFileByModel": "🔒 Claude próbował edytować config.json noctisa narzędziem plikowym; noctis odmówił, bo ten plik określa, jak działa ochrona, w tym czy pliki kolejki wymagają zaufania, więc zmieniasz go tylko ty. Uruchom noctis setup albo edytuj go sam (%s).",
   "queue.trustGranted": "Ten plik może prowadzić sesje: %s",
   "queue.trustRevoked": "Ten plik już nie prowadzi sesji: %s",
   "queue.trustNone": "Nie ma tu pliku kolejki (szukano: %s).",

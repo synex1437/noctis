@@ -112,13 +112,14 @@ function checkPreToolUseMatcher(entries) {
   const pre = entries.filter((entry) => entry.event === 'PreToolUse');
   const matchers = pre.map((entry) => entry.matcher || '(none)').join(' ; ');
   const hits = (entry, tool, anchored) => !entry.matcher || entry.matcher === '*' ||
-    new RegExp(anchored ? `^(${entry.matcher})$` : entry.matcher).test(tool);
-  for (const tool of ['Write', 'Agent', 'Task', 'WebSearch', 'WebFetch', 'Workflow']) {
+    (/^[A-Za-z0-9_|]+$/.test(entry.matcher) ? entry.matcher.split('|').includes(tool) :
+      new RegExp(anchored ? `^(${entry.matcher})$` : entry.matcher).test(tool));
+  for (const tool of ['Write', 'Edit', 'MultiEdit', 'Agent', 'Task', 'WebSearch', 'WebFetch', 'Workflow']) {
     check(`PreToolUse matcher starts the hook for ${tool}`, pre.some((entry) => hits(entry, tool, true)), matchers);
   }
+  check('PreToolUse matcher skips NotebookEdit, so a notebook edit never waits for a process',
+    !pre.some((entry) => hits(entry, 'NotebookEdit', false)), matchers);
   for (const tool of ['Edit', 'MultiEdit', 'NotebookEdit']) {
-    check(`PreToolUse matcher skips ${tool}, so an edit never waits for a process`,
-      !pre.some((entry) => hits(entry, tool, false)), matchers);
     for (const file of ['lite.md', 'digest.md']) {
       const disallowed = agentDisallowedTools(file);
       check(`agents/${file} keeps ${tool} in disallowedTools, since the write policy never sees it`,

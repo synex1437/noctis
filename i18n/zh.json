@@ -430,6 +430,8 @@
   "queue.trustByModel": "🔒 Claude 试图自己运行 noctis queue trust，noctis 拒绝了：受信任的文件会不经询问地驱动会话，所以应当由你在读过之后亲自信任它。要信任它：!noctis queue trust（%s）",
   "queue.dayLimitMessage": "⛔ 队列：此会话今天已被继续 %s 次，达到每日上限 (queue.maxContinuesPerDay)；自动继续已停止到午夜（%d 个未完成）。",
   "queue.stateWriteByModel": "🔒 Claude 试图自己写入 noctis 的状态文件（noctis state-write），noctis 拒绝了：该文件记录着你信任了哪些队列文件，不能在没有你的情况下设置。要信任某个队列文件，请读过之后输入：!noctis queue trust（%s）",
+  "queue.stateFileByModel": "🔒 Claude 试图用文件工具写入 noctis 的状态文件，noctis 拒绝了：该文件记录着你信任了哪些队列文件以及其他保护状态，只应由 noctis 写入。若某个队列文件需要信任，请读过之后输入：!noctis queue trust（%s）",
+  "queue.configFileByModel": "🔒 Claude 试图用文件工具编辑 noctis 的 config.json，noctis 拒绝了：该文件决定保护如何运作，包括队列文件是否需要信任，只应由你更改。请运行 noctis setup 或自己编辑（%s）。",
   "queue.trustGranted": "此文件可以驱动会话：%s",
   "queue.trustRevoked": "此文件不再驱动会话：%s",
   "queue.trustNone": "这里没有队列文件（查找过：%s）。",

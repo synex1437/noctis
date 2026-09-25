@@ -430,6 +430,8 @@
   "queue.trustByModel": "🔒 Claude가 noctis queue trust를 직접 실행하려 해서 noctis가 거부했습니다. 신뢰된 파일은 묻지 않고 세션을 이끌기 때문에, 파일을 읽은 뒤 직접 신뢰해야 합니다. 신뢰하려면: !noctis queue trust (%s)",
   "queue.dayLimitMessage": "⛔ 큐: 이 세션은 오늘 %s번 계속되어 일일 한도에 도달했습니다 (queue.maxContinuesPerDay). 자동 계속을 자정까지 멈춥니다 (미완료 %d개).",
   "queue.stateWriteByModel": "🔒 Claude가 noctis의 상태 파일을 직접 쓰려 해서(noctis state-write) noctis가 거부했습니다. 그 파일은 당신이 어떤 큐 파일을 신뢰했는지 담고 있어 당신 없이 설정하면 안 됩니다. 큐 파일을 신뢰하려면 읽은 뒤 입력하세요: !noctis queue trust (%s)",
+  "queue.stateFileByModel": "🔒 Claude가 파일 도구로 noctis의 상태 파일을 쓰려 해서 noctis가 거부했습니다. 그 파일은 당신이 어떤 큐 파일을 신뢰했는지와 다른 보호 상태를 담고 있어 noctis만 써야 합니다. 큐 파일에 신뢰가 필요하면 읽은 뒤 입력하세요: !noctis queue trust (%s)",
+  "queue.configFileByModel": "🔒 Claude가 파일 도구로 noctis의 config.json을 편집하려 해서 noctis가 거부했습니다. 그 파일은 큐 파일에 신뢰가 필요한지를 포함해 보호가 어떻게 동작할지 정하므로 당신만 바꿉니다. noctis setup을 실행하거나 직접 편집하세요 (%s).",
   "queue.trustGranted": "이 파일은 세션을 이끌 수 있습니다: %s",
   "queue.trustRevoked": "이 파일은 더 이상 세션을 이끌지 않습니다: %s",
   "queue.trustNone": "여기에는 큐 파일이 없습니다(찾은 곳: %s).",
