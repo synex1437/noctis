@@ -100,3 +100,16 @@ func TestQueueStatusAndTrustNameAnAfterReferenceThatMatchesNoItemAndLeaveFreeTex
 		t.Fatalf("queue status warns about (after …) references that all match an item:\n%s", run)
 	}
 }
+
+func TestQueueStatusNamesTwoLongAfterReferencesThatShareTheirFirstFortyCharactersAsTwo(t *testing.T) {
+	home, project := t.TempDir(), t.TempDir()
+	east, west := "#deploy-to-production-servers-in-region-us-east-1", "#deploy-to-production-servers-in-region-eu-west-1"
+	cliWrite(t, filepath.Join(project, "TASKS.md"), []byte("- [ ] (P0) fix the login redirect #auth\n- [ ] roll out (after "+east+", "+west+")\n"))
+	shown := truncateText(east, 40)
+	for _, command := range []string{"status", "trust"} {
+		run := startNoctisCLIAt(t, home, "", nil, "queue", command, "--file", "TASKS.md", "--cwd", project)()
+		if run.code != 0 || !strings.Contains(run.stdout, T("queue.unmatched", "TASKS.md", shown+", "+shown)) {
+			t.Fatalf("queue %s does not name two unmatched (after …) references that share their first 40 characters as two:\n%s", command, run)
+		}
+	}
+}

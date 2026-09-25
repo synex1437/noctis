@@ -292,6 +292,18 @@ type queueView struct {
 	unmatchedMore int
 }
 
+func shortReferences(references []string) []string {
+	shown := make([]string, 0, len(references))
+	for _, reference := range references {
+		shown = append(shown, truncateText(reference, queueReferenceChars))
+	}
+	return shown
+}
+
+func referenceDigest(reference string) string {
+	return queueItemDigest(strings.ToLower(reference))[:8]
+}
+
 func parseQueueEntries(content string) ([]queueEntry, bool) {
 	lines := strings.Split(strings.TrimPrefix(content, "\uFEFF"), "\n")
 	hasBoxes, fenced := false, false
@@ -529,13 +541,12 @@ func queueSnapshot(file string) queueView {
 		for _, reference := range entry.after {
 			done, matched := satisfied(entry, reference)
 			ready = ready && done
-			shown := truncateText(reference, queueReferenceChars)
-			if matched || !queueReference.MatchString(reference) || named[strings.ToLower(shown)] {
+			if matched || !queueReference.MatchString(reference) || named[strings.ToLower(reference)] {
 				continue
 			}
-			named[strings.ToLower(shown)] = true
-			if len(view.unmatched) < queueUnmatchedKept {
-				view.unmatched = append(view.unmatched, shown)
+			named[strings.ToLower(reference)] = true
+			if len(view.unmatched) < queueUnmatchedTracked {
+				view.unmatched = append(view.unmatched, reference)
 			} else {
 				view.unmatchedMore++
 			}

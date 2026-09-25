@@ -90,6 +90,7 @@ const (
 	queueMaxBytes           = 1024 * 1024
 	queueMaxItems           = 15
 	queueUnmatchedKept      = 50
+	queueUnmatchedTracked   = 500
 	queueUnmatchedNamed     = 5
 	queueReferenceChars     = 40
 	openTaskLimit           = 50

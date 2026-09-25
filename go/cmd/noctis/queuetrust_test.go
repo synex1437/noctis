@@ -183,10 +183,46 @@ func TestTheStopHookNamesAtMostFiveUnmatchedAfterReferencesEachCutShortAndCounts
 	if reason := getString(crowded, "reason"); !strings.Contains(reason, "nothing waits for them: #t1, #t2, #t3, #t4, #t5 and 50 more.") {
 		t.Fatalf("55 unmatched (after …) references are not named five at most with a count of the rest: %q", reason)
 	}
-	if told := getList(getMap(getMap(readState(), "stopGuard"), "st10"), "unmatched"); len(told) != 50 {
-		t.Fatalf("the session's stopGuard keeps %d unmatched references, want the first 50: %v", len(told), told)
+	if told := getList(getMap(getMap(readState(), "stopGuard"), "st10"), "unmatched"); len(told) != 55 {
+		t.Fatalf("the session's stopGuard keeps %d unmatched references, want all 55: %v", len(told), told)
 	}
 	if next := stopHookOutput(t, again, cfg); getString(next, "decision") != "block" || strings.Contains(getString(next, "reason"), "#t1") || strings.Contains(getString(next, "systemMessage"), "#t1") {
 		t.Fatalf("the next continuation names the same unmatched references again: %v", next)
+	}
+}
+
+func TestTheStopHookTellsTwoLongAfterReferencesApartAndNamesOnlyNewOnesPastTheFiftieth(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, false)
+	east, west := "#deploy-to-production-servers-in-region-us-east-1", "#deploy-to-production-servers-in-region-eu-west-1"
+	queuePath := writeQueueFile(t, project, "# q\n- [ ] (P0) fix the login redirect #auth\n- [ ] roll out (after "+east+", "+west+")\n")
+	trustQueueFile(queuePath, true)
+	again := object{"hook_event_name": "Stop", "session_id": "st11", "cwd": project, "stop_hook_active": true}
+
+	shown := truncateText(east, 40)
+	first := stopHookOutput(t, stopInput("st11", project), cfg)
+	if reason := getString(first, "reason"); !strings.Contains(reason, "nothing waits for them: "+shown+", "+shown+".") {
+		t.Fatalf("two unmatched (after …) references that share their first 40 characters are not named as two: %q", reason)
+	}
+	if message := getString(first, "systemMessage"); !strings.Contains(message, T("queue.unmatched", "TASKS.md", shown+", "+shown)) {
+		t.Fatalf("the notice does not name both long unmatched references: %q", message)
+	}
+
+	many := []string{}
+	for index := 1; index <= 55; index++ {
+		many = append(many, fmt.Sprintf("#t%d", index))
+	}
+	rewrite := func(references []string) object {
+		writeQueueFile(t, project, "# q\n- [ ] (P0) fix the login redirect #auth\n- [ ] migrate the users (after "+strings.Join(references, ", ")+")\n")
+		trustQueueFile(queuePath, true)
+		return stopHookOutput(t, again, cfg)
+	}
+	if reason := getString(rewrite(many), "reason"); !strings.Contains(reason, "nothing waits for them: #t1, #t2, #t3, #t4, #t5 and 50 more.") {
+		t.Fatalf("55 unmatched (after …) references are not named five at most with a count of the rest: %q", reason)
+	}
+	if reason := getString(rewrite(append(many, "#t56")), "reason"); !strings.Contains(reason, "nothing waits for them: #t56.") {
+		t.Fatalf("a new unmatched reference after the fiftieth is not named: %q", reason)
+	}
+	if reason := getString(rewrite(append([]string{"#t0"}, append(many, "#t56")...)), "reason"); !strings.Contains(reason, "nothing waits for them: #t0.") {
+		t.Fatalf("a new unmatched reference is not named alone: the count counts references already named: %q", reason)
 	}
 }
