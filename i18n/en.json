@@ -62,6 +62,8 @@
   "queue.doneMessage": "✔ Queue finished — %s has no open items; stopping cleanly.",
   "queue.blockedNotify": "Queue blocked: %d open items in %s wait on dependencies that are not done.",
   "queue.blockedMessage": "⛔ Queue blocked: %d open item(s) wait on (after …) dependencies that never completed; stopping.",
+  "queue.heldNotify": "Queue held: `%[1]s` failed %[2]d time(s) in a row; %[3]s waits until the command passes.",
+  "queue.heldMessage": "⛔ Queue held: `%[1]s` failed %[2]d time(s) in a row, so %[3]s does not go on until the command passes. It runs again at the first stop after you type a prompt.",
   "queue.unmatched": "⚠ (after …) ignored in %s — no tag, issue or item number matches: %s. Check the spelling.",
   "queue.unmatchedMore": "%s and %d more",
   "queue.modeNotice": "☰ Queue mode: %s has %d open item(s) — Claude works through them without asking (/%s:pause to stop; rename the file or set queue.files to opt out).",

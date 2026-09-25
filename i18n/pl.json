@@ -62,6 +62,8 @@
   "queue.doneMessage": "✔ Kolejka ukończona — %s nie ma otwartych pozycji; czyste zatrzymanie.",
   "queue.blockedNotify": "Kolejka zablokowana: %d otwartych pozycji w %s czeka na nieukończone zależności.",
   "queue.blockedMessage": "⛔ Kolejka zablokowana: %d otwarta/e pozycja/e czeka na zależności (after …), które nigdy nie zostały ukończone; zatrzymuję.",
+  "queue.heldNotify": "Kolejka wstrzymana: komenda `%[1]s` nie powiodła się %[2]d raz(y) z rzędu; %[3]s czeka, aż komenda przejdzie.",
+  "queue.heldMessage": "⛔ Kolejka wstrzymana: komenda `%[1]s` nie powiodła się %[2]d raz(y) z rzędu, więc %[3]s nie idzie dalej, dopóki komenda nie przejdzie. Uruchomi się ponownie przy pierwszym zatrzymaniu po tym, jak wpiszesz prompt.",
   "queue.unmatched": "⚠ (after …) pominięte w %s — żaden tag, zgłoszenie ani numer pozycji nie pasuje: %s. Sprawdź pisownię.",
   "queue.unmatchedMore": "%s i jeszcze %d",
   "queue.modeNotice": "☰ Tryb kolejki: %s ma %d otwartą pozycję/e — Claude przerabia je bez pytania (/%s:pause aby przerwać; zmień nazwę pliku lub ustaw queue.files, by wyłączyć).",

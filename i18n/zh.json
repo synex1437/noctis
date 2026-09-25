@@ -62,6 +62,8 @@
   "queue.doneMessage": "✔ 队列已完成 — %s 没有未完成项；正常停止。",
   "queue.blockedNotify": "队列被阻塞：%[2]s 中的 %[1]d 个未完成项在等待未完成的依赖。",
   "queue.blockedMessage": "⛔ 队列被阻塞：%d 个未完成项在等待永远未完成的 (after …) 依赖；停止。",
+  "queue.heldNotify": "队列已暂停：`%[1]s` 连续失败 %[2]d 次；%[3]s 会等到该命令通过。",
+  "queue.heldMessage": "⛔ 队列已暂停：`%[1]s` 连续失败 %[2]d 次，因此在该命令通过之前 %[3]s 不会继续。你输入提示后，第一次停止时会再次运行它。",
   "queue.unmatched": "⚠ 已忽略 %s 中的 (after …) — 没有匹配的标签、议题或项编号：%s。请检查拼写。",
   "queue.unmatchedMore": "%s，另有 %d 个",
   "queue.modeNotice": "☰ 队列模式：%s 中有 %d 个待办项 — Claude 会不询问地逐项完成（/%s:pause 可停止；重命名该文件或设置 queue.files 可退出）。",

@@ -953,6 +953,7 @@ func emptyState() object {
 		"queueTrust":       object{},
 		"launchFailures":   object{},
 		"failureRetries":   object{},
+		"queueVerify":      object{},
 	}
 }
 
@@ -1129,6 +1130,11 @@ func pruneState(state object, now int64) {
 		record := toObject(raw)
 		if last := max(numberOr(record, "at", 0), numberOr(record, "used", 0)); float64(now)-last > queueTrustTTLSeconds {
 			delete(stateMap(state, "queueTrust"), key)
+		}
+	}
+	for key, raw := range stateMap(state, "queueVerify") {
+		if float64(now)-numberOr(toObject(raw), "at", 0) > queueTrustTTLSeconds {
+			delete(stateMap(state, "queueVerify"), key)
 		}
 	}
 	for key, raw := range stateMap(state, "githubSeen") {

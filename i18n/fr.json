@@ -62,6 +62,8 @@
   "queue.doneMessage": "✔ File terminée — %s n'a plus d'éléments ouverts ; arrêt propre.",
   "queue.blockedNotify": "File bloquée : %d éléments ouverts dans %s attendent des dépendances non terminées.",
   "queue.blockedMessage": "⛔ File bloquée : %d élément(s) ouvert(s) attendent des dépendances (after …) jamais terminées ; arrêt.",
+  "queue.heldNotify": "File en attente : `%[1]s` a échoué %[2]d fois de suite ; %[3]s attend que la commande passe.",
+  "queue.heldMessage": "⛔ File en attente : `%[1]s` a échoué %[2]d fois de suite, donc %[3]s ne reprend pas tant que la commande ne passe pas. Elle est relancée au premier arrêt après que tu as tapé un prompt.",
   "queue.unmatched": "⚠ (after …) ignoré dans %s — aucun tag, ticket ou numéro d'élément ne correspond : %s. Vérifie l'orthographe.",
   "queue.unmatchedMore": "%s et %d autres",
   "queue.modeNotice": "☰ Mode file d'attente : %s contient %d élément(s) ouvert(s) — Claude les traite sans demander (/%s:pause pour arrêter ; renomme le fichier ou règle queue.files pour te désinscrire).",

@@ -62,6 +62,8 @@
   "queue.doneMessage": "✔ Warteschlange erledigt — %s hat keine offenen Punkte mehr; sauberer Stopp.",
   "queue.blockedNotify": "Warteschlange blockiert: %d offene Punkte in %s warten auf unerledigte Abhängigkeiten.",
   "queue.blockedMessage": "⛔ Warteschlange blockiert: %d offene Punkte warten auf (after …)-Abhängigkeiten, die nie erledigt wurden; Stopp.",
+  "queue.heldNotify": "Warteschlange angehalten: `%[1]s` ist %[2]d Mal in Folge fehlgeschlagen; %[3]s wartet, bis der Befehl durchläuft.",
+  "queue.heldMessage": "⛔ Warteschlange angehalten: `%[1]s` ist %[2]d Mal in Folge fehlgeschlagen, deshalb geht %[3]s erst weiter, wenn der Befehl durchläuft. Er läuft wieder beim ersten Stopp, nachdem du einen Prompt eingegeben hast.",
   "queue.unmatched": "⚠ (after …) in %s ignoriert — kein Tag, kein Issue und keine Punktnummer passt: %s. Prüf die Schreibweise.",
   "queue.unmatchedMore": "%s und %d weitere",
   "queue.modeNotice": "☰ Warteschlangenmodus: %s hat %d offene(n) Punkt(e) — Claude arbeitet sie ohne Rückfrage ab (/%s:pause zum Stoppen; benenne die Datei um oder setze queue.files, um das abzuschalten).",

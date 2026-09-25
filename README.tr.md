@@ -130,6 +130,8 @@ Biçimin tamamı bu. Claude ilk açık maddeyi alır, bitince `- [x]` işaretler
 
 `noctis queue import` açık GitHub issue'larını `gh` CLI üzerinden `- [ ] (P1) #123 Başlık` olarak ekler (`--repo sahip/depo` verilirse `sahip/depo#123`) — öncelik `P0`–`P9` ya da `priority: high` etiketlerinden gelir, tekrar çalıştırmak güvenlidir. Yalnızca sizin açtığınız issue'ları (`gh`'nin deponun sunucusunda giriş yaptığı hesap) ya da `--author kullanıcı1,kullanıcı2` ile yalnızca o yazarlarınkini alır (`@me` o hesabı belirtir); böylece herkese açık bir depoda bir yabancının issue'su asla kuyruk maddesi olmaz; kaç tanesini, kimlerinkini dışarıda bıraktığını söyler. Ayrıca `queue.github.closeOnDone`, issue'nun referansıyla başlayan maddelerin hepsi işaretlenince issue'yu kapatır; bir maddenin ortasında geçen `#123` hiçbir şeyi kapatmaz. `gh` komutunun geri çevirdiği bir kapatma (giriş yapılmamış, ağ yok) Claude sonraki kez durduğunda yeniden denenir, toplamda üç kez; sonra bırakılır ve `gh` komutunun gerekçesi `errors.log` dosyasına yazılır.
 
+Maddeler arasında bir denetim isteğe bağlıdır: `~/.claude/noctis/config.json` içinde `"queue": {"verifyCommand": "go test ./..."}` varsa, bir madde işaretlendiğinde noctis, Claude sıradaki maddeyi almadan önce bu komutu proje klasöründe çalıştırır; komut başarısız olursa Claude çıktının sonuyla birlikte hatayı düzeltmeye geri gönderilir, art arda `queue.verifyAttempts` (2) başarısızlıktan sonra da kuyruk komut geçene kadar bekletilir; komut, siz bir prompt yazdıktan sonra Claude ilk kez durduğunda yeniden denenir. Komut yalnızca kendi yapılandırma dosyanızdan gelir, asla `TASKS.md` dosyasından ya da bir prompt'tan gelmez ve izin sorulmadan çalışır.
+
 </details>
 
 ## Siz yokken ne yapar

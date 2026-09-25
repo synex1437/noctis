@@ -219,6 +219,8 @@ func onSessionStart(input, cfg object) {
 				queueNotice = T("queue.trustAsk", filepath.Base(queuePath), snapshot.total, pluginName)
 			}
 			logInfo("queue file %s found but not trusted (%d open, %d added or changed since a trust): no directive injected", queuePath, snapshot.total, len(fresh))
+		} else if queueHeld(cfg, state, queuePath) {
+			logInfo("queue file %s held until %q passes: no directive injected", queuePath, queueCheckCommand(cfg))
 		} else {
 			rememberOpenIssues(cfg, queuePath)
 			if isAutoQueue(queuePath) {
@@ -230,7 +232,7 @@ func onSessionStart(input, cfg object) {
 			logInfo("queue mode for %s: %s (%d open)", sid, queuePath, snapshot.total)
 		}
 
-		if key := "queue:" + queuePath; queueTrusted(cfg, queuePath) && !isAutoQueue(queuePath) && snapshot.total > 0 && float64(now)-numberOr(getMap(state, "notified"), key, 0) > 7*86400 && (source == "startup" || source == "clear") {
+		if key := "queue:" + queuePath; queueTrusted(cfg, queuePath) && !isAutoQueue(queuePath) && !queueHeld(cfg, state, queuePath) && snapshot.total > 0 && float64(now)-numberOr(getMap(state, "notified"), key, 0) > 7*86400 && (source == "startup" || source == "clear") {
 			queueNotice = T("queue.modeNotice", filepath.Base(queuePath), snapshot.total, pluginName)
 			queueNoticeKey = key
 		}
@@ -443,6 +445,9 @@ func onUserPromptSubmit(input, cfg object) {
 	clearOverload(state, sid)
 	if !queueContinuationPrompt(getString(input, "prompt")) {
 		resetIdleGuard(state, sid)
+		if !promptFromPlugin {
+			rearmQueueCheck(cfg, input, sid)
+		}
 	}
 	result := decide(cfg, state, input, now, decideOptions{})
 	if result.fableHit {
@@ -1293,6 +1298,9 @@ func onStop(input, cfg object) {
 		logInfo("completion promise seen for %s; stop allowed with %d open", sid, snapshot.total)
 		return
 	}
+	if queueHeldBack(cfg, state, sid, queuePath) {
+		return
+	}
 	guard := getMap(getMap(state, "stopGuard"), sid)
 	if guard == nil {
 		guard = object{"forced": float64(0), "idle": float64(0), "lastOpen": nil, "at": float64(now)}
@@ -1363,6 +1371,19 @@ func onStop(input, cfg object) {
 			return
 		}
 		systemMessage, waitContext = outcome.notice, withCutOffNote(sid, outcome.context)
+	}
+	if gated := gateQueue(cfg, input, sid, queuePath, queueLabel, now); gated != nil {
+		if reason := getString(gated, "reason"); reason != "" {
+			updateState(func(next object) { stateMap(next, "stopGuard")[sid] = guard })
+			if waitContext != "" {
+				gated["reason"] = waitContext + "\n" + reason
+			}
+		}
+		if message := joinNotices(systemMessage, result.notice, getString(gated, "systemMessage")); message != "" {
+			gated["systemMessage"] = message
+		}
+		emit(gated)
+		return
 	}
 	if observed(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), nil) {
 		return

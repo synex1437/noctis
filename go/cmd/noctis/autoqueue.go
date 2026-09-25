@@ -299,6 +299,7 @@ func startAutoQueue(sid, cwd string, items []string, now int64) string {
 	}
 	updateState(func(state object) {
 		stateMap(state, "autoQueues")[sid] = object{"path": path, "cwd": cwd, "at": float64(now), "items": float64(len(items))}
+		delete(stateMap(state, "queueVerify"), queueTrustKey(path))
 	})
 	journal(sid, "UserPromptSubmit", "auto-queue", fmt.Sprintf("%d items", len(items)), nil)
 	logInfo("auto queue for %s: %d items in %s", sid, len(items), path)
@@ -314,7 +315,10 @@ func endAutoQueue(sid string, removeFile bool) {
 	if removeFile && isAutoQueue(getString(record, "path")) {
 		_ = os.Remove(getString(record, "path"))
 	}
-	updateState(func(next object) { delete(stateMap(next, "autoQueues"), sid) })
+	updateState(func(next object) {
+		delete(stateMap(next, "autoQueues"), sid)
+		delete(stateMap(next, "queueVerify"), queueTrustKey(getString(record, "path")))
+	})
 }
 
 func queueFileFor(cfg object, cwd, sid string) string {
