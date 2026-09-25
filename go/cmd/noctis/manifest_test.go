@@ -75,22 +75,38 @@ func capturedStdout(t *testing.T, run func()) string {
 func mainThreadAnswers(t *testing.T, cfg object) map[string]bool {
 	t.Helper()
 	defer func(previous bool) { emitted = previous }(emitted)
-	call := func(tool string) string {
+	call := func(tool, filePath string) string {
 		updateState(func(state object) {
 			stateMap(state, "routes")["routed"] = object{"at": float64(nowSec()), "denies": float64(0)}
 		})
 		return capturedStdout(t, func() {
-			onPreToolUse(object{"session_id": "routed", "tool_name": tool, "tool_input": object{"file_path": "main.go"}}, cfg)
+			emitted = false
+			onPreToolUse(object{"session_id": "routed", "cwd": t.TempDir(), "tool_name": tool, "tool_input": object{"file_path": filePath, "content": "x", "old_string": "a", "new_string": "b"}}, cfg)
 		})
 	}
-	if out := call("WebSearch"); !strings.Contains(out, `"permissionDecision":"deny"`) {
+	if out := call("WebSearch", "main.go"); !strings.Contains(out, `"permissionDecision":"deny"`) {
 		t.Fatalf("a routed prompt let a main-thread WebSearch through (%q), so a quiet file tool below would prove nothing", out)
 	}
 	answers := map[string]bool{}
 	for tool := range fileTools {
-		answers[tool] = call(tool) != ""
+		answers[tool] = call(tool, "main.go") != "" || call(tool, files.config) != "" || call(tool, files.state) != ""
 	}
 	return answers
+}
+
+func liteAgentGuards(t *testing.T, cfg object) map[string]bool {
+	t.Helper()
+	defer func(previousEmitted bool, previousHost string) { emitted, activeHost = previousEmitted, previousHost }(emitted, activeHost)
+	activeHost = "claude"
+	guarded := map[string]bool{}
+	for tool := range fileTools {
+		out := capturedStdout(t, func() {
+			emitted = false
+			onPreToolUse(object{"session_id": "lite", "agent_type": liteAgentType(cfg), "cwd": t.TempDir(), "tool_name": tool, "tool_input": object{"file_path": "scratch.bin", "content": "x", "old_string": "a", "new_string": "b"}}, cfg)
+		})
+		guarded[tool] = strings.Contains(out, `"permissionDecision":"deny"`)
+	}
+	return guarded
 }
 
 func TestPreToolUseStartsNoctisOnlyForFileToolsItCanAnswer(t *testing.T) {
@@ -99,6 +115,7 @@ func TestPreToolUseStartsNoctisOnlyForFileToolsItCanAnswer(t *testing.T) {
 	matches := preToolUseMatches(t)
 	agents := routerAgentToolRules(t, cfg)
 	mainThread := mainThreadAnswers(t, cfg)
+	liteGuarded := liteAgentGuards(t, cfg)
 	unhooked := map[string]bool{}
 	for _, tool := range unhookedFileTools {
 		if !fileTools[tool] {
@@ -111,17 +128,18 @@ func TestPreToolUseStartsNoctisOnlyForFileToolsItCanAnswer(t *testing.T) {
 		for _, agent := range agents {
 			callable = callable || agent.mayCall(tool)
 		}
+		hooked := matches(tool) && liteGuarded[tool]
+		if hooked && unhooked[tool] {
+			t.Errorf("the PreToolUse hook stops a stray %s (the matcher sends it and the write policy denies it), so unhookedFileTools should not list it", tool)
+		}
+		if !hooked && !unhooked[tool] {
+			t.Errorf("the PreToolUse hook does not apply the write policy to %s, so unhookedFileTools must list it for the self-check to name a router agent that allows it", tool)
+		}
 		if matches(tool) {
-			if unhooked[tool] {
-				t.Errorf("the PreToolUse matcher sends %s to noctis, but unhookedFileTools still lists it, so the self-check warns about calls noctis does see", tool)
-			}
 			if !callable && !mainThread[tool] {
 				t.Errorf("PreToolUse starts noctis on every %s call, but the main thread lets %s through and no router agent may call it, so the process can never answer", tool, tool)
 			}
 			continue
-		}
-		if !unhooked[tool] {
-			t.Errorf("the PreToolUse matcher never sends %s to noctis, but unhookedFileTools leaves it out, so the self-check cannot name a router agent that may call it", tool)
 		}
 		if mainThread[tool] {
 			t.Errorf("noctis answers a main-thread %s call, but the PreToolUse matcher never sends it one", tool)

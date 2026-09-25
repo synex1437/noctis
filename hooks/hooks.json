@@ -78,7 +78,7 @@
         ]
       },
       {
-        "matcher": "Bash|PowerShell",
+        "matcher": "Bash|PowerShell|Edit|MultiEdit",
         "hooks": [
           {
             "type": "command",
