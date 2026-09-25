@@ -272,18 +272,22 @@ func currentUsageIn(now int64, guardDir string) usageView {
 	build := func(key string) *window {
 		fromStatus := getMap(usage, key)
 		fromOauth := getMap(fable, key)
+		statusAt := usageAt
+		if reported := numberOr(fromStatus, "at", 0); reported > 0 {
+			statusAt = math.Min(usageAt, reported)
+		}
 		var raw object
 		var at float64
 		useOauth := false
 		switch {
 		case fromStatus != nil && fromOauth != nil:
-			if oauthReadingWins(fromStatus, fromOauth, usageAt, fetchedAt) {
+			if oauthReadingWins(fromStatus, fromOauth, statusAt, fetchedAt) {
 				raw, at, useOauth = fromOauth, fetchedAt, true
 			} else {
-				raw, at = fromStatus, usageAt
+				raw, at = fromStatus, statusAt
 			}
 		case fromStatus != nil:
-			raw, at = fromStatus, usageAt
+			raw, at = fromStatus, statusAt
 		case fromOauth != nil:
 			raw, at, useOauth = fromOauth, fetchedAt, true
 		default:
