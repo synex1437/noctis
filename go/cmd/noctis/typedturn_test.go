@@ -104,6 +104,22 @@ func TestAPromptNoctisComposedIsStillParkedAtThePausePoint(t *testing.T) {
 	}
 }
 
+func TestClaudeIsNotToldTheUsageIsPastThePausePointWhenThePauseComesEarly(t *testing.T) {
+	cfg, _ := controlSandbox(t, 88, 40)
+	now := nowSec()
+	for hit, cause := range map[string]string{"burst": "a usage burst projects past it", "projection": "the burn rate projects past it", "compaction": "a context compaction could carry the usage past it"} {
+		early := &waitPlan{window: "five_hour", label: windowLabel("five_hour"), used: 88, threshold: 92, until: float64(now + 3600), hit: hit}
+		_, context := letTypedPromptThrough(cfg, readState(), "tp-early-"+hit, decision{wait: early, usage: currentUsage(now)}, now)
+		if strings.Contains(context, "is past its auto-pause point") || !strings.Contains(context, "88% is under its auto-pause point (92%)") || !strings.Contains(context, cause) {
+			t.Errorf("a prompt typed at 88%% under a 92%% pause point that a %s pause brought forward told Claude: %q", hit, context)
+		}
+	}
+	plain := &waitPlan{window: "five_hour", label: windowLabel("five_hour"), used: 93, threshold: 92, until: float64(now + 3600), hit: "threshold"}
+	if _, context := letTypedPromptThrough(cfg, readState(), "tp-early-plain", decision{wait: plain, usage: currentUsage(now)}, now); !strings.Contains(context, "93% is past its auto-pause point (92%)") {
+		t.Errorf("a prompt typed at 93%% over a 92%% pause point no longer tells Claude the usage is past it: %q", context)
+	}
+}
+
 func TestATypedTurnThatEndsInAnAPIErrorLeavesWhatFollowsToThePausePoint(t *testing.T) {
 	cfg, project := controlSandbox(t, 93, 40)
 	sid := "tp-failure"

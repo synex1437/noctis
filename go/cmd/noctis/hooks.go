@@ -471,8 +471,22 @@ func letTypedPromptThrough(cfg, state object, sid string, result decision, now i
 	if !paidCreditsAllowed(cfg) {
 		notice += " " + T("wait.typedLimit")
 	}
-	context := fmt.Sprintf("[noctis] %s usage %d%% is past its auto-pause point (%s%%): the user's own prompt goes ahead. Do what they asked; start no big new work beyond it.", wait.label, int(math.Round(wait.used)), formatNumber(wait.threshold))
+	where := fmt.Sprintf("is past its auto-pause point (%s%%)", formatNumber(wait.threshold))
+	if wait.used < wait.threshold {
+		where = fmt.Sprintf("is under its auto-pause point (%s%%), but noctis pauses unattended work now because %s", formatNumber(wait.threshold), earlyPauseCause(wait.hit))
+	}
+	context := fmt.Sprintf("[noctis] %s usage %d%% %s: the user's own prompt goes ahead. Do what they asked; start no big new work beyond it.", wait.label, int(math.Round(wait.used)), where)
 	return notice, context
+}
+
+func earlyPauseCause(hit string) string {
+	switch hit {
+	case "burst":
+		return "a usage burst projects past it"
+	case "compaction":
+		return "a context compaction could carry the usage past it"
+	}
+	return "the burn rate projects past it"
 }
 
 func noteTypedTurn(state object, sid, event string, result decision) {
