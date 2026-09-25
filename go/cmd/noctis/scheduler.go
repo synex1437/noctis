@@ -7,6 +7,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -151,13 +152,17 @@ func runnerProxiesFile(sid string) string {
 }
 
 func keepProxiesForRunner(sid string) {
+	keepEnvironmentForRunner(sid, proxyEnvNames)
+}
+
+func keepEnvironmentForRunner(sid string, names []string) {
 	dropProxiesForRunner(sid)
-	proxies := object{}
-	for _, pair := range environmentOf(proxyEnvNames) {
-		proxies[pair[0]] = pair[1]
+	kept := object{}
+	for _, pair := range environmentOf(names) {
+		kept[pair[0]] = pair[1]
 	}
-	if len(proxies) > 0 {
-		mustWriteJSON(runnerProxiesFile(sid), proxies)
+	if len(kept) > 0 {
+		mustWriteJSON(runnerProxiesFile(sid), kept)
 	}
 }
 
@@ -167,7 +172,7 @@ func dropProxiesForRunner(sid string) {
 
 func takeProxiesForRunner(sid string) {
 	stored := readJSON(runnerProxiesFile(sid))
-	for _, name := range proxyEnvNames {
+	for _, name := range slices.Concat(carriedEnvNames, proxyEnvNames) {
 		if value := getString(stored, name); value != "" {
 			_ = os.Setenv(name, value)
 		}
@@ -356,6 +361,8 @@ func cancelNative(sid string, scheduled object) {
 			unit = systemdUnit(sid)
 		}
 		cancelSystemd(unit)
+		dropProxiesForRunner(sid)
+	case "task":
 		dropProxiesForRunner(sid)
 	}
 }
