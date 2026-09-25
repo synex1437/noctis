@@ -612,6 +612,9 @@ func TestTheRouterCorpusReportsOwnWorkRecallAndResearchPrecision(t *testing.T) {
 
 func TestAReviewOfTheUsersOwnEndpointsKeepsItsFanOutAdviceInsteadOfTheLiteRoute(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, false)
+	workflow := cloneObject(section(cfg, "workflow"))
+	workflow["suggest"] = true
+	cfg["workflow"] = workflow
 	var output string
 	func() {
 		defer func(previous bool) { emitted = previous }(emitted)

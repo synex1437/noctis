@@ -517,8 +517,8 @@ func onUserPromptSubmit(input, cfg object) {
 		systemMessage = joinNotices(systemMessage, T("notice.routed", liteAgentType(cfg), getString(section(cfg, "models"), "primary")))
 		journal(sid, "UserPromptSubmit", "route", verdict.reason, object{"signal": verdict.signal})
 		logInfo("route -> %s for %s (%s)", getString(section(cfg, "router"), "agent"), sid, verdict.reason)
-	} else if advice := suggestWorkflow(cfg, getString(input, "prompt"), result); advice != "" && currentHost().agents {
-		contexts = append(contexts, advice)
+	} else if notice := suggestWorkflow(cfg, getString(input, "prompt"), result); notice != "" && currentHost().agents {
+		systemMessage = joinNotices(systemMessage, notice)
 		journal(sid, "UserPromptSubmit", "suggest-workflow", "fan-out prompt", nil)
 		logInfo("workflow suggested for %s (fan-out prompt)", sid)
 	}
@@ -1194,7 +1194,7 @@ func onStop(input, cfg object) {
 		blockedNote = fmt.Sprintf(" %d item(s) wait on unfinished dependencies and are not eligible yet.", snapshot.blocked)
 	}
 	if len(snapshot.items) > 0 && currentHost().agents && looksLikeFanOut(snapshot.items[0]) && workflowAdvisable(cfg, result) {
-		blockedNote += " " + workflowAdvice(cfg, "The next item", result.usage)
+		systemMessage = joinNotices(systemMessage, workflowNotice(cfg, "notice.workflowQueue", result.usage))
 	}
 	if snapshot.plain {
 		blockedNote += " This list has no checkboxes: first rewrite every open item as \"- [ ] …\" (finished ones as \"- [x] …\") so progress can be tracked, then continue."

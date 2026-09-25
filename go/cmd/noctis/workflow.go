@@ -8,14 +8,16 @@ import (
 )
 
 var fanOutPatterns = []*lazyRe{
-	lazyRegexp(`(?i)\b(every|all|each)\b(?:\s+\S+){0,3}\s+(files?|endpoints?|components?|modules?|tests?|routes?|handlers?|packages?|services?|pages?|screens?|functions?|classes?|tables?|models?)\b`),
-	lazyRegexp(`(?i)\b(across|throughout)\s+the\s+(whole\s+|entire\s+)?(repo|repository|codebase|project|monorepo)\b`),
+	lazyRegexp(`(?i)\b(migrate|convert|port|upgrade|refactor|rewrite|update|audit|review|document|translate|rename)\b.*\b(every|all|each)\b(?:\s+\S+){0,3}\s+(files?|endpoints?|components?|modules?|tests?|routes?|handlers?|packages?|services?|pages?|screens?|functions?|classes?|tables?|models?)\b`),
+	lazyRegexp(`(?i)\b(migrate|convert|port|upgrade|refactor|rewrite|update|audit|review|document|translate|rename)\b.*\b(across|throughout)\s+the\s+(whole\s+|entire\s+)?(repo|repository|codebase|project|monorepo)\b`),
 	lazyRegexp(`(?i)\b(migrate|convert|port|upgrade|refactor|audit|sweep|review|scan)\b(?:\s+\S+){0,4}\s+(\d{2,}|dozens|hundreds)\b`),
 	lazyRegexp(`(?i)\b(codebase|repo)[- ]wide\b`),
-	lazyRegexp(`(?i)\b(tüm|bütün|her)\s+(?:\S+\s+){0,3}(dosya\S*|bileşen\S*|modül\S*|test\S*|endpoint\S*|servis\S*|sayfa\S*|fonksiyon\S*|sınıf\S*|tablo\S*)`),
+	lazyRegexp(`(?i)\b(tüm|bütün|her)\s+(?:\S+\s+){0,3}(dosya\S*|bileşen\S*|modül\S*|test\S*|endpoint\S*|servis\S*|sayfa\S*|fonksiyon\S*|sınıf\S*|tablo\S*).*(?:^|\s)(taşı|dönüştür|çevir|güncelle|yeniden yaz|incele|denetle|belgele|yükselt|refactor)`),
 	lazyRegexp(`(?i)\b(repo|kod taban|proje)\S*\s+(genelinde|tamamında|baştan sona)`),
 	lazyRegexp(`(?i)\b(\d{2,})\s+(dosya|bileşen|modül|test|endpoint|servis)`),
 }
+
+var fanOutClauseBreak = lazyRegexp(`(?i)[,;.!?\n]+|\s(?:and|then|ve|sonra|ardından)\s`)
 
 var workflowKeywords = lazyRegexp(`(?i)\b(ultracode|workflow|iş akışı|/deep-research)\b`)
 
@@ -29,9 +31,11 @@ func looksLikeFanOut(text string) bool {
 	if text == "" || workflowKeywords.MatchString(text) {
 		return false
 	}
-	for _, pattern := range fanOutPatterns {
-		if pattern.MatchString(text) {
-			return true
+	for _, clause := range fanOutClauseBreak.Split(text, -1) {
+		for _, pattern := range fanOutPatterns {
+			if pattern.MatchString(clause) {
+				return true
+			}
 		}
 	}
 	return false
@@ -68,10 +72,10 @@ func roleModelText(role roleModel) string {
 	return role.model
 }
 
-func workflowAdvice(cfg object, subject string, usage usageView) string {
+func workflowNotice(cfg object, key string, usage usageView) string {
 	models := workflowRoleModels(cfg, usage)
 	size := orDefault(getString(workflowCfg(cfg), "size"), "medium")
-	return fmt.Sprintf(`[noctis] %s looks like a fan-out task: run it as a dynamic workflow (ultracode) instead of working item by item — one agent per unit, results verified before they are reported, size guideline %s. Agent models: code-writing agents → %s; read-only analysis and review agents → %s; discovery/search agents → %s; test runs and other noisy verification → %s. Give parallel editors isolated copies (worktrees) so their edits never collide, and keep the run's script path: if the run is interrupted, relaunch that same script (completed agents return saved results) rather than starting a new run.`, subject, size, roleModelText(models[0]), roleModelText(models[1]), roleModelText(models[2]), roleModelText(models[3]))
+	return T(key, size, roleModelText(models[0]), roleModelText(models[1]), roleModelText(models[2]), roleModelText(models[3]))
 }
 
 func launchedScript(launch object) (string, bool) {
@@ -157,7 +161,7 @@ func agentFileModel(file string) (string, bool) {
 }
 
 func workflowAdvisable(cfg object, result decision) bool {
-	if !getBool(workflowCfg(cfg), "suggest", true) || result.wait != nil || result.warnWindow != nil || result.fableHit {
+	if !getBool(workflowCfg(cfg), "suggest", false) || result.wait != nil || result.warnWindow != nil || result.fableHit {
 		return false
 	}
 	return gateWorkflowLaunch(cfg, result, nil) == ""
@@ -167,7 +171,7 @@ func suggestWorkflow(cfg object, prompt string, result decision) string {
 	if !looksLikeFanOut(prompt) || !workflowAdvisable(cfg, result) {
 		return ""
 	}
-	return workflowAdvice(cfg, "This request", result.usage)
+	return workflowNotice(cfg, "notice.workflowPrompt", result.usage)
 }
 
 func recordWorkflowLaunch(sid string, input object, now int64) {

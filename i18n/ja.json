@@ -39,6 +39,8 @@
   "notice.noUsage": "%s: 使用量データがありません（statusLine は設定済みですか？ noctis doctor）。",
   "notice.configError": "%s: config.json を読めないため既定値を使います。",
   "notice.routed": "🔀 調査をサブエージェント %s に回しました。%s はコード用に温存します。",
+  "notice.workflowPrompt": "🧩 この依頼はファンアウト型の作業に見えます。動的ワークフローとして実行したい場合は、ご自身のプロンプトで ultracode と書いて依頼してください。推奨サイズ: %s。エージェントのモデル: コードを書くエージェント → %s、読み取り専用の分析・レビューエージェント → %s、探索・検索エージェント → %s、テスト実行などの出力の多い検証 → %s。",
+  "notice.workflowQueue": "🧩 次の項目はファンアウト型の作業に見えます。動的ワークフローとして実行したい場合は、ご自身のプロンプトで ultracode と書いて依頼してください。推奨サイズ: %s。エージェントのモデル: コードを書くエージェント → %s、読み取り専用の分析・レビューエージェント → %s、探索・検索エージェント → %s、テスト実行などの出力の多い検証 → %s。",
   "notice.budget": "[noctis] daily budget reached: %s%% of the weekly quota used today (cap %s%%). Finish the current step; prefer lighter work.",
   "handoff.blocked": "⛔ このセッションは %[1]s から別ウィンドウで %[2]s により実行中です。このウィンドウを閉じてください（強制: noctis cancel %[3]s）。",
   "selfcheck.settings": "settings.json を読めません",

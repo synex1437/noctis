@@ -63,10 +63,12 @@ func baseCatalog() map[string]map[string]string {
 			"scoped.reverted":        "🔁 %s weekly quota reset; default model is %s again.",
 			"scoped.revertedDefault": "🔁 %s weekly quota reset; settings.json names no model again, so Claude Code's own default applies.",
 
-			"notice.noUsage":     "%s: no usage data (is statusLine installed? noctis doctor).",
-			"notice.configError": "%s: config.json unreadable, using defaults.",
-			"notice.routed":      "🔀 Research routed to the %s subagent; %s kept for coding.",
-			"notice.budget":      "[noctis] daily budget reached: %s%% of the weekly quota used today (cap %s%%). Finish the current step; prefer lighter work.",
+			"notice.noUsage":        "%s: no usage data (is statusLine installed? noctis doctor).",
+			"notice.configError":    "%s: config.json unreadable, using defaults.",
+			"notice.routed":         "🔀 Research routed to the %s subagent; %s kept for coding.",
+			"notice.workflowPrompt": "🧩 This request looks like a fan-out task. To run it as a dynamic workflow, ask for one in your own prompt with ultracode. Suggested size: %s. Agent models: code-writing agents → %s; read-only analysis and review agents → %s; discovery/search agents → %s; test runs and other noisy verification → %s.",
+			"notice.workflowQueue":  "🧩 The next item looks like a fan-out task. To run it as a dynamic workflow, ask for one in your own prompt with ultracode. Suggested size: %s. Agent models: code-writing agents → %s; read-only analysis and review agents → %s; discovery/search agents → %s; test runs and other noisy verification → %s.",
+			"notice.budget":         "[noctis] daily budget reached: %s%% of the weekly quota used today (cap %s%%). Finish the current step; prefer lighter work.",
 
 			"handoff.blocked": "⛔ This session has been running in another window with %[2]s since %[1]s; close this window (to force: noctis cancel %[3]s).",
 
@@ -496,10 +498,12 @@ func baseCatalog() map[string]map[string]string {
 			"scoped.reverted":        "🔁 %s haftalık kotası sıfırlandı; varsayılan model yeniden %s.",
 			"scoped.revertedDefault": "🔁 %s haftalık kotası sıfırlandı; settings.json yine bir model belirtmiyor, Claude Code kendi varsayılanını kullanır.",
 
-			"notice.noUsage":     "%s: kullanım verisi yok (statusLine kurulu mu? noctis doctor).",
-			"notice.configError": "%s: config.json okunamadı, varsayılanlar kullanılıyor.",
-			"notice.routed":      "🔀 Araştırma %s alt-ajanına yönlendirildi; %s kodlama için saklandı.",
-			"notice.budget":      "[noctis] daily budget reached: %s%% of the weekly quota used today (cap %s%%). Finish the current step; prefer lighter work.",
+			"notice.noUsage":        "%s: kullanım verisi yok (statusLine kurulu mu? noctis doctor).",
+			"notice.configError":    "%s: config.json okunamadı, varsayılanlar kullanılıyor.",
+			"notice.routed":         "🔀 Araştırma %s alt-ajanına yönlendirildi; %s kodlama için saklandı.",
+			"notice.workflowPrompt": "🧩 Bu istek çok parçalı (fan-out) bir işe benziyor. Dinamik bir workflow olarak çalışmasını istiyorsan bunu kendi prompt'unda ultracode ile iste. Önerilen boyut: %s. Ajan modelleri: kod yazan ajanlar → %s; salt okunur analiz ve inceleme ajanları → %s; keşif/arama ajanları → %s; test koşuları ve diğer gürültülü doğrulamalar → %s.",
+			"notice.workflowQueue":  "🧩 Sıradaki madde çok parçalı (fan-out) bir işe benziyor. Dinamik bir workflow olarak çalışmasını istiyorsan bunu kendi prompt'unda ultracode ile iste. Önerilen boyut: %s. Ajan modelleri: kod yazan ajanlar → %s; salt okunur analiz ve inceleme ajanları → %s; keşif/arama ajanları → %s; test koşuları ve diğer gürültülü doğrulamalar → %s.",
+			"notice.budget":         "[noctis] daily budget reached: %s%% of the weekly quota used today (cap %s%%). Finish the current step; prefer lighter work.",
 
 			"handoff.blocked": "⛔ Bu oturum %[1]s itibarıyla %[2]s ile başka pencerede sürüyor; bu pencereyi kapat (zorla açmak için: noctis cancel %[3]s).",
 

@@ -11,7 +11,11 @@ const opusOnlyWorkflow = "export const meta = { name: 'port-routes', description
 
 func fanOutSession(t *testing.T, overrides object, model string, fable float64) (object, string) {
 	t.Helper()
-	cfg, project, _ := limitSandbox(t, overrides, 10, 20)
+	settings := object{"workflow": object{"suggest": true}}
+	for key, value := range overrides {
+		settings[key] = value
+	}
+	cfg, project, _ := limitSandbox(t, settings, 10, 20)
 	now := float64(nowSec())
 	usage := readJSON(files.usage)
 	usage["sessions"] = object{"fan": object{"model": model, "updatedAt": now}}

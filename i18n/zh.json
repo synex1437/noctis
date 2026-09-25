@@ -39,6 +39,8 @@
   "notice.noUsage": "%s：没有用量数据（是否安装了 statusLine？noctis doctor）。",
   "notice.configError": "%s：config.json 无法读取，使用默认值。",
   "notice.routed": "🔀 调研已交给子代理 %s；%s 留给编码。",
+  "notice.workflowPrompt": "🧩 这个请求看起来是扇出（fan-out）式任务。如果想以动态工作流运行，请在你自己的提示中用 ultracode 提出。建议规模：%s。智能体模型：写代码的智能体 → %s；只读的分析与审查智能体 → %s；探索与搜索智能体 → %s；测试运行及其他输出繁多的验证 → %s。",
+  "notice.workflowQueue": "🧩 下一项看起来是扇出（fan-out）式任务。如果想以动态工作流运行，请在你自己的提示中用 ultracode 提出。建议规模：%s。智能体模型：写代码的智能体 → %s；只读的分析与审查智能体 → %s；探索与搜索智能体 → %s；测试运行及其他输出繁多的验证 → %s。",
   "notice.budget": "[noctis] daily budget reached: %s%% of the weekly quota used today (cap %s%%). Finish the current step; prefer lighter work.",
   "handoff.blocked": "⛔ 该会话自 %[1]s 起已在另一个窗口用 %[2]s 运行；请关闭此窗口（强制：noctis cancel %[3]s）。",
   "selfcheck.settings": "settings.json 无法读取",
