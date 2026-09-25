@@ -264,7 +264,7 @@
   "report.errors": "最近のエラー（%s）:",
   "report.cost": "API 換算コスト: %s（定価。サブスクリプションでは参考値です）",
   "report.unpriced": "価格が不明: %s（config.json に report.pricing を追加してください）",
-  "report.saved": "主モデルから外したことで約 %[1]s 節約できました（これらの呼び出しは %[3]s ではなく %[2]s でした）",
+  "report.saved": "API 定価での概算（プランのクォータの節約量ではありません）: これらの呼び出しは主モデルより約 %[1]s 安く済みました（%[3]s ではなく %[2]s）",
   "report.bundle": "バグ報告用のまとめを書き出しました: %s（ログ、判断の記録、状態、設定。ホームパス、トークン、Webhook は伏せてあります — issue に添付してください）",
   "install.header": "\n== %s",
   "install.copied": "   プラグインをコピーしました -> %s",

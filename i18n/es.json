@@ -264,7 +264,7 @@
   "report.errors": "Errores recientes (%s):",
   "report.cost": "Coste equivalente de API: %s (precios de lista; informativo con una suscripción)",
   "report.unpriced": "sin precio conocido para: %s (añade report.pricing en config.json)",
-  "report.saved": "Mantenerlo fuera del modelo principal ahorró ≈ %s (esas llamadas costaron %s en lugar de %s)",
+  "report.saved": "Estimación a precios de lista de la API, no un ahorro de cuota del plan: esas llamadas costaron ≈ %s menos que con el modelo principal (%s en lugar de %s)",
   "report.bundle": "paquete de informe de error escrito: %s (registros, diario, estado, config; ruta personal, tokens y webhooks ocultados — adjúntalo a una incidencia)",
   "install.header": "\n== %s",
   "install.copied": "   plugin copiado -> %s",

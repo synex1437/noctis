@@ -264,7 +264,7 @@
   "report.errors": "최근 오류(%s):",
   "report.cost": "API 환산 비용: %s(정가 기준. 구독에서는 참고용입니다)",
   "report.unpriced": "가격을 알 수 없음: %s (config.json에 report.pricing을 추가하세요)",
-  "report.saved": "주 모델에서 덜어내 약 %[1]s를 아꼈습니다(해당 호출이 %[3]s 대신 %[2]s였습니다)",
+  "report.saved": "API 정가 기준 추정치(절약된 요금제 할당량 아님): 해당 호출은 주 모델보다 약 %[1]s 적게 들었습니다(%[3]s 대신 %[2]s)",
   "report.bundle": "버그 신고 묶음을 작성했습니다: %s(로그, 판단 기록, 상태, 설정. 홈 경로·토큰·웹훅은 가렸습니다 — 이슈에 첨부하세요)",
   "install.header": "\n== %s",
   "install.copied": "   플러그인 복사됨 -> %s",
