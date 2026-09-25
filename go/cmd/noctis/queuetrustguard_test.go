@@ -117,3 +117,20 @@ func TestShellCallsThatOnlyQuoteTheCommandStillPass(t *testing.T) {
 		}
 	}
 }
+
+func TestClaudeMayNotRunStateWriteThroughAShellCall(t *testing.T) {
+	_, project := queueTrustSandbox(t, false)
+	for _, call := range []struct{ tool, command string }{
+		{"Bash", `echo '{"waits":{}}' | noctis state-write`},
+		{"Bash", `noctis state-write < doc.json`},
+		{"Bash", `"${CLAUDE_PLUGIN_ROOT}/bin/noctis" state-w'r'ite`},
+		{"Bash", `sh -c 'noctis state-write < /tmp/doc.json'`},
+		{"Bash", `echo state-write | xargs noctis`},
+		{"PowerShell", `Get-Content doc.json | & "$env:CLAUDE_PLUGIN_ROOT\bin\noctis.exe" state-write`},
+	} {
+		run := runHostHook(t, "claude", shellToolCall("sw1", project, call.tool, call.command), "sw1", 10*time.Second)
+		if permissionOf(run.answer) != "deny" || getString(run.answer, "systemMessage") != T("queue.stateWriteByModel", pluginName) {
+			t.Errorf("Claude's %s call %q writes noctis state directly, and noctis did not deny it: %v", call.tool, call.command, run.answer)
+		}
+	}
+}

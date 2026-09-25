@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func liveWait(seconds int64) object {
 	return object{"kind": "batch", "window": "five_hour", "until": float64(nowSec() + seconds),
@@ -88,5 +91,17 @@ func TestStateWriteRefusesAPayloadWithNoDocument(t *testing.T) {
 	sandboxFiles(t)
 	if result := stateWriteResult(object{"expect": "absent"}); getBool(result, "ok", false) {
 		t.Fatalf("a payload with no document was accepted: %v", result)
+	}
+}
+
+func TestStateWriteRunsOnlyForTheTestHarness(t *testing.T) {
+	document := `{"document":{"waits":{}}}`
+	guarded := startNoctisCLIAt(t, t.TempDir(), document, map[string]string{"NOCTIS_STATE_WRITE": "1"}, "state-write")()
+	if guarded.code != 0 || !strings.Contains(guarded.stdout, `"ok":true`) {
+		t.Fatalf("state-write with NOCTIS_STATE_WRITE=1 did not write the state: code %d stdout %q stderr %q", guarded.code, guarded.stdout, guarded.stderr)
+	}
+	plain := startNoctisCLIAt(t, t.TempDir(), document, nil, "state-write")()
+	if plain.code == 0 || strings.Contains(plain.stdout, `"ok":true`) {
+		t.Fatalf("state-write without NOCTIS_STATE_WRITE let anyone write the state: code %d stdout %q", plain.code, plain.stdout)
 	}
 }

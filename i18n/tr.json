@@ -429,6 +429,7 @@
   "queue.importTrust": "%[2]s dosyasında henüz güven vermediğin %[1]d madde ya da satır var: onları okuyup noctis queue trust komutunu yeniden çalıştırana kadar dosya hiçbir oturumu sürüklemez.",
   "queue.trustByModel": "🔒 Claude noctis queue trust komutunu kendisi çalıştırmaya çalıştı; noctis izin vermedi, çünkü güvenilen bir kuyruk dosyası oturumları sormadan sürükler ve ona yalnızca sen, okuduktan sonra güvenmelisin. Kendin güvenmek için: !noctis queue trust (%s)",
   "queue.dayLimitMessage": "⛔ Kuyruk: bu oturum bugün %s kez devam ettirildi ve günlük sınıra ulaştı (queue.maxContinuesPerDay); otomatik devam gece yarısına kadar durdu, %d açık madde var.",
+  "queue.stateWriteByModel": "🔒 Claude noctis'in durum dosyasını kendisi yazmaya çalıştı (noctis state-write); noctis izin vermedi, çünkü o dosya hangi kuyruk dosyalarına güvendiğini tutar ve sen olmadan ayarlanmamalı. Bir kuyruk dosyasına güvenmek için onu oku ve şunu yaz: !noctis queue trust (%s)",
   "queue.trustGranted": "Bu dosya oturumları sürükleyebilir: %s",
   "queue.trustRevoked": "Bu dosya artık oturumları sürüklemiyor: %s",
   "queue.trustNone": "Burada kuyruk dosyası yok (aranan: %s).",

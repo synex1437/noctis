@@ -523,7 +523,7 @@ class Account {
   }
 
   putState(document) {
-    const answer = this.stateAnswer(this.run(['state-write'], { document }));
+    const answer = this.stateAnswer(this.run(['state-write'], { document }, { NOCTIS_STATE_WRITE: '1' }));
     if (!answer.ok) throw new Error(`state-write refused the document: ${answer.reason || 'no answer'}`);
     return document;
   }
@@ -547,7 +547,7 @@ class Account {
         }
       }
       mutate(document);
-      const answer = this.stateAnswer(this.run(['state-write'], { document, expect }));
+      const answer = this.stateAnswer(this.run(['state-write'], { document, expect }, { NOCTIS_STATE_WRITE: '1' }));
       if (answer.ok) return document;
       if (answer.reason !== 'conflict') {
         throw new Error(`state-write refused the document: ${answer.reason || 'no answer'}`);

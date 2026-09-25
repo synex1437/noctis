@@ -832,6 +832,10 @@ func stateWriteResult(payload object) object {
 }
 
 func runStateWrite() {
+	if os.Getenv("NOCTIS_STATE_WRITE") != "1" {
+		fmt.Println(string(marshalCompact(object{"ok": false, "reason": "state-write runs only from the test harness with NOCTIS_STATE_WRITE=1"})))
+		os.Exit(1)
+	}
 	result := stateWriteResult(readStdinJSON())
 	fmt.Println(string(marshalCompact(result)))
 	if !getBool(result, "ok", false) {

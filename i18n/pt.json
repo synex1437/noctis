@@ -429,6 +429,7 @@
   "queue.importTrust": "%[2]s agora tem %[1]d item(ns) ou linha(s) em que você não confiou: o arquivo não conduz nenhuma sessão até você lê-los e executar noctis queue trust de novo.",
   "queue.trustByModel": "🔒 O Claude tentou executar noctis queue trust por conta própria; o noctis recusou, porque um arquivo confiável conduz sessões sem perguntar e só você deve confiar nele, depois de lê-lo. Para confiar nele: !noctis queue trust (%s)",
   "queue.dayLimitMessage": "⛔ Fila: esta sessão foi continuada %s vezes hoje e atingiu o limite diário (queue.maxContinuesPerDay); continuação automática parada até a meia-noite, %d item(ns) aberto(s).",
+  "queue.stateWriteByModel": "🔒 O Claude tentou escrever por conta própria o arquivo de estado do noctis (noctis state-write); o noctis recusou, porque esse arquivo guarda em quais arquivos de fila você confia e não deve ser definido sem você. Para confiar em um arquivo de fila, leia-o e digite: !noctis queue trust (%s)",
   "queue.trustGranted": "Este arquivo pode conduzir sessões: %s",
   "queue.trustRevoked": "Este arquivo não conduz mais sessões: %s",
   "queue.trustNone": "Nenhum arquivo de fila aqui (procurado: %s).",

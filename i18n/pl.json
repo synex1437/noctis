@@ -429,6 +429,7 @@
   "queue.importTrust": "W %[2]s są teraz pozycje lub wiersze, którym nie zaufano: %[1]d. Plik nie prowadzi żadnej sesji, dopóki ich nie przeczytasz i ponownie nie uruchomisz noctis queue trust.",
   "queue.trustByModel": "🔒 Claude próbował sam uruchomić noctis queue trust; noctis odmówił, bo zaufany plik prowadzi sesje bez pytania, a zaufać mu możesz tylko ty, po jego przeczytaniu. Aby mu zaufać: !noctis queue trust (%s)",
   "queue.dayLimitMessage": "⛔ Kolejka: ta sesja była dziś kontynuowana %s razy i osiągnęła dzienny limit (queue.maxContinuesPerDay); automatyczna kontynuacja zatrzymana do północy, otwartych pozycji: %d.",
+  "queue.stateWriteByModel": "🔒 Claude próbował sam zapisać plik stanu noctisa (noctis state-write); noctis odmówił, bo ten plik przechowuje, którym plikom kolejki ufasz, i nie może zostać ustawiony bez ciebie. Aby zaufać plikowi kolejki, przeczytaj go i wpisz: !noctis queue trust (%s)",
   "queue.trustGranted": "Ten plik może prowadzić sesje: %s",
   "queue.trustRevoked": "Ten plik już nie prowadzi sesji: %s",
   "queue.trustNone": "Nie ma tu pliku kolejki (szukano: %s).",
