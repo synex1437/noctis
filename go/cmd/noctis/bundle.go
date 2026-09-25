@@ -118,6 +118,20 @@ func bundleState(content []byte) []byte {
 			}
 		}
 	}
+	for _, raw := range getMap(state, "workflows") {
+		records, _ := raw.([]any)
+		for _, item := range records {
+			launch := toObject(item)
+			if launch == nil || getString(launch, "agent") != "" {
+				continue
+			}
+			for key, value := range launch {
+				if text, isText := value.(string); isText && text != "" {
+					launch[key] = fmt.Sprintf("<redacted workflow %s, length %d>", key, utf8.RuneCountInString(text))
+				}
+			}
+		}
+	}
 	return marshalPretty(state)
 }
 

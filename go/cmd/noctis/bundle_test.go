@@ -80,6 +80,40 @@ func TestABundleLeavesOutParkedPromptsTaskSubjectsAndPermissionRules(t *testing.
 	}
 }
 
+func TestABundleLeavesOutWhatAWorkflowWasLaunchedWith(t *testing.T) {
+	home := t.TempDir()
+	account := filepath.Join(home, ".claude")
+	now := float64(nowSec())
+	launch := object{
+		"at": now, "name": "acme-billing-migration", "script_path": "/srv/acme/migrate.js", "description": "Move ACME billing to the new cluster",
+		"script": "agent('Rotate the Stripe key in deploy/prod.env for ACME Corp')", "args": "--client acme --region eu-west",
+	}
+	cutOff := object{"at": now, "agent": "a1b2c3", "agentType": "general-purpose", "until": now + 3600}
+	cliWrite(t, filepath.Join(account, pluginName, "state.json"), marshalPretty(object{"workflows": object{"s1": []any{launch, cutOff}}}))
+	target := filepath.Join(home, "bundle.zip")
+	run := startNoctisCLIAt(t, home, "", nil, "report", "--bundle", target)()
+	if run.code != 0 {
+		t.Fatalf("noctis report --bundle failed:\n%s", run)
+	}
+	entries := bundleEntries(t, target)
+	for _, key := range []string{"name", "script_path", "description", "script", "args"} {
+		text := getString(launch, key)
+		for name, content := range entries {
+			if strings.Contains(content, text) {
+				t.Errorf("%s in the bundle carries the workflow's %s %q", name, key, text)
+			}
+		}
+		if want := fmt.Sprintf(`"%s": "<redacted workflow %s, length %d>"`, key, key, utf8.RuneCountInString(text)); !strings.Contains(entries["state.json"], want) {
+			t.Errorf("state.json in the bundle must keep the length of the workflow's %s (%s):\n%s", key, want, entries["state.json"])
+		}
+	}
+	for _, want := range []string{`"agent": "a1b2c3"`, `"agentType": "general-purpose"`} {
+		if !strings.Contains(entries["state.json"], want) {
+			t.Errorf("state.json in the bundle must keep the record of a cut-off agent (%s):\n%s", want, entries["state.json"])
+		}
+	}
+}
+
 func TestABundleShowsAHomeWithABackslashAsATilde(t *testing.T) {
 	home := filepath.Join(t.TempDir(), `back\slash`)
 	account := filepath.Join(home, ".claude")

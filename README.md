@@ -283,7 +283,7 @@ Three limits worth knowing. Usage data comes from Claude Code's status-line payl
 
 ## Contributing
 
-Bug reports with `noctis doctor` output and the relevant `errors.log` / `noctis why --last 20` lines are the most useful thing you can send; `noctis report --bundle` zips all of that (tokens and webhook URLs are redacted, your home folder shows as `~`, and prompts parked until a reset, the subjects of open tasks and the permission rules in `settings.json` are left out, only their length kept; file paths and whatever the logs hold are not, so read it before you attach it). Build and test loop: [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports with `noctis doctor` output and the relevant `errors.log` / `noctis why --last 20` lines are the most useful thing you can send; `noctis report --bundle` zips all of that (tokens and webhook URLs are redacted, your home folder shows as `~`, and prompts parked until a reset, the subjects of open tasks, what recent workflows were launched with and the permission rules in `settings.json` are left out, only their length kept; file paths and whatever the logs hold are not, so read it before you attach it). Build and test loop: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
