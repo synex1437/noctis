@@ -39,6 +39,8 @@
   "notice.noUsage": "%s: لا بيانات استهلاك (هل statusLine مثبّت؟ noctis doctor).",
   "notice.configError": "%s: تعذّرت قراءة config.json، تُستخدم القيم الافتراضية.",
   "notice.routed": "🔀 أُحيل البحث إلى الوكيل الفرعي %s؛ يبقى %s للبرمجة.",
+  "notice.workflowPrompt": "🧩 يبدو هذا الطلب مهمة متفرعة (fan-out). لتشغيله كسير عمل ديناميكي، اطلب ذلك في موجّهك أنت بكلمة ultracode. الحجم المقترح: %s. نماذج الوكلاء: الوكلاء الذين يكتبون الشيفرة ← %s؛ وكلاء التحليل والمراجعة للقراءة فقط ← %s؛ وكلاء البحث والاستكشاف ← %s؛ تشغيل الاختبارات وغيرها من التحقق كثير المخرجات ← %s.",
+  "notice.workflowQueue": "🧩 يبدو البند التالي مهمة متفرعة (fan-out). لتشغيله كسير عمل ديناميكي، اطلب ذلك في موجّهك أنت بكلمة ultracode. الحجم المقترح: %s. نماذج الوكلاء: الوكلاء الذين يكتبون الشيفرة ← %s؛ وكلاء التحليل والمراجعة للقراءة فقط ← %s؛ وكلاء البحث والاستكشاف ← %s؛ تشغيل الاختبارات وغيرها من التحقق كثير المخرجات ← %s.",
   "notice.budget": "[noctis] daily budget reached: %s%% of the weekly quota used today (cap %s%%). Finish the current step; prefer lighter work.",
   "handoff.blocked": "⛔ هذه الجلسة تعمل في نافذة أخرى بـ %[2]s منذ %[1]s؛ أغلق هذه النافذة (للإجبار: noctis cancel %[3]s).",
   "selfcheck.settings": "تعذّرت قراءة settings.json",

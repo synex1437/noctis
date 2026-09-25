@@ -39,6 +39,8 @@
   "notice.noUsage": "%s: nessun dato di utilizzo (statusLine è installata? noctis doctor).",
   "notice.configError": "%s: config.json illeggibile, uso i valori predefiniti.",
   "notice.routed": "🔀 Ricerca affidata al sub-agente %s; %s resta per il codice.",
+  "notice.workflowPrompt": "🧩 Questa richiesta sembra un lavoro a ventaglio (fan-out). Per eseguirla come workflow dinamico, chiedilo nel tuo prompt con ultracode. Dimensione suggerita: %s. Modelli degli agenti: agenti che scrivono codice → %s; agenti di analisi e revisione in sola lettura → %s; agenti di ricerca ed esplorazione → %s; esecuzioni dei test e altre verifiche rumorose → %s.",
+  "notice.workflowQueue": "🧩 Il prossimo elemento sembra un lavoro a ventaglio (fan-out). Per eseguirlo come workflow dinamico, chiedilo nel tuo prompt con ultracode. Dimensione suggerita: %s. Modelli degli agenti: agenti che scrivono codice → %s; agenti di analisi e revisione in sola lettura → %s; agenti di ricerca ed esplorazione → %s; esecuzioni dei test e altre verifiche rumorose → %s.",
   "notice.budget": "[noctis] daily budget reached: %s%% of the weekly quota used today (cap %s%%). Finish the current step; prefer lighter work.",
   "handoff.blocked": "⛔ Questa sessione gira in un'altra finestra con %[2]s dalle %[1]s; chiudi questa finestra (forzare: noctis cancel %[3]s).",
   "selfcheck.settings": "settings.json illeggibile",

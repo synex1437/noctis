@@ -39,6 +39,8 @@
   "notice.noUsage": "%s: 사용량 데이터가 없습니다 (statusLine이 설치되어 있나요? noctis doctor).",
   "notice.configError": "%s: config.json을 읽을 수 없어 기본값을 사용합니다.",
   "notice.routed": "🔀 조사를 서브에이전트 %s에 넘겼습니다. %s는 코딩용으로 남겨 둡니다.",
+  "notice.workflowPrompt": "🧩 이 요청은 팬아웃(fan-out) 작업으로 보입니다. 동적 워크플로로 실행하려면 직접 쓰는 프롬프트에 ultracode 를 넣어 요청하세요. 권장 크기: %s. 에이전트 모델: 코드를 쓰는 에이전트 → %s; 읽기 전용 분석·리뷰 에이전트 → %s; 탐색·검색 에이전트 → %s; 테스트 실행 등 출력이 많은 검증 → %s.",
+  "notice.workflowQueue": "🧩 다음 항목은 팬아웃(fan-out) 작업으로 보입니다. 동적 워크플로로 실행하려면 직접 쓰는 프롬프트에 ultracode 를 넣어 요청하세요. 권장 크기: %s. 에이전트 모델: 코드를 쓰는 에이전트 → %s; 읽기 전용 분석·리뷰 에이전트 → %s; 탐색·검색 에이전트 → %s; 테스트 실행 등 출력이 많은 검증 → %s.",
   "notice.budget": "[noctis] daily budget reached: %s%% of the weekly quota used today (cap %s%%). Finish the current step; prefer lighter work.",
   "handoff.blocked": "⛔ 이 세션은 %[1]s부터 다른 창에서 %[2]s로 실행 중입니다. 이 창을 닫으세요 (강제: noctis cancel %[3]s).",
   "selfcheck.settings": "settings.json을 읽을 수 없음",

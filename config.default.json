@@ -147,7 +147,7 @@
     "url": "https://raw.githubusercontent.com/synex1437/noctis/main/.claude-plugin/plugin.json"
   },
   "workflow": {
-    "suggest": true,
+    "suggest": false,
     "gate": true,
     "size": "medium"
   },

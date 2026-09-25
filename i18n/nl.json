@@ -39,6 +39,8 @@
   "notice.noUsage": "%s: geen verbruiksdata (is statusLine geïnstalleerd? noctis doctor).",
   "notice.configError": "%s: config.json onleesbaar, standaardwaarden worden gebruikt.",
   "notice.routed": "🔀 Onderzoek doorgestuurd naar subagent %s; %s blijft voor code.",
+  "notice.workflowPrompt": "🧩 Dit verzoek lijkt op een fan-out-taak. Wil je het als dynamische workflow laten draaien, vraag er dan zelf om in je prompt met ultracode. Voorgestelde grootte: %s. Agentmodellen: agents die code schrijven → %s; alleen-lezen analyse- en reviewagents → %s; zoek- en verkenningsagents → %s; testruns en andere luidruchtige controles → %s.",
+  "notice.workflowQueue": "🧩 Het volgende item lijkt op een fan-out-taak. Wil je het als dynamische workflow laten draaien, vraag er dan zelf om in je prompt met ultracode. Voorgestelde grootte: %s. Agentmodellen: agents die code schrijven → %s; alleen-lezen analyse- en reviewagents → %s; zoek- en verkenningsagents → %s; testruns en andere luidruchtige controles → %s.",
   "notice.budget": "[noctis] daily budget reached: %s%% of the weekly quota used today (cap %s%%). Finish the current step; prefer lighter work.",
   "handoff.blocked": "⛔ Deze sessie draait sinds %[1]s in een ander venster met %[2]s; sluit dit venster (forceren: noctis cancel %[3]s).",
   "selfcheck.settings": "settings.json onleesbaar",

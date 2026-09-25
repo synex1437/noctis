@@ -1621,8 +1621,16 @@ async function scenarioShippedProfile(acc) {
   check('shipped profile: the main session runs Opus at max effort', settings.model === 'opus' && settings.env.CLAUDE_CODE_EFFORT_LEVEL === 'max' && config.models.primary === 'opus' && config.roles.profile === 'noctis', true);
   check('shipped profile: the Fable cap stays watched and leads back to the code model', config.models.scopedPattern === 'fable' && config.models.fallback === 'opus' && config.router.subagentModels.Plan === 'opus' && config.router.subagentModels.Explore === 'haiku', true);
   acc.statusline('sp1', 'claude-opus-5-5', 20, now + 7200, 10, now + 3 * 86400, 30);
-  const advice = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'sp1', cwd: PROJECT_DIR, prompt: 'Audit every route handler under src/routes for missing auth checks and fix what you find' });
-  check('shipped profile: workflow agents get the profile models', advice.includes('code-writing agents → opus (effort max)') && advice.includes('read-only analysis and review agents → opus (effort xhigh)') && advice.includes('test runs and other noisy verification → haiku.'), true);
+  const fanOutPrompt = { hook_event_name: 'UserPromptSubmit', session_id: 'sp1', cwd: PROJECT_DIR, prompt: 'Audit every route handler under src/routes for missing auth checks and fix what you find' };
+  check('shipped profile: a fan-out prompt gets no workflow suggestion', acc.hook(fanOutPrompt).includes('🧩'), false);
+  acc.setConfig((config) => {
+    config.workflow.suggest = true;
+  });
+  const advice = acc.hook(fanOutPrompt);
+  check('shipped profile: workflow agents get the profile models', advice.includes('🧩') && advice.includes('→ opus (effort max)') && advice.includes('→ opus (effort xhigh)') && advice.includes('→ haiku.'), true);
+  acc.setConfig((config) => {
+    config.workflow.suggest = false;
+  });
   check('shipped profile: status names no earlier profile', acc.run(['status']).includes('--profile'), false);
 }
 
@@ -1736,13 +1744,18 @@ async function scenarioGitHubQueue(acc) {
 
 async function scenarioWorkflows(acc) {
   const now = nowSec();
+  acc.setConfig((config) => {
+    config.workflow.suggest = true;
+  });
   acc.statusline('wf1', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
-  const fanOut = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf1', cwd: PROJECT_DIR, prompt: 'Audit every route handler under src/routes for missing auth checks and fix what you find' });
-  check('workflow: fan-out prompt gets the advisory with role models', fanOut.includes('dynamic workflow (ultracode)') && fanOut.includes('code-writing agents → fable (effort max)') && fanOut.includes('read-only analysis and review agents → opus (effort xhigh)'), true);
+  const fanOut = JSON.parse(acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf1', cwd: PROJECT_DIR, prompt: 'Audit every route handler under src/routes for missing auth checks and fix what you find' }));
+  const fanOutNotice = String(fanOut.systemMessage);
+  check('workflow: fan-out prompt tells you, with role models, how to ask for a workflow', fanOutNotice.startsWith('🧩') && fanOutNotice.includes('ultracode') && fanOutNotice.includes('→ fable (effort max)') && fanOutNotice.includes('→ opus (effort xhigh)'), true);
+  check('workflow: Claude is not told to start a workflow', JSON.stringify(fanOut.hookSpecificOutput || {}).includes('ultracode'), false);
   check('workflow: advisory journaled', acc.run(['why', '--last', '2']).includes('suggest-workflow'), true);
-  check('workflow: explicit ultracode prompt gets no duplicate advisory', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf1', cwd: PROJECT_DIR, prompt: 'ultracode: audit every route handler under src/routes' }).includes('fan-out task'), false);
-  check('workflow: ordinary prompt gets no advisory', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf1', cwd: PROJECT_DIR, prompt: 'fix the null check in parser.go' }).includes('fan-out task'), false);
-  check('workflow: turkish fan-out prompt detected', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf1', cwd: PROJECT_DIR, prompt: 'tüm bileşen dosyalarını TypeScript\'a taşı ve testleri düzelt' }).includes('fan-out task'), true);
+  check('workflow: explicit ultracode prompt gets no duplicate advisory', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf1', cwd: PROJECT_DIR, prompt: 'ultracode: audit every route handler under src/routes' }).includes('🧩'), false);
+  check('workflow: ordinary prompt gets no advisory', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf1', cwd: PROJECT_DIR, prompt: 'fix the null check in parser.go' }).includes('🧩'), false);
+  check('workflow: turkish fan-out prompt detected', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf1', cwd: PROJECT_DIR, prompt: 'tüm bileşen dosyalarını TypeScript\'a taşı ve testleri düzelt' }).includes('🧩'), true);
   const launch = acc.hook({ hook_event_name: 'PreToolUse', session_id: 'wf1', cwd: PROJECT_DIR, tool_name: 'Workflow', tool_input: { name: 'audit-routes', script_path: '/tmp/x/audit-routes.js' } });
   check('workflow: launch allowed under the thresholds and recorded', launch === '' && acc.state().workflows.wf1.length === 1 && acc.state().workflows.wf1[0].name === 'audit-routes', true);
   acc.statusline('wf1', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400, 30);
@@ -1770,7 +1783,7 @@ async function scenarioWorkflows(acc) {
   for (const used of [12, 20, 28, 36, 44, 52, 60, 67, 74, 80, 85, 88]) acc.statusline('wf2', 'claude-fable-5-1', used, now + 7200, 10, now + 3 * 86400, 30);
   const warnDenied = acc.hook({ hook_event_name: 'PreToolUse', session_id: 'wf2', cwd: PROJECT_DIR, tool_name: 'Workflow', tool_input: { name: 'big-run' } });
   check('workflow: launch denied inside the warn band', warnDenied.includes('"permissionDecision":"deny"') && warnDenied.includes('too close to the limit'), true);
-  check('workflow: fan-out prompt gets no advisory inside the warn band', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf2', cwd: PROJECT_DIR, prompt: 'Audit every route handler under src/routes for missing auth checks' }).includes('fan-out task'), false);
+  check('workflow: fan-out prompt gets no advisory inside the warn band', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf2', cwd: PROJECT_DIR, prompt: 'Audit every route handler under src/routes for missing auth checks' }).includes('🧩'), false);
   acc.setConfig((config) => {
     config.workflow.gate = false;
   });
@@ -1783,10 +1796,14 @@ async function scenarioWorkflows(acc) {
   acc.run(['queue', 'trust', '--file', queueFile]);
   acc.statusline('wf3', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
   const stop = acc.hook({ hook_event_name: 'Stop', session_id: 'wf3', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
-  check('workflow: fan-out queue item gets the advisory in the Stop directive', JSON.parse(stop).reason.includes('The next item looks like a fan-out task'), true);
+  const stopOutput = JSON.parse(stop);
+  check('workflow: a fan-out queue item is suggested to you, and the Stop directive does not tell Claude to start a workflow', stopOutput.decision === 'block' && String(stopOutput.systemMessage).startsWith('🧩') && String(stopOutput.systemMessage).includes('ultracode') && !String(stopOutput.reason).includes('ultracode'), true);
   fs.unlinkSync(queueFile);
   acc.hook({ hook_event_name: 'SessionEnd', session_id: 'wf1', reason: 'exit' });
   check('workflow: session end clears the launch record once nothing is pending', acc.state().workflows.wf1, undefined);
+  acc.setConfig((config) => {
+    config.workflow.suggest = false;
+  });
 }
 
 async function scenarioFirstRunEdges(acc) {

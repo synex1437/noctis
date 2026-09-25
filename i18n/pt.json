@@ -39,6 +39,8 @@
   "notice.noUsage": "%s: sem dados de uso (a statusLine está instalada? noctis doctor).",
   "notice.configError": "%s: config.json ilegível, usando os padrões.",
   "notice.routed": "🔀 Pesquisa encaminhada ao subagente %s; %s fica reservado para código.",
+  "notice.workflowPrompt": "🧩 Este pedido parece uma tarefa em leque (fan-out). Para a executar como workflow dinâmico, peça-o no seu próprio prompt com ultracode. Tamanho sugerido: %s. Modelos dos agentes: agentes que escrevem código → %s; agentes de análise e revisão só de leitura → %s; agentes de pesquisa e exploração → %s; execuções de testes e outras verificações ruidosas → %s.",
+  "notice.workflowQueue": "🧩 O próximo item parece uma tarefa em leque (fan-out). Para o executar como workflow dinâmico, peça-o no seu próprio prompt com ultracode. Tamanho sugerido: %s. Modelos dos agentes: agentes que escrevem código → %s; agentes de análise e revisão só de leitura → %s; agentes de pesquisa e exploração → %s; execuções de testes e outras verificações ruidosas → %s.",
   "notice.budget": "[noctis] daily budget reached: %s%% of the weekly quota used today (cap %s%%). Finish the current step; prefer lighter work.",
   "handoff.blocked": "⛔ Esta sessão está rodando em outra janela com %[2]s desde %[1]s; feche esta janela (forçar: noctis cancel %[3]s).",
   "selfcheck.settings": "settings.json ilegível",

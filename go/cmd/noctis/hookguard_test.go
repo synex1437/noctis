@@ -209,6 +209,15 @@ func contextOf(output object) string {
 	return getString(getMap(output, "hookSpecificOutput"), "additionalContext")
 }
 
+func fanOutNotice(output object) string {
+	for _, line := range strings.Split(getString(output, "systemMessage"), "\n") {
+		if strings.Contains(line, "fan-out task") {
+			return line
+		}
+	}
+	return ""
+}
+
 func reasonOf(output object) string {
 	return getString(getMap(output, "hookSpecificOutput"), "permissionDecisionReason")
 }
@@ -1218,28 +1227,28 @@ func TestTheFableSubagentFallbackFollowsObserveModeAndTheHost(t *testing.T) {
 }
 
 func TestTheFanOutAdviceSendsNoAgentToFableWhileTheFableQuotaIsOut(t *testing.T) {
-	cfg, project := retiredProfileSandbox(t, object{"workflow": object{"gate": false}}, 97)
-	advice := contextOf(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg))
+	cfg, project := retiredProfileSandbox(t, object{"workflow": object{"gate": false, "suggest": true}}, 97)
+	advice := fanOutNotice(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg))
 	if !strings.Contains(advice, "fan-out task") || !strings.Contains(advice, "code-writing agents → opus (effort max)") || strings.Contains(strings.ToLower(advice), "fable") {
 		t.Fatalf("with the Fable bucket at 97%% the fan-out advice still sends agents to Fable: %q", advice)
 	}
 	trustQueueFile(writeQueueFile(t, project, "# q\n- [ ] migrate every component under src/components to TypeScript\n- [ ] fix typo\n"), true)
-	reason := getString(hookOutput(t, onStop, stopInput("s1", project), cfg), "reason")
-	if !strings.Contains(reason, "The next item looks like a fan-out task") || !strings.Contains(reason, "code-writing agents → opus (effort max)") || strings.Contains(strings.ToLower(reason), "fable") {
-		t.Fatalf("with the Fable bucket at 97%% the queue's fan-out advice still sends agents to Fable: %q", reason)
+	notice := fanOutNotice(hookOutput(t, onStop, stopInput("s1", project), cfg))
+	if !strings.Contains(notice, "The next item looks like a fan-out task") || !strings.Contains(notice, "code-writing agents → opus (effort max)") || strings.Contains(strings.ToLower(notice), "fable") {
+		t.Fatalf("with the Fable bucket at 97%% the queue's fan-out advice still sends agents to Fable: %q", notice)
 	}
 	writeFableBucket(50, float64(nowSec()), float64(nowSec()+2*86400))
-	if advice := contextOf(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg)); !strings.Contains(advice, "code-writing agents → fable (effort max)") {
+	if advice := fanOutNotice(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg)); !strings.Contains(advice, "code-writing agents → fable (effort max)") {
 		t.Fatalf("with the Fable bucket at 50%% the fan-out advice no longer names the code role's model: %q", advice)
 	}
 }
 
 func TestNoWorkflowIsAdvisedThatTheLaunchGateWouldRefuse(t *testing.T) {
-	cfg, project := retiredProfileSandbox(t, nil, 80)
+	cfg, project := retiredProfileSandbox(t, object{"workflow": object{"suggest": true}}, 80)
 	workflow := func(toolInput object) object {
 		return agentHookInput("PreToolUse", "s1", project, object{"tool_name": "Workflow", "tool_input": toolInput})
 	}
-	if advice := contextOf(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg)); strings.Contains(advice, "fan-out task") {
+	if advice := fanOutNotice(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg)); strings.Contains(advice, "fan-out task") {
 		t.Fatalf("with 15 points of Fable room a workflow was advised that puts its code agents on Fable, which the launch gate refuses: %q", advice)
 	}
 	onFable := object{"script": strings.Replace(opusOnlyWorkflow, "model: 'opus'", "model: 'fable'", 1)}
@@ -1247,11 +1256,11 @@ func TestNoWorkflowIsAdvisedThatTheLaunchGateWouldRefuse(t *testing.T) {
 		t.Fatalf("the launch gate let a workflow with agents on Fable fan out with 15 points of Fable room: %v", output)
 	}
 	trustQueueFile(writeQueueFile(t, project, "# q\n- [ ] migrate every component under src/components to TypeScript\n- [ ] fix typo\n"), true)
-	if reason := getString(hookOutput(t, onStop, stopInput("s1", project), cfg), "reason"); !strings.Contains(reason, "Queue continues") || strings.Contains(reason, "fan-out task") {
-		t.Fatalf("with 15 points of Fable room the queue advised a workflow that the launch gate refuses: %q", reason)
+	if output := hookOutput(t, onStop, stopInput("s1", project), cfg); !strings.Contains(getString(output, "reason"), "Queue continues") || fanOutNotice(output) != "" {
+		t.Fatalf("with 15 points of Fable room the queue advised a workflow that the launch gate refuses: %v", output)
 	}
 	writeFableBucket(97, float64(nowSec()), float64(nowSec()+2*86400))
-	advice := contextOf(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg))
+	advice := fanOutNotice(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg))
 	if !strings.Contains(advice, "fan-out task") || !strings.Contains(advice, "code-writing agents → opus (effort max)") || strings.Contains(strings.ToLower(advice), "fable") {
 		t.Fatalf("with the Fable quota out every agent of the advice runs on Opus, so the Fable window has no say, and no such advice was given: %q", advice)
 	}
@@ -1261,11 +1270,11 @@ func TestNoWorkflowIsAdvisedThatTheLaunchGateWouldRefuse(t *testing.T) {
 	if output := hookOutput(t, onPreToolUse, workflow(object{"name": "audit-routes"}), cfg); permissionOf(output) != "deny" {
 		t.Fatalf("the launch gate let a workflow it cannot read, which may run on Fable, fan out with -2 points of Fable room: %v", output)
 	}
-	if reason := getString(hookOutput(t, onStop, stopInput("s1", project), cfg), "reason"); !strings.Contains(reason, "Queue continues") || !strings.Contains(reason, "code-writing agents → opus (effort max)") {
-		t.Fatalf("with the Fable quota out the queue gave no Opus workflow advice for its fan-out item: %q", reason)
+	if output := hookOutput(t, onStop, stopInput("s1", project), cfg); !strings.Contains(getString(output, "reason"), "Queue continues") || !strings.Contains(fanOutNotice(output), "code-writing agents → opus (effort max)") {
+		t.Fatalf("with the Fable quota out the queue gave no Opus workflow advice for its fan-out item: %v", output)
 	}
 	writeFableBucket(50, float64(nowSec()), float64(nowSec()+2*86400))
-	if advice := contextOf(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg)); !strings.Contains(advice, "fan-out task") {
+	if advice := fanOutNotice(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg)); !strings.Contains(advice, "fan-out task") {
 		t.Fatalf("with 45 points of Fable room the fan-out prompt got no workflow advice: %q", advice)
 	}
 }
