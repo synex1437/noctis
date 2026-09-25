@@ -345,36 +345,44 @@ func isAutoQueue(path string) bool {
 }
 
 func queueTrusted(cfg object, path string) bool {
-	trusted, _ := queueTrustGap(cfg, path)
+	trusted, _, _ := queueTrustGap(cfg, path)
 	return trusted
 }
 
-func queueTrustGap(cfg object, path string) (bool, []string) {
+func queueTrustGap(cfg object, path string) (bool, []string, bool) {
 	if isAutoQueue(path) || !getBool(section(cfg, "queue"), "requireTrust", true) {
-		return true, nil
+		return true, nil, false
 	}
 	record := getMap(getMap(readState(), "queueTrust"), queueTrustKey(path))
 	if numberOr(record, "at", 0) <= 0 {
-		return false, nil
+		return false, nil, false
 	}
-	known := map[string]bool{}
-	for _, digest := range getList(record, "items") {
-		if text, ok := digest.(string); ok {
-			known[text] = true
+	if getList(record, "lines") == nil || getList(record, "open") == nil {
+		return false, nil, true
+	}
+	lines, open := digestSet(getList(record, "lines")), digestSet(getList(record, "open"))
+	changed := []string{}
+	for _, unit := range queueTrustUnits(path) {
+		if !lines[unit.line] || unit.open != "" && !open[unit.open] {
+			changed = append(changed, unit.shown)
 		}
 	}
-	fresh := []string{}
-	for _, entry := range queueFileEntries(path) {
-		if !entry.checked && !known[queueItemDigest(entry.text)] {
-			fresh = append(fresh, entry.text)
+	return len(changed) == 0, changed, false
+}
+
+func digestSet(values []any) map[string]bool {
+	set := map[string]bool{}
+	for _, value := range values {
+		if digest, ok := value.(string); ok {
+			set[digest] = true
 		}
 	}
-	return len(fresh) == 0, fresh
+	return set
 }
 
 func queueItemDigest(text string) string {
 	sum := sha256.Sum256([]byte(strings.Join(strings.Fields(text), " ")))
-	return hex.EncodeToString(sum[:8])
+	return hex.EncodeToString(sum[:16])
 }
 
 func queueFileEntries(path string) []queueEntry {
@@ -386,18 +394,61 @@ func queueFileEntries(path string) []queueEntry {
 	return entries
 }
 
+type queueTrustUnit struct {
+	line, open, shown string
+}
+
+func queueTrustUnits(path string) []queueTrustUnit {
+	content, ok := readQueueText(path)
+	if !ok {
+		return nil
+	}
+	entries, plain := parseQueueEntries(content)
+	starts, covered := map[int]queueEntry{}, map[int]bool{}
+	for _, entry := range entries {
+		starts[entry.first] = entry
+		for index := entry.first; index <= entry.last; index++ {
+			covered[index] = true
+		}
+	}
+	units := []queueTrustUnit{}
+	for index, line := range strings.Split(strings.TrimPrefix(content, "\uFEFF"), "\n") {
+		if entry, ok := starts[index]; ok {
+			head, _, _ := queueLineParts(line)
+			if plain {
+				head, _, _ = queueBulletParts(line)
+			}
+			core := strings.Join(strings.Fields(queueUndone(head)+strings.TrimPrefix(entry.text, head)), " ")
+			unit := queueTrustUnit{line: queueItemDigest("- [ ] " + core), shown: "- [x] " + core}
+			if !entry.checked {
+				text := strings.Join(strings.Fields(entry.text), " ")
+				unit.open, unit.shown = queueItemDigest(text), "- [ ] "+text
+			}
+			units = append(units, unit)
+		} else if text := strings.Join(strings.Fields(line), " "); text != "" && !covered[index] {
+			units = append(units, queueTrustUnit{line: queueItemDigest(text), shown: text})
+		}
+	}
+	return units
+}
+
 func queueTrustKey(path string) string {
 	return safeName(filepath.Base(path)) + "-" + hashKey(path)
 }
 
 func trustQueueFile(path string, trusted bool) {
 	key := queueTrustKey(path)
-	digests, seen := []any{}, map[string]bool{}
+	lines, open := []any{}, []any{}
 	if trusted {
-		for _, entry := range queueFileEntries(path) {
-			if digest := queueItemDigest(entry.text); !seen[digest] {
-				seen[digest] = true
-				digests = append(digests, digest)
+		seenLines, seenOpen := map[string]bool{}, map[string]bool{}
+		for _, unit := range queueTrustUnits(path) {
+			if !seenLines[unit.line] {
+				seenLines[unit.line] = true
+				lines = append(lines, unit.line)
+			}
+			if unit.open != "" && !seenOpen[unit.open] {
+				seenOpen[unit.open] = true
+				open = append(open, unit.open)
 			}
 		}
 	}
@@ -405,7 +456,7 @@ func trustQueueFile(path string, trusted bool) {
 		records := stateMap(next, "queueTrust")
 		if trusted {
 			now := float64(nowSec())
-			records[key] = object{"at": now, "used": now, "path": path, "items": digests}
+			records[key] = object{"at": now, "used": now, "path": path, "lines": lines, "open": open}
 			return
 		}
 		delete(records, key)

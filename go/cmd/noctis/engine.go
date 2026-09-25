@@ -28,6 +28,7 @@ var (
 
 	queueBulletPattern = lazyRegexp(`^\s*(?:` + bulletMarker + `|\(?\d+[.)])\s+(\S.*)$`)
 	queueDoneMarker    = lazyRegexp(`(?i)^~~.*~~$|^\s*(?:✓|✔|\[done\]|\(done\)|\(tamam\)|\(bitti\))|(?:\(done\)|\(tamam\)|\(bitti\)|✓|✔)\s*$`)
+	queueDoneAffix     = lazyRegexp(`(?i)^\s*(?:✓|✔|\[done\]|\(done\)|\(tamam\)|\(bitti\))|(?:\(done\)|\(tamam\)|\(bitti\)|✓|✔)\s*$`)
 	queueHeading       = lazyRegexp(`^\s*#{1,6}\s`)
 	queuePriority      = lazyRegexp(`(?i)\(p([0-9])\)`)
 	queueAfter         = lazyRegexp(`(?i)\(after\s+([^)]+)\)`)
@@ -305,13 +306,14 @@ func parseQueueEntries(content string) ([]queueEntry, bool) {
 		}
 	}
 	type draft struct {
-		checked bool
-		text    strings.Builder
+		checked     bool
+		text        strings.Builder
+		first, last int
 	}
 	drafts := []*draft{}
 	open := false
 	fenced = false
-	for _, line := range lines {
+	for index, line := range lines {
 		if queueFence(line) {
 			fenced, open = !fenced, false
 			continue
@@ -329,7 +331,7 @@ func parseQueueEntries(content string) ([]queueEntry, bool) {
 		}
 		switch {
 		case ok:
-			item := &draft{checked: checked}
+			item := &draft{checked: checked, first: index, last: index}
 			item.text.WriteString(text)
 			drafts = append(drafts, item)
 			open = true
@@ -342,22 +344,26 @@ func parseQueueEntries(content string) ([]queueEntry, bool) {
 			last := drafts[len(drafts)-1]
 			last.text.WriteByte(' ')
 			last.text.WriteString(trimmed)
+			last.last = index
 		}
 	}
 	entries := make([]queueEntry, 0, len(drafts))
 	for index, item := range drafts {
-		entries = append(entries, newQueueEntry(index+1, item.text.String(), item.checked))
+		entry := newQueueEntry(index+1, item.text.String(), item.checked)
+		entry.first, entry.last = item.first, item.last
+		entries = append(entries, entry)
 	}
 	return entries, !hasBoxes && len(entries) > 0
 }
 
 type queueEntry struct {
-	ordinal  int
-	text     string
-	checked  bool
-	priority int
-	tags     map[string]bool
-	after    []string
+	ordinal     int
+	text        string
+	checked     bool
+	priority    int
+	tags        map[string]bool
+	after       []string
+	first, last int
 }
 
 func queueFence(line string) bool {
@@ -380,6 +386,19 @@ func queueBulletParts(line string) (text string, checked, ok bool) {
 	}
 	text = strings.TrimSpace(match[1])
 	return text, queueDoneMarker.MatchString(text), true
+}
+
+func queueUndone(text string) string {
+	for {
+		next := strings.TrimSpace(queueDoneAffix.ReplaceAllString(text, ""))
+		if len(next) >= 4 && strings.HasPrefix(next, "~~") && strings.HasSuffix(next, "~~") {
+			next = strings.TrimSpace(next[2 : len(next)-2])
+		}
+		if next == text {
+			return text
+		}
+		text = next
+	}
 }
 
 func parseQueueLine(line string, ordinal int) (queueEntry, bool) {

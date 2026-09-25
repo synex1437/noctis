@@ -211,14 +211,19 @@ func onSessionStart(input, cfg object) {
 	}
 	if queuePath := sessionQueueFile(cfg, sid, queueDirs(input)...); queuePath != "" {
 		snapshot := queueSnapshot(queuePath)
-		if trusted, fresh := queueTrustGap(cfg, queuePath); !trusted {
+		if trusted, changed, legacy := queueTrustGap(cfg, queuePath); !trusted {
 
-			if len(fresh) > 0 {
-				queueNotice = T("queue.trustChanged", filepath.Base(queuePath), len(fresh), pluginName)
-			} else if snapshot.total > 0 {
-				queueNotice = T("queue.trustAsk", filepath.Base(queuePath), snapshot.total, pluginName)
+			if snapshot.total > 0 {
+				switch {
+				case legacy:
+					queueNotice = T("queue.trustLegacy", filepath.Base(queuePath), pluginName)
+				case len(changed) > 0:
+					queueNotice = T("queue.trustChanged", filepath.Base(queuePath), len(changed), pluginName)
+				default:
+					queueNotice = T("queue.trustAsk", filepath.Base(queuePath), snapshot.total, pluginName)
+				}
 			}
-			logInfo("queue file %s found but not trusted (%d open, %d added or changed since a trust): no directive injected", queuePath, snapshot.total, len(fresh))
+			logInfo("queue file %s found but not trusted (%d open, %d added or changed since a trust, record from an older noctis: %t): no directive injected", queuePath, snapshot.total, len(changed), legacy)
 		} else if queueHeld(cfg, state, queuePath) {
 			logInfo("queue file %s held until %q passes: no directive injected", queuePath, queueCheckCommand(cfg))
 		} else {
@@ -1220,18 +1225,22 @@ func allowFileRequest(sid, tool, path, action, role string) {
 	emit(object{"hookSpecificOutput": object{"hookEventName": "PermissionRequest", "decision": object{"behavior": "allow"}}})
 }
 
-func noteQueueTrustGap(sid, queuePath string, fresh []string, now int64) {
-	key := "queue:trustgap:" + queueTrustKey(queuePath) + ":" + queueItemDigest(strings.Join(fresh, "\n"))
+func noteQueueTrustGap(sid, queuePath string, changed []string, legacy bool, now int64) {
+	mark, notice := queueItemDigest(strings.Join(changed, "\n")), T("queue.trustChanged", filepath.Base(queuePath), len(changed), pluginName)
+	if legacy {
+		mark, notice = "legacy", T("queue.trustLegacy", filepath.Base(queuePath), pluginName)
+	}
+	key := "queue:trustgap:" + queueTrustKey(queuePath) + ":" + mark
 	if getMap(readState(), "notified")[key] != nil {
 		return
 	}
 	updateState(func(next object) { stateMap(next, "notified")[key] = float64(now) })
-	journal(sid, "Stop", "allow-stop", "queue items not trusted", object{"new": len(fresh)})
-	logInfo("queue file %s has %d item(s) added or changed since its trust; not driving %s", queuePath, len(fresh), sid)
+	journal(sid, "Stop", "allow-stop", "queue file not trusted", object{"new": len(changed), "legacy": legacy})
+	logInfo("queue file %s has %d item(s) or line(s) added or changed since its trust (record from an older noctis: %t); not driving %s", queuePath, len(changed), legacy, sid)
 	if observing {
 		return
 	}
-	emit(object{"systemMessage": T("queue.trustChanged", filepath.Base(queuePath), len(fresh), pluginName)})
+	emit(object{"systemMessage": notice})
 }
 
 func onStop(input, cfg object) {
@@ -1253,9 +1262,9 @@ func onStop(input, cfg object) {
 	if queuePath == "" {
 		return
 	}
-	if trusted, fresh := queueTrustGap(cfg, queuePath); !trusted {
-		if len(fresh) > 0 {
-			noteQueueTrustGap(sid, queuePath, fresh, now)
+	if trusted, changed, legacy := queueTrustGap(cfg, queuePath); !trusted {
+		if (legacy || len(changed) > 0) && queueSnapshot(queuePath).total > 0 {
+			noteQueueTrustGap(sid, queuePath, changed, legacy, now)
 		}
 		return
 	}

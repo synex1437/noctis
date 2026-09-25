@@ -177,13 +177,20 @@ func runQueueTrust(cfg object, cwd, action string) {
 		fmt.Println(T("queue.trustRevoked", target))
 	default:
 		view := queueSnapshot(target)
-		switch trusted, fresh := queueTrustGap(cfg, target); {
+		trusted, changed, legacy := queueTrustGap(cfg, target)
+		switch {
 		case trusted:
 			fmt.Println(T("queue.trustGranted", target))
-		case len(fresh) > 0:
-			fmt.Println(T("queue.trustChanged", filepath.Base(target), len(fresh), pluginName))
-			for _, text := range fresh {
-				fmt.Println("  - [ ] " + printableItem(text))
+		case legacy:
+			fmt.Println(T("queue.trustLegacy", filepath.Base(target), pluginName))
+		case len(changed) > 0:
+			fmt.Println(T("queue.trustChanged", filepath.Base(target), len(changed), pluginName))
+			shown := map[string]bool{}
+			for _, text := range changed {
+				if line := printableItem(text); !shown[line] {
+					shown[line] = true
+					fmt.Println("  " + line)
+				}
 			}
 		default:
 			fmt.Println(T("queue.trustAsk", filepath.Base(target), view.total, pluginName))
@@ -194,7 +201,7 @@ func runQueueTrust(cfg object, cwd, action string) {
 
 func printableItem(text string) string {
 	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
 			return -1
 		}
 		return r
@@ -377,8 +384,10 @@ func runQueue() {
 		fmt.Println(T("queue.importSkipped", skipped, strings.Join(others, ", "), named))
 	}
 	if absolute, err := filepath.Abs(target); err == nil {
-		if trusted, fresh := queueTrustGap(cfg, absolute); !trusted && len(fresh) > 0 {
-			fmt.Println(T("queue.importTrust", len(fresh), filepath.Base(target)))
+		if trusted, changed, legacy := queueTrustGap(cfg, absolute); legacy {
+			fmt.Println(T("queue.trustLegacy", filepath.Base(target), pluginName))
+		} else if !trusted && len(changed) > 0 {
+			fmt.Println(T("queue.importTrust", len(changed), filepath.Base(target)))
 		}
 	}
 }
