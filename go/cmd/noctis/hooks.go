@@ -173,7 +173,7 @@ func queueDirective(cfg object, queuePath string, total int) string {
 
 func alreadyOverNotice(wait *waitPlan) string {
 	notice := T("session.alreadyOver", wait.label, formatNumber(wait.used), formatTime(wait.until)) + pauseWhy(wait)
-	if wait.hit != "ceiling" {
+	if pauseHonoured(wait) {
 		notice += T("session.pauseHint")
 	}
 	return notice
