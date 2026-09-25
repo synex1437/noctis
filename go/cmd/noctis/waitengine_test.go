@@ -1990,3 +1990,74 @@ func TestAnUpdatedRunnerLauncherIsSwappedInNotRewrittenUnderATaskReadingIt(t *te
 		}
 	}
 }
+
+func TestPausingKeepsEveryWaitAndNamesTheOnesThatStillResumeOnTheirOwn(t *testing.T) {
+	recorded := sandboxSystemd(t, object{})
+	cfg := sharedWaitConfig()
+	project, elsewhere := t.TempDir(), t.TempDir()
+	parked, held, second, relaunching := "1a2b3c4d-parked", "9f8e7d6c-held", "5e6f7a8b-second", "2b3c4d5e-relaunching"
+	weeklyUntil := float64(nowSec() + 3*86400)
+	park := func(sid string) string {
+		updateState(func(state object) {
+			wait := liveWait(3 * 86400)
+			wait["kind"], wait["window"], wait["label"], wait["cwd"], wait["queuedPrompt"], wait["permissionMode"] = "prompt", "seven_day", "weekly", project, "drop the old tables", "auto"
+			wait["until"], wait["resumeAt"] = weeklyUntil, weeklyUntil
+			stateMap(state, "waits")[sid] = wait
+		})
+		return getString(scheduleRunner(cfg, sid, weeklyUntil), "unit")
+	}
+	pause := func() string {
+		code := 0
+		stdout := capturedStdout(t, func() { code = pauseGuard("120") })
+		if code != 0 || numberOr(readState(), "disabledUntil", 0) <= float64(nowSec()) {
+			t.Fatalf("off 120 did not pause the guard (exit %d):\n%s", code, stdout)
+		}
+		return stdout
+	}
+	unit := park(parked)
+	until := float64(nowSec() + 6)
+	holding := pauseAside("prompt", held, elsewhere, cfg, fiveHourPlan(until))
+	if storedWaitOf(t, held) == nil {
+		t.Fatal("the prompt held in its hook was never stored with its runner")
+	}
+	armed := len(*recorded)
+
+	stdout := pause()
+	result := <-holding
+
+	if !strings.Contains(stdout, project) || !strings.Contains(stdout, formatTime(weeklyUntil)) || !strings.Contains(stdout, "noctis cancel --sid "+shortSid(parked)) {
+		t.Fatalf("the pause does not name the parked prompt that still relaunches on its own, its resume time and the command that cancels it:\n%s", stdout)
+	}
+	if strings.Contains(stdout, shortSid(held)) || strings.Contains(stdout, elsewhere) || strings.Contains(stdout, T("off.cancelAll")) {
+		t.Fatalf("the pause offers to cancel the prompt its hook is holding, which noctis cancel would let run at once:\n%s", stdout)
+	}
+	if want := T("wait.resumed", "5h", formatNumber(95), durationText(0)); result.outcome.stop != "" || result.outcome.notice != want || float64(result.at) < until {
+		t.Fatalf("the prompt held in its hook was let go %ds before the 5h reset with %+v, want only the notice %q at the reset", int64(until)-result.at, result.outcome, want)
+	}
+	if stored := getMap(getMap(readState(), "waits"), parked); getString(getMap(stored, "scheduled"), "unit") != unit {
+		t.Fatalf("the pause dropped the parked prompt or its relaunch: %v", stored)
+	}
+	for _, target := range systemctlStops((*recorded)[armed:]) {
+		if strings.HasPrefix(target, unit) {
+			t.Fatalf("the pause stopped the relaunch timer of the parked prompt: %s", target)
+		}
+	}
+
+	park(second)
+	if stdout := pause(); !strings.Contains(stdout, "noctis cancel --sid "+shortSid(parked)) || !strings.Contains(stdout, "noctis cancel --sid "+shortSid(second)) || !strings.Contains(stdout, T("off.cancelAll")) {
+		t.Fatalf("with two parked prompts and nothing else pending the pause does not name both and the command that cancels them all:\n%s", stdout)
+	}
+
+	updateState(func(state object) {
+		wait := liveWait(60)
+		wait["cwd"] = elsewhere
+		stateMap(state, "waits")[relaunching] = wait
+		stateMap(state, "handedOff")[relaunching] = object{"at": float64(nowSec()), "model": "opus", "pid": float64(os.Getpid())}
+	})
+	if stdout := pause(); strings.Contains(stdout, shortSid(relaunching)) || strings.Contains(stdout, T("off.cancelAll")) || !strings.Contains(stdout, "noctis cancel --sid "+shortSid(second)) {
+		t.Fatalf("the pause lists a relaunch that is already under way, or offers to cancel everything past it:\n%s", stdout)
+	}
+	if waits := getMap(readState(), "waits"); len(waits) != 3 {
+		t.Fatalf("the pause removed waits: %v", waits)
+	}
+}
