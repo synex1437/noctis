@@ -1454,6 +1454,13 @@ func onStop(input, cfg object) {
 	snapshot := queueSnapshotOf(queuePath, content)
 	syncDoneIssues(cfg, queuePath, content, getString(input, "cwd"))
 	if snapshot.total == 0 {
+		if queueHeldBack(cfg, state, sid, queuePath) {
+			return
+		}
+		if gated := gateQueue(cfg, input, sid, queuePath, content, queueLabel, now); gated != nil {
+			emit(gated)
+			return
+		}
 		driven := getMap(getMap(state, "stopGuard"), sid) != nil || isAutoQueue(queuePath)
 		updateState(func(next object) { delete(stateMap(next, "stopGuard"), sid) })
 		if isAutoQueue(queuePath) {

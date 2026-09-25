@@ -549,6 +549,7 @@ func syncDoneIssues(cfg object, queuePath, content, cwd string) {
 	updateState(func(state object) {
 		now := float64(nowSec())
 		seen := stateMap(state, "githubSeen")
+		unchecked := queueUncheckedIssues(cfg, state, queuePath, content)
 		for _, ref := range sortedKeys(checked) {
 			key := prefix + ref
 			if open[ref] {
@@ -559,6 +560,8 @@ func syncDoneIssues(cfg object, queuePath, content, cwd string) {
 			switch {
 			case record == nil:
 				seen[key] = object{"status": "closed", "at": now}
+			case unchecked[ref]:
+				continue
 			case status == "open" || status == "closing" && now-numberOr(record, "at", 0) > closeClaimSeconds:
 				if !checked[ref].trustedHost() {
 					record["status"], record["at"] = "skipped", now
