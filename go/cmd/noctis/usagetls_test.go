@@ -31,7 +31,7 @@ func TestTheUsageRequestOffersPostQuantumKeyExchangeAndNo3DES(t *testing.T) {
 	defer server.Close()
 	t.Setenv("NOCTIS_USAGE_URL", server.URL+"/api/oauth/usage")
 
-	fetchOauthUsage("test-token", "2.1.0")
+	fetchOauthUsage("test-token")
 	var got hello
 	select {
 	case got = <-hellos:
