@@ -212,9 +212,10 @@ func printUnmatchedReferences(target string, view queueView) {
 	if len(view.unmatched) == 0 {
 		return
 	}
-	list := printableItem(strings.Join(view.unmatched, ", "))
-	if view.unmatchedMore > 0 {
-		list = T("queue.unmatchedMore", list, view.unmatchedMore)
+	listed := view.unmatched[:min(len(view.unmatched), queueUnmatchedKept)]
+	list := printableItem(strings.Join(shortReferences(listed), ", "))
+	if more := len(view.unmatched) - len(listed) + view.unmatchedMore; more > 0 {
+		list = T("queue.unmatchedMore", list, more)
 	}
 	fmt.Println(T("queue.unmatched", filepath.Base(target), list))
 }

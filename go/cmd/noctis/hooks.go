@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1397,14 +1396,20 @@ func onStop(input, cfg object) {
 	if observed(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), nil) {
 		return
 	}
-	told, unmatched := getList(guard, "unmatched"), []string{}
+	told := map[string]bool{}
+	for _, digest := range getList(guard, "unmatched") {
+		told[fmt.Sprint(digest)] = true
+	}
+	unmatched, digests := []string{}, []any{}
 	for _, reference := range snapshot.unmatched {
-		if !slices.ContainsFunc(told, func(named any) bool { return strings.EqualFold(fmt.Sprint(named), reference) }) {
+		digest := referenceDigest(reference)
+		digests = append(digests, digest)
+		if !told[digest] {
 			unmatched = append(unmatched, reference)
 		}
 	}
-	if len(snapshot.unmatched) > 0 {
-		guard["unmatched"] = toAnyList(snapshot.unmatched)
+	if len(digests) > 0 {
+		guard["unmatched"] = digests
 	} else {
 		delete(guard, "unmatched")
 	}
@@ -1434,8 +1439,8 @@ func onStop(input, cfg object) {
 	}
 	unmatchedNotice := ""
 	if len(unmatched) > 0 {
-		shown := unmatched[:min(len(unmatched), queueUnmatchedNamed)]
-		list, more := strings.Join(shown, ", "), len(unmatched)-len(shown)+snapshot.unmatchedMore
+		shown := shortReferences(unmatched[:min(len(unmatched), queueUnmatchedNamed)])
+		list, more := strings.Join(shown, ", "), len(unmatched)-len(shown)
 		note, notice := list, list
 		if more > 0 {
 			note, notice = fmt.Sprintf("%s and %d more", list, more), T("queue.unmatchedMore", list, more)
