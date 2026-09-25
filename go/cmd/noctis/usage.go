@@ -180,6 +180,10 @@ func historySamples(history []any, resetsAt float64, keep func(object) bool) []o
 		if keep != nil && !keep(sample) {
 			continue
 		}
+		if last := len(samples) - 1; last >= 0 && numberOr(samples[last], "at", 0) == numberOr(sample, "at", 0) {
+			samples[last] = sample
+			continue
+		}
 		samples = append(samples, sample)
 	}
 	return samples
