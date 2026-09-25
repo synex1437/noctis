@@ -22,9 +22,9 @@ func leanRecordOf(t *testing.T, account string) object {
 func TestSetupTurnsOnClaudeCodesFunctionHooksForLeanCompactionAndRecordsIt(t *testing.T) {
 	box := newCLIBox(t)
 
-	run := box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep")
+	run := box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep")
 
-	box.configured(t, run, box.account, "economy")
+	box.configured(t, run, box.account, "balanced")
 	if value, _ := leanSwitchOf(t, box.account); value != "1" {
 		t.Fatalf("setup left env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS at %q, want 1:\n%s", value, run)
 	}
@@ -55,9 +55,9 @@ func TestSetupLeavesAFunctionHooksSwitchItDidNotWrite(t *testing.T) {
 		getMap(settings, "env")["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] = own
 		cliWrite(t, filepath.Join(box.account, "settings.json"), marshalPretty(settings))
 
-		run := box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep")
+		run := box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep")
 
-		box.configured(t, run, box.account, "economy")
+		box.configured(t, run, box.account, "balanced")
 		if value, _ := leanSwitchOf(t, box.account); value != own {
 			t.Fatalf("setup changed a switch the person set to %q into %q:\n%s", own, value, run)
 		}
@@ -73,12 +73,12 @@ func TestSetupLeavesAFunctionHooksSwitchItDidNotWrite(t *testing.T) {
 
 func TestSetupWithNoLeanTurnsLeanCompactionOffAndTakesBackOnlyItsOwnSwitch(t *testing.T) {
 	box := newCLIBox(t)
-	first := box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep")
-	box.configured(t, first, box.account, "economy")
+	first := box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep")
+	box.configured(t, first, box.account, "balanced")
 
-	run := box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep", "--no-lean")
+	run := box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep", "--no-lean")
 
-	box.configured(t, run, box.account, "economy")
+	box.configured(t, run, box.account, "balanced")
 	if value, present := leanSwitchOf(t, box.account); present {
 		t.Fatalf("--no-lean left the switch setup wrote at %q:\n%s", value, run)
 	}
@@ -89,9 +89,9 @@ func TestSetupWithNoLeanTurnsLeanCompactionOffAndTakesBackOnlyItsOwnSwitch(t *te
 		t.Fatalf("--no-lean left compaction.lean at %v:\n%s", lean, run)
 	}
 
-	again := box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep")
+	again := box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep")
 
-	box.configured(t, again, box.account, "economy")
+	box.configured(t, again, box.account, "balanced")
 	if value, present := leanSwitchOf(t, box.account); present {
 		t.Fatalf("a later setup turned the switch back on (%q) after --no-lean:\n%s", value, again)
 	}
@@ -103,9 +103,9 @@ func TestSetupWithNoLeanLeavesAPersonsOwnSwitch(t *testing.T) {
 	getMap(settings, "env")["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] = "1"
 	cliWrite(t, filepath.Join(box.account, "settings.json"), marshalPretty(settings))
 
-	run := box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep", "--no-lean")
+	run := box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep", "--no-lean")
 
-	box.configured(t, run, box.account, "economy")
+	box.configured(t, run, box.account, "balanced")
 	if value, _ := leanSwitchOf(t, box.account); value != "1" {
 		t.Fatalf("--no-lean removed a switch the person set (now %q):\n%s", value, run)
 	}

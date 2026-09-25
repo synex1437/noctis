@@ -278,7 +278,7 @@ func TestAProfileSwitchLeavesThePermissionModeTheUserChose(t *testing.T) {
 	cliWrite(t, settingsFile, []byte(`{"permissions": {"defaultMode": "plan"}}`))
 	env := cliAccountEnv(root, account)
 
-	first := runNoctisCLI(t, env, "setup", "--config-dir", account, "--profile", "noctis")
+	first := runNoctisCLI(t, env, "setup", "--config-dir", account, "--profile", "synex")
 	if mode, _ := recordValue(readJSON(settingsFile), "permissions", "defaultMode"); first.code != 0 || mode != "auto" {
 		t.Fatalf("the first setup should switch to auto, got %q:\n%s", mode, first)
 	}
@@ -286,17 +286,17 @@ func TestAProfileSwitchLeavesThePermissionModeTheUserChose(t *testing.T) {
 	getMap(settings, "permissions")["defaultMode"] = "default"
 	mustWriteJSON(settingsFile, settings)
 
-	economy := runNoctisCLI(t, env, "setup", "--config-dir", account, "--profile", "economy")
+	balanced := runNoctisCLI(t, env, "setup", "--config-dir", account, "--profile", "balanced")
 
 	settings = readJSON(settingsFile)
-	if mode, _ := recordValue(settings, "permissions", "defaultMode"); economy.code != 0 || mode != "default" {
-		t.Fatalf("the user set defaultMode back to default after setup; a profile switch made it %q:\n%s", mode, economy)
+	if mode, _ := recordValue(settings, "permissions", "defaultMode"); balanced.code != 0 || mode != "default" {
+		t.Fatalf("the user set defaultMode back to default after setup; a profile switch made it %q:\n%s", mode, balanced)
 	}
-	if effort, _ := recordValue(settings, "env", "CLAUDE_CODE_EFFORT_LEVEL"); effort != "low" {
-		t.Fatalf("the profile switch did not set the economy effort: %q", effort)
+	if effort, _ := recordValue(settings, "env", "CLAUDE_CODE_EFFORT_LEVEL"); effort != "high" {
+		t.Fatalf("the profile switch did not set the Balanced effort: %q", effort)
 	}
 
-	switched := runNoctisCLI(t, env, "setup", "--config-dir", account, "--profile", "economy", "--permissions", "auto")
+	switched := runNoctisCLI(t, env, "setup", "--config-dir", account, "--profile", "balanced", "--permissions", "auto")
 	if mode, _ := recordValue(readJSON(settingsFile), "permissions", "defaultMode"); switched.code != 0 || mode != "auto" {
 		t.Fatalf("--permissions auto should still switch the mode, got %q:\n%s", mode, switched)
 	}

@@ -1461,20 +1461,20 @@ async function scenarioMarketplaceBootstrap(acc) {
   const rolesDir = path.join(LAB_ROOT, 'roles-account');
   fs.mkdirSync(rolesDir, { recursive: true });
   writeJson(path.join(rolesDir, 'settings.json'), {});
-  const economy = spawnSync(shipped, ['setup', '--config-dir', rolesDir, '--profile', 'economy'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
-  const economyConfig = readJson(path.join(rolesDir, PLUGIN_NAME, 'config.json'));
-  check('roles: profile flag sets the roles and the working keys', economy.status === 0 && economyConfig.roles.profile === 'economy' && economyConfig.models.primary === 'opus' && economyConfig.models.effort === 'low' && economyConfig.models.fallback === 'opus' && economyConfig.router.subagentModels.Plan === 'opus', true);
-  check('roles: settings.json follows the code role', readJson(path.join(rolesDir, 'settings.json')).model === 'opus' && readJson(path.join(rolesDir, 'settings.json')).env.CLAUDE_CODE_EFFORT_LEVEL === 'low', true);
+  const coding = spawnSync(shipped, ['setup', '--config-dir', rolesDir, '--profile', 'Code'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
+  const codingConfig = readJson(path.join(rolesDir, PLUGIN_NAME, 'config.json'));
+  check('roles: profile flag sets the roles and the working keys', coding.status === 0 && codingConfig.roles.profile === 'code' && codingConfig.models.primary === 'opus' && codingConfig.models.effort === 'xhigh' && codingConfig.models.fallback === 'opus' && codingConfig.router.subagentModels.Plan === 'opus', true);
+  check('roles: settings.json follows the code role', readJson(path.join(rolesDir, 'settings.json')).model === 'opus' && readJson(path.join(rolesDir, 'settings.json')).env.CLAUDE_CODE_EFFORT_LEVEL === 'xhigh', true);
   const lite = fs.readFileSync(path.join(root, 'agents', 'lite.md'), 'utf8');
   const digest = fs.readFileSync(path.join(root, 'agents', 'digest.md'), 'utf8');
-  check('roles: plugin agents rewritten from the profile', /^model: sonnet$/m.test(lite) && /^effort: high$/m.test(lite) && /^model: haiku$/m.test(digest) && !/^effort:/m.test(digest) && lite.split('---').length === 3, true);
+  check('roles: plugin agents rewritten from the profile', /^model: opus$/m.test(lite) && /^effort: high$/m.test(lite) && /^model: haiku$/m.test(digest) && !/^effort:/m.test(digest) && lite.split('---').length === 3, true);
   check('setup: permissions.defaultMode=auto when the CLI supports it', readJson(path.join(rolesDir, 'settings.json')).permissions.defaultMode === 'auto' && readJson(path.join(rolesDir, PLUGIN_NAME, 'config.json')).managedPermissionMode === 'auto', true);
   const keepDir = path.join(LAB_ROOT, 'keep-account');
   fs.mkdirSync(keepDir, { recursive: true });
   writeJson(path.join(keepDir, 'settings.json'), { permissions: { defaultMode: 'plan', allow: ['Bash(npm test)'] } });
-  spawnSync(shipped, ['setup', '--config-dir', keepDir, '--profile', 'noctis', '--permissions', 'keep'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
+  spawnSync(shipped, ['setup', '--config-dir', keepDir, '--profile', 'synex', '--permissions', 'keep'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
   check('setup: --permissions keep leaves the user permissions alone', readJson(path.join(keepDir, 'settings.json')).permissions.defaultMode === 'plan' && readJson(path.join(keepDir, 'settings.json')).permissions.allow.length === 1, true);
-  spawnSync(shipped, ['setup', '--config-dir', keepDir, '--profile', 'noctis', '--permissions', 'acceptEdits'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
+  spawnSync(shipped, ['setup', '--config-dir', keepDir, '--profile', 'synex', '--permissions', 'acceptEdits'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
   check('setup: --permissions acceptEdits pins the milder mode and keeps allow rules', readJson(path.join(keepDir, 'settings.json')).permissions.defaultMode === 'acceptEdits' && readJson(path.join(keepDir, 'settings.json')).permissions.allow.length === 1, true);
   spawnSync(shipped, ['install', '--source', root, '--config-dir', keepDir, '--uninstall'], { encoding: 'utf8', env });
   check('uninstall: restores the permission mode the person had before setup', readJson(path.join(keepDir, 'settings.json')).permissions.defaultMode === 'plan' && readJson(path.join(keepDir, 'settings.json')).permissions.allow.length === 1, true);
@@ -1495,21 +1495,22 @@ async function scenarioMarketplaceBootstrap(acc) {
   const haikuConfig = readJson(path.join(rolesDir, PLUGIN_NAME, 'config.json'));
   check('roles: an effort for a model that takes none is named and not stored', haikuRun.status === 0 && haikuRun.stdout.includes('effort seviyesi almaz') && haikuConfig.roles.digest.model === 'haiku' && haikuConfig.roles.digest.effort === undefined && !/^effort:/m.test(fs.readFileSync(path.join(root, 'agents', 'digest.md'), 'utf8')), true);
   spawnSync(shipped, ['setup', '--config-dir', rolesDir, '--profile', 'noctis'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
-  check('roles: back to noctis restores the agents', /^model: opus$/m.test(fs.readFileSync(path.join(root, 'agents', 'lite.md'), 'utf8')) && /^effort: xhigh$/m.test(fs.readFileSync(path.join(root, 'agents', 'lite.md'), 'utf8')) && !/^effort:/m.test(fs.readFileSync(path.join(root, 'agents', 'digest.md'), 'utf8')), true);
+  check('roles: --profile noctis, the earlier name, sets SYNEX', readJson(path.join(rolesDir, PLUGIN_NAME, 'config.json')).roles.profile, 'synex');
+  check('roles: back to SYNEX restores the agents', /^model: opus$/m.test(fs.readFileSync(path.join(root, 'agents', 'lite.md'), 'utf8')) && /^effort: xhigh$/m.test(fs.readFileSync(path.join(root, 'agents', 'lite.md'), 'utf8')) && !/^effort:/m.test(fs.readFileSync(path.join(root, 'agents', 'digest.md'), 'utf8')), true);
   const switchDir = path.join(LAB_ROOT, 'switch-account');
   fs.mkdirSync(switchDir, { recursive: true });
   writeJson(path.join(switchDir, 'settings.json'), {});
   spawnSync(shipped, ['setup', '--config-dir', switchDir, '--code', 'fable:max', '--fallback', 'opus:max'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
   const setOnFable = readJson(path.join(switchDir, 'settings.json')).model;
-  spawnSync(shipped, ['setup', '--config-dir', switchDir, '--profile', 'economy'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
+  spawnSync(shipped, ['setup', '--config-dir', switchDir, '--profile', 'balanced'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
   const afterSwitch = readJson(path.join(switchDir, 'settings.json'));
-  check('roles: a profile switch replaces the model setup itself wrote', setOnFable === 'fable' && afterSwitch.model === 'opus' && afterSwitch.env.CLAUDE_CODE_EFFORT_LEVEL === 'low', true);
+  check('roles: a profile switch replaces the model setup itself wrote', setOnFable === 'fable' && afterSwitch.model === 'opus' && afterSwitch.env.CLAUDE_CODE_EFFORT_LEVEL === 'high', true);
   spawnSync(shipped, ['install', '--source', root, '--config-dir', switchDir, '--uninstall'], { encoding: 'utf8', env });
   check('uninstall: after a replaced model the person gets back what they had', 'model' in readJson(path.join(switchDir, 'settings.json')), false);
   const ownDir = path.join(LAB_ROOT, 'own-model-account');
   fs.mkdirSync(ownDir, { recursive: true });
   writeJson(path.join(ownDir, 'settings.json'), { model: 'fable' });
-  spawnSync(shipped, ['setup', '--config-dir', ownDir, '--profile', 'economy'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
+  spawnSync(shipped, ['setup', '--config-dir', ownDir, '--profile', 'search'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
   check('roles: a model the person chose themselves is left alone', readJson(path.join(ownDir, 'settings.json')).model, 'fable');
   const retunedDir = path.join(LAB_ROOT, 'retuned-account');
   fs.mkdirSync(path.join(retunedDir, PLUGIN_NAME), { recursive: true });
@@ -1522,11 +1523,11 @@ async function scenarioMarketplaceBootstrap(acc) {
   const retunedEnv = { ...env, CLAUDE_CONFIG_DIR: retunedDir, NOCTIS_NO_TASKS: '1' };
   const namedBefore = spawnSync(shipped, ['status'], { encoding: 'utf8', env: retunedEnv }).stdout;
   const untouched = readJson(path.join(retunedDir, 'settings.json')).model;
-  spawnSync(shipped, ['setup', '--config-dir', retunedDir, '--profile', 'noctis'], { encoding: 'utf8', env: retunedEnv });
+  spawnSync(shipped, ['setup', '--config-dir', retunedDir, '--profile', 'synex'], { encoding: 'utf8', env: retunedEnv });
   const namedAfter = spawnSync(shipped, ['status'], { encoding: 'utf8', env: retunedEnv }).stdout;
   const adopted = readJson(path.join(retunedDir, 'settings.json'));
-  check('roles: an earlier noctis assignment is named, not switched on its own', namedBefore.includes('--profile noctis') && untouched === 'fable', true);
-  check('roles: setup adopts the re-tuned profile and the notice goes away', !namedAfter.includes('--profile noctis') && adopted.model === 'opus' && adopted.env.CLAUDE_CODE_EFFORT_LEVEL === 'max', true);
+  check('roles: an earlier SYNEX assignment stored as noctis is named, not switched on its own', namedBefore.includes('--profile synex') && untouched === 'fable', true);
+  check('roles: setup adopts the re-tuned profile and the notice goes away', !namedAfter.includes('--profile synex') && adopted.model === 'opus' && adopted.env.CLAUDE_CODE_EFFORT_LEVEL === 'max', true);
 }
 
 async function scenarioStaleRepoSums() {
@@ -1667,7 +1668,7 @@ async function scenarioShippedProfile(acc) {
   const now = nowSec();
   const config = readJson(acc.configFile);
   const settings = readJson(path.join(acc.dir, 'settings.json'));
-  check('shipped profile: the main session runs Opus at max effort', settings.model === 'opus' && settings.env.CLAUDE_CODE_EFFORT_LEVEL === 'max' && config.models.primary === 'opus' && config.roles.profile === 'noctis', true);
+  check('shipped profile: the main session runs Opus at max effort', settings.model === 'opus' && settings.env.CLAUDE_CODE_EFFORT_LEVEL === 'max' && config.models.primary === 'opus' && config.roles.profile === 'synex', true);
   check('shipped profile: the Fable cap stays watched and leads back to the code model', config.models.scopedPattern === 'fable' && config.models.fallback === 'opus' && config.router.subagentModels.Plan === 'opus' && config.router.subagentModels.Explore === 'haiku', true);
   acc.statusline('sp1', 'claude-opus-5-5', 20, now + 7200, 10, now + 3 * 86400, 30);
   check('shipped profile: the router is off, so a research prompt stays in the main session', config.router.enabled === false && !acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'sp1', cwd: PROJECT_DIR, prompt: 'En iyi mekanik klavye 2026 araştır' }).includes('Non-code research'), true);

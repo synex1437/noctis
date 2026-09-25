@@ -266,8 +266,8 @@ func TestUninstallGivesBackTheMarketplaceAutoUpdateOnlyWhenSetupSwitchedItOn(t *
 			switchedOn := filepath.Join(t.TempDir(), "on.json")
 			cliWrite(t, switchedOn, entry("true"))
 			fakeMarketplaceClaude(t, box, known, switchedOn, c.refused)
-			setup := box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep")
-			box.configured(t, setup, box.account, "economy")
+			setup := box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep")
+			box.configured(t, setup, box.account, "balanced")
 			if c.later != "" {
 				cliWrite(t, known, entry(c.later))
 			}
@@ -309,9 +309,9 @@ func TestSetupSaysWhenItCannotRecordTheAutoUpdateItSwitchedOn(t *testing.T) {
 	cliWrite(t, switchedOn, []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}, "autoUpdate": true}}`))
 	fakeMarketplaceClaude(t, box, known, switchedOn, false)
 
-	run := box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep")
+	run := box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep")
 
-	box.configured(t, run, box.account, "economy")
+	box.configured(t, run, box.account, "balanced")
 	if !strings.Contains(run.stdout, "could not record that it switched marketplace auto-update on for test-mkt") {
 		t.Fatalf("setup switched auto-update on where no noctis config could hold the record, without saying the uninstall will not undo it:\n%s", run)
 	}
@@ -332,7 +332,7 @@ func TestUninstallSaysItLeftTheAutoUpdateWhenItCannotReadTheMarketplaces(t *test
 	switchedOn := filepath.Join(t.TempDir(), "on.json")
 	cliWrite(t, switchedOn, []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}, "autoUpdate": true}}`))
 	fakeMarketplaceClaude(t, box, known, switchedOn, false)
-	box.configured(t, box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep"), box.account, "economy")
+	box.configured(t, box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep"), box.account, "balanced")
 	broken := []byte(`{"test-mkt": {"autoUpdate": true`)
 	cliWrite(t, known, broken)
 

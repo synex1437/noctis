@@ -97,21 +97,23 @@
     <line x1="20" y1="44" x2="696" y2="44" stroke="#1d2634"/>
     <g class="mono">
       <text x="24" y="74" class="q">Which model should do which kind of work?</text>
-      <text x="24" y="102" class="optHi">1 noctis</text>
-      <text x="124" y="102" class="opt">Opus 5.5·max code · Opus 5.5·xhigh research · Haiku 4.5 digests</text>
-      <text x="24" y="126" class="opt">2 balanced</text>
-      <text x="124" y="126" class="opt">Opus 5.5·high code · Opus 5.5·medium research · Haiku 4.5 digests</text>
-      <text x="24" y="150" class="opt">3 economy</text>
-      <text x="124" y="150" class="opt">Opus 5.5·low code · Sonnet 5·high research · Haiku 4.5 digests</text>
-      <text x="24" y="174" class="opt">4 custom</text>
-      <text x="124" y="174" class="opt">a model for each of the six roles, with an effort where one applies</text>
-      <text x="24" y="210" class="prompt">›</text>
-      <text x="44" y="210" class="q">1</text>
-      <text x="64" y="210" class="ok">✔ statusLine wired · model=opus · effort=max · permissions.defaultMode=auto</text>
-      <line x1="20" y1="228" x2="696" y2="228" stroke="#1d2634"/>
-      <text x="24" y="254" class="prompt">›</text>
-      <text x="44" y="254" class="q">!noctis queue trust</text>
-      <text x="44" y="276" class="out">This file may drive sessions: /home/you/my-project/TASKS.md</text>
+      <text x="24" y="98" class="opt">1 Code</text>
+      <text x="124" y="98" class="opt">Opus 5.5·xhigh code · Opus 5.5·high research · Haiku 4.5 digests</text>
+      <text x="24" y="120" class="opt">2 Search</text>
+      <text x="124" y="120" class="opt">Opus 5.5·xhigh research · Opus 5.5·xhigh code · Haiku 4.5 digests</text>
+      <text x="24" y="142" class="opt">3 Balanced</text>
+      <text x="124" y="142" class="opt">Opus 5.5·high code · Opus 5.5·medium research · Haiku 4.5 digests</text>
+      <text x="24" y="164" class="optHi">4 SYNEX</text>
+      <text x="124" y="164" class="opt">Opus 5.5·max code · Opus 5.5·xhigh research · Haiku 4.5 digests</text>
+      <text x="24" y="186" class="opt">5 custom</text>
+      <text x="124" y="186" class="opt">a model for each of the six roles, with an effort where one applies</text>
+      <text x="24" y="216" class="prompt">›</text>
+      <text x="44" y="216" class="q">4</text>
+      <text x="64" y="216" class="ok">✔ statusLine wired · model=opus · effort=max · permissions.defaultMode=auto</text>
+      <line x1="20" y1="232" x2="696" y2="232" stroke="#1d2634"/>
+      <text x="24" y="256" class="prompt">›</text>
+      <text x="44" y="256" class="q">!noctis queue trust</text>
+      <text x="44" y="278" class="out">This file may drive sessions: /home/you/my-project/TASKS.md</text>
     </g>
   </g>
 

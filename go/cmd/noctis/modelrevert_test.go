@@ -95,17 +95,17 @@ func TestASetupDuringAScopedSwitchIsTheNewBaseline(t *testing.T) {
 	updateState(func(state object) {
 		state["modelSwitched"] = object{"at": float64(now - 3600), "from": "fable", "to": "opus", "fableResetsAt": float64(now - 60), "effortWas": "max"}
 	})
-	run := runNoctisCLI(t, cliAccountEnv(root, account), "setup", "--config-dir", account, "--profile", "economy", "--no-ask", "--permissions", "keep")
+	run := runNoctisCLI(t, cliAccountEnv(root, account), "setup", "--config-dir", account, "--profile", "code", "--no-ask", "--permissions", "keep")
 	if run.code != 0 {
 		t.Fatalf("setup failed:\n%s", run)
 	}
 	chosen := readJSON(filepath.Join(account, "settings.json"))
-	if getString(chosen, "model") != "opus" || getString(getMap(chosen, "env"), "CLAUDE_CODE_EFFORT_LEVEL") != "low" {
-		t.Fatalf("setup --profile economy should leave opus at effort low: %v", chosen)
+	if getString(chosen, "model") != "opus" || getString(getMap(chosen, "env"), "CLAUDE_CODE_EFFORT_LEVEL") != "xhigh" {
+		t.Fatalf("setup --profile code should leave opus at effort xhigh: %v", chosen)
 	}
 	note := maybeRevertDefaultModel(loadConfig(), readState(), fableWindowCleared(now), now)
 	after := readJSON(files.settings)
-	if note != "" || getString(after, "model") != "opus" || getString(getMap(after, "env"), "CLAUDE_CODE_EFFORT_LEVEL") != "low" {
+	if note != "" || getString(after, "model") != "opus" || getString(getMap(after, "env"), "CLAUDE_CODE_EFFORT_LEVEL") != "xhigh" {
 		t.Fatalf("the reset of a switch made before setup undid the setup: notice %q, settings %v", note, after)
 	}
 }

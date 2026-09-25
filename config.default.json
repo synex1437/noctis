@@ -12,7 +12,7 @@
     "fanOutHeadroom": 25
   },
   "roles": {
-    "profile": "noctis",
+    "profile": "synex",
     "code": {
       "model": "opus",
       "effort": "max"
