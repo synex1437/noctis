@@ -56,8 +56,9 @@ func waitForPid(pid int) {
 }
 
 func recordLaunch(sid string, pid int, how string) {
+	started := processStarted(pid)
 	updateState(func(state object) {
-		stateMap(state, "launched")[sid] = object{"pid": float64(pid), "at": float64(nowSec()), "how": how, "runner": float64(os.Getpid())}
+		stateMap(state, "launched")[sid] = object{"pid": float64(pid), "started": started, "at": float64(nowSec()), "how": how, "runner": float64(os.Getpid())}
 	})
 }
 
@@ -105,6 +106,10 @@ func closePreviousLaunch(cfg object, sid string, wait object) {
 	}
 	if !looksLikeSessionProcess(pid) {
 		logInfo("pid %d is no longer the session's claude process; leaving it alone", pid)
+		return
+	}
+	if started := getString(record, "started"); started == "" || processStarted(pid) != started {
+		logInfo("pid %d is not the process launched for %s (its start time differs or was not recorded); leaving it alone", pid, sid)
 		return
 	}
 	if err := terminateProcess(pid); err != nil {

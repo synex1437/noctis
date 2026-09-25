@@ -364,7 +364,7 @@ func TestResumeTakesOverFromARunnerWatchingAnOlderWindow(t *testing.T) {
 		cwd := t.TempDir()
 		transcript := quietTranscript(t, cwd, t0)
 		handoff := object{"at": t0 + tc.handoffAt, "model": "claude-opus-5", "mode": "window", "pid": float64(runner.pid)}
-		launched := object{"pid": float64(window.pid), "at": t0 + tc.launchedAt, "how": "terminal", "runner": float64(runner.pid)}
+		launched := object{"pid": float64(window.pid), "started": processStarted(window.pid), "at": t0 + tc.launchedAt, "how": "terminal", "runner": float64(runner.pid)}
 		updateState(func(state object) {
 			stateMap(state, "handedOff")[sid] = cloneObject(handoff)
 			if tc.window {
@@ -485,7 +485,7 @@ func TestAFableRelaunchClosesTheWindowItsOwnPauseLeftIdle(t *testing.T) {
 		runner, window := idleRunner(t), idleWindow(t)
 		transcript := quietTranscript(t, t.TempDir(), tc.lastWrite)
 		updateState(func(state object) {
-			stateMap(state, "launched")[sid] = object{"pid": float64(window.pid), "at": now - 7200, "how": "terminal", "runner": float64(runner.pid)}
+			stateMap(state, "launched")[sid] = object{"pid": float64(window.pid), "started": processStarted(window.pid), "at": now - 7200, "how": "terminal", "runner": float64(runner.pid)}
 		})
 
 		closePreviousLaunch(object{}, sid, object{"kind": "fable", "startedAt": tc.startedAt, "transcript": transcript})
@@ -619,7 +619,7 @@ func TestAPreviousWindowIsClosedOnlyWhileTheRunnerThatOpenedItStillWatchesIt(t *
 	for index, tc := range cases {
 		sid := fmt.Sprintf("pw%d", index+1)
 		window := idleWindow(t)
-		record := object{"pid": float64(window.pid), "at": now - 3*86400, "how": "terminal"}
+		record := object{"pid": float64(window.pid), "started": processStarted(window.pid), "at": now - 3*86400, "how": "terminal"}
 		if runner := tc.runner(); runner > 0 {
 			record["runner"] = runner
 		}
@@ -636,6 +636,35 @@ func TestAPreviousWindowIsClosedOnlyWhileTheRunnerThatOpenedItStillWatchesIt(t *
 		}
 		if record := getMap(getMap(readState(), "launched"), sid); record != nil {
 			t.Fatalf("%s: the launch record stayed behind: %v", tc.name, record)
+		}
+	}
+}
+
+func TestAPreviousWindowIsClosedOnlyWhileItsPidStillNamesTheProcessThatWasLaunched(t *testing.T) {
+	relaunchSandbox(t)
+	cases := []struct {
+		name   string
+		edit   func(record object)
+		closed bool
+	}{
+		{"the pid still names the process that was launched", func(object) {}, true},
+		{"the window ended and its pid now names a process started at another time", func(record object) { record["started"] = "1" }, false},
+		{"the record keeps no start time to tell the two apart", func(record object) { delete(record, "started") }, false},
+	}
+	for index, tc := range cases {
+		sid := fmt.Sprintf("ps%d", index+1)
+		window := idleWindow(t)
+		recordLaunch(sid, window.pid, "terminal")
+		updateState(func(state object) { tc.edit(getMap(getMap(state, "launched"), sid)) })
+
+		closePreviousLaunch(object{}, sid, nil)
+
+		wait := 500 * time.Millisecond
+		if tc.closed {
+			wait = 5 * time.Second
+		}
+		if closed := window.endsWithin(wait); closed != tc.closed {
+			t.Errorf("%s: pid %d was closed: %v, want %v", tc.name, window.pid, closed, tc.closed)
 		}
 	}
 }
