@@ -82,12 +82,12 @@ function networkFailures(lab, account) {
       `fetchedAt ${fable.fetchedAt} with error ${fable.error}`);
   }
 
-  lab.setLimits(limitsAt(96, 40));
+  lab.setLimits(limitsAt(100, 40));
   account.setConfig((config) => { config.wait.maxInHookMinutes = 0; });
   setOutage(lab, '');
   dropCache(account);
   const honest = hookOnce(account, lab, 'chaos-cut-control', { NOCTIS_NO_SCHEDULE: '1' });
-  check('the control really does block at 96%', /"decision":\s*"block"|"continue":\s*false/.test(honest.stdout),
+  check('the control really does block at 100%', /"decision":\s*"block"|"continue":\s*false/.test(honest.stdout),
     `the scenario proves nothing unless the healthy case blocks: ${honest.stdout.slice(0, 200)}`);
 
   setOutage(lab, 'chunked-cut');
@@ -159,7 +159,7 @@ function fullDisk(lab, account, mountPoint) {
     console.log('  (disk-full: no small filesystem was provided, skipped — set NOCTIS_CHAOS_FULL_DISK)');
     return;
   }
-  lab.setLimits(limitsAt(97, 40));
+  lab.setLimits(limitsAt(100, 40));
   account.setConfig((config) => { config.wait.maxInHookMinutes = 0; });
 
   const configDir = path.join(mountPoint, 'claude');

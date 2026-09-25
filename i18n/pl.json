@@ -453,5 +453,8 @@
   "doctor.fixHostSetup": "uruchom noctis setup --host %s",
   "doctor.fixHint": "   rozwiązanie: %s",
   "doctor.allGood": "Wszystko, czego wtyczka potrzebuje, jest na miejscu.",
-  "doctor.issuesFound": "%d rzecz(y) powyżej wymaga uwagi."
+  "doctor.issuesFound": "%d rzecz(y) powyżej wymaga uwagi.",
+  "wait.typedGoesAhead": "⚠ limit %s %s%% (%s): twój prompt i tak idzie dalej.",
+  "wait.typedLimit": "noctis zatrzyma go dopiero na limicie użycia.",
+  "session.typedHint": " Prompty, które wpisujesz, i tak idą dalej."
 }

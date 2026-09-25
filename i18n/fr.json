@@ -453,5 +453,8 @@
   "doctor.fixHostSetup": "lance noctis setup --host %s",
   "doctor.fixHint": "   solution : %s",
   "doctor.allGood": "Tout ce dont le plugin a besoin est en place.",
-  "doctor.issuesFound": "%d point(s) ci-dessus demandent ton attention."
+  "doctor.issuesFound": "%d point(s) ci-dessus demandent ton attention.",
+  "wait.typedGoesAhead": "⚠ fenêtre %s %s%% (%s) : ton prompt passe quand même.",
+  "wait.typedLimit": "noctis ne l'arrête qu'à la limite d'usage.",
+  "session.typedHint": " Les prompts que tu tapes passent quand même."
 }

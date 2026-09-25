@@ -206,6 +206,9 @@ async function scenarioWarnAndBurst(acc) {
 async function scenarioInHookWait(acc) {
   const now = nowSec();
   acc.statusline('s1', 'claude-fable-5-1', 93, now + 3, 23, now + 3 * 86400);
+  const ahead = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'keep going with auth.js' });
+  check('a prompt you type past the pause point goes ahead with a warning and does not wait', !ahead.includes('"decision":"block"') && ahead.includes("prompt'un yine de devam ediyor") && acc.state().waits.s1 === undefined, true);
+  acc.statusline('s1', 'claude-fable-5-1', 100, nowSec() + 3, 23, now + 3 * 86400);
   const child = acc.hookAsync({ hook_event_name: 'UserPromptSubmit', session_id: 's1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'keep going with auth.js' });
   let stdout = '';
   child.stdout.on('data', (chunk) => {
@@ -235,7 +238,7 @@ async function scenarioWorkspaceGuard(acc) {
   fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n');
   git('add', '.');
   git('commit', '-q', '-m', 'init');
-  acc.statusline('wg1', 'claude-fable-5-1', 93, now + 3, 23, now + 3 * 86400);
+  acc.statusline('wg1', 'claude-fable-5-1', 100, now + 3, 23, now + 3 * 86400);
   const child = acc.hookAsync({ hook_event_name: 'UserPromptSubmit', session_id: 'wg1', cwd: repo, transcript_path: TRANSCRIPT, prompt: 'keep going with a.txt' });
   let stdout = '';
   child.stdout.on('data', (chunk) => {
@@ -248,7 +251,7 @@ async function scenarioWorkspaceGuard(acc) {
   check('workspace guard: user notice mentions the changed tree', stdout.includes('çalışma ağacı değişti'), true);
   check('workspace guard: the model is told to re-check', stdout.includes('"additionalContext"') && stdout.includes('the files, the commit or git status differ from the checkpoint'), true);
   check('workspace guard: journaled', acc.run(['why', '--last', '3']).includes('workspace-changed'), true);
-  acc.statusline('wg2', 'claude-fable-5-1', 93, nowSec() + 3, 23, now + 3 * 86400);
+  acc.statusline('wg2', 'claude-fable-5-1', 100, nowSec() + 3, 23, now + 3 * 86400);
   const quiet = await acc.hookPromise({ hook_event_name: 'UserPromptSubmit', session_id: 'wg2', cwd: repo, transcript_path: TRANSCRIPT, prompt: 'keep going with a.txt' });
   check('workspace guard: silent when nothing changed', !quiet.includes('additionalContext') && quiet.includes('devam ediliyor'), true);
   const waitThroughAnEdit = async (sid, event, newFile) => {
@@ -285,7 +288,7 @@ async function scenarioWorkspaceGuard(acc) {
   acc.setConfig((config) => {
     config.wait.workspaceGuard = false;
   });
-  acc.statusline('wg3', 'claude-fable-5-1', 93, nowSec() + 3, 23, now + 3 * 86400);
+  acc.statusline('wg3', 'claude-fable-5-1', 100, nowSec() + 3, 23, now + 3 * 86400);
   const off = acc.hookAsync({ hook_event_name: 'UserPromptSubmit', session_id: 'wg3', cwd: repo, transcript_path: TRANSCRIPT, prompt: 'keep going with a.txt' });
   const wg3 = await waitRecord(acc, 'wg3');
   check('workspace guard: off -> no fingerprint', wg3.tree, undefined);
@@ -398,8 +401,14 @@ async function scenarioWeeklyLongWait(acc) {
   const stop = acc.hook({ hook_event_name: 'PostToolBatch', session_id: 's3', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('weekly stop', stop.includes('"continue":false'), true);
   check('weekly stop message short', JSON.parse(stop).stopReason.length < 140, true);
+  const parkedPid = acc.state().waits.s3.scheduled.pid;
+  const ahead = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's3', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'please finish the tests' });
+  check('weekly: a prompt you type past the pause point goes ahead with a warning', !ahead.includes('"decision":"block"') && ahead.includes("prompt'un yine de devam ediyor"), true);
+  await sleep(300);
+  check('weekly: the prompt you typed takes over from the parked wait and its runner', acc.state().waits.s3 === undefined && !isAlive(parkedPid), true);
+  acc.statusline('s3', 'claude-fable-5-1', 50, now + 7200, 100, now + 2 * 86400);
   const block = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's3', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'please finish the tests' });
-  check('weekly prompt blocked', block.includes('"decision":"block"'), true);
+  check('weekly prompt blocked at the usage limit', block.includes('"decision":"block"'), true);
   const wait = acc.state().waits.s3;
   check('prompt queued', wait.queuedPrompt, 'please finish the tests');
   const firstPid = wait.scheduled.pid;
@@ -1872,14 +1881,20 @@ async function scenarioFirstRunEdges(acc) {
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
   acc.statusline('fr1', 'claude-fable-5-1', 30, now + 7200, 99, now + 3 * 86400, 10);
   const start = acc.hook({ hook_event_name: 'SessionStart', session_id: 'fr1', cwd: PROJECT_DIR, source: 'startup' });
-  check('first run at 99 %: session start explains the pause and the escape hatch', start.includes('zaten %99') && start.includes('/noctis:pause 120'), true);
+  check('first run at 99 %: session start says the window is past its pause point and that prompts you type still go ahead', start.includes('zaten %99') && start.includes("Yazdığın prompt'lar yine de devam eder") && !start.includes('/noctis:pause'), true);
   check('first run at 99 %: the notice is not repeated for the same window', acc.hook({ hook_event_name: 'SessionStart', session_id: 'fr1', cwd: PROJECT_DIR, source: 'startup' }).includes('zaten %99'), false);
-  const blocked = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'fr1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'start with the parser refactor' });
-  check('first run at 99 %: the first prompt is saved with a resume time and the pause hint', blocked.includes('"decision":"block"') && blocked.includes('iş kaydedildi') && blocked.includes('noctis off 120'), true);
-  check('first run at 99 %: a scheduled relaunch exists', acc.state().waits.fr1 && acc.state().waits.fr1.resumeAt > now + 2 * 86400, true);
+  const ahead = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'fr1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'start with the parser refactor' });
+  check('first run at 99 %: the first prompt goes ahead with a warning and nothing is scheduled', !ahead.includes('"decision":"block"') && ahead.includes("prompt'un yine de devam ediyor") && acc.state().waits.fr1 === undefined, true);
+  acc.statusline('fr1b', 'claude-fable-5-1', 30, now + 7200, 99, now + 3 * 86400, 10);
   acc.run(['off', '1']);
-  check('first run at 99 %: pause lets the prompt through', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'fr1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'start with the parser refactor' }), '');
+  check('first run at 99 %: a pause lets work that goes on by itself through', acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'fr1b', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT }).includes('"continue":false'), false);
   acc.run(['on']);
+  check('first run at 99 %: without the pause that work stops', acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'fr1b', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT }).includes('"continue":false'), true);
+  acc.run(['cancel', 'fr1b']);
+  acc.statusline('fr1', 'claude-fable-5-1', 30, now + 7200, 100, now + 3 * 86400, 10);
+  const blocked = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'fr1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'start with the parser refactor' });
+  check('first run at 100 %: the prompt is saved with a resume time and no pause hint', blocked.includes('"decision":"block"') && blocked.includes('iş kaydedildi') && !blocked.includes('noctis off'), true);
+  check('first run at 100 %: a scheduled relaunch exists', acc.state().waits.fr1 && acc.state().waits.fr1.resumeAt > now + 2 * 86400, true);
   acc.run(['cancel', 'fr1']);
   acc.statusline('fr1', 'claude-fable-5-1', 30, now + 7200, 10, now + 3 * 86400, 10);
   const settingsFile = path.join(acc.dir, 'settings.json');
@@ -2059,9 +2074,9 @@ async function scenarioEarlyReset(acc) {
     { kind: 'session', percent, resets_at: new Date((now + resetIn) * 1000).toISOString() },
     { kind: 'weekly_all', percent: 20, resets_at: new Date((now + 3 * 86400) * 1000).toISOString() },
   ];
-  mock.limits = limited(93, 900);
+  mock.limits = limited(100, 900);
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
-  acc.statusline('er1', 'claude-fable-5-1', 93, now + 900, 20, now + 3 * 86400);
+  acc.statusline('er1', 'claude-fable-5-1', 100, now + 900, 20, now + 3 * 86400);
   let started = Date.now();
   let child = acc.hookAsync({ hook_event_name: 'UserPromptSubmit', session_id: 'er1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'keep going with auth.js' });
   let stdout = '';
@@ -2076,9 +2091,9 @@ async function scenarioEarlyReset(acc) {
   check('early reset: the person is told', /planlanandan önce|ahead of schedule/.test(stdout), true);
   check('early reset: journaled', acc.run(['why', '--last', '4']).includes('early-reset'), true);
   check('early reset: wait cleared', acc.state().waits.er1, undefined);
-  mock.limits = limited(93, 900);
+  mock.limits = limited(100, 900);
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
-  acc.statusline('er2', 'claude-fable-5-1', 93, now + 900, 20, now + 3 * 86400);
+  acc.statusline('er2', 'claude-fable-5-1', 100, now + 900, 20, now + 3 * 86400);
   started = Date.now();
   child = acc.hookAsync({ hook_event_name: 'UserPromptSubmit', session_id: 'er2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'keep going with auth.js' });
   stdout = '';
@@ -2394,10 +2409,10 @@ async function scenarioRepair(acc) {
   const now = nowSec();
   mock.limits = [
     { kind: 'session', percent: 20, resets_at: new Date((now + 7200) * 1000).toISOString() },
-    { kind: 'weekly_all', percent: 95, resets_at: new Date((now + 2 * 86400) * 1000).toISOString() },
+    { kind: 'weekly_all', percent: 100, resets_at: new Date((now + 2 * 86400) * 1000).toISOString() },
   ];
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
-  acc.statusline('rp1', 'claude-fable-5-1', 20, now + 7200, 95, now + 2 * 86400);
+  acc.statusline('rp1', 'claude-fable-5-1', 20, now + 7200, 100, now + 2 * 86400);
   acc.editState((state) => {
     state.handedOff.rp1 = { at: now - 600, model: 'opus', mode: 'window', pid: 999999 };
     state.waits.rp1 = { kind: 'batch', window: 'seven_day', label: 'weekly', used: 95, threshold: 89, until: now + 2 * 86400, resumeAt: now + 2 * 86400, inHook: false, cwd: PROJECT_DIR, transcript: TRANSCRIPT, checkpoint: '', queuedPrompt: '', startedAt: now - 600, permissionMode: '' };
@@ -2707,7 +2722,7 @@ async function scenarioBundle(acc) {
 
 async function scenarioSilentFailures(acc) {
   const now = nowSec();
-  acc.statusline('sf1', 'claude-fable-5-1', 20, now + 7200, WEEKLY_OVER, now + 2 * 86400);
+  acc.statusline('sf1', 'claude-fable-5-1', 20, now + 7200, 100, now + 2 * 86400);
   const bare = acc.run([], { hook_event_name: 'UserPromptSubmit', session_id: 'sf1', cwd: PROJECT_DIR, prompt: 'keep going on the refactor' });
   check('no-command hook call still guards the session', bare.includes('⏸') || bare.includes('"decision"'), true);
   check('and says the wiring is wrong', bare.includes('noctis doctor'), true);
@@ -2722,7 +2737,7 @@ async function scenarioSilentFailures(acc) {
 
   const lockFile = path.join(acc.guardDir, 'state.lock');
   fs.writeFileSync(lockFile, String(process.pid));
-  acc.statusline('sf2', 'claude-fable-5-1', 20, now + 7200, WEEKLY_OVER, now + 2 * 86400);
+  acc.statusline('sf2', 'claude-fable-5-1', 20, now + 7200, 100, now + 2 * 86400);
   const refused = acc.run(['hook'], { hook_event_name: 'UserPromptSubmit', session_id: 'sf2', cwd: PROJECT_DIR, prompt: 'continue' });
   fs.rmSync(lockFile, { force: true });
   check('a wait that cannot be stored does not pause the session', refused.includes('could not save the pause') || refused.includes('duraklatma kaydedilemedi'), true);

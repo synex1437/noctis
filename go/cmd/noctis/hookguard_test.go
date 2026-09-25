@@ -795,16 +795,18 @@ func TestTheControlCommandsPassThePausePoint(t *testing.T) {
 	if journal, _ := os.ReadFile(files.decisions); !strings.Contains(string(journal), `"action":"control-prompt"`) || !strings.Contains(string(journal), "/noctis:pause") {
 		t.Fatalf("the journal does not say which control prompt passed the pause point:\n%s", journal)
 	}
+	writeUsage(100, 40, float64(nowSec()+7200))
 	for i, prompt := range []string{"fix the parser", "/noctis:statusbar", "/noctis:unknown 120", "/other:pause 120", "please run /noctis:pause 120"} {
 		sid := "cw-" + strconv.Itoa(i)
 		output := hookOutput(t, onUserPromptSubmit, promptInput(sid, project, prompt), cfg)
 		if getString(output, "decision") != "block" {
-			t.Fatalf("%q went past the 5h pause point: %v", prompt, output)
+			t.Fatalf("%q went past the 5h usage limit: %v", prompt, output)
 		}
 		if queued := getString(pendingWait(sid), "queuedPrompt"); queued != prompt {
-			t.Fatalf("%q was not parked for the relaunch (queuedPrompt %q)", prompt, queued)
+			t.Fatalf("%q was taken for a control command and not parked for the relaunch (queuedPrompt %q)", prompt, queued)
 		}
 	}
+	writeUsage(95, 40, float64(nowSec()+7200))
 	now := float64(nowSec())
 	updateState(func(state object) {
 		stateMap(state, "waits")["cp-esc"] = object{"kind": "prompt", "window": "five_hour", "until": now + 7200, "resumeAt": now + 7290, "inHook": true, "startedAt": now - 600, "heartbeat": now - 5, "queuedPrompt": "fix the parser"}
@@ -816,16 +818,17 @@ func TestTheControlCommandsPassThePausePoint(t *testing.T) {
 }
 
 func TestAControlCommandLeavesAParkedPromptAlone(t *testing.T) {
-	cfg, project := controlSandbox(t, 40, 95)
+	cfg, project := controlSandbox(t, 40, 100)
 	sid := "cp-parked"
 	work := "fix the parser so that nested brackets are handled"
 	if output := hookOutput(t, onUserPromptSubmit, promptInput(sid, project, work), cfg); getString(output, "decision") != "block" {
-		t.Fatalf("a work prompt at 95%% weekly was not parked: %v", output)
+		t.Fatalf("a work prompt at 100%% weekly was not parked: %v", output)
 	}
 	parked := pendingWait(sid)
 	if getString(parked, "queuedPrompt") != work {
 		t.Fatalf("the work prompt was not queued for the relaunch: %v", parked)
 	}
+	writeUsage(40, 95, float64(nowSec()+7200))
 	for _, prompt := range []string{"/noctis:pause 120", "/noctis:status"} {
 		if output := hookOutput(t, onUserPromptSubmit, promptInput(sid, project, prompt), cfg); output != nil {
 			t.Fatalf("%q at 95%% weekly was not let through: %v", prompt, output)
@@ -841,12 +844,12 @@ func TestAtTheCreditCeilingAControlCommandIsStillRefused(t *testing.T) {
 	cfg, project := controlSandbox(t, 40, 95)
 	sid := "cc-parked"
 	work := "fix the parser so that nested brackets are handled"
+	writeUsage(100, 95, float64(nowSec()+7200))
 	hookOutput(t, onUserPromptSubmit, promptInput(sid, project, work), cfg)
 	parked := pendingWait(sid)
 	if getString(parked, "queuedPrompt") != work {
 		t.Fatalf("the work prompt was not parked: %v", parked)
 	}
-	writeUsage(100, 95, float64(nowSec()+7200))
 	for _, prompt := range []string{"/noctis:status", "/noctis:pause 120", "/noctis:resume"} {
 		output := hookOutput(t, onUserPromptSubmit, promptInput(sid, project, prompt), cfg)
 		reason := getString(output, "reason")

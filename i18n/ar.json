@@ -453,5 +453,8 @@
   "doctor.fixHostSetup": "نفّذ noctis setup --host %s",
   "doctor.fixHint": "   الحل: %s",
   "doctor.allGood": "كل ما تحتاجه الإضافة موجود في مكانه.",
-  "doctor.issuesFound": "هناك %d أمر أعلاه يحتاج انتباهًا."
+  "doctor.issuesFound": "هناك %d أمر أعلاه يحتاج انتباهًا.",
+  "wait.typedGoesAhead": "⚠ حد %s بنسبة %s%% (%s): يمضي طلبك رغم ذلك.",
+  "wait.typedLimit": "لا يوقفه noctis إلا عند الحد الأقصى للاستخدام.",
+  "session.typedHint": " الطلبات التي تكتبها بنفسك تمضي رغم ذلك."
 }

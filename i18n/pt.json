@@ -453,5 +453,8 @@
   "doctor.fixHostSetup": "rode noctis setup --host %s",
   "doctor.fixHint": "   solução: %s",
   "doctor.allGood": "Tudo de que o plugin precisa está no lugar.",
-  "doctor.issuesFound": "%d ponto(s) acima precisam de atenção."
+  "doctor.issuesFound": "%d ponto(s) acima precisam de atenção.",
+  "wait.typedGoesAhead": "⚠ janela %s %s%% (%s): seu prompt segue em frente mesmo assim.",
+  "wait.typedLimit": "o noctis só o interrompe no limite de uso.",
+  "session.typedHint": " Os prompts que você digita seguem em frente mesmo assim."
 }

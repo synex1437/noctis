@@ -453,5 +453,8 @@
   "doctor.fixHostSetup": "noctis setup --host %s 를 실행하세요",
   "doctor.fixHint": "   해결: %s",
   "doctor.allGood": "플러그인에 필요한 것이 모두 준비되어 있습니다.",
-  "doctor.issuesFound": "위의 %d가지를 확인해야 합니다."
+  "doctor.issuesFound": "위의 %d가지를 확인해야 합니다.",
+  "wait.typedGoesAhead": "⚠ %s 창 %s%%(%s): 입력한 프롬프트는 그대로 진행됩니다.",
+  "wait.typedLimit": "noctis는 사용량 한도에서만 이를 멈춥니다.",
+  "session.typedHint": " 직접 입력한 프롬프트는 그대로 진행됩니다."
 }

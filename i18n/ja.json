@@ -453,5 +453,8 @@
   "doctor.fixHostSetup": "noctis setup --host %s を実行してください",
   "doctor.fixHint": "   対処: %s",
   "doctor.allGood": "プラグインに必要なものはすべてそろっています。",
-  "doctor.issuesFound": "上記のうち %d 件に対応が必要です。"
+  "doctor.issuesFound": "上記のうち %d 件に対応が必要です。",
+  "wait.typedGoesAhead": "⚠ %s ウィンドウ %s%%（%s）: 入力したプロンプトはそのまま進みます。",
+  "wait.typedLimit": "noctis が止めるのは使用量の上限に達したときだけです。",
+  "session.typedHint": "自分で入力したプロンプトはそのまま進みます。"
 }

@@ -172,7 +172,10 @@ func queueDirective(cfg object, queuePath string, total int) string {
 
 func alreadyOverNotice(wait *waitPlan) string {
 	notice := T("session.alreadyOver", wait.label, formatNumber(wait.used), formatTime(wait.until)) + pauseWhy(wait)
-	if pauseHonoured(wait) {
+	switch {
+	case typedPromptGoesAhead(wait):
+		notice += T("session.typedHint")
+	case pauseHonoured(wait):
 		notice += T("session.pauseHint")
 	}
 	return notice
@@ -361,6 +364,7 @@ func onSessionEnd(input, _ object) {
 			delete(stateMap(state, "workflows"), sid)
 		}
 		delete(stateMap(state, "routes"), sid)
+		delete(stateMap(state, "typedTurns"), sid)
 		delete(stateMap(state, "notified"), sid)
 		delete(stateMap(state, "notified"), sid+":config")
 	})
@@ -429,6 +433,61 @@ func onControlPrompt(input, cfg object, result decision, command string) {
 	}
 }
 
+func typedPromptGoesAhead(wait *waitPlan) bool {
+	return wait != nil && pauseHonoured(wait) && wait.hit != "blind" && wait.hit != "budget"
+}
+
+func typedTurn(state object, sid string) bool {
+	return getMap(getMap(state, "typedTurns"), sid) != nil
+}
+
+func endTypedTurn(state object, sid string) {
+	if !typedTurn(state, sid) {
+		return
+	}
+	updateState(func(next object) { delete(stateMap(next, "typedTurns"), sid) })
+}
+
+func letTypedPromptThrough(cfg, state object, sid string, result decision, now int64) (string, string) {
+	wait := result.wait
+	journal(sid, "UserPromptSubmit", "typed-prompt", hitLabel(wait), usageFacts(result.usage))
+	logInfo("typed prompt for %s goes past the pause point: %s %s%%", sid, wait.window, formatNumber(wait.used))
+	if parked := getMap(getMap(state, "waits"), sid); parked != nil && !hookSleeping(parked) && !observing {
+		clearWaitAndConsume(sid, state)
+		logInfo("typed prompt for %s: pending wait cleared", sid)
+	}
+	key := fmt.Sprintf("%s:typed:%s:%s", sid, wait.window, formatNumber(wait.until))
+	told := getMap(state, "notified")[key] != nil
+	updateState(func(next object) {
+		stateMap(next, "typedTurns")[sid] = object{"at": float64(now)}
+		if !told {
+			stateMap(next, "notified")[key] = float64(now)
+		}
+	})
+	if told {
+		return "", ""
+	}
+	notice := T("wait.typedGoesAhead", wait.label, formatNumber(wait.used), hitLabel(wait))
+	if !paidCreditsAllowed(cfg) {
+		notice += " " + T("wait.typedLimit")
+	}
+	context := fmt.Sprintf("[noctis] %s usage %d%% is past its auto-pause point (%s%%): the user's own prompt goes ahead. Do what they asked; start no big new work beyond it.", wait.label, int(math.Round(wait.used)), formatNumber(wait.threshold))
+	return notice, context
+}
+
+func noteTypedTurn(state object, sid, event string, result decision) {
+	if getBool(getMap(getMap(state, "typedTurns"), sid), "noted", false) {
+		return
+	}
+	updateState(func(next object) {
+		if turn := getMap(getMap(next, "typedTurns"), sid); turn != nil {
+			turn["noted"] = true
+		}
+	})
+	journal(sid, event, "typed-turn", hitLabel(result.wait), usageFacts(result.usage))
+	logInfo("the typed turn of %s goes on past the pause point: %s %s%%", sid, result.wait.window, formatNumber(result.wait.used))
+}
+
 func onUserPromptSubmit(input, cfg object) {
 	now := nowSec()
 	sid := sessionKey(input)
@@ -467,7 +526,14 @@ func onUserPromptSubmit(input, cfg object) {
 	}
 	output := object{}
 	systemMessage, waitContext := "", ""
-	if result.wait != nil {
+	goesAhead := result.wait != nil && !promptFromPlugin && !queueContinuationPrompt(getString(input, "prompt")) && typedPromptGoesAhead(result.wait)
+	if !goesAhead {
+		endTypedTurn(state, sid)
+	}
+	switch {
+	case goesAhead:
+		systemMessage, waitContext = letTypedPromptThrough(cfg, state, sid, result, now)
+	case result.wait != nil:
 		if observed(sid, "UserPromptSubmit", "pause", hitLabel(result.wait), usageFacts(result.usage)) {
 			return
 		}
@@ -478,7 +544,7 @@ func onUserPromptSubmit(input, cfg object) {
 		}
 		systemMessage = outcome.notice
 		waitContext = withCutOffNote(sid, outcome.context)
-	} else if promptFromPlugin {
+	case promptFromPlugin:
 		forgetCutOffs(sid)
 	}
 	retireOwnCheckpoint(state, sid)
@@ -628,7 +694,9 @@ func onAgentSpawn(input, cfg, state object, now int64) {
 	}
 	systemMessage := ""
 	specific := object{}
-	if result.wait != nil {
+	if result.wait != nil && typedTurn(state, sid) && typedPromptGoesAhead(result.wait) {
+		noteTypedTurn(state, sid, "PreToolUse", result)
+	} else if result.wait != nil {
 		if observed(sid, "PreToolUse", "pause", hitLabel(result.wait), usageFacts(result.usage)) {
 			return
 		}
@@ -995,17 +1063,20 @@ func denySubagentTool(input, cfg object) bool {
 	}
 	result := subagentLimit(cfg, now)
 	toolName := getString(input, "tool_name")
+	sid := sessionKey(input)
+	state := readState()
 	reason, what := "", ""
 	switch ceiling := ceilingHit(cfg, result.usage); {
-	case result.wait != nil:
+	case result.wait != nil && !(typedTurn(state, sid) && typedPromptGoesAhead(result.wait)):
 		reason, what = subagentLimitReason(result.wait, ceiling), hitLabel(shownLimit(result.wait, ceiling))
 	case toolName == "Workflow":
 		reason, what = gateWorkflowLaunch(cfg, result, input), orDefault(hitLabelOrWarn(result), "fan-out headroom")
+	case result.wait != nil:
+		noteTypedTurn(state, sid, "PreToolUse", result)
 	}
 	if reason == "" {
 		return false
 	}
-	sid := sessionKey(input)
 	facts := usageFacts(result.usage)
 	if observed(sid, "PreToolUse", "deny-subagent-tool", toolName+": "+what, facts) {
 		return false
@@ -1113,6 +1184,10 @@ func onSubagentBatch(input, cfg object) {
 		return
 	}
 	sid, agent, agentType := sessionKey(input), getString(input, "agent_id"), getString(input, "agent_type")
+	if typedTurn(state, sid) && typedPromptGoesAhead(wait) {
+		noteTypedTurn(state, sid, "PostToolBatch", result)
+		return
+	}
 	who := strings.TrimSpace(agentType + " " + agent)
 	facts := usageFacts(result.usage)
 	if ceiling := ceilingHit(cfg, result.usage); ceiling != nil || agentWarned(state, sid, agent, now) {
@@ -1328,6 +1403,7 @@ func onStop(input, cfg object) {
 	now := nowSec()
 	sid := sessionKey(input)
 	state := readState()
+	endTypedTurn(state, sid)
 	if guardPaused(cfg, state, now) {
 		return
 	}
@@ -1702,6 +1778,8 @@ func onPostToolBatch(input, cfg object) {
 	if result.wait != nil && ownCommandsOnly(input) && ceilingHit(cfg, result.usage) == nil {
 		journal(sid, "PostToolBatch", "control-batch", hitLabel(result.wait), usageFacts(result.usage))
 		logInfo("batch of %s commands only for %s passes the pause point: %s %s%%", pluginName, sid, result.wait.window, formatNumber(result.wait.used))
+	} else if result.wait != nil && typedTurn(state, sid) && typedPromptGoesAhead(result.wait) {
+		noteTypedTurn(state, sid, "PostToolBatch", result)
 	} else if result.wait != nil {
 		if observed(sid, "PostToolBatch", "pause", hitLabel(result.wait), usageFacts(result.usage)) {
 			return
@@ -1857,6 +1935,7 @@ func onStopFailure(input, cfg object) {
 	now := nowSec()
 	sid := sessionKey(input)
 	state := readState()
+	endTypedTurn(state, sid)
 	errorType := firstString(input, "error_type", "error")
 	errorText := joinNotices(getString(input, "error_message"), getString(input, "last_assistant_message"), getString(input, "error_details"))
 	if errorType == "model_not_found" {

@@ -302,7 +302,7 @@ async function main() {
     account.setConfig((config) => {
       config.wait.maxInHookMinutes = 0;
     });
-    lab.setLimits(limitsAt(97, 40));
+    lab.setLimits(limitsAt(100, 40));
     fs.rmSync(path.join(account.guardDir, 'fable.json'), { force: true });
     const { wired } = bothWays('args dropped, at the limit',
       payloadFor('UserPromptSubmit', 'contract-dropped-limit', lab, account),
