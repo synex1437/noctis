@@ -474,7 +474,7 @@ type fetchResult struct {
 	err        string
 }
 
-func fetchOauthUsage(token, version string) fetchResult {
+func fetchOauthUsage(token string) fetchResult {
 	endpoint := usageEndpoint()
 	request, err := http.NewRequest(http.MethodGet, endpoint.String(), nil)
 	if err != nil {
@@ -482,7 +482,7 @@ func fetchOauthUsage(token, version string) fetchResult {
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("anthropic-beta", "oauth-2025-04-20")
-	request.Header.Set("User-Agent", "claude-code/"+version)
+	request.Header.Set("User-Agent", pluginName+"/"+pluginVersion)
 	request.Header.Set("Accept", "application/json")
 	client := &http.Client{Timeout: fetchTimeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	sentAt := nowSec()
@@ -754,11 +754,7 @@ func refreshFable(cfg object, now int64, reason string, maxAge float64, ignoreBa
 		logInfo("fable refresh skipped (%s): no usable OAuth token in %s", reason, files.credentials)
 		return next
 	}
-	version := getString(readJSON(files.usage), "version")
-	if version == "" {
-		version = fallbackClaudeVersion
-	}
-	response := fetchOauthUsage(token, version)
+	response := fetchOauthUsage(token)
 	if response.status != 200 {
 		backoff := int64(120)
 		switch response.status {

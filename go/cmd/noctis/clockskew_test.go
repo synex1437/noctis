@@ -29,7 +29,7 @@ func TestFetchStampsTheRequestOnThePluginClock(t *testing.T) {
 	var result fetchResult
 	for attempt := 0; attempt < 50; attempt++ {
 		before := time.Now().Unix()
-		result = fetchOauthUsage("token", "1.0")
+		result = fetchOauthUsage("token")
 		if result.err != "" {
 			t.Fatalf("fetch failed: %s", result.err)
 		}

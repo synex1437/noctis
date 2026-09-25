@@ -425,7 +425,7 @@ async function scenarioFableFlow(acc) {
   const hitsBefore = mock.hits;
   const block = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's4', cwd: PROJECT_DIR, prompt: 'go on with the code changes' });
   check('mock usage fetched', mock.hits > hitsBefore, true);
-  check('oauth headers', Boolean(mock.lastHeaders && mock.lastHeaders['anthropic-beta'] === 'oauth-2025-04-20' && /^claude-code\//.test(mock.lastHeaders['user-agent'])), true);
+  check('oauth headers', Boolean(mock.lastHeaders && mock.lastHeaders['anthropic-beta'] === 'oauth-2025-04-20' && /^noctis\//.test(mock.lastHeaders['user-agent'])), true);
   check('fable prompt block', block.includes('/model opus'), true);
   check('default switched to opus', acc.settingsModel(), 'opus');
   const stop = acc.hook({ hook_event_name: 'PostToolBatch', session_id: 's4', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
