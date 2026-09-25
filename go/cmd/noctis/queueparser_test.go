@@ -57,9 +57,9 @@ func TestAFencedExampleNeverClosesAnIssue(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, true)
 	calls := fakeGhCLI(t, "[]")
 	queuePath := writeQueueFile(t, project, "# q\n```markdown\n- [ ] #12 an example item\n```\n- [ ] #13 the real task\n")
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	writeQueueFile(t, project, "# q\n```markdown\n- [x] #12 an example item\n```\n- [ ] #13 the real task\n")
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	if closes := ghLoggedCloses(t, calls, 0); len(closes) != 0 {
 		t.Fatalf("ticking an example inside a code fence closed an issue: %q", closes)
 	}

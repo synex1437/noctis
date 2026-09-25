@@ -89,14 +89,14 @@ func TestTickingAnIssueClosesOnlyItsOwnReference(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, true)
 	calls := fakeGhCLI(t, "[]")
 	queuePath := writeQueueFile(t, project, "# q\n- [ ] #12 Follow-up to #45\n")
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	tickIssueItem(t, queuePath, "#12 Follow-up to #45")
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	closes := ghLoggedCloses(t, calls, 1)
 	if len(closes) != 1 || !strings.HasPrefix(closes[0], "gh issue close 12 ") {
 		t.Fatalf("ticking \"#12 Follow-up to #45\" ran %q; want only issue close 12, since #45 is only named in the title", closes)
 	}
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	if closes := ghLoggedCloses(t, calls, 1); len(closes) != 1 {
 		t.Fatalf("a second pass over the same ticked item closed again: %q", closes)
 	}
@@ -123,14 +123,14 @@ func TestAnIssueStaysOpenUntilEveryItemCarryingItIsTicked(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, true)
 	calls := fakeGhCLI(t, "[]")
 	queuePath := writeQueueFile(t, project, "# q\n- [ ] #12 backend part\n- [ ] #12 frontend part\n")
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	tickIssueItem(t, queuePath, "#12 backend part")
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	if closes := ghLoggedCloses(t, calls, 0); len(closes) != 0 {
 		t.Fatalf("#12 was closed while its frontend item was still open: %q", closes)
 	}
 	tickIssueItem(t, queuePath, "#12 frontend part")
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	if closes := ghLoggedCloses(t, calls, 1); len(closes) != 1 || !strings.HasPrefix(closes[0], "gh issue close 12 ") {
 		t.Fatalf("ticking the last item of #12 ran %q; want one issue close 12", closes)
 	}
@@ -227,9 +227,9 @@ func TestARepoImportIsClosedInThatRepository(t *testing.T) {
 	if content := issueQueueText(t, queuePath); !strings.Contains(content, "- [ ] (P1) org/backend#12 Backend crash\n") {
 		t.Errorf("an import from org/backend was written without its repository:\n%s", content)
 	}
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	tickIssueItem(t, queuePath, "Backend crash")
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	closes := ghLoggedCloses(t, calls, 1)
 	if len(closes) != 1 || !strings.HasPrefix(closes[0], "gh issue close 12 ") || !strings.Contains(closes[0]+" ", " --repo org/backend ") {
 		t.Fatalf("ticking org/backend#12 ran %q; want issue close 12 with --repo org/backend, not #12 of the checkout", closes)
@@ -286,10 +286,10 @@ func TestAnIssueOnGhHostIsClosedThere(t *testing.T) {
 	calls := fakeGhCLI(t, "[]")
 	t.Setenv("GH_HOST", "GHE.example.com")
 	queuePath := writeQueueFile(t, project, "# q\n- [ ] ghe.example.com/org/api#3 API crash\n- [ ] evil.example.com/o/r#1 innocuous task\n")
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	tickIssueItem(t, queuePath, "API crash")
 	tickIssueItem(t, queuePath, "innocuous task")
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	closes := ghLoggedCloses(t, calls, 1)
 	if len(closes) != 1 || !strings.HasPrefix(closes[0], "gh issue close 3 --repo ghe.example.com/org/api ") {
 		t.Fatalf("with GH_HOST=GHE.example.com close-on-done ran %q; want only issue close 3 on that host", closes)
@@ -312,9 +312,9 @@ func TestARepoImportQualifiesTheItemsAnOlderImportWroteAsABareNumber(t *testing.
 	if again := issueQueueText(t, queuePath); again != want {
 		t.Fatalf("importing --repo org/backend again changed the file:\n%s", again)
 	}
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	tickIssueItem(t, queuePath, "Backend crash")
-	syncDoneIssues(cfg, queuePath, project)
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
 	closes := ghLoggedCloses(t, calls, 1)
 	if len(closes) != 1 || !strings.HasPrefix(closes[0], "gh issue close 12 --repo org/backend ") {
 		t.Fatalf("ticking the item an older import wrote for org/backend#12 ran %q; want issue close 12 with --repo org/backend, not #12 of the checkout", closes)

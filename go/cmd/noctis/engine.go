@@ -447,7 +447,7 @@ func newQueueEntry(ordinal int, text string, checked bool) queueEntry {
 	return entry
 }
 
-func readQueueText(file string) (string, bool) {
+var readQueueText = func(file string) (string, bool) {
 	info := statSafe(file)
 	if info == nil {
 		return "", false
@@ -474,12 +474,16 @@ func readQueueText(file string) (string, bool) {
 }
 
 func queueSnapshot(file string) queueView {
-	if info := statSafe(file); info != nil && info.Size() > queueMaxBytes {
-		warn("queue file %s is %d KB; only the first %d KB are read", filepath.Base(file), info.Size()/1024, queueMaxBytes/1024)
-	}
 	content, ok := readQueueText(file)
 	if !ok {
 		return queueView{}
+	}
+	return queueSnapshotOf(file, content)
+}
+
+func queueSnapshotOf(file, content string) queueView {
+	if info := statSafe(file); info != nil && info.Size() > queueMaxBytes {
+		warn("queue file %s is %d KB; only the first %d KB are read", filepath.Base(file), info.Size()/1024, queueMaxBytes/1024)
 	}
 	entries, plain := parseQueueEntries(content)
 	view := queueView{plain: plain}
@@ -852,16 +856,13 @@ func buildCheckpoint(input object, reasonLine, model string, cfg object) string 
 		tracked = tracked[:queueMaxItems]
 	}
 	queuePath := ""
-
-	if cfg != nil {
-		if candidate := sessionQueueFile(cfg, sid, queueDirs(input)...); queueTrusted(cfg, candidate) {
-			queuePath = candidate
-		}
-	}
 	var queue *queueView
-	if queuePath != "" {
-		view := queueSnapshot(queuePath)
-		queue = &view
+	if cfg != nil {
+		if candidate := sessionQueueFile(cfg, sid, queueDirs(input)...); candidate != "" {
+			if view, trusted := trustedQueueSnapshot(cfg, candidate); trusted {
+				queuePath, queue = candidate, &view
+			}
+		}
 	}
 	changes := gitStatus(cwd)
 	if model == "" {

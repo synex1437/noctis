@@ -535,16 +535,12 @@ func importDestination(folder, target string) (string, string) {
 	return resolved, ""
 }
 
-func syncDoneIssues(cfg object, queuePath, cwd string) {
+func syncDoneIssues(cfg object, queuePath, content, cwd string) {
 	github := getMap(section(cfg, "queue"), "github")
 	if !getBool(github, "closeOnDone", false) {
 		return
 	}
-	content, err := os.ReadFile(queuePath)
-	if err != nil {
-		return
-	}
-	open, checked := queueIssueItems(string(content))
+	open, checked := queueIssueItems(content)
 	if len(open) == 0 && len(checked) == 0 {
 		return
 	}

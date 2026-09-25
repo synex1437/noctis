@@ -970,7 +970,11 @@ func resumeWait(sid, release string) {
 	queuePath := sessionQueueFile(cfg, sid, dirs...)
 	prompt := orDefault(getString(wait, "queuedPrompt"), getString(resume, "prompt"))
 	launchDir := dirs[0]
-	if queuePath != "" && queueTrusted(cfg, queuePath) {
+	view, trusted := queueView{}, false
+	if queuePath != "" {
+		view, trusted = trustedQueueSnapshot(cfg, queuePath)
+	}
+	if trusted {
 		if len(dirs) > 1 && queueFile(cfg, dirs[1]) == queuePath {
 			launchDir = dirs[1]
 		}
@@ -980,7 +984,7 @@ func resumeWait(sid, release string) {
 				listName = queuePath
 			}
 			prompt += " Task list: " + listName + " (do not redo items already marked done)"
-			items := queueSnapshot(queuePath).items
+			items := view.items
 			if len(items) > 3 {
 				items = items[:3]
 			}

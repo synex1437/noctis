@@ -1440,8 +1440,9 @@ func onStop(input, cfg object) {
 	if queuePath == "" {
 		return
 	}
-	if trusted, changed, legacy := queueTrustGap(cfg, queuePath); !trusted {
-		if (legacy || len(changed) > 0) && queueSnapshot(queuePath).total > 0 {
+	content, _ := readQueueText(queuePath)
+	if trusted, changed, legacy := queueTrustGapOf(cfg, queuePath, content); !trusted {
+		if (legacy || len(changed) > 0) && queueSnapshotOf(queuePath, content).total > 0 {
 			noteQueueTrustGap(sid, queuePath, changed, legacy, now)
 		}
 		return
@@ -1450,8 +1451,8 @@ func onStop(input, cfg object) {
 	if isAutoQueue(queuePath) {
 		queueLabel = T("queue.autoLabel")
 	}
-	snapshot := queueSnapshot(queuePath)
-	syncDoneIssues(cfg, queuePath, getString(input, "cwd"))
+	snapshot := queueSnapshotOf(queuePath, content)
+	syncDoneIssues(cfg, queuePath, content, getString(input, "cwd"))
 	if snapshot.total == 0 {
 		driven := getMap(getMap(state, "stopGuard"), sid) != nil || isAutoQueue(queuePath)
 		updateState(func(next object) { delete(stateMap(next, "stopGuard"), sid) })
@@ -1559,7 +1560,7 @@ func onStop(input, cfg object) {
 		}
 		systemMessage, waitContext = outcome.notice, withCutOffNote(sid, outcome.context)
 	}
-	if gated := gateQueue(cfg, input, sid, queuePath, queueLabel, now); gated != nil {
+	if gated := gateQueue(cfg, input, sid, queuePath, content, queueLabel, now); gated != nil {
 		if reason := getString(gated, "reason"); reason != "" {
 			updateState(func(next object) { stateMap(next, "stopGuard")[sid] = guard })
 			if waitContext != "" {
