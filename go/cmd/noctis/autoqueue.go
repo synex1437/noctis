@@ -287,22 +287,31 @@ func autoQueueDir() string {
 }
 
 func startAutoQueue(sid, cwd string, items []string, now int64) string {
-	ensureDir(autoQueueDir())
-	path := filepath.Join(autoQueueDir(), safeName(sid)+".md")
 	lines := []string{"# " + pluginName + " — job from the prompt at " + localISO(float64(now)), ""}
 	for _, item := range items {
 		lines = append(lines, "- [ ] "+item)
 	}
+	path := writeSessionQueue(sid, object{"cwd": cwd, "at": float64(now), "items": float64(len(items))}, lines)
+	if path == "" {
+		return ""
+	}
+	journal(sid, "UserPromptSubmit", "auto-queue", fmt.Sprintf("%d items", len(items)), nil)
+	logInfo("auto queue for %s: %d items in %s", sid, len(items), path)
+	return path
+}
+
+func writeSessionQueue(sid string, record object, lines []string) string {
+	ensureDir(autoQueueDir())
+	path := filepath.Join(autoQueueDir(), safeName(sid)+".md")
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
 		warn("auto queue could not be written: %v", err)
 		return ""
 	}
+	record["path"] = path
 	updateState(func(state object) {
-		stateMap(state, "autoQueues")[sid] = object{"path": path, "cwd": cwd, "at": float64(now), "items": float64(len(items))}
+		stateMap(state, "autoQueues")[sid] = record
 		delete(stateMap(state, "queueVerify"), queueTrustKey(path))
 	})
-	journal(sid, "UserPromptSubmit", "auto-queue", fmt.Sprintf("%d items", len(items)), nil)
-	logInfo("auto queue for %s: %d items in %s", sid, len(items), path)
 	return path
 }
 
@@ -322,22 +331,29 @@ func endAutoQueue(sid string, removeFile bool) {
 }
 
 func queueFileFor(cfg object, cwd, sid string) string {
-	return sessionQueueFile(cfg, sid, cwd)
+	if file := queueFile(cfg, cwd); file != "" {
+		return file
+	}
+	return sessionQueueOr(sid, func() string { return "" })
 }
 
 func sessionQueueFile(cfg object, sid string, dirs ...string) string {
-	if file := queueFile(cfg, dirs...); file != "" {
+	return sessionQueueOr(sid, func() string { return followedQueueFile(cfg, dirs...) })
+}
+
+func sessionQueueOr(sid string, project func() string) string {
+	record := getMap(getMap(readState(), "autoQueues"), sid)
+	own := getString(record, "path")
+	if own != "" && statSafe(own) == nil {
+		own = ""
+	}
+	if own != "" && getString(record, "source") != "" {
+		return own
+	}
+	if file := project(); file != "" {
 		return file
 	}
-	record := getMap(getMap(readState(), "autoQueues"), sid)
-	if record == nil {
-		return ""
-	}
-	path := getString(record, "path")
-	if statSafe(path) == nil {
-		return ""
-	}
-	return path
+	return own
 }
 
 func isAutoQueue(path string) bool {
@@ -359,6 +375,10 @@ func trustedQueueSnapshot(cfg object, path string) (queueView, bool) {
 
 func queueNeedsTrust(cfg object, path string) bool {
 	return !isAutoQueue(path) && getBool(section(cfg, "queue"), "requireTrust", true)
+}
+
+func queueFollowed(cfg object, path string) bool {
+	return !queueNeedsTrust(cfg, path) || numberOr(getMap(getMap(readState(), "queueTrust"), queueTrustKey(path)), "at", 0) > 0
 }
 
 func queueEditRule(cfg object, path string) string {
