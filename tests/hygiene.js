@@ -147,6 +147,24 @@ for (const name of fs.readdirSync(workflowDir).filter((file) => /\.ya?ml$/.test(
   }
 }
 
+const release = fs.readFileSync(path.join(workflowDir, 'release.yml'), 'utf8');
+const releaseTrigger = /^on:\n((?: {2}.*\n)+)/m.exec(release);
+if (!releaseTrigger || releaseTrigger[1] !== '  workflow_run:\n    workflows: [ci]\n    types: [completed]\n    branches: [main]\n') {
+  problems.push('release.yml starts on something other than a finished ci run on main, so a version waits for a tag pushed by hand');
+}
+for (const [pattern, problem] of [
+  [/github\.event\.workflow_run\.conclusion == 'success'/, 'would release a commit ci failed'],
+  [/github\.event\.workflow_run\.event == 'push'/, 'would act on the ci run of a pull request, whose head branch a fork can name main'],
+  [/git ls-remote --exit-code --tags origin "refs\/tags\/\$tag"/, 'would publish a version again on every push to main'],
+  [/target_commitish: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/, 'would tag the newest commit on main instead of the one ci tested'],
+]) {
+  if (!pattern.test(release)) problems.push(`release.yml ${problem}`);
+}
+const releaseCheckouts = release.match(/uses: actions\/checkout@v4\n(?: {8}.*\n)*/g) || [];
+if (!releaseCheckouts.length || releaseCheckouts.some((step) => !step.includes('ref: ${{ github.event.workflow_run.head_sha }}'))) {
+  problems.push('release.yml would build another commit than the one ci tested');
+}
+
 const engineSources = fs.readdirSync(path.join(ROOT, 'go', 'cmd', 'noctis'))
   .filter((name) => name.endsWith('.go') && !name.endsWith('_test.go'))
   .map((name) => ({ name, text: fs.readFileSync(path.join(ROOT, 'go', 'cmd', 'noctis', name), 'utf8') }));
