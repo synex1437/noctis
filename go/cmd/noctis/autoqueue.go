@@ -311,7 +311,7 @@ func endAutoQueue(sid string, removeFile bool) {
 	if record == nil {
 		return
 	}
-	if removeFile {
+	if removeFile && isAutoQueue(getString(record, "path")) {
 		_ = os.Remove(getString(record, "path"))
 	}
 	updateState(func(next object) { delete(stateMap(next, "autoQueues"), sid) })
@@ -337,7 +337,7 @@ func sessionQueueFile(cfg object, sid string, dirs ...string) string {
 }
 
 func isAutoQueue(path string) bool {
-	return path != "" && filepath.Dir(path) == autoQueueDir()
+	return path != "" && path == filepath.Join(autoQueueDir(), filepath.Base(path))
 }
 
 func queueTrusted(cfg object, path string) bool {

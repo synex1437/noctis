@@ -162,7 +162,7 @@ Install for another tool from the zip or clone: `./scripts/install.sh --host cod
 | `usage.json` (+ `.bak`) | Status-line captures, per-session model, context and the version its status line reported, burst history — a stable contract other status lines can read; each window also carries `at`, the time it was last reported |
 | `fable.json` | The windows from the last OAuth usage fetch (on Codex, from `codex app-server`), with its error and back-off |
 | `release.json` | The last published version the daily check saw |
-| `state.json` (+ `.bak`) | Pending waits and hand-offs, checkpoint records, queue trust, what the router learned, notices already shown |
+| `state.json` (+ `.bak`) | Pending waits and hand-offs, checkpoint records, queue trust, what the router learned, notices already shown. Whatever file or git ref a record names, dropping the record deletes only a checkpoint or checklist whose path leads straight into `checkpoints/` or `queues/` (no subfolder, no `..`) and a snapshot ref under `refs/noctis/` itself, never the branch a symbolic ref there points at |
 | `decisions.jsonl`, `guard.log`, `errors.log` | The journal behind `noctis why`, the full log, and its WARN/ERROR lines — each rotated to `.1` at 512 KB |
 | `resume-output.log` | Output of headless relaunches, rotated at 512 KB |
 | `hooks-debug.log` | Raw hook payloads, only with `NOCTIS_DEBUG_HOOKS` |
