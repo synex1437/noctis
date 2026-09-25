@@ -144,3 +144,20 @@ func TestRelaunchEnvDropsTheConfigDirInAnyCaseOnWindows(t *testing.T) {
 		t.Fatalf("on unix only the exact name is the variable Claude reads, got %q", got)
 	}
 }
+
+func TestOnlyAWindowsRelaunchGetsThePromptAsOneScrubbedLine(t *testing.T) {
+	previous := isWindows
+	t.Cleanup(func() { isWindows = previous })
+	typed := "keep \"100%\" of the rows\n^ then run the tests"
+	isWindows = true
+	if got, want := relaunchPrompt(typed), "keep '100'' of the rows ' then run the tests"; got != want {
+		t.Fatalf("a Windows relaunch prompt can pass cmd.exe, so quotes, %% and ^ are replaced and the lines joined: got %q, want %q", got, want)
+	}
+	isWindows = false
+	if got := relaunchPrompt(typed); got != typed {
+		t.Fatalf("elsewhere the prompt reaches the tool as an argument no shell reads, so it stays as typed: got %q", got)
+	}
+	if got := relaunchPrompt("- add tests"); got != "Continue. - add tests" {
+		t.Fatalf("a prompt that starts with a dash must not be read as an option: got %q", got)
+	}
+}
