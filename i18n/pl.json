@@ -415,6 +415,7 @@
   "queue.trustChanged": "☰ %s ma %d otwartą pozycję/e dodaną/e lub zmienioną/e od chwili, gdy mu zaufano; pull albo zmiana gałęzi może je przynieść. Nie prowadzi tej sesji, dopóki ich nie przeczytasz i znów mu nie zaufasz: noctis queue trust (%s)",
   "queue.importTrust": "%[2]s zawiera teraz %[1]d otwartą pozycję/e, której/ym nie zaufano: nie prowadzą żadnej sesji, dopóki ich nie przeczytasz i ponownie nie uruchomisz noctis queue trust.",
   "queue.trustByModel": "🔒 Claude próbował sam uruchomić noctis queue trust; noctis odmówił, bo zaufany plik prowadzi sesje bez pytania, a zaufać mu możesz tylko ty, po jego przeczytaniu. Aby mu zaufać: !noctis queue trust (%s)",
+  "queue.dayLimitMessage": "⛔ Kolejka: ta sesja była dziś kontynuowana %s razy i osiągnęła dzienny limit (queue.maxContinuesPerDay); automatyczna kontynuacja zatrzymana do północy, otwartych pozycji: %d.",
   "queue.trustGranted": "Ten plik może prowadzić sesje: %s",
   "queue.trustRevoked": "Ten plik już nie prowadzi sesji: %s",
   "queue.trustNone": "Nie ma tu pliku kolejki (szukano: %s).",

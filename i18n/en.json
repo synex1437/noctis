@@ -415,6 +415,7 @@
   "queue.trustChanged": "☰ %s has %d open item(s) added or changed since you trusted it; a pull or a branch switch can bring them. It is not driving this session until you read them and trust it again: noctis queue trust (%s)",
   "queue.importTrust": "%[2]s now holds %[1]d open item(s) you have not trusted: they drive no session until you read them and run noctis queue trust again.",
   "queue.trustByModel": "🔒 Claude tried to run noctis queue trust itself; noctis refused, because a trusted queue file drives sessions without asking and only you should trust one, after reading it. To trust it yourself: !noctis queue trust (%s)",
+  "queue.dayLimitMessage": "⛔ Queue: this session was continued %s times today and reached the daily limit (queue.maxContinuesPerDay); auto-continue stopped until midnight, %d item(s) open.",
   "queue.trustGranted": "This file may drive sessions: %s",
   "queue.trustRevoked": "This file no longer drives sessions: %s",
   "queue.trustNone": "No queue file here (looked for: %s).",

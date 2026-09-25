@@ -415,6 +415,7 @@
   "queue.trustChanged": "☰ %s ha %d elemento/i aperto/i aggiunto/i o modificato/i da quando gli hai dato fiducia; un pull o un cambio di branch può portarli. Non guida questa sessione finché non li leggi e non gli dai di nuovo fiducia: noctis queue trust (%s)",
   "queue.importTrust": "%[2]s ora contiene %[1]d elemento/i aperto/i a cui non hai dato fiducia: non guidano nessuna sessione finché non li leggi e non esegui di nuovo noctis queue trust.",
   "queue.trustByModel": "🔒 Claude ha provato a eseguire da solo noctis queue trust; noctis l'ha rifiutato, perché un file fidato guida le sessioni senza chiedere e solo tu dovresti dargli fiducia, dopo averlo letto. Per dargli fiducia: !noctis queue trust (%s)",
+  "queue.dayLimitMessage": "⛔ Coda: questa sessione è stata proseguita %s volte oggi e ha raggiunto il limite giornaliero (queue.maxContinuesPerDay); continuazione automatica fermata fino a mezzanotte, %d elemento/i aperto/i.",
   "queue.trustGranted": "Questo file può guidare le sessioni: %s",
   "queue.trustRevoked": "Questo file non guida più le sessioni: %s",
   "queue.trustNone": "Nessun file di coda qui (cercato: %s).",

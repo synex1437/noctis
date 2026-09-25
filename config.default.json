@@ -135,6 +135,7 @@
     ],
     "maxIdleContinues": 4,
     "maxContinuesPerSession": 200,
+    "maxContinuesPerDay": 600,
     "completionPromise": "",
     "github": {
       "closeOnDone": false,

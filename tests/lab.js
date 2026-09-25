@@ -962,6 +962,15 @@ async function scenarioQueueContinuation(acc) {
   check('stuck queue: counters reset, the next cycle continues again', acc.state().stopGuard.qc1.idle === 0 && acc.state().stopGuard.qc1.forced === 0 && acc.state().stopGuard.qc1.cycles === 1 && acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false }).includes('"decision":"block"'), true);
   for (let i = 0; i < 4; i += 1) stuck = acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
   check('stuck queue: the warning is not repeated for the same file', !stuck.includes('"decision":"block"') && !stuck.includes('Kuyruk ilerlemiyor'), true);
+  acc.setConfig((config) => {
+    config.queue.maxContinuesPerDay = 2;
+  });
+  const dayStops = [0, 1, 2, 3].map(() => acc.hook({ hook_event_name: 'Stop', session_id: 'qd1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false }));
+  check('daily continue limit: two continues, then the stop goes through with one notice', dayStops.map((out) => out.includes('"decision":"block"')).join(' ') === 'true true false false' && dayStops[2].includes('günlük sınıra ulaştı') && dayStops[3] === '', true);
+  check('daily continue limit journaled', acc.run(['why', '--last', '1']).includes('daily continue limit'), true);
+  acc.setConfig((config) => {
+    config.queue.maxContinuesPerDay = 600;
+  });
   writeQueue(0);
   const finished = acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('finished queue: one done notice for a session that was driven through it', finished.includes('Kuyruk bitti') && finished.includes('TASKS.md') && !finished.includes('"decision":"block"'), true);
