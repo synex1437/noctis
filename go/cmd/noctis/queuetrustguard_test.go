@@ -67,3 +67,53 @@ func TestTheShippedHooksSeeClaudesShellCalls(t *testing.T) {
 		}
 	}
 }
+
+func TestClaudeCannotRunQueueTrustThroughQuotesEscapesOrAnotherRunner(t *testing.T) {
+	_, project := queueTrustSandbox(t, false)
+	writeQueueFile(t, project, "# q\n- [ ] migrate the users table\n")
+	for _, call := range []struct{ tool, command string }{
+		{"Bash", `noctis queue t'r'ust`},
+		{"Bash", `noctis queue tru""st`},
+		{"Bash", `noct\is queue trust`},
+		{"Bash", `noctis queue tr\ust`},
+		{"PowerShell", `cmd /c no^ctis queue trust`},
+		{"PowerShell", "no`ctis queue trust"},
+		{"Bash", `bash -c noctis\ queue\ trust`},
+		{"Bash", `echo 'noctis queue trust' | sh`},
+		{"Bash", `source <(echo 'noctis queue trust')`},
+		{"Bash", `$(which noctis) queue trust`},
+		{"Bash", `echo "$(noctis queue trust)"`},
+		{"Bash", "echo \"`noctis queue trust`\""},
+		{"Bash", `echo trust | xargs noctis queue`},
+		{"Bash", `env -S 'noctis queue trust'`},
+		{"PowerShell", `iex 'noctis queue trust'`},
+		{"PowerShell", `Invoke-Expression "noctis queue trust"`},
+		{"PowerShell", `Start-Process noctis -ArgumentList 'queue','trust'`},
+		{"PowerShell", `& (Get-Command noctis) queue trust`},
+		{"Bash", `python3 -c "import subprocess; subprocess.run(['noctis','queue','trust'])"`},
+		{"Bash", `node -e "require('child_process').execSync('noctis queue trust')"`},
+		{"Bash", `x='noctis queue trust'; eval "$x"`},
+		{"PowerShell", `python -c "import os; os.system(r'C:\Users\me\.claude\plugins\noctis\bin\noctis.exe queue trust')"`},
+	} {
+		run := runHostHook(t, "claude", shellToolCall("tg4", project, call.tool, call.command), "tg4", 10*time.Second)
+		if permissionOf(run.answer) != "deny" || getString(run.answer, "systemMessage") != T("queue.trustByModel", pluginName) {
+			t.Errorf("Claude's %s call %q runs noctis queue trust, and noctis did not deny it: %v", call.tool, call.command, run.answer)
+		}
+	}
+}
+
+func TestShellCallsThatOnlyQuoteTheCommandStillPass(t *testing.T) {
+	_, project := queueTrustSandbox(t, false)
+	for _, call := range []struct{ tool, command string }{
+		{"Bash", `cd ~/noctis && node tests/lab.js "queue trust"`},
+		{"Bash", `grep -rn "noctis queue trust" . | head -5`},
+		{"PowerShell", `Select-String -Path README.md -Pattern "noctis queue trust"`},
+		{"Bash", `bash -c 'noctis queue status && echo trust'`},
+		{"Bash", "git commit -m \"$(cat <<'EOF'\nqueue: the hook denies noctis queue trust run by Claude\n\nThe user sees \"Claude tried to run\nnoctis queue trust itself\" and runs it after reading the file.\nEOF\n)\""},
+		{"Bash", "gh pr create --title \"queue trust\" --body \"$(cat <<'EOF'\nRun `noctis queue trust` yourself, after reading TASKS.md.\nEOF\n)\""},
+	} {
+		if run := runHostHook(t, "claude", shellToolCall("tg5", project, call.tool, call.command), "tg5", 10*time.Second); run.answer != nil {
+			t.Errorf("the %s call %q only quotes the command, and noctis answered it: %v", call.tool, call.command, run.answer)
+		}
+	}
+}

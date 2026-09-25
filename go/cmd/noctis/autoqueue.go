@@ -488,9 +488,20 @@ func touchQueueTrust(path string, now int64) {
 
 var nestedShells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true, "pwsh": true, "powershell": true, "cmd": true, "eval": true}
 
+var codeRunners = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true, "pwsh": true, "powershell": true, "cmd": true, "py": true, "node": true, "perl": true, "ruby": true, "php": true, "osascript": true, "xargs": true, "eval": true, "source": true, "iex": true, "invoke-expression": true, "start-process": true, "start": true, "saps": true}
+
+var heredocReaders = map[string]bool{"cat": true, "tee": true, "git": true, "gh": true}
+
+var (
+	pythonRunner = lazyRegexp(`^python[0-9.]*$`)
+	dotSourcing  = lazyRegexp(`(?m)(?:^|[;&|({])[ \t]*\.[ \t]`)
+	splitString  = lazyRegexp(`^(?:-[a-z]*s|--split-string)`)
+	shellQuotes  = strings.NewReplacer("'", "", `"`, "", "^", "", "`", "")
+)
+
 func denyQueueTrustByModel(input object) {
 	command := getString(getMap(input, "tool_input"), "command")
-	if !strings.Contains(command, "trust") || !runsQueueTrust(command, 0) {
+	if !runsQueueTrust(command, getString(input, "tool_name") == "PowerShell") {
 		return
 	}
 	cfg := loadConfig()
@@ -504,33 +515,288 @@ func denyQueueTrustByModel(input object) {
 	})
 }
 
-func runsQueueTrust(command string, depth int) bool {
+func runsQueueTrust(command string, powershell bool) bool {
+	plain := strings.ReplaceAll(strings.ToLower(shellQuotes.Replace(command)), `\`, "")
+	if !strings.Contains(plain, "trust") || !strings.Contains(plain, pluginName) {
+		return false
+	}
+	text := command
+	if reduced := withoutHeredocData(command); reduced != command && !runsCodeAnotherWay(reduced, shellTokens(reduced), powershell, true) {
+		text = reduced
+	}
+	if namesQueueTrust(text, 0) {
+		return true
+	}
+	words := shellTokens(text)
+	return runsCodeAnotherWay(text, words, powershell, false) && trustFollowsNoctis(words)
+}
+
+func namesQueueTrust(command string, depth int) bool {
 	if depth > 3 {
 		return false
 	}
 	for _, words := range looseShellSegments(command) {
 		shell := false
 		for index, word := range words {
-			if programName(word.text) == pluginName {
+			plain, path := wordPrograms(word.text)
+			if plain == pluginName || path == pluginName {
 				rest := []string{}
 				for _, next := range words[index+1:] {
-					rest = append(rest, next.text)
+					rest = append(rest, plainWord(next.text))
 				}
 				if parsed := parseArgs(rest); len(parsed.positional) >= 2 && parsed.positional[0] == "queue" && parsed.positional[1] == "trust" {
 					return true
 				}
 			}
-			if shell && word.quoted && runsQueueTrust(word.text, depth+1) {
+			if shell && word.quoted && namesQueueTrust(word.text, depth+1) {
 				return true
 			}
-			shell = shell || nestedShells[programName(word.text)]
+			shell = shell || nestedShells[plain] || nestedShells[path]
 		}
 	}
 	return false
 }
 
+func plainWord(word string) string {
+	return strings.ReplaceAll(strings.ToLower(shellQuotes.Replace(word)), `\`, "")
+}
+
+func wordPrograms(word string) (string, string) {
+	lower := strings.ToLower(shellQuotes.Replace(word))
+	return programName(strings.ReplaceAll(lower, `\`, "")), programName(strings.ReplaceAll(lower, `\`, "/"))
+}
+
 func programName(word string) string {
 	return strings.TrimSuffix(strings.ToLower(word[strings.LastIndexAny(word, `/\`)+1:]), ".exe")
+}
+
+type shellToken struct {
+	plain, path string
+}
+
+func shellTokens(text string) []shellToken {
+	words := []shellToken{}
+	for _, field := range strings.FieldsFunc(strings.ToLower(shellQuotes.Replace(text)), func(r rune) bool {
+		return r == ' ' || r == '\t' || r == '\n' || r == '\r' || strings.ContainsRune("|;&()<>{}[],$", r)
+	}) {
+		parts := []string{field}
+		if !strings.HasPrefix(field, "-") {
+			parts = strings.Split(field, "=")
+		}
+		for _, part := range parts {
+			if part != "" {
+				words = append(words, shellToken{plain: strings.ReplaceAll(part, `\`, ""), path: strings.ReplaceAll(part, `\`, "/")})
+			}
+		}
+	}
+	return words
+}
+
+func (word shellToken) names(match func(string) bool) bool {
+	return match(programName(word.plain)) || match(programName(word.path))
+}
+
+func runsCodeAnotherWay(text string, words []shellToken, powershell, lenient bool) bool {
+	if substitutes(text, powershell, lenient) || dotSourcing.get().MatchString(text) {
+		return true
+	}
+	for index, word := range words {
+		if word.names(func(name string) bool { return codeRunners[name] || pythonRunner.get().MatchString(name) }) {
+			return true
+		}
+		if word.names(func(name string) bool { return name == "env" }) {
+			for _, next := range words[index+1:] {
+				if splitString.get().MatchString(next.plain) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func substitutes(text string, powershell, lenient bool) bool {
+	quote := byte(0)
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if quote == '\'' {
+			if c == '\'' {
+				quote = 0
+			}
+			continue
+		}
+		next := byte(0)
+		if i+1 < len(text) {
+			next = text[i+1]
+		}
+		switch {
+		case c == '\\' && !powershell:
+			i++
+		case c == '`':
+			return true
+		case c == '\'' && quote == 0:
+			quote = '\''
+		case c == '"':
+			quote ^= '"'
+		case c == '$' && next == '(':
+			if !lenient || !flagArgument(text[:i]) {
+				return true
+			}
+		case (c == '<' || c == '>') && next == '(' && quote == 0 && !powershell:
+			return true
+		case c == '&' && quote == 0 && strings.HasPrefix(strings.TrimLeft(text[i+1:], " \t"), "(") && (i == 0 || !strings.ContainsRune("&<>", rune(text[i-1]))):
+			return true
+		}
+	}
+	return false
+}
+
+func flagArgument(before string) bool {
+	before = strings.TrimSuffix(before, `"`)
+	fields := strings.Fields(before)
+	if len(fields) == 0 {
+		return false
+	}
+	last := fields[len(fields)-1]
+	previous := ""
+	if len(fields) > 1 {
+		previous = fields[len(fields)-2]
+	}
+	switch {
+	case strings.HasSuffix(before, " ") || strings.HasSuffix(before, "\t"):
+		return strings.HasPrefix(last, "-")
+	case strings.HasSuffix(last, "="):
+		return strings.HasPrefix(last, "-") || strings.HasPrefix(previous, "-")
+	}
+	return false
+}
+
+func trustFollowsNoctis(words []shellToken) bool {
+	xargs, trust := false, false
+	for _, word := range words {
+		xargs = xargs || word.names(func(name string) bool { return name == "xargs" })
+		trust = trust || word.plain == "trust"
+	}
+	for index, word := range words {
+		if !word.names(func(name string) bool { return name == pluginName }) {
+			continue
+		}
+		rest, ok := afterWord(words[index+1:], "queue")
+		if !ok {
+			continue
+		}
+		if _, ok := afterWord(rest, "trust"); ok || xargs && trust {
+			return true
+		}
+	}
+	return false
+}
+
+func afterWord(words []shellToken, want string) ([]shellToken, bool) {
+	for i := 0; i < len(words); i++ {
+		word := words[i].plain
+		switch {
+		case word == want:
+			return words[i+1:], true
+		case strings.HasPrefix(word, "--"):
+			name, _, given := strings.Cut(word[2:], "=")
+			if !given && !switchFlags[name] && i+1 < len(words) && !strings.HasPrefix(words[i+1].plain, "--") {
+				i++
+			}
+		case strings.HasPrefix(word, "-"):
+			if i+1 < len(words) && words[i+1].plain != want && !strings.HasPrefix(words[i+1].plain, "-") {
+				i++
+			}
+		default:
+			return nil, false
+		}
+	}
+	return nil, false
+}
+
+type heredoc struct {
+	word, reader string
+	quoted, tabs bool
+}
+
+func withoutHeredocData(command string) string {
+	lines := strings.SplitAfter(command, "\n")
+	var kept strings.Builder
+	for i := 0; i < len(lines); i++ {
+		kept.WriteString(lines[i])
+		for _, doc := range heredocsOpenedIn(lines[i]) {
+			end := i + 1
+			for end < len(lines) && !doc.endsAt(lines[end]) {
+				end++
+			}
+			if end == len(lines) {
+				break
+			}
+			body := strings.Join(lines[i+1:end+1], "")
+			if !heredocReaders[doc.reader] || !doc.quoted && (strings.Contains(body, "$(") || strings.Contains(body, "`")) {
+				kept.WriteString(body)
+			}
+			i = end
+		}
+	}
+	return kept.String()
+}
+
+func (doc heredoc) endsAt(line string) bool {
+	line = strings.TrimRight(line, "\r\n")
+	if doc.tabs {
+		line = strings.TrimLeft(line, "\t")
+	}
+	return line == doc.word
+}
+
+func heredocsOpenedIn(line string) []heredoc {
+	found := []heredoc{}
+	for i := 0; i+1 < len(line); i++ {
+		if line[i] != '<' || line[i+1] != '<' || i > 0 && line[i-1] == '<' || i+2 < len(line) && line[i+2] == '<' {
+			continue
+		}
+		doc := heredoc{reader: segmentProgram(line[:i])}
+		j := i + 2
+		if j < len(line) && line[j] == '-' {
+			doc.tabs = true
+			j++
+		}
+		for j < len(line) && (line[j] == ' ' || line[j] == '\t') {
+			j++
+		}
+		var word strings.Builder
+		for ; j < len(line) && !strings.ContainsRune(" \t\r\n;&|()<>", rune(line[j])); j++ {
+			switch c := line[j]; c {
+			case '\'', '"':
+				end := strings.IndexByte(line[j+1:], c)
+				if end < 0 {
+					end = len(line) - j - 1
+				}
+				word.WriteString(line[j+1 : j+1+end])
+				doc.quoted = true
+				j += end + 1
+			case '\\':
+				doc.quoted = true
+			default:
+				word.WriteByte(c)
+			}
+		}
+		if doc.word = word.String(); doc.word != "" {
+			found = append(found, doc)
+		}
+		i = j - 1
+	}
+	return found
+}
+
+func segmentProgram(before string) string {
+	fields := strings.Fields(before[strings.LastIndexAny(before, ";&|(){}`")+1:])
+	if len(fields) == 0 {
+		return ""
+	}
+	plain, _ := wordPrograms(fields[0])
+	return plain
 }
 
 func looseShellSegments(command string) [][]shellWord {
