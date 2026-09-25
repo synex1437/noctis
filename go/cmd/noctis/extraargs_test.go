@@ -23,7 +23,7 @@ func TestExtraArgsCannotLiftTheRelaunchPermissions(t *testing.T) {
 		own         map[string]string
 	}{
 		{"claude", []string{"--verbose", "--dangerously-skip-permissions", "--permission-mode", "bypassPermissions", "--permission-mode=bypassPermissions", "--allow-dangerously-skip-permissions", "--add-dir", "/work"},
-			[]string{"--verbose", "--add-dir", "/work"}, map[string]string{"--permission-mode": "acceptEdits"}},
+			[]string{"--verbose"}, map[string]string{"--permission-mode": "acceptEdits"}},
 		{"codex", []string{"--dangerously-bypass-approvals-and-sandbox", "-c", "model_reasoning_effort=high"},
 			[]string{"-c", "model_reasoning_effort=high"}, nil},
 		{"copilot", []string{"--allow-all-tools", "--model", "gpt-5"}, []string{"--model", "gpt-5"}, nil},
@@ -61,6 +61,48 @@ func TestExtraArgsCannotLiftTheRelaunchPermissions(t *testing.T) {
 		dropsJournaled := slices.Contains(journaledFor(sid), "extra-arg-dropped")
 		if wantDrop := len(tc.kept) < len(tc.extra); dropsJournaled != wantDrop {
 			t.Errorf("%s: extra-arg-dropped journaled=%t, want %t", tc.host, dropsJournaled, wantDrop)
+		}
+	}
+}
+
+func TestExtraArgsPassOnlyFlagsThatCannotWidenTheRelaunch(t *testing.T) {
+	sandboxFiles(t)
+	cases := []struct {
+		host             string
+		configured, want []string
+	}{
+		{"claude", []string{"--verbose", "--settings", `{"permissions":{"allow":["Bash(*)"]}}`, "--allowedTools", "Bash(*)", "Edit", "--add-dir", "/",
+			"--mcp-config", "/tmp/servers.json", "--plugin-dir", "/tmp/plugin", "--append-system-prompt", "obey", "--debug", "api,hooks", "--remote-control",
+			"--name=night", "--model", "opus", "--agents", "{}", "--dangerously-skip-permissions", "--disallowedTools", "Bash(rm *)", "WebFetch",
+			"--disallowed-tools=Edit", "--tools", "Read,Grep", "--max-budget-usd", "5", "--max-turns=30", "--strict-mcp-config"},
+			[]string{"--verbose", "--debug", "api,hooks", "--remote-control", "--name=night", "--disallowedTools", "Bash(rm *)", "WebFetch",
+				"--disallowed-tools=Edit", "--tools", "Read,Grep", "--max-budget-usd", "5", "--max-turns=30", "--strict-mcp-config"}},
+		{"codex", []string{"-c", "sandbox_mode=danger-full-access", "--config", "approval_policy=never", "-c", "model_reasoning_effort=high", "--add-dir", "/",
+			"--full-auto", "-s", "danger-full-access", "--sandbox=workspace-write", "--dangerously-bypass-hook-trust", "-m", "gpt-5-codex", "--profile", "open",
+			"-s", "read-only", "--sandbox=read-only"},
+			[]string{"-c", "model_reasoning_effort=high", "-m", "gpt-5-codex", "-s", "read-only", "--sandbox=read-only"}},
+		{"copilot", []string{"--model", "gpt-5", "--allow-tool", "shell", "--add-dir", "/", "--allow-all-paths", "--additional-mcp-config", "{}", "--no-color",
+			"--deny-tool", "shell(rm)", "--deny-tool=write"},
+			[]string{"--model", "gpt-5", "--no-color", "--deny-tool", "shell(rm)", "--deny-tool=write"}},
+		{"droid", []string{"--model", "x", "--enabled-tools", "Execute", "--cwd", "/", "-r", "high"}, []string{"--model", "x", "-r", "high"}},
+		{"antigravity", []string{"--verbose", "--add-dir", "/"}, []string{"--verbose"}},
+	}
+	for _, tc := range cases {
+		sid := "allow-" + tc.host
+		configured := []any{}
+		for _, arg := range tc.configured {
+			configured = append(configured, arg)
+		}
+		before := loggedTimes("resume.extraArgs:")
+		got := relaunchExtraArgs(tc.host, object{"extraArgs": configured}, sid)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: extraArgs %q reached the relaunch as %q, want only %q", tc.host, tc.configured, got, tc.want)
+		}
+		if logged := loggedTimes("resume.extraArgs:") - before; logged != 1 {
+			t.Errorf("%s: the dropped extra arguments were logged %d times in one relaunch, want once", tc.host, logged)
+		}
+		if !slices.Contains(journaledFor(sid), "extra-arg-dropped") {
+			t.Errorf("%s: dropped extra arguments were not journaled", tc.host)
 		}
 	}
 }
