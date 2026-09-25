@@ -25,6 +25,28 @@ func newWordMatcher(turkishStems, englishWords []string) wordMatcher {
 	return wordMatcher{pattern: pattern}
 }
 
+func newOwnWorkPattern(pointers, turkishNouns, englishNouns, possessed []string) *lazyRe {
+	nouns := make([]string, 0, len(turkishNouns)+len(englishNouns))
+	for _, stem := range turkishNouns {
+		nouns = append(nouns, stem+`\p{L}*`)
+	}
+	noun := `(?:` + strings.Join(append(nouns, englishNouns...), "|") + `)`
+	pointer := `(?:` + strings.Join(pointers, "|") + `)(?:[^\p{L}\p{N}_]+[\p{L}\p{N}_'’]+){0,2}[^\p{L}\p{N}_]+` + noun
+	pronoun := noun + `[^\p{L}\p{N}_]+(?:this|these)\s*(?:[?.!,;:]|$)`
+	owned := `(?:` + strings.Join(possessed, "|") + `)\p{L}*`
+	return lazyRegexp(`(?i)(?:^|[^\p{L}\p{N}_])(?:` + pointer + `|` + pronoun + `|` + owned + `)(?:[^\p{L}\p{N}_]|$)`)
+}
+
+func pointsAtOwnWork(text string) bool {
+	for _, part := range ownWorkBreaks.Split(text, -1) {
+		if ownWorkPattern.MatchString(part) {
+			return true
+		}
+	}
+	_, research := strongWebWords.find(text)
+	return !research && codeIdentifierPattern.MatchString(text)
+}
+
 func (matcher wordMatcher) find(text string) (string, bool) {
 	match := matcher.pattern.FindStringSubmatch(text)
 	if match == nil {
@@ -46,6 +68,19 @@ var (
 		[]string{"haber", "kaynaklar", "literatür", "karşılaştır", "incelemeler", "makale", "fiyat", "trendler", "piyasa", "avantaj", "dezavantaj", "en iyi", "en yeni", "hangisi daha iyi", "web'?de ara", "internette ara", "google"},
 		[]string{"güncel", "kaynak", "kaynakça", "latest", "newest", "recent", "news", "sources", "literature", "compar(e|ison)", "which is better", "reviews", "articles", "papers?", "prices", "price of", "pricing", "trends", "market", "benchmarks", "pros and cons", "best"},
 	)
+	codeIdentifierPattern = lazyRegexp(`(?:^|[^\p{L}\p{N}_@#])(?:[a-z]{2,}[A-Z][a-z]|[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9]|[A-Za-z_]\w*\(\))`)
+	ownWorkBreaks         = lazyRegexp(`(?i)\b(?:year|week|month)['’]s\b|\bcode\s+editors?\b|\b(?:promo|zip|postal|discount|coupon|dress)\s+codes?\b|(?:^|\s)kod\s+editör\p{L}*|(?:^|\s)(?:indirim|promosyon|kupon|posta)\s+kod\p{L}*`)
+	ownWorkPattern        = newOwnWorkPattern(
+		[]string{"this", "these", "our", "my", "bu", "şu", "bunlar", "şunlar", "bizim", "benim"},
+		[]string{"kod", "dosya", "sınıf", "bileşen", "şema", "klasör", "dizin", "implementasyon"},
+		[]string{`modül([üu]\p{L}*|d[ea]\p{L}*|l[ea]r\p{L}*|e|den)?`, `proje(y[ie]|s[ie]\p{L}*|n[ie]n|d[ea]\p{L}*|l[ea]r\p{L}*|m\p{L}*)?`, `fonksiyon([ua]\p{L}*|d[ae]\p{L}*|l[ae]r\p{L}*)?`, "code", "codebase", "structure", "modules?", "functions?", "files?", "folders?", "director(y|ies)", "class(es)?", "components?", "apis?", "endpoints?", "schemas?", "repos?", "repository", "branch(es)?", "commits?", "projects?", "scripts?", "quer(y|ies)", "implementation", `yapı(s\p{L}*|y[ıa]\p{L}*|d[ae]\p{L}*|n[ıi]n|lar\p{L}*|m[ıi]z\p{L}*)?`, `repo([dy]\p{L}*|nun|m\p{L}*|lar\p{L}*)`, `sorgu(s\p{L}*|y[ua]\p{L}*|da\p{L}*|nun|lar\p{L}*|m\p{L}*)?`},
+		[]string{"kodum", "dosyam", "modülüm", "fonksiyonum", "projem", "repom", "bileşenim", "şemam", "klasörüm", "sorgum", "yapım[ıi]z", "api'?m[ıi]z"},
+	)
+	strongWebWords = newWordMatcher(
+		[]string{"haber", "kaynaklar", "literatür", "incelemeler", "makale", "fiyat", "trendler", "piyasa", "en yeni", "web'?de ara", "internette ara", "google"},
+		[]string{"güncel", "kaynak", "kaynakça", "latest", "newest", "recent", "news", "sources", "literature", "reviews", "articles", "papers?", "preprints?", "prices", "price of", "pricing", "trends", "market", "benchmarks"},
+	)
+	deicticPattern   = lazyRegexp(`(?i)(?:^|[^\p{L}\p{N}_])(?:this|these|here|it|bu|şu|bunu|bunun|buna|bunlar\p{L}*|şunu|şunun|şunlar\p{L}*|burada\p{L}*|ikisi\p{L}*)(?:[^\p{L}\p{N}_]|$)`)
 	investigateWords = newWordMatcher([]string{"araştır", "incele"}, []string{"research", "investigate", "look (up|into)"})
 	codeActionWords  = newWordMatcher(
 		[]string{"derle", "çalıştır", "uygula", "entegre", "düzelt", "optimiz", "refaktör", "kur", "kurma", "kurulum", "taşı", "dağıt", "test"},
@@ -200,6 +235,12 @@ func classifyPrompt(cfg object, learned object, prompt, transcriptPath string, n
 		return decide("url", "url")
 	}
 	if signal, found := webWords.find(withoutURLs); found {
+		if pointsAtOwnWork(withoutURLs) {
+			return verdict{reason: "code-signal"}
+		}
+		if _, strong := strongWebWords.find(withoutURLs); !strong && deicticPattern.MatchString(withoutURLs) && transcriptPath != "" && recentCodingActivity(transcriptPath, now) {
+			return verdict{reason: "coding-session"}
+		}
 		return decide("web-words", signal)
 	}
 	if signal, found := writeWords.find(withoutURLs); found {
@@ -224,7 +265,7 @@ func coldSessionResearch(text, transcriptPath string, now int64) bool {
 	if _, web := webWords.find(text); !web {
 		return false
 	}
-	if _, doing := codeActionWords.find(text); doing {
+	if _, doing := codeActionWords.find(text); doing || pointsAtOwnWork(text) {
 		return false
 	}
 	return transcriptPath == "" || !recentCodingActivity(transcriptPath, now)
