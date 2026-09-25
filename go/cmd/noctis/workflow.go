@@ -8,14 +8,22 @@ import (
 )
 
 var fanOutPatterns = []*lazyRe{
-	lazyRegexp(`(?i)\b(migrate|convert|port|upgrade|refactor|rewrite|update|audit|review|document|translate|rename)\b.*\b(every|all|each)\b(?:\s+\S+){0,3}\s+(files?|endpoints?|components?|modules?|tests?|routes?|handlers?|packages?|services?|pages?|screens?|functions?|classes?|tables?|models?)\b`),
+	lazyRegexp(`(?i)\b(migrate|convert|port|upgrade|refactor|rewrite|update|audit|review|document|translate|rename)\b.*\b(every|each)\b(?:\s+\S+){0,3}\s+(files?|endpoints?|components?|modules?|tests?|routes?|handlers?|packages?|services?|pages?|screens?|functions?|classes?|tables?|models?)\b`),
 	lazyRegexp(`(?i)\b(migrate|convert|port|upgrade|refactor|rewrite|update|audit|review|document|translate|rename)\b.*\b(across|throughout)\s+the\s+(whole\s+|entire\s+)?(repo|repository|codebase|project|monorepo)\b`),
-	lazyRegexp(`(?i)\b(migrate|convert|port|upgrade|refactor|audit|sweep|review|scan)\b(?:\s+\S+){0,4}\s+(\d{2,}|dozens|hundreds)\b`),
-	lazyRegexp(`(?i)\b(codebase|repo)[- ]wide\b`),
-	lazyRegexp(`(?i)\b(tüm|bütün|her)\s+(?:\S+\s+){0,3}(dosya\S*|bileşen\S*|modül\S*|test\S*|endpoint\S*|servis\S*|sayfa\S*|fonksiyon\S*|sınıf\S*|tablo\S*).*(?:^|\s)(taşı|dönüştür|çevir|güncelle|yeniden yaz|incele|denetle|belgele|yükselt|refactor)`),
-	lazyRegexp(`(?i)\b(repo|kod taban|proje)\S*\s+(genelinde|tamamında|baştan sona)`),
-	lazyRegexp(`(?i)\b(\d{2,})\s+(dosya|bileşen|modül|test|endpoint|servis)`),
+	lazyRegexp(`(?i)\b(migrate|convert|port|upgrade|refactor|rewrite|update|audit|sweep|review|scan|document|translate|rename)\b(?:\s+\S+){0,4}\s+(\d{2,}|dozens|hundreds)(?:\s+\S+){0,2}\s+(files?|endpoints?|components?|modules?|tests?|routes?|handlers?|packages?|services?|pages?|screens?|functions?|classes?|tables?|models?|scripts?|prs?|pull\s+requests?|microservices?|jobs?|repos?|repositories)\b`),
+	lazyRegexp(`(?i)\b(migrate|convert|port|upgrade|refactor|rewrite|update|audit|review|document|translate|rename)\b.*\b(codebase|repo)[- ]wide\b`),
+	lazyRegexp(`(?i)\b(migrate|convert|port|rewrite|refactor|audit|review|translate)\s+(?:\S+\s+)?all\s+(?:\S+\s+){0,3}(files|endpoints|components|modules|tests|routes|handlers|packages|services|pages|screens|functions|classes|tables|models)\b`),
+	lazyRegexp(`(?i)(?:^|\s)(tüm|bütün)\s+(?:\S+\s+){0,3}(dosya\S*|bileşen\S*|modül\S*|test\S*|endpoint\S*|servis\S*|sayfa\S*|fonksiyon\S*|sınıf\S*|tablo\S*).*(?:^|\s)(taşı|dönüştür|çevir|yeniden yaz|incele|denetle)`),
+	lazyRegexp(`(?i)\bher\s+(?:\S+\s+){0,3}(dosya\S*|bileşen\S*|modül\S*|test\S*|endpoint\S*|servis\S*|sayfa\S*|fonksiyon\S*|sınıf\S*|tablo\S*).*(?:^|\s)(taşı|dönüştür|çevir|güncelle|yeniden yaz|yeniden adlandır|incele|denetle|belgele|yükselt|refactor)`),
+	lazyRegexp(`(?i)\b(repo|kod taban|proje)\S*\s+(genelinde|tamamında|baştan sona).*(?:^|\s)(taşı|dönüştür|çevir|güncelle|yeniden yaz|yeniden adlandır|incele|denetle|belgele|yükselt|refactor)`),
+	lazyRegexp(`(?i)\b(\d{2,})\s+(dosya|bileşen|modül|test|endpoint|servis).*(?:^|\s)(taşı|dönüştür|çevir|güncelle|yeniden yaz|yeniden adlandır|incele|denetle|belgele|yükselt|refactor)`),
 }
+
+const sourceFileName = `[\w-]+\.(?:go|js|mjs|ts|tsx|jsx|py|rb|rs|java|kt|cs|php|swift|c|cc|cpp|h|vue|svelte)`
+
+var singleFileScope = lazyRegexp(`(?i)\b(?:in|within|inside)\s+(?:this|that|the|one|a|a single)\s+file\b|\b(?:in|within|inside|of)\s+(?:the\s+)?(?:\S*/)?` + sourceFileName + `\b|\b` + sourceFileName + `(?:'[dt][ae]ki|\s+içindeki)|(?:^|\s)(?:bu|şu|o) dosya(?:da|daki|nın|yı|nın içindeki)?(?:\s|$)|\S+ dosyasındaki`)
+
+var herTimeWord = lazyRegexp(`(?i)(?:^|\s)her\s+(?:zaman|gün|sefer|seferinde|hafta|ay)(?:\s|$)`)
 
 var fanOutClauseBreak = lazyRegexp(`(?i)[,;.!?\n]+|\s(?:and|then|ve|sonra|ardından)\s`)
 
@@ -28,10 +36,10 @@ var agentTypeOption = lazyRegexp(`\bagentType\b`)
 var agentTypeLiteral = lazyRegexp(`\bagentType\b["']?\s*:\s*(?:'([^'\\\r\n]*)'|"([^"\\\r\n]*)")\s*(?:[,})\r\n]|$)`)
 
 func looksLikeFanOut(text string) bool {
-	if text == "" || workflowKeywords.MatchString(text) {
+	if text == "" || workflowKeywords.MatchString(text) || singleFileScope.MatchString(text) {
 		return false
 	}
-	for _, clause := range fanOutClauseBreak.Split(text, -1) {
+	for _, clause := range fanOutClauseBreak.Split(herTimeWord.ReplaceAllString(text, " "), -1) {
 		for _, pattern := range fanOutPatterns {
 			if pattern.MatchString(clause) {
 				return true
