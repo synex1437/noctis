@@ -359,7 +359,33 @@ func pauseGuard(request string) int {
 		return 1
 	}
 	fmt.Println(T("off.done", pluginName, formatTime(until)))
+	printWaitsThatStillResume(readState(), nowSec())
 	return 0
+}
+
+func printWaitsThatStillResume(state object, now int64) {
+	waits, handedOff := getMap(state, "waits"), getMap(state, "handedOff")
+	lines, skipped := []string{}, false
+	for _, sid := range sortedKeys(waits) {
+		wait := toObject(waits[sid])
+		if !waitLive(wait, now) {
+			continue
+		}
+		if getMap(handedOff, sid) != nil || (hookSleeping(wait) && holderAlive(wait)) {
+			skipped = true
+			continue
+		}
+		where := orDefault(getString(wait, "projectDir"), orDefault(getString(wait, "cwd"), shortSid(sid)))
+		lines = append(lines, T("status.waitLine", where, getString(wait, "kind"), getString(wait, "label"), formatTime(numberOr(wait, "resumeAt", 0)))+T("off.cancelOne", shortSid(sid)))
+	}
+	if len(lines) == 0 {
+		return
+	}
+	fmt.Println(T("off.pending"))
+	fmt.Println(strings.Join(lines, "\n"))
+	if len(lines) > 1 && !skipped {
+		fmt.Println(T("off.cancelAll"))
+	}
 }
 
 func pauseMinutes(request string) (float64, bool) {

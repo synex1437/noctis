@@ -79,7 +79,7 @@ and gets the queue instructions only after `noctis queue trust` (inside Claude C
 
 **The binaries.** The six prebuilt binaries in `bin/` are rebuilt from source by CI on every push, and the build fails unless they match the committed ones byte for byte. Release downloads carry GitHub build-provenance attestations (`gh attestation verify noctis-linux-amd64 --repo synex1437/noctis`). The Go code uses the standard library only; the binaries are not code-signed or notarized ([what that means](#install-details)).
 
-**Turn it off.** For a while: `/noctis:pause 120` — for 120 minutes (60 by default) there are no limit pauses, no research routing and no queue continuation; the stop at 100 % still applies. `/noctis:resume` ends it early. Watch only: `"mode": "observe"` in `~/.claude/noctis/config.json` (step 5 below). Completely, inside Claude Code:
+**Turn it off.** For a while: `/noctis:pause 120` — for 120 minutes (60 by default) there are no limit pauses, no research routing and no queue continuation; the stop at 100 % still applies. Waits already set are kept: it lists the ones that will still resume on their own, each with the `noctis cancel --sid <id>` that cancels it. `/noctis:resume` ends it early. Watch only: `"mode": "observe"` in `~/.claude/noctis/config.json` (step 5 below). Completely, inside Claude Code:
 
 ```
 !noctis cancel                             # drop pending resumes and their scheduled tasks

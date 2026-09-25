@@ -16,4 +16,4 @@ Convert the request to whole minutes first (2 hours → 120, half an hour → 30
 
 (PowerShell: prefix the command with `& `.)
 
-Report the line it prints. If it says nothing changed or that noctis is still on, the pause was not set. Enforcement resumes automatically when the period ends, or earlier with `/noctis:resume`.
+Report the lines it prints. If it says nothing changed or that noctis is still on, the pause was not set. If it lists waits that still resume on their own, tell the user and ask whether to cancel any of them; each line names its `noctis cancel --sid <id>`, and nothing is cancelled unless the user runs it. Enforcement resumes automatically when the period ends, or earlier with `/noctis:resume`.

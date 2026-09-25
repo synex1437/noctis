@@ -79,7 +79,7 @@ Yeni bir oturum açılırken henüz yazdığınız bir dil olmadığı için bu 
 
 **Binary'ler.** `bin/` içindeki altı hazır binary, her push'ta CI tarafından kaynaktan yeniden derlenir; commit'lenmiş olanlarla bayt bayt aynı değilse build başarısız olur. Sürüm indirmeleri GitHub build-provenance attestation'ları taşır (`gh attestation verify noctis-linux-amd64 --repo synex1437/noctis`). Go kodu yalnızca standart kütüphaneyi kullanır; binary'ler kod imzalı değil, notarize de edilmemiş ([ne anlama geldiği](#kurulum-ayrıntı)).
 
-**Kapatma.** Bir süreliğine: `/noctis:pause 120` — 120 dakika boyunca (varsayılan 60) limit duraklaması, araştırma yönlendirmesi ve kuyruk devamı olmaz; %100'deki durdurma yine geçerlidir. `/noctis:resume` erken bitirir. Yalnızca izlesin: `~/.claude/noctis/config.json` içinde `"mode": "observe"` (aşağıda 5. adım). Tamamen, Claude Code içinde:
+**Kapatma.** Bir süreliğine: `/noctis:pause 120` — 120 dakika boyunca (varsayılan 60) limit duraklaması, araştırma yönlendirmesi ve kuyruk devamı olmaz; %100'deki durdurma yine geçerlidir. Önceden kurulmuş beklemeler kalır: kendiliğinden devam edecek olanları, her birini iptal eden `noctis cancel --sid <id>` komutuyla listeler. `/noctis:resume` erken bitirir. Yalnızca izlesin: `~/.claude/noctis/config.json` içinde `"mode": "observe"` (aşağıda 5. adım). Tamamen, Claude Code içinde:
 
 ```
 !noctis cancel                             # bekleyen devamları ve zamanlanmış görevlerini iptal edin
