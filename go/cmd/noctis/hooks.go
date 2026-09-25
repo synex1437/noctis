@@ -898,6 +898,9 @@ func noctisOwnFile(file, cwd string) string {
 }
 
 func resolvedWritePath(file string) string {
+	if reached, followed := followWrite(file); followed {
+		file = reached[len(reached)-1]
+	}
 	dir, rest := file, ""
 	for {
 		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
@@ -993,7 +996,7 @@ func followWrite(file string) ([]string, bool) {
 		}
 		next := filepath.Join(dest, part)
 		info, err := os.Lstat(next)
-		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		if err != nil || !linkOrJunction(next, info) {
 			dest = next
 			continue
 		}
@@ -1013,6 +1016,17 @@ func followWrite(file string) ([]string, bool) {
 		pending = append(pathParts(link), pending...)
 	}
 	return append(reached, dest), true
+}
+
+func linkOrJunction(path string, info os.FileInfo) bool {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return true
+	}
+	if info.Mode()&os.ModeIrregular == 0 {
+		return false
+	}
+	_, err := os.Readlink(path)
+	return err == nil
 }
 
 func pathParts(path string) []string {
