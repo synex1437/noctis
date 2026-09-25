@@ -1004,10 +1004,10 @@ func gitIndexCopy(cwd string) (string, bool) {
 }
 
 func dropGitSnapshot(cwd, ref string) {
-	if cwd == "" || ref == "" {
+	if cwd == "" || !strings.HasPrefix(ref, "refs/noctis/") {
 		return
 	}
-	drop := exec.Command("git", "update-ref", "-d", ref)
+	drop := exec.Command("git", "update-ref", "--no-deref", "-d", ref)
 	drop.Dir = cwd
 	_, _ = runWithTimeout(drop, 5*time.Second)
 }

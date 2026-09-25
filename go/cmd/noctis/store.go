@@ -969,7 +969,9 @@ func pruneState(state object, now int64) {
 			touched = float64(info.ModTime().Unix())
 		}
 		if float64(now)-touched > checkpointTTLSeconds {
-			_ = os.Remove(getString(record, "path"))
+			if isAutoQueue(getString(record, "path")) {
+				_ = os.Remove(getString(record, "path"))
+			}
 			delete(stateMap(state, "autoQueues"), sid)
 		}
 	}
@@ -1022,7 +1024,7 @@ func pruneState(state object, now int64) {
 			continue
 		}
 		if entry != nil {
-			if target := getString(entry, "path"); target != "" {
+			if target := getString(entry, "path"); target != "" && target == filepath.Join(files.checkpoints, filepath.Base(target)) {
 				if err := os.Remove(target); err != nil {
 					logInfo("expired checkpoint already gone: %s", target)
 				}
