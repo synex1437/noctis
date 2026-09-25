@@ -145,6 +145,17 @@ func TestRelaunchEnvDropsTheConfigDirInAnyCaseOnWindows(t *testing.T) {
 	}
 }
 
+func TestARelaunchPromptDropsANulByteOnEveryPlatform(t *testing.T) {
+	previous := isWindows
+	t.Cleanup(func() { isWindows = previous })
+	for _, windows := range []bool{true, false} {
+		isWindows = windows
+		if got := relaunchPrompt("Fix the parser\x00 and run the tests"); got != "Fix the parser and run the tests" {
+			t.Fatalf("no launcher can pass a NUL byte, so the relaunch prompt drops it (windows %v): got %q", windows, got)
+		}
+	}
+}
+
 func TestOnlyAWindowsRelaunchGetsThePromptAsOneScrubbedLine(t *testing.T) {
 	previous := isWindows
 	t.Cleanup(func() { isWindows = previous })

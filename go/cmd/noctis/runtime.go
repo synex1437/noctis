@@ -540,6 +540,7 @@ func sanitizePrompt(text string) string {
 }
 
 func relaunchPrompt(text string) string {
+	text = strings.ReplaceAll(text, "\x00", "")
 	if isWindows {
 		return sanitizePrompt(text)
 	}
