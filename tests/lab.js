@@ -1299,6 +1299,17 @@ async function scenarioBudgetWakeWebhook(acc) {
   resetCalls();
   acc.run(['resume', '--sid', 'pm1', '--account', acc.dir]);
   check('relaunch inherits the session permission mode', (callsLog().find((line) => line.includes('--resume pm1')) || '').includes('--permission-mode plan'), true);
+  acc.statusline('pm2', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400);
+  acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'pm2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, permission_mode: 'dontAsk' });
+  check('a dontAsk session is recorded as dontAsk', acc.state().waits.pm2.permissionMode, 'dontAsk');
+  acc.editState((waitState) => {
+    waitState.waits.pm2.resumeAt = now - 5;
+    waitState.waits.pm2.until = now - 10;
+  });
+  acc.statusline('pm2', 'claude-fable-5-1', 5, now + 7200, 10, now + 3 * 86400);
+  resetCalls();
+  acc.run(['resume', '--sid', 'pm2', '--account', acc.dir]);
+  check('a dontAsk session is relaunched in dontAsk, not in acceptEdits', (callsLog().find((line) => line.includes('--resume pm2')) || '').includes('--permission-mode dontAsk'), true);
   acc.setConfig((config) => {
     config.resume.permissionMode = relaunchMode;
     config.wake.sameSession = true;

@@ -231,7 +231,7 @@ class Lab {
     if (IS_WINDOWS) {
       fs.writeFileSync(path.join(this.binDir, 'claude.cmd'), [
         '@echo off',
-        'if "%~1"=="--help" (echo   --permission-mode ^<mode^>  (choices: "acceptEdits", "bypassPermissions", "default", "plan", "auto")& exit /b 0)',
+        'if "%~1"=="--help" (echo   --permission-mode ^<mode^>  (choices: "acceptEdits", "bypassPermissions", "default", "plan", "auto", "dontAsk")& exit /b 0)',
         'if defined CLAUDE_CONFIG_DIR (set "NOCTIS_LAB_CONFIG_SET=yes") else (set "NOCTIS_LAB_CONFIG_SET=")',
         'echo FAKE_CLAUDE args=[%*] HANDOFF=%NOCTIS_HANDOFF% CONFIG=%CLAUDE_CONFIG_DIR% EFFORT=%CLAUDE_CODE_EFFORT_LEVEL% CHILD=%CLAUDE_CODE_CHILD_SESSION% CONFIG_SET=%NOCTIS_LAB_CONFIG_SET%>> "%NOCTIS_LAB_CALLS%"',
         'if defined NOCTIS_LAB_STOP_INPUT "%NOCTIS_LAB_NOCTIS%" hook < "%NOCTIS_LAB_STOP_INPUT%" >> "%NOCTIS_LAB_STOP_OUTPUT%" 2>nul',
@@ -244,7 +244,7 @@ class Lab {
     const script = path.join(this.binDir, 'claude');
     fs.writeFileSync(script, [
       '#!/usr/bin/env sh',
-      'if [ "$1" = "--help" ]; then printf \'  --permission-mode <mode>  (choices: "acceptEdits", "bypassPermissions", "default", "plan", "auto")\\n\'; exit 0; fi',
+      'if [ "$1" = "--help" ]; then printf \'  --permission-mode <mode>  (choices: "acceptEdits", "bypassPermissions", "default", "plan", "auto", "dontAsk")\\n\'; exit 0; fi',
       'echo "FAKE_CLAUDE args=[$*] HANDOFF=$NOCTIS_HANDOFF CONFIG=$CLAUDE_CONFIG_DIR EFFORT=$CLAUDE_CODE_EFFORT_LEVEL CHILD=$CLAUDE_CODE_CHILD_SESSION CONFIG_SET=${CLAUDE_CONFIG_DIR+yes}" >> "$NOCTIS_LAB_CALLS"',
       '[ -n "$NOCTIS_LAB_STOP_INPUT" ] && "$NOCTIS_LAB_NOCTIS" hook < "$NOCTIS_LAB_STOP_INPUT" >> "$NOCTIS_LAB_STOP_OUTPUT" 2>/dev/null',
       '[ -z "$NOCTIS_LAB_FAST" ] && sleep 1',

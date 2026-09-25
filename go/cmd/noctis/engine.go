@@ -1909,7 +1909,7 @@ func hitLabel(wait *waitPlan) string {
 
 func permissionModeOf(input object) string {
 	mode := getString(input, "permission_mode")
-	if knownPermModes[mode] {
+	if knownPermModes[mode] || refusedPermModes[mode] {
 		return mode
 	}
 	return ""

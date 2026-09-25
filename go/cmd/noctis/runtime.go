@@ -20,6 +20,7 @@ var (
 	backslashQuote     = lazyRegexp(`(\\*)"`)
 	permissionAuto     = lazyRegexp(`permission-mode[\s\S]{0,600}?["' ]auto["',)\s]`)
 	permissionManual   = lazyRegexp(`permission-mode[\s\S]{0,600}?["' ]manual["',)\s]`)
+	permissionDontAsk  = lazyRegexp(`permission-mode[\s\S]{0,600}?["' ]dontAsk["',)\s]`)
 	promptScrub        = lazyRegexp(`["%^]`)
 	whitespaceRun      = lazyRegexp(`\s+`)
 	scriptExtension    = lazyRegexp(`(?i)\.(exe|cmd)$`)
@@ -492,23 +493,25 @@ func inGuardDir(command *exec.Cmd) *exec.Cmd {
 func supportedPermissionMode(cfg object, claudePath, inherited string) string {
 	requested := orDefault(getString(section(cfg, "resume"), "permissionMode"), "acceptEdits")
 	if requested == "inherit" {
-		requested = orDefault(inherited, "acceptEdits")
+		requested = orDefault(inherited, "default")
 	}
 	if refusedPermModes[requested] {
 		warn("permission mode %q is not used for unattended relaunches; falling back to acceptEdits", requested)
 		return "acceptEdits"
 	}
 	if !knownPermModes[requested] {
-		return "acceptEdits"
+		return "default"
 	}
-	if requested != "auto" && requested != "manual" {
+	if requested != "auto" && requested != "manual" && requested != "dontAsk" {
 		return requested
 	}
 	output, _ := runWithTimeout(inGuardDir(claudeCommand(claudePath, []string{"--help"})), 20*time.Second)
 	switch {
 	case requested == "manual" && permissionManual.Match(output):
 		return "manual"
-	case requested == "manual":
+	case requested == "dontAsk" && permissionDontAsk.Match(output):
+		return "dontAsk"
+	case requested != "auto":
 		return "default"
 	case permissionAuto.Match(output):
 		return "auto"
