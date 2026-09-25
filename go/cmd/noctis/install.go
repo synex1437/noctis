@@ -562,7 +562,10 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		return err
 	}
 	backup := backupFile(settingsFile)
-	mustWriteJSON(settingsFile, data)
+	if err := writeJSONKeepingOrder(settingsFile, data); err != nil {
+		writeFailures++
+		fail("write %s failed: %v", filepath.Base(settingsFile), err)
+	}
 	model := getString(data, "model")
 	settleModelSwitch(configDir, noModel, func(switched object) string {
 		before := getString(switched, "from")
@@ -807,7 +810,7 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 			modelNote = T("install.modelRemoved")
 		}
 	}
-	if err := writeJSONAtomic(settingsFile, data); err != nil {
+	if err := writeJSONKeepingOrder(settingsFile, data); err != nil {
 		return err
 	}
 	fmt.Println(T("install.restored", modelNote))

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -488,6 +489,115 @@ func marshalCompact(value any) []byte {
 	return bytes.TrimRight(buffer.Bytes(), "\n")
 }
 
+type keyOrder struct {
+	keys     []string
+	children map[string]*keyOrder
+	items    []*keyOrder
+}
+
+func (order *keyOrder) child(key string) *keyOrder {
+	if order == nil {
+		return nil
+	}
+	return order.children[key]
+}
+
+func (order *keyOrder) item(index int) *keyOrder {
+	if order == nil || index >= len(order.items) {
+		return nil
+	}
+	return order.items[index]
+}
+
+func readKeyOrder(decoder *json.Decoder) (*keyOrder, error) {
+	token, err := decoder.Token()
+	if err != nil {
+		return nil, err
+	}
+	delim, nested := token.(json.Delim)
+	if !nested {
+		return nil, nil
+	}
+	order := &keyOrder{children: map[string]*keyOrder{}}
+	for decoder.More() {
+		if delim == '[' {
+			item, err := readKeyOrder(decoder)
+			if err != nil {
+				return nil, err
+			}
+			order.items = append(order.items, item)
+			continue
+		}
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		key, _ := token.(string)
+		child, err := readKeyOrder(decoder)
+		if err != nil {
+			return nil, err
+		}
+		if _, seen := order.children[key]; !seen {
+			order.keys = append(order.keys, key)
+		}
+		order.children[key] = child
+	}
+	_, err = decoder.Token()
+	return order, err
+}
+
+func appendInOrder(out []byte, value any, order *keyOrder) []byte {
+	switch typed := value.(type) {
+	case object:
+		keys, added, placed := []string{}, []string{}, map[string]bool{}
+		if order != nil {
+			for _, key := range order.keys {
+				if _, present := typed[key]; present {
+					keys = append(keys, key)
+					placed[key] = true
+				}
+			}
+		}
+		for key := range typed {
+			if !placed[key] {
+				added = append(added, key)
+			}
+		}
+		sort.Strings(added)
+		out = append(out, '{')
+		for index, key := range append(keys, added...) {
+			if index > 0 {
+				out = append(out, ',')
+			}
+			out = append(append(out, marshalCompact(key)...), ':')
+			out = appendInOrder(out, typed[key], order.child(key))
+		}
+		return append(out, '}')
+	case []any:
+		out = append(out, '[')
+		for index, item := range typed {
+			if index > 0 {
+				out = append(out, ',')
+			}
+			out = appendInOrder(out, item, order.item(index))
+		}
+		return append(out, ']')
+	}
+	return append(out, marshalCompact(value)...)
+}
+
+func marshalPrettyAsBefore(value any, previous []byte) []byte {
+	order, err := readKeyOrder(json.NewDecoder(bytes.NewReader(bytes.TrimPrefix(previous, utf8BOM))))
+	var buffer bytes.Buffer
+	if err != nil || json.Indent(&buffer, appendInOrder(nil, value, order), "", "  ") != nil {
+		return marshalPretty(value)
+	}
+	if bytes.HasSuffix(previous, []byte("\n")) {
+		buffer.WriteByte('\n')
+	}
+	return buffer.Bytes()
+}
+
 func linkTarget(file string) string {
 	target := file
 	for hops := 0; hops < 40; hops++ {
@@ -508,9 +618,17 @@ func linkTarget(file string) string {
 }
 
 func writeJSONAtomic(file string, value any) error {
+	return writeEncodedAtomic(file, marshalPretty(value))
+}
+
+func writeJSONKeepingOrder(file string, value any) error {
+	previous, _ := readFileShared(linkTarget(file))
+	return writeEncodedAtomic(file, marshalPrettyAsBefore(value, previous))
+}
+
+func writeEncodedAtomic(file string, encoded []byte) error {
 	file = linkTarget(file)
 	ensureDir(filepath.Dir(file))
-	encoded := marshalPretty(value)
 	if encoded == nil {
 		return errors.New("value cannot be encoded as JSON; file left unchanged")
 	}
@@ -1238,7 +1356,7 @@ func withSettings(change func(object) bool) bool {
 		if !change(data) {
 			return
 		}
-		if err := writeJSONAtomic(files.settings, data); err != nil {
+		if err := writeJSONKeepingOrder(files.settings, data); err != nil {
 			fail("settings.json could not be written: %v", err)
 			return
 		}

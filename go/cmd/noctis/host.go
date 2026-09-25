@@ -245,7 +245,7 @@ func wireHostHooks(host, binary, accountDir string) ([]hostHookFile, error) {
 			root = object{}
 		}
 		root["statusLine"] = object{"type": "command", "command": `"` + forwardSlashes(binary) + `" statusline ` + strings.Join(extra, " "), "stack_with_default": true}
-		if err := writeJSONAtomic(settingsFile, root); err != nil {
+		if err := writeJSONKeepingOrder(settingsFile, root); err != nil {
 			written = append(written, hostHookFile{settingsFile, T("host.statuslineSkipped", err.Error())})
 			return written, nil
 		}
@@ -369,7 +369,7 @@ func unwireHostHooks(host, accountDir string) ([]string, error) {
 		}
 		if settings.data != nil && strings.Contains(getString(getMap(settings.data, "statusLine"), "command"), "noctis") {
 			delete(settings.data, "statusLine")
-			if err := writeJSONAtomic(settingsFile, settings.data); err != nil {
+			if err := writeJSONKeepingOrder(settingsFile, settings.data); err != nil {
 				return removed, err
 			}
 			removed = append(removed, settingsFile)
