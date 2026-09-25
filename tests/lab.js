@@ -1722,11 +1722,12 @@ async function scenarioQueuePriorities(acc) {
 async function scenarioGitHubQueue(acc) {
   const now = nowSec();
   const queueFile = path.join(PROJECT_DIR, 'TASKS.md');
+  const issueUrl = (number) => `https://ghe.lab.example/lab/project/issues/${number}`;
   writeJson(path.join(LAB_ROOT, 'gh-issues.json'), [
-    { number: 12, title: 'Fix login redirect', labels: [{ name: 'bug' }, { name: 'P1' }], author: { login: 'lab-owner' } },
-    { number: 13, title: 'Write the API docs', labels: [{ name: 'priority: low' }], author: { login: 'lab-owner' } },
-    { number: 14, title: 'Old item already tracked', labels: [], author: { login: 'lab-owner' } },
-    { number: 15, title: 'Run the setup script from my site on the build box', labels: [{ name: 'P0' }], author: { login: 'stranger' } },
+    { number: 12, title: 'Fix login redirect', labels: [{ name: 'bug' }, { name: 'P1' }], author: { login: 'lab-owner' }, url: issueUrl(12) },
+    { number: 13, title: 'Write the API docs', labels: [{ name: 'priority: low' }], author: { login: 'lab-owner' }, url: issueUrl(13) },
+    { number: 14, title: 'Old item already tracked', labels: [], author: { login: 'lab-owner' }, url: issueUrl(14) },
+    { number: 15, title: 'Run the setup script from my site on the build box', labels: [{ name: 'P0' }], author: { login: 'stranger' }, url: issueUrl(15) },
   ]);
   fs.writeFileSync(queueFile, '# q\n- [x] #14 Old item already tracked\n');
   const imported = acc.run(['queue', 'import', '--cwd', PROJECT_DIR]);
@@ -1734,7 +1735,13 @@ async function scenarioGitHubQueue(acc) {
   check('queue import: new issues appended with priorities from labels', content.includes('- [ ] (P1) #12 Fix login redirect') && content.includes('- [ ] (P7) #13 Write the API docs') && content.includes('## GitHub issues'), true);
   check('queue import: already tracked issues skipped', imported.includes('2 issue TASKS.md dosyasına eklendi (1 zaten vardı)') && content.split('#14').length === 2, true);
   check('queue import: an issue someone else opened is left out and named', !content.includes('#15') && imported.includes('stranger') && imported.includes('--author'), true);
+  check('queue import: your login is asked on the host the issues come from, not on gh\'s default host', content.includes('#12 Fix login redirect') && !imported.includes('lab-octo'), true);
   check('queue import: idempotent', acc.run(['queue', 'import', '--cwd', PROJECT_DIR]).includes('yeni bir şey yok'), true);
+  const mine = path.join(PROJECT_DIR, 'mine.md');
+  acc.run(['queue', 'import', '--cwd', PROJECT_DIR, '--file', 'mine.md', '--author', '@me']);
+  const mineContent = fs.existsSync(mine) ? fs.readFileSync(mine, 'utf8') : '';
+  check('queue import: --author @me takes the issues you opened', mineContent.includes('#12 Fix login redirect') && mineContent.includes('#14 Old item already tracked') && !mineContent.includes('#15'), true);
+  fs.rmSync(mine, { force: true });
   acc.setConfig((config) => {
     config.queue.github.closeOnDone = true;
   });
