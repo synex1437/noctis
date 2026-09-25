@@ -702,7 +702,7 @@ func agentWritePolicy(input, cfg object) {
 		}
 		if steersMainModel(cfg, targets) {
 			logInfo("lite agent write denied (steers the main model): %s", filePath)
-			emit(object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": fmt.Sprintf("The lite agent may not write CLAUDE.md, the queue files (%s) or anything under .claude/: those files steer the main model. Return the content in your answer instead.", strings.Join(queueFileNames(cfg), ", "))}})
+			emit(object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": fmt.Sprintf("The lite agent may not write CLAUDE.md, the queue files (%s), anything under .claude/ or in Claude's config folder, or noctis's own files: those files steer the main model. Return the content in your answer instead.", strings.Join(queueFileNames(cfg), ", "))}})
 			return
 		}
 		if textDocuments(targets) {
@@ -717,7 +717,11 @@ func agentWritePolicy(input, cfg object) {
 }
 
 func steersMainModel(cfg object, targets []string) bool {
+	folders := steeringFolders()
 	for _, path := range targets {
+		if insideFolder(path, folders) {
+			return true
+		}
 		parts := strings.FieldsFunc(path, func(r rune) bool { return r == '/' || r == '\\' })
 		if len(parts) == 0 {
 			continue
@@ -735,6 +739,36 @@ func steersMainModel(cfg object, targets []string) bool {
 			if strings.EqualFold(name, filepath.Base(queue)) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func steeringFolders() []os.FileInfo {
+	dirs := []string{files.configDir, hostHome("claude"), files.guardDir}
+	if looksLikePluginRoot(files.pluginRoot) {
+		dirs = append(dirs, files.pluginRoot)
+	}
+	folders := []os.FileInfo{}
+	for _, dir := range dirs {
+		if info := statSafe(dir); info != nil && info.IsDir() {
+			folders = append(folders, info)
+		}
+	}
+	return folders
+}
+
+func insideFolder(path string, folders []os.FileInfo) bool {
+	for dir := path; len(folders) > 0; dir = filepath.Dir(dir) {
+		if info := statSafe(dir); info != nil {
+			for _, folder := range folders {
+				if os.SameFile(info, folder) {
+					return true
+				}
+			}
+		}
+		if filepath.Dir(dir) == dir {
+			break
 		}
 	}
 	return false
