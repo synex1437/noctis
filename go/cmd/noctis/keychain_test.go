@@ -162,3 +162,70 @@ func TestMacOSReadsTheOAuthTokenFromTheAccountsOwnKeychainItem(t *testing.T) {
 		t.Fatalf("the default account read %q, want PERSONAL-token", got)
 	}
 }
+
+func TestTheKeychainReadKeepsOnlyTheAccessTokenAndItsExpiry(t *testing.T) {
+	keychainSandbox(t)
+	previous := isDarwin
+	t.Cleanup(func() { isDarwin = previous })
+	isDarwin = true
+	store := fakeKeychain(t)
+	stock := func(expires float64) {
+		t.Helper()
+		item := marshalCompact(object{"claudeAiOauth": object{"accessToken": "ACCESS-token", "refreshToken": "REFRESH-secret", "expiresAt": expires, "scopes": []any{"user:inference", "user:profile"}, "subscriptionType": "max"}})
+		if err := os.WriteFile(filepath.Join(store, "Claude Code-credentials.json"), item, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	expires := float64(time.Now().Add(time.Hour).UnixMilli())
+	stock(expires)
+	kept := string(marshalCompact(keychainCredentials()))
+	if want := string(marshalCompact(object{"claudeAiOauth": object{"accessToken": "ACCESS-token", "expiresAt": expires}})); kept != want {
+		t.Fatalf("the keychain read must keep the access token and its expiry and nothing else, not the refresh token; it kept %s", kept)
+	}
+	if token, state := oauthTokenState(); token != "ACCESS-token" || state != "present" {
+		t.Fatalf("oauthTokenState() = %q, %q; want ACCESS-token, present", token, state)
+	}
+
+	stock(float64(time.Now().Add(-time.Hour).UnixMilli()))
+	if token, state := oauthTokenState(); token != "" || state != "expired" {
+		t.Fatalf("an expired keychain token gave %q, %q; want no token, expired", token, state)
+	}
+}
+
+func TestTheCredentialsFileReadKeepsNothingButTheTokenItNeeds(t *testing.T) {
+	keychainSandbox(t)
+	previous := isDarwin
+	t.Cleanup(func() { isDarwin = previous })
+	isDarwin = false
+	stock := func(prefix string, expires float64) {
+		t.Helper()
+		item := marshalCompact(object{"claudeAiOauth": object{"accessToken": "ACCESS-token", "refreshToken": "REFRESH-secret", "expiresAt": expires, "scopes": []any{"user:inference", "user:profile"}, "subscriptionType": "max"}})
+		cliWrite(t, files.credentials, append([]byte(prefix), item...))
+	}
+
+	stock("", float64(time.Now().Add(time.Hour).UnixMilli()))
+	if token, state := oauthTokenState(); token != "ACCESS-token" || state != "present" {
+		t.Fatalf("oauthTokenState() = %q, %q; want ACCESS-token, present", token, state)
+	}
+	if cached, seen := parsedEntry(files.credentials); seen {
+		t.Fatalf("reading the token kept the credentials file in memory, refresh token included: %s", marshalCompact(cached.data))
+	}
+	stock("\xef\xbb\xbf", float64(time.Now().Add(time.Hour).UnixMilli()))
+	if token, state := oauthTokenState(); token != "ACCESS-token" || state != "present" {
+		t.Fatalf("a credentials file with a byte-order mark gave %q, %q; want ACCESS-token, present", token, state)
+	}
+	stock("", float64(time.Now().Add(-time.Hour).UnixMilli()))
+	if token, state := oauthTokenState(); token != "" || state != "expired" {
+		t.Fatalf("an expired token gave %q, %q; want no token, expired", token, state)
+	}
+	cliWrite(t, files.credentials, []byte(`{"claudeAiOauth": {"accessToken": "ACCESS-token"`))
+	if token, state := oauthTokenState(); token != "" || state != "missing" {
+		t.Fatalf("a credentials file that does not parse gave %q, %q; want no token, missing", token, state)
+	}
+	isDarwin = true
+	stockKeychain(t, fakeKeychain(t), map[string]string{"Claude Code-credentials": "KEYCHAIN-token"})
+	if token, state := oauthTokenState(); token != "KEYCHAIN-token" || state != "present" {
+		t.Fatalf("on macOS a credentials file that does not parse must leave the token to the Keychain; got %q, %q", token, state)
+	}
+}
