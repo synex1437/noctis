@@ -338,3 +338,52 @@ func TestAWaitInPlaceInTheStopHookKeepsTheQueueCheckTimeFree(t *testing.T) {
 		t.Fatalf("the pause was not journaled: %v", actions)
 	}
 }
+
+func TestAnIssueIsClosedOnlyOnceTheQueueCheckPasses(t *testing.T) {
+	cfg, project, frontend := queueCheckSandbox(t, shellFor("cat fixed.txt", "type fixed.txt"))
+	getMap(section(cfg, "queue"), "github")["closeOnDone"] = true
+	calls := fakeGhCLI(t, "[]")
+	queuePath := writeQueueFile(t, project, "# q\n- [ ] #12 Backend crash\n- [ ] write the release notes\n")
+	trustQueueFile(queuePath, true)
+	stopHookOutput(t, stopInput("qc-issue", frontend), cfg)
+	tickIssueItem(t, queuePath, "#12 Backend crash")
+	failed := stopHookOutput(t, stopAgain("qc-issue", frontend), cfg)
+	if getString(failed, "decision") != "block" || !strings.Contains(getString(failed, "reason"), "Queue check failed") {
+		t.Fatalf("the queue check was meant to fail after #12 was ticked: %v", failed)
+	}
+	if closes := ghLoggedCalls(calls, "close"); len(closes) != 0 {
+		t.Fatalf("#12 was ticked but the queue check failed, and Claude was told to leave it unticked until the check passes; its issue was closed anyway: %q", closes)
+	}
+	if err := os.WriteFile(filepath.Join(project, "fixed.txt"), []byte("ok\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	passed := stopHookOutput(t, stopAgain("qc-issue", frontend), cfg)
+	if !strings.Contains(getString(passed, "reason"), queueContinuesPrefix) {
+		t.Fatalf("the stop whose check passed did not continue the queue: %v", passed)
+	}
+	if closes := ghLoggedCloses(t, calls, 1); len(closes) != 1 || !strings.HasPrefix(closes[0], "gh issue close 12 ") {
+		t.Fatalf("the stop whose queue check passed with #12 ticked ran %q, want one issue close 12", closes)
+	}
+}
+
+func TestTheLastTickedItemIsCheckedBeforeTheQueueIsDone(t *testing.T) {
+	cfg, project, frontend := queueCheckSandbox(t, shellFor("echo run >> runs.txt; cat fixed.txt", "echo run>> runs.txt & type fixed.txt"))
+	if first := stopHookOutput(t, stopInput("qc-last", frontend), cfg); !strings.Contains(getString(first, "reason"), queueContinuesPrefix) {
+		t.Fatalf("the queue did not start: %v", first)
+	}
+	writeQueueFile(t, project, "# q\n- [x] migrate the users table\n- [x] write the release notes\n")
+	failed := stopHookOutput(t, stopAgain("qc-last", frontend), cfg)
+	if getString(failed, "decision") != "block" || !strings.Contains(getString(failed, "reason"), "Queue check failed") || getString(failed, "systemMessage") == T("queue.doneMessage", "TASKS.md") {
+		t.Fatalf("the last item was ticked and the queue check fails, yet the stop declared the queue done without sending Claude back to fix it: %v", failed)
+	}
+	if err := os.WriteFile(filepath.Join(project, "fixed.txt"), []byte("ok\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	done := stopHookOutput(t, stopAgain("qc-last", frontend), cfg)
+	if getString(done, "decision") == "block" || getString(done, "systemMessage") != T("queue.doneMessage", "TASKS.md") {
+		t.Fatalf("once the queue check passed with every item ticked, the stop did not declare the queue done: %v", done)
+	}
+	if runs := queueCheckRuns(project); runs != 2 {
+		t.Fatalf("the check ran %d times over the failing and the passing stop, want 2", runs)
+	}
+}

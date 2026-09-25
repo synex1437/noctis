@@ -105,6 +105,21 @@ func queueCheckDue(record object, ticked []any) bool {
 	return false
 }
 
+func queueUncheckedIssues(cfg, state object, path, content string) map[string]bool {
+	unchecked := map[string]bool{}
+	if queueCheckCommand(cfg) == "" || observing {
+		return unchecked
+	}
+	passed := digestSet(getList(queueCheckRecord(state, path), "ticked"))
+	entries, _ := parseQueueEntries(content)
+	for _, entry := range entries {
+		if issue, found := itemIssue(entry.text); found && entry.checked && !passed[queueItemDigest(entry.text)] {
+			unchecked[issue.ref()] = true
+		}
+	}
+	return unchecked
+}
+
 func queueFolder(cfg, input object, sid, path string) string {
 	if isAutoQueue(path) {
 		if project := claudeProjectDir(); project != "" {
@@ -206,6 +221,7 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 		updateState(func(next object) { stateMap(next, "queueVerify")[key] = object{"ticked": ticked, "at": now} })
 		journal(sid, "Stop", "verify-queue", "passed", facts)
 		logInfo("queue check %q passed for %s in %s", command, sid, folder)
+		syncDoneIssues(cfg, path, content, getString(input, "cwd"))
 		return nil
 	}
 	failures := numberOr(record, "failures", 0) + 1
