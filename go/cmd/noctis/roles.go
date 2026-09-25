@@ -56,13 +56,21 @@ func anthropicHost(address string) bool {
 }
 
 var roleProfiles = map[string]object{
-	"noctis": {
-		"code":     object{"model": "opus", "effort": "max"},
+	"code": {
+		"code":     object{"model": "opus", "effort": "xhigh"},
+		"research": object{"model": "opus", "effort": "high"},
+		"planning": object{"model": "opus"},
+		"digest":   object{"model": "haiku"},
+		"explore":  object{"model": "haiku"},
+		"fallback": object{"model": "opus", "effort": "xhigh"},
+	},
+	"search": {
+		"code":     object{"model": "opus", "effort": "xhigh"},
 		"research": object{"model": "opus", "effort": "xhigh"},
 		"planning": object{"model": "opus"},
 		"digest":   object{"model": "haiku"},
 		"explore":  object{"model": "haiku"},
-		"fallback": object{"model": "opus", "effort": "max"},
+		"fallback": object{"model": "opus", "effort": "xhigh"},
 	},
 	"balanced": {
 		"code":     object{"model": "opus", "effort": "high"},
@@ -72,18 +80,20 @@ var roleProfiles = map[string]object{
 		"explore":  object{"model": "haiku"},
 		"fallback": object{"model": "opus", "effort": "high"},
 	},
-	"economy": {
-		"code":     object{"model": "opus", "effort": "low"},
-		"research": object{"model": "sonnet", "effort": "high"},
+	"synex": {
+		"code":     object{"model": "opus", "effort": "max"},
+		"research": object{"model": "opus", "effort": "xhigh"},
 		"planning": object{"model": "opus"},
 		"digest":   object{"model": "haiku"},
 		"explore":  object{"model": "haiku"},
-		"fallback": object{"model": "opus", "effort": "low"},
+		"fallback": object{"model": "opus", "effort": "max"},
 	},
 }
 
+var profileTitles = map[string]string{"code": "Code", "search": "Search", "balanced": "Balanced", "synex": "SYNEX"}
+
 var retiredProfiles = map[string]object{
-	"noctis": {
+	"synex": {
 		"code":     object{"model": "fable", "effort": "max"},
 		"research": object{"model": "opus", "effort": "xhigh"},
 		"planning": object{"model": "fable"},
@@ -98,14 +108,6 @@ var retiredProfiles = map[string]object{
 		"digest":   object{"model": "haiku"},
 		"explore":  object{"model": "haiku"},
 		"fallback": object{"model": "sonnet"},
-	},
-	"economy": {
-		"code":     object{"model": "sonnet", "effort": "high"},
-		"research": object{"model": "haiku"},
-		"planning": object{"model": "opus"},
-		"digest":   object{"model": "haiku"},
-		"explore":  object{"model": "haiku"},
-		"fallback": object{"model": "haiku"},
 	},
 }
 
@@ -204,7 +206,7 @@ func askRoles(current object, anyModel bool) object {
 		return line
 	}
 	fmt.Println(T("roles.intro"))
-	choice := profileAlias(strings.ToLower(ask(T("roles.profileQuestion"), "noctis")))
+	choice := profileAlias(strings.ToLower(ask(T("roles.profileQuestion"), profileTitles["synex"])))
 	if base, known := roleProfiles[choice]; known {
 		roles := cloneObject(base)
 		roles["profile"] = choice
@@ -356,11 +358,11 @@ func roleSummary(roles object, label func(string) string) string {
 }
 
 func describeRoles(roles object) string {
-	return orDefault(getString(roles, "profile"), "custom") + ": " + roleSummary(roles, func(role string) string { return T("roles." + role) })
+	return profileTitle(orDefault(getString(roles, "profile"), "custom")) + ": " + roleSummary(roles, func(role string) string { return T("roles." + role) })
 }
 
 func retunedNotice(profile string) string {
-	return T("roles.retuned", profile, pluginVersion, roleSummary(roleProfiles[profile], func(role string) string { return role }), profile)
+	return T("roles.retuned", profileTitle(profile), pluginVersion, roleSummary(roleProfiles[profile], func(role string) string { return role }), profile)
 }
 
 func badRoleValue(role string, spec object, anyModel bool) string {
@@ -429,14 +431,21 @@ func syncAgentFiles(pluginRoot string, roles object, anyModel bool) int {
 
 func profileAlias(name string) string {
 	switch strings.TrimSpace(name) {
-	case "synex", "1", "noctis mode", "noctis-mode":
-		return "noctis"
+	case "1":
+		return "code"
 	case "2":
-		return "balanced"
+		return "search"
 	case "3":
-		return "economy"
-	case "4":
+		return "balanced"
+	case "4", "noctis", "noctis mode", "noctis-mode":
+		return "synex"
+	case "5":
 		return "custom"
 	}
 	return strings.TrimSpace(name)
+}
+
+func profileTitle(name string) string {
+	name = profileAlias(strings.ToLower(name))
+	return orDefault(profileTitles[name], name)
 }

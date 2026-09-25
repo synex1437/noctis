@@ -1,9 +1,11 @@
 package main
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -105,14 +107,14 @@ func TestAHaikuEffortFromAFlagIsNotStored(t *testing.T) {
 	}
 }
 
-func TestTheShippedDefaultsAreTheNoctisProfileProjected(t *testing.T) {
+func TestTheShippedDefaultsAreTheSynexProfileProjected(t *testing.T) {
 	defaults := readJSON(filepath.Join(repoRoot(), "config.default.json"))
 	roles := section(defaults, "roles")
-	profile := roleProfiles["noctis"]
+	profile := roleProfiles["synex"]
 	for _, role := range roleNames {
 		want, got := getMap(profile, role), getMap(roles, role)
 		if getString(want, "model") != getString(got, "model") || getString(want, "effort") != getString(got, "effort") {
-			t.Errorf("config.default.json %s = %v, the noctis profile says %v", role, got, want)
+			t.Errorf("config.default.json %s = %v, the SYNEX profile says %v", role, got, want)
 		}
 	}
 	models := section(defaults, "models")
@@ -163,20 +165,20 @@ func TestTheScopedRuleWatchesFableWhateverTheCodeModel(t *testing.T) {
 
 func TestAnEarlierShippedProfileIsNamedNotSwitched(t *testing.T) {
 	sandboxFiles(t)
-	earlier := cloneObject(retiredProfiles["noctis"])
+	earlier := cloneObject(retiredProfiles["synex"])
 	earlier["profile"] = "noctis"
 	earlier["digest"] = object{"model": "haiku", "effort": "high"}
 	earlier["planning"] = object{"model": "fable", "effort": "max"}
-	if got := retunedProfile(earlier); got != "noctis" {
-		t.Fatalf("the 5.5 noctis assignment was not recognised as an earlier noctis profile (%q)", got)
+	if got := retunedProfile(earlier); got != "synex" {
+		t.Fatalf("the 5.5 noctis assignment was not recognised as an earlier SYNEX profile (%q)", got)
 	}
 	synex := cloneObject(earlier)
 	synex["profile"] = "synex"
-	if got := retunedProfile(synex); got != "noctis" {
-		t.Errorf("the synex alias hid the earlier profile (%q)", got)
+	if got := retunedProfile(synex); got != "synex" {
+		t.Errorf("the synex name hid the earlier profile (%q)", got)
 	}
-	current := cloneObject(roleProfiles["noctis"])
-	current["profile"] = "noctis"
+	current := cloneObject(roleProfiles["synex"])
+	current["profile"] = "synex"
 	edited := cloneObject(earlier)
 	edited["code"] = object{"model": "opus", "effort": "high"}
 	custom := cloneObject(earlier)
@@ -187,10 +189,57 @@ func TestAnEarlierShippedProfileIsNamedNotSwitched(t *testing.T) {
 		}
 	}
 	issues := strings.Join(selfCheckIssues(object{"roles": earlier}), "; ")
-	if !strings.Contains(issues, "--profile noctis") {
+	if !strings.Contains(issues, "--profile synex") {
 		t.Errorf("the self-check did not say how to adopt the re-tuned profile: %q", issues)
 	}
 	if strings.Contains(strings.Join(selfCheckIssues(object{"roles": current}), "; "), "--profile") {
 		t.Error("the self-check nags a configuration that already has the current profile")
+	}
+}
+
+func TestTheProfilesAreCodeSearchBalancedAndSynexAndOnlySynexRunsAtMax(t *testing.T) {
+	if names := slices.Sorted(maps.Keys(roleProfiles)); strings.Join(names, " ") != "balanced code search synex" {
+		t.Fatalf("setup offers the profiles %v, want code, search, balanced and synex", names)
+	}
+	for name, profile := range roleProfiles {
+		for _, role := range roleNames {
+			effort := getString(getMap(profile, role), "effort")
+			if want := name == "synex" && (role == "code" || role == "fallback"); (effort == "max") != want {
+				t.Errorf("the %s profile gives %s the effort %q; only SYNEX runs code and its fallback at max", name, role, effort)
+			}
+		}
+	}
+	for _, pick := range []struct{ profile, role string }{{"code", "code"}, {"search", "research"}, {"search", "code"}} {
+		if spec := getMap(roleProfiles[pick.profile], pick.role); getString(spec, "model") != "opus" || getString(spec, "effort") != "xhigh" {
+			t.Errorf("the %s profile runs %s on %v, want Opus 5.5 at xhigh", pick.profile, pick.role, spec)
+		}
+	}
+}
+
+func TestTheNoctisProfileNameStillMeansSynex(t *testing.T) {
+	if got := profileAlias("noctis"); got != "synex" {
+		t.Fatalf("--profile noctis now means %q; it named the profile that is SYNEX now", got)
+	}
+	roles := cloneObject(roleProfiles["synex"])
+	roles["profile"] = "noctis"
+	if got := describeRoles(roles); !strings.HasPrefix(got, "SYNEX: ") {
+		t.Fatalf("a configuration that stored the noctis profile is described as %q, want it named SYNEX", got)
+	}
+}
+
+func TestSetupNamesTheProfilesInEveryLanguage(t *testing.T) {
+	locales := append([]string{"en", "tr"}, slices.Sorted(maps.Keys(extraCatalogBuilders))...)
+	for _, code := range locales {
+		for _, key := range []string{"roles.intro", "roles.profileQuestion", "roles.unknownProfile"} {
+			text := catalogFor(code)[key]
+			for _, title := range []string{"Code", "Search", "Balanced", "SYNEX"} {
+				if !strings.Contains(text, title) {
+					t.Errorf("%s %s does not name the %s profile: %q", code, key, title, text)
+				}
+			}
+			if strings.Contains(text, "economy") || strings.Contains(text, "noctis") {
+				t.Errorf("%s %s still names a profile that is gone: %q", code, key, text)
+			}
+		}
 	}
 }

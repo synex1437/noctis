@@ -31,7 +31,7 @@ Layout of `cmd/noctis`:
 | `runtime.go` | status line, pace marker, hooks self-heal, resume runner, `claude` launching, sleeper |
 | `host.go` | the other AI coding tools: capability table, hook-file wiring, input/output translation, Codex rate limits, Antigravity quota, update check, coexistence notes |
 | `autoqueue.go` | long prompts turned into checklists (`<account>/noctis/queues/`) |
-| `roles.go` | roles profiles (noctis / balanced / economy / custom) projected onto models, router and agent files |
+| `roles.go` | roles profiles (Code / Search / Balanced / SYNEX / custom) projected onto models, router and agent files |
 | `lang.go` | deterministic language detection, per-session locale, the twelve-language catalog subset |
 | `workflow.go` | dynamic-workflow detection, suggestion and relaunch notes |
 | `github.go` | `queue import` from GitHub issues, closing issues when items are ticked |

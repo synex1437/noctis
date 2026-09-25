@@ -1014,8 +1014,8 @@ func valueProblem(name, value string) string {
 
 func wordGuess(word string, known map[string]bool) string {
 	lower := strings.ToLower(strings.TrimSpace(word))
-	if roleProfiles[lower] != nil {
-		return "--profile " + lower
+	if name := profileAlias(lower); roleProfiles[name] != nil {
+		return "--profile " + name
 	}
 	if thresholdPresets[lower] != nil {
 		return "--preset " + lower

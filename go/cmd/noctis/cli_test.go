@@ -131,7 +131,7 @@ func cliPluginTree(t *testing.T) string {
 	}
 	cliWrite(t, filepath.Join(root, "config.default.json"), encoded)
 	cliWrite(t, filepath.Join(root, "hooks", "hooks.json"), []byte(`{"hooks": {"SessionStart": [{"matcher": "startup", "hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/noctis", "args": ["ensure"], "timeout": 15}]}]}}`))
-	cliWrite(t, filepath.Join(root, "agents", "lite.md"), []byte("---\nname: lite\nmodel: sonnet\neffort: high\n---\n\nResearch on the model the economy profile picked.\n"))
+	cliWrite(t, filepath.Join(root, "agents", "lite.md"), []byte("---\nname: lite\nmodel: sonnet\neffort: high\n---\n\nResearch on the model a custom profile picked.\n"))
 	return root
 }
 
@@ -193,7 +193,7 @@ func TestEnsureLeavesAConfigItCannotReadAsItIs(t *testing.T) {
 
 func TestEnsureLeavesTheAgentsAloneWhileTheConfigCannotBeRead(t *testing.T) {
 	root := cliPluginTree(t)
-	broken := []byte(`{"roles": {"profile": "economy", "research": {"model": "sonnet", "effort": "high"},},}`)
+	broken := []byte(`{"roles": {"profile": "custom", "research": {"model": "sonnet", "effort": "high"},},}`)
 	cliWrite(t, files.config, broken)
 	settings := []byte(`{"statusLine": {"type": "command", "command": "\"` + forwardSlashes(filepath.Join(root, "bin", binaryFileName())) + `\" statusline"}}`)
 	cliWrite(t, files.settings, settings)
@@ -229,7 +229,7 @@ func TestSetupRefusesAConfigItCannotRead(t *testing.T) {
 			cliWrite(t, filepath.Join(account, "settings.json"), cliForeignSettings)
 			config := unreadable.plant(t, filepath.Join(account, pluginName))
 
-			run := runNoctisCLI(t, cliAccountEnv(root, account), "setup", "--config-dir", account, "--profile", "economy", "--no-ask")
+			run := runNoctisCLI(t, cliAccountEnv(root, account), "setup", "--config-dir", account, "--profile", "balanced", "--no-ask")
 
 			if run.code != 1 || !strings.Contains(run.stderr, "config.json") || strings.Contains(run.stdout, "setup complete") {
 				t.Fatalf("setup went on past a config.json it cannot read:\n%s", run)
@@ -250,7 +250,7 @@ func TestInstallRefusesAConfigItCannotRead(t *testing.T) {
 			cliWrite(t, filepath.Join(account, "settings.json"), cliForeignSettings)
 			config := unreadable.plant(t, filepath.Join(account, pluginName))
 
-			run := runNoctisCLI(t, cliAccountEnv(root, account), "install", "--source", root, "--config-dir", account, "--host", "claude", "--profile", "economy", "--no-ask")
+			run := runNoctisCLI(t, cliAccountEnv(root, account), "install", "--source", root, "--config-dir", account, "--host", "claude", "--profile", "balanced", "--no-ask")
 
 			if run.code != 1 || !strings.Contains(run.stderr, "config.json") {
 				t.Fatalf("install went on past a config.json it cannot read:\n%s", run)
@@ -829,22 +829,22 @@ func TestSetupAndInstallChangeNothingWhenTheyDoNotUnderstandTheirArguments(t *te
 		env  map[string]string
 		say  []string
 	}{
-		{[]string{"setup", "--config-dir", "ACCOUNT", "--profle", "economy"}, nil, []string{"--profle", "did you mean --profile?"}},
+		{[]string{"setup", "--config-dir", "ACCOUNT", "--profle", "balanced"}, nil, []string{"--profle", "did you mean --profile?"}},
 		{[]string{"setup", "--config-dir", "ACCOUNT", "--permisions", "keep"}, nil, []string{"--permisions", "did you mean --permissions?"}},
 		{[]string{"setup", "--config-dir", "ACCOUNT", "--permissions", "kep"}, nil, []string{"--permissions kep", "acceptEdits"}},
 		{[]string{"setup", "--config-dir", "ACCOUNT", "--permissions", "bypassPermissions"}, nil, []string{"--permissions bypassPermissions"}},
 		{[]string{"setup", "--config-dir", "ACCOUNT", "--updates", "no"}, nil, []string{"--updates no"}},
-		{[]string{"setup", "--config-dir", "ACCOUNT", "--profile", "noctis", "economy"}, nil, []string{"unexpected word economy", "did you mean --profile economy?"}},
-		{[]string{"setup", "--config-dir", "ACCOUNT", "--no-ask", "economy"}, nil, []string{"unexpected word economy"}},
+		{[]string{"setup", "--config-dir", "ACCOUNT", "--profile", "synex", "search"}, nil, []string{"unexpected word search", "did you mean --profile search?"}},
+		{[]string{"setup", "--config-dir", "ACCOUNT", "--no-ask", "search"}, nil, []string{"unexpected word search"}},
 		{[]string{"setup", "--config-dir", "ACCOUNT", "--no-model=yes"}, nil, []string{"--no-model"}},
-		{[]string{"setup", "--config-dir", "--profile", "economy"}, nil, []string{"--config-dir"}},
-		{[]string{"setup", "--config-dir=", "--profile", "economy"}, nil, []string{"--config-dir"}},
-		{[]string{"setup", "--account", "ACCOUNT", "--profile", "economy", "--config-dir"}, nil, []string{"--config-dir"}},
+		{[]string{"setup", "--config-dir", "--profile", "balanced"}, nil, []string{"--config-dir"}},
+		{[]string{"setup", "--config-dir=", "--profile", "balanced"}, nil, []string{"--config-dir"}},
+		{[]string{"setup", "--account", "ACCOUNT", "--profile", "balanced", "--config-dir"}, nil, []string{"--config-dir"}},
 		{[]string{"install", "--source", "ROOT", "--config-dir", "ACCOUNT", "--host", "claude", "--uninstal"}, nil, []string{"--uninstal", "did you mean --uninstall?"}},
 		{[]string{"install", "--source", "ROOT", "--config-dir", "ACCOUNT", "--host", "codx"}, nil, []string{"codx", "codex"}},
 		{[]string{"install", "--source", "ROOT", "--config-dir", "ACCOUNT", "--host", "Codex CLI"}, nil, []string{"Codex CLI", "codex"}},
-		{[]string{"setup", "--config-dir", "ACCOUNT", "--profile", "economy"}, map[string]string{"NOCTIS_HOST": "codx"}, []string{"NOCTIS_HOST", "codx", "codex"}},
-		{[]string{"setup", "--config-dir", "ACCOUNT", "--profile", "economy", "--host", "codx"}, map[string]string{"NOCTIS_HOST": "codex"}, []string{"codx"}},
+		{[]string{"setup", "--config-dir", "ACCOUNT", "--profile", "balanced"}, map[string]string{"NOCTIS_HOST": "codx"}, []string{"NOCTIS_HOST", "codx", "codex"}},
+		{[]string{"setup", "--config-dir", "ACCOUNT", "--profile", "balanced", "--host", "codx"}, map[string]string{"NOCTIS_HOST": "codex"}, []string{"codx"}},
 	}
 	for _, c := range cases {
 		t.Run(strings.Join(c.argv, " "), func(t *testing.T) {
@@ -902,9 +902,9 @@ func TestSetupAndInstallTakeFlagsHoweverTheyAreWritten(t *testing.T) {
 	t.Run("--flag=value", func(t *testing.T) {
 		box := newCLIBox(t)
 
-		run := box.run(t, "setup", "--config-dir="+box.account, "--profile=economy", "--permissions=keep")
+		run := box.run(t, "setup", "--config-dir="+box.account, "--profile=balanced", "--permissions=keep")
 
-		box.configured(t, run, box.account, "economy")
+		box.configured(t, run, box.account, "balanced")
 		if mode := getString(getMap(readJSON(filepath.Join(box.account, "settings.json")), "permissions"), "defaultMode"); mode != "default" {
 			t.Fatalf("--permissions=keep did not keep the permission mode: %q\n%s", mode, run)
 		}
@@ -912,16 +912,16 @@ func TestSetupAndInstallTakeFlagsHoweverTheyAreWritten(t *testing.T) {
 	t.Run("--account", func(t *testing.T) {
 		box := newCLIBox(t)
 
-		run := box.run(t, "setup", "--account", box.account, "--profile", "economy", "--permissions", "keep")
+		run := box.run(t, "setup", "--account", box.account, "--profile", "balanced", "--permissions", "keep")
 
-		box.configured(t, run, box.account, "economy")
+		box.configured(t, run, box.account, "balanced")
 	})
 	t.Run("--config-dir ~/work", func(t *testing.T) {
 		box := newCLIBox(t)
 
-		run := box.run(t, "setup", "--config-dir", "~/work", "--profile", "economy", "--permissions", "keep")
+		run := box.run(t, "setup", "--config-dir", "~/work", "--profile", "balanced", "--permissions", "keep")
 
-		box.configured(t, run, filepath.Join(box.home, "work"), "economy")
+		box.configured(t, run, filepath.Join(box.home, "work"), "balanced")
 		if statSafe(filepath.Join(box.home, "~")) != nil {
 			t.Fatalf("~ was taken as a folder name:\n%s", run)
 		}
@@ -929,18 +929,18 @@ func TestSetupAndInstallTakeFlagsHoweverTheyAreWritten(t *testing.T) {
 	t.Run("the profile the setup skill puts first gives way to the one the person asked for", func(t *testing.T) {
 		box := newCLIBox(t)
 
-		run := box.run(t, "setup", "--profile", "noctis", "--config-dir", box.account, "--profile=economy", "--permissions", "keep")
+		run := box.run(t, "setup", "--profile", "noctis", "--config-dir", box.account, "--profile=balanced", "--permissions", "keep")
 
-		box.configured(t, run, box.account, "economy")
+		box.configured(t, run, box.account, "balanced")
 	})
 	t.Run("--permissions in any case", func(t *testing.T) {
 		for flag, want := range map[string]string{"ACCEPTEDITS": "acceptEdits", "Plan": "plan", "Default": "default"} {
 			box := newCLIBox(t)
 			cliWrite(t, filepath.Join(box.account, "settings.json"), []byte(`{"permissions": {"defaultMode": "auto"}}`))
 
-			run := box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", flag)
+			run := box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", flag)
 
-			box.configured(t, run, box.account, "economy")
+			box.configured(t, run, box.account, "balanced")
 			if mode := getString(getMap(readJSON(filepath.Join(box.account, "settings.json")), "permissions"), "defaultMode"); mode != want {
 				t.Fatalf("--permissions %s set %q, want %q:\n%s", flag, mode, want, run)
 			}
@@ -952,9 +952,9 @@ func TestSetupAndInstallTakeFlagsHoweverTheyAreWritten(t *testing.T) {
 	t.Run("install --config-dir=", func(t *testing.T) {
 		box := newCLIBox(t)
 
-		run := box.run(t, "install", "--source", box.root, "--config-dir="+box.account, "--host", "claude", "--profile", "economy", "--permissions", "keep")
+		run := box.run(t, "install", "--source", box.root, "--config-dir="+box.account, "--host", "claude", "--profile", "balanced", "--permissions", "keep")
 
-		box.configured(t, run, box.account, "economy")
+		box.configured(t, run, box.account, "balanced")
 		if statSafe(filepath.Join(box.account, "skills", pluginName, "hooks", "hooks.json")) == nil {
 			t.Fatalf("the plugin was not copied into the account named with --config-dir=:\n%s", run)
 		}
@@ -1003,9 +1003,9 @@ func TestUpdatesOffLeavesMarketplaceAutoUpdateAlone(t *testing.T) {
 			}
 			box.env["NOCTIS_PLUGIN_ROOT"] = market
 
-			run := box.run(t, append([]string{"setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep"}, c.flags...)...)
+			run := box.run(t, append([]string{"setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep"}, c.flags...)...)
 
-			box.configured(t, run, box.account, "economy")
+			box.configured(t, run, box.account, "balanced")
 			if said := strings.Contains(run.stdout, "auto-update"); said != c.asked {
 				t.Fatalf("%s: auto-update mentioned=%v, want %v:\n%s", strings.Join(c.flags, " "), said, c.asked, run)
 			}
@@ -1055,9 +1055,9 @@ func TestAnUnknownHostStopsTheCommandsPeopleRunButNotTheHooks(t *testing.T) {
 }
 
 func TestParseArgsReadsEveryWayAFlagIsWritten(t *testing.T) {
-	parsed := parseArgs([]string{"setup", "--profile=economy", "--config-dir=a", "--config-dir", "b", "--title=x=y", "--json", "--days", "7"})
+	parsed := parseArgs([]string{"setup", "--profile=balanced", "--config-dir=a", "--config-dir", "b", "--title=x=y", "--json", "--days", "7"})
 
-	for name, want := range map[string]string{"profile": "economy", "title": "x=y", "days": "7"} {
+	for name, want := range map[string]string{"profile": "balanced", "title": "x=y", "days": "7"} {
 		if got := parsed.flags[name]; got != want {
 			t.Errorf("--%s read as %q, want %q", name, got, want)
 		}
@@ -1072,9 +1072,9 @@ func TestParseArgsReadsEveryWayAFlagIsWritten(t *testing.T) {
 		t.Errorf("positional words %q, want only setup", parsed.positional)
 	}
 
-	parsed = parseArgs([]string{"setup", "--no-ask", "economy", "--config-dir", "--profile", "noctis", "--profile="})
+	parsed = parseArgs([]string{"setup", "--no-ask", "balanced", "--config-dir", "--profile", "noctis", "--profile="})
 
-	if strings.Join(parsed.positional, " ") != "setup economy" {
+	if strings.Join(parsed.positional, " ") != "setup balanced" {
 		t.Errorf("a switch swallowed the word after it: positional %q", parsed.positional)
 	}
 	if got := parsed.values["config-dir"]; len(got) != 1 || got[0] != "" {
@@ -1133,10 +1133,10 @@ func TestTheFlagCheckSaysWhatItDidNotUnderstand(t *testing.T) {
 	t.Cleanup(func() { args, locale = previous, previousLocale })
 	locale = "en"
 
-	args = parseArgs([]string{"setup", "--profle", "economy", "--permissions", "Plan", "--config-dir=d", "noctis"})
+	args = parseArgs([]string{"setup", "--profle", "balanced", "--permissions", "Plan", "--config-dir=d", "noctis"})
 	problems := argProblems(setupFlags)
 
-	want := []string{"unknown option --profle (did you mean --profile?)", "unexpected word noctis (did you mean --profile noctis?)"}
+	want := []string{"unknown option --profle (did you mean --profile?)", "unexpected word noctis (did you mean --profile synex?)"}
 	if strings.Join(problems, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("problems:\n%s\nwant:\n%s", strings.Join(problems, "\n"), strings.Join(want, "\n"))
 	}
@@ -1153,7 +1153,7 @@ func TestTheFlagCheckSaysWhatItDidNotUnderstand(t *testing.T) {
 	}
 
 	for _, argv := range [][]string{
-		{"setup", "--profile", "noctis", "--profile=economy", "--permissions", "acceptedits", "--updates", "OFF", "--config-dir", "a", "--account=b", "--no-ask", "--code", "opus:max"},
+		{"setup", "--profile", "noctis", "--profile=balanced", "--permissions", "acceptedits", "--updates", "OFF", "--config-dir", "a", "--account=b", "--no-ask", "--code", "opus:max"},
 		{"install", "--source", "s", "--uninstall", "--host", "codex", "--config-dir", "c"},
 	} {
 		args = parseArgs(argv)

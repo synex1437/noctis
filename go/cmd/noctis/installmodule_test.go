@@ -16,9 +16,9 @@ func TestAnInstallCopiesTheHooksModuleItsHooksJSONNames(t *testing.T) {
 	hooks["modules"] = []any{"./lean.js"}
 	cliWrite(t, filepath.Join(box.root, "hooks", "hooks.json"), marshalPretty(hooks))
 
-	run := box.run(t, "install", "--source", box.root, "--config-dir", box.account, "--host", "claude", "--profile", "economy", "--permissions", "keep")
+	run := box.run(t, "install", "--source", box.root, "--config-dir", box.account, "--host", "claude", "--profile", "balanced", "--permissions", "keep")
 
-	box.configured(t, run, box.account, "economy")
+	box.configured(t, run, box.account, "balanced")
 	installed := filepath.Join(box.account, "skills", pluginName, "hooks")
 	copied, err := os.ReadFile(filepath.Join(installed, "lean.js"))
 	if err != nil || !bytes.Equal(copied, module) {
@@ -37,9 +37,9 @@ func TestAnInstallNeverCopiesAModuleNamedOutsideThePlugin(t *testing.T) {
 	hooks["modules"] = []any{"../../outside.js"}
 	cliWrite(t, filepath.Join(box.root, "hooks", "hooks.json"), marshalPretty(hooks))
 
-	run := box.run(t, "install", "--source", box.root, "--config-dir", box.account, "--host", "claude", "--profile", "economy", "--permissions", "keep")
+	run := box.run(t, "install", "--source", box.root, "--config-dir", box.account, "--host", "claude", "--profile", "balanced", "--permissions", "keep")
 
-	box.configured(t, run, box.account, "economy")
+	box.configured(t, run, box.account, "balanced")
 	err := filepath.WalkDir(box.account, func(path string, entry os.DirEntry, err error) error {
 		if err == nil && strings.HasSuffix(path, "outside.js") {
 			t.Fatalf("a module named outside the plugin was copied to %s:\n%s", path, run)

@@ -783,7 +783,7 @@ func mainBatch(sid, cwd string, calls ...object) object {
 
 func TestTheControlCommandsPassThePausePoint(t *testing.T) {
 	cfg, project := controlSandbox(t, 95, 40)
-	for i, prompt := range []string{"/noctis:status", "/noctis:pause 120", "  /noctis:setup --profile economy", "/noctis:resume", "/noctis:pause"} {
+	for i, prompt := range []string{"/noctis:status", "/noctis:pause 120", "  /noctis:setup --profile search", "/noctis:resume", "/noctis:pause"} {
 		sid := "cp-" + strconv.Itoa(i)
 		if output := hookOutput(t, onUserPromptSubmit, promptInput(sid, project, prompt), cfg); output != nil {
 			t.Fatalf("%q with the 5h window at 95%% (pause point 92%%) was not let through: %v", prompt, output)
@@ -939,7 +939,7 @@ func TestOnlyPlainCallsOfThePluginBinaryCountAsItsOwnCommands(t *testing.T) {
 				`"{root}/bin/noctis" why --last 10`,
 				`'{root}/bin/noctis' off 120`,
 				`{root}/bin/noctis on`,
-				`"${CLAUDE_PLUGIN_ROOT}/bin/noctis" setup --profile economy --code opus:high --research sonnet:high`,
+				`"${CLAUDE_PLUGIN_ROOT}/bin/noctis" setup --profile balanced --code opus:high --research sonnet:high`,
 				`$CLAUDE_PLUGIN_ROOT/bin/noctis status`,
 				`"{root}/bin/linux-arm64/noctis" doctor`,
 				"\"{root}/bin/noctis\" status\n\"{root}/bin/noctis\" why --last 10\n",
@@ -1057,7 +1057,7 @@ func TestEveryControlCommandIsAShippedSkill(t *testing.T) {
 func retiredProfileSandbox(t *testing.T, overrides object, fable float64) (object, string) {
 	t.Helper()
 	_, project, _ := limitSandbox(t, overrides, 20, 10)
-	roles := cloneObject(retiredProfiles["noctis"])
+	roles := cloneObject(retiredProfiles["synex"])
 	roles["profile"] = "noctis"
 	applyRoles(files.config, readJSON(files.config), roles)
 	now := float64(nowSec())
