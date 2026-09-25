@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -79,7 +80,7 @@ func buildWebhookRequest(config webhookConfig, endpoint *url.URL, title, body st
 			headers["Title"] = "=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(title)) + "?="
 		}
 	default:
-		payload = marshalCompact(object{"source": pluginName, "account": files.configDir, "title": title, "body": body, "at": time.Now().UTC().Format(time.RFC3339)})
+		payload = marshalCompact(object{"source": pluginName, "account": filepath.Base(files.configDir), "title": title, "body": body, "at": time.Now().UTC().Format(time.RFC3339)})
 	}
 	request, err := http.NewRequest(http.MethodPost, endpoint.String(), bytes.NewReader(payload))
 	if err != nil {
@@ -132,6 +133,7 @@ func deliverWebhook(cfg object, title, body string, ignoreBreaker bool) (bool, s
 		logInfo("webhook skipped: circuit open")
 		return false, T("webhook.circuitOpen", formatTime(numberOr(getMap(state, "webhook"), "openUntil", 0)))
 	}
+	title, body = homeAsTilde(title), homeAsTilde(body)
 	client := &http.Client{Timeout: 5 * time.Second}
 	delays := []time.Duration{0, time.Second, 3 * time.Second}
 	var lastError string
