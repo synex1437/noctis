@@ -533,6 +533,10 @@ async function scenarioWindowsTaskIsRegisteredAndRuns(lab) {
     const argumentsText = tagValue(replaced, 'Arguments');
     const workingDirectory = tagValue(replaced, 'WorkingDirectory');
 
+    const held = schtasks(['/change', '/tn', name, '/disable']);
+    check('task: Windows is kept from running the task itself, so only the lab runs its command',
+      held.status === 0, `${held.status}: ${(held.stderr || held.stdout || '').trim().slice(0, 200)}`);
+
     lab.resetCalls();
     while (nowSec() < Number((again && again.resumeAt) || 0)) await sleep(1000);
     const ran = spawnSync(command, [argumentsText], {
