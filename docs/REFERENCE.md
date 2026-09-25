@@ -132,6 +132,7 @@ Claude Code hook events wired in `hooks/hooks.json`: `SessionStart` (on `startup
 | `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` | Read from `settings.json` → `env`, else from the process; unless `compaction.contextPercent` is changed from 85, the compaction gate sits 5 points below it |
 | `LC_ALL` / `LC_MESSAGES` / `LANG` | Interface language outside a session and before its first prompt (with `locale: auto` and no `NOCTIS_LANG`) |
 | `DISPLAY` / `WAYLAND_DISPLAY` | Linux: a desktop terminal is tried for a relaunch only when one is set |
+| `GODEBUG` | Go's own switches. The usage request, the webhook and the daily update check (`update.check`) run with Go 1.24.7's TLS defaults: they offer the post-quantum key exchange X25519MLKEM768, which makes the first message to the server about 1.2 KB larger, and refuse a server certificate with a negative serial number or an RSA key under 1024 bits. `tlsmlkem=0` leaves the post-quantum key exchange out, which brings that message back to about its old size; `x509negativeserial=1` and `rsa1024min=0` accept those certificates again. Several at once: `GODEBUG=tlsmlkem=0,rsa1024min=0` |
 | `NOCTIS_ANTIGRAVITY_HOOKS` | Antigravity hook-file path — test use |
 
 ## Other AI coding tools
