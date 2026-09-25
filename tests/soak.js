@@ -568,6 +568,7 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       const file = path.join(lab.projectDir, 'TASKS.md');
       const text = fs.readFileSync(file, 'utf8');
       fs.writeFileSync(file, `${text}- [ ] (P0) urgent chaos item ${serial}\n- [ ] #never${serial} slow chaos item ${serial}\n- [ ] (after #never${serial}) blocked chaos item ${serial}\n`);
+      for (const other of ACCOUNTS) other.run(['queue', 'trust', '--file', file]);
       const stop = parseOutput(timedHook(acc, { hook_event_name: 'Stop', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, stop_hook_active: false }));
       if (stop.decision === 'block') {
         stats.priorityChecks += 1;
