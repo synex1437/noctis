@@ -1260,6 +1260,7 @@ async function scenarioBudgetWakeWebhook(acc) {
   check('daily budget notice once it is exceeded', notice.includes('daily budget reached') && notice.includes('11%'), true);
   check('budget notice not repeated the same day', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'bd1', cwd: PROJECT_DIR, prompt: 'continue with the parser code' }), '');
   fs.writeFileSync(path.join(PROJECT_DIR, 'TASKS.md'), '# q\n- [ ] first item\n- [ ] second item\n');
+  acc.run(['queue', 'trust', '--file', path.join(PROJECT_DIR, 'TASKS.md')]);
   acc.statusline('bd2', 'claude-fable-5-1', 20, now + 7200, 41, weekReset);
   const stopNotice = JSON.parse(acc.hook({ hook_event_name: 'Stop', session_id: 'bd2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false }) || '{}');
   check('a one-time notice that a Stop hook uses up is shown while the queue continues', stopNotice.decision === 'block' && String(stopNotice.systemMessage).includes('daily budget reached') && String(stopNotice.reason).includes('Queue continues: 2 open'), true);
@@ -1679,6 +1680,10 @@ async function scenarioQueuePriorities(acc) {
     '',
   ].join('\n'));
   acc.statusline('qp2', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
+  const rewritten = acc.hook({ hook_event_name: 'Stop', session_id: 'qp2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
+  check('queue: a rewrite with items nobody trusted drives nothing and says how many are new', !rewritten.includes('"decision":"block"') && rewritten.includes(' 4 ') && rewritten.includes('noctis queue trust'), true);
+  check('queue: status lists the items added since the trust', acc.run(['queue', 'status', '--file', queueFile]).includes('- [ ] Write the release notes'), true);
+  acc.run(['queue', 'trust', '--file', queueFile]);
   const sloppy = JSON.parse(acc.hook({ hook_event_name: 'Stop', session_id: 'qp2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false })).reason;
   check('queue: sloppy boxes, bare boxes and TODO markers all count; notes do not', sloppy.includes('Queue continues: 4 open'), true);
   check('queue: a multi-line item is one item and P1 comes first', sloppy.includes('("bare box without a bullet (P1)")'), true);
@@ -1689,9 +1694,11 @@ async function scenarioQueuePriorities(acc) {
   acc.run(['cancel', 'qp2']);
   acc.statusline('qp2', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
   fs.writeFileSync(queueFile, ['# plain list', '- migrate the users table', '- ~~write docs~~', '- deploy (done)', '1) run the smoke tests', '', 'notes: not a task', ''].join('\n'));
+  acc.run(['queue', 'trust', '--file', queueFile]);
   const plain = JSON.parse(acc.hook({ hook_event_name: 'Stop', session_id: 'qp2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true })).reason;
   check('queue: a list without checkboxes is read as tasks with done markers honoured', plain.includes('Queue continues: 2 open') && plain.includes('("migrate the users table")') && plain.includes('rewrite every open item as "- [ ] …"'), true);
   fs.writeFileSync(queueFile, ['# cycle', '- [ ] a #a (after #b)', '- [ ] b #b (after #a)', ''].join('\n'));
+  acc.run(['queue', 'trust', '--file', queueFile]);
   const blocked = acc.hook({ hook_event_name: 'Stop', session_id: 'qp1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
   check('queue: fully blocked queue stops with a notice instead of forcing', !blocked.includes('"decision":"block"') && blocked.includes('Kuyruk tıkalı: 2'), true);
   check('queue: blocked stop journaled', acc.run(['why', '--last', '1']).includes('queue blocked'), true);

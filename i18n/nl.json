@@ -406,6 +406,8 @@
   "status.launchFailed": "!!  automatisch herstarten van %s is om %s mislukt — hervat het met: %s",
   "doctor.schedulerSleeper": "(normaal: hier is geen launchd/systemd/schtasks, dus wordt een licht slaapproces gebruikt)",
   "queue.trustAsk": "☰ %s in deze map bevat %d open punt(en). Het stuurt deze sessie niet aan: een checklist kan met een repository meekomen, en aansturen betekent hem afwerken zonder te stoppen om te vragen. Om het toe te staan: noctis queue trust (%s)",
+  "queue.trustChanged": "☰ %s heeft %d open punt(en) die zijn toegevoegd of gewijzigd sinds je het vertrouwde; een pull of een branchwissel kan ze meebrengen. Het stuurt deze sessie niet aan tot je ze leest en het opnieuw vertrouwt: noctis queue trust (%s)",
+  "queue.importTrust": "%[2]s bevat nu %[1]d open punt(en) die je niet vertrouwd hebt: ze sturen geen sessie aan tot je ze leest en noctis queue trust opnieuw uitvoert.",
   "queue.trustGranted": "Dit bestand mag sessies aansturen: %s",
   "queue.trustRevoked": "Dit bestand stuurt geen sessies meer aan: %s",
   "queue.trustNone": "Hier staat geen wachtrijbestand (gezocht naar: %s).",

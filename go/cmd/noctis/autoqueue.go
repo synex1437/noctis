@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -339,10 +341,45 @@ func isAutoQueue(path string) bool {
 }
 
 func queueTrusted(cfg object, path string) bool {
+	trusted, _ := queueTrustGap(cfg, path)
+	return trusted
+}
+
+func queueTrustGap(cfg object, path string) (bool, []string) {
 	if isAutoQueue(path) || !getBool(section(cfg, "queue"), "requireTrust", true) {
-		return true
+		return true, nil
 	}
-	return numberOr(getMap(getMap(readState(), "queueTrust"), queueTrustKey(path)), "at", 0) > 0
+	record := getMap(getMap(readState(), "queueTrust"), queueTrustKey(path))
+	if numberOr(record, "at", 0) <= 0 {
+		return false, nil
+	}
+	known := map[string]bool{}
+	for _, digest := range getList(record, "items") {
+		if text, ok := digest.(string); ok {
+			known[text] = true
+		}
+	}
+	fresh := []string{}
+	for _, entry := range queueFileEntries(path) {
+		if !entry.checked && !known[queueItemDigest(entry.text)] {
+			fresh = append(fresh, entry.text)
+		}
+	}
+	return len(fresh) == 0, fresh
+}
+
+func queueItemDigest(text string) string {
+	sum := sha256.Sum256([]byte(strings.Join(strings.Fields(text), " ")))
+	return hex.EncodeToString(sum[:8])
+}
+
+func queueFileEntries(path string) []queueEntry {
+	content, ok := readQueueText(path)
+	if !ok {
+		return nil
+	}
+	entries, _ := parseQueueEntries(content)
+	return entries
 }
 
 func queueTrustKey(path string) string {
@@ -351,13 +388,35 @@ func queueTrustKey(path string) string {
 
 func trustQueueFile(path string, trusted bool) {
 	key := queueTrustKey(path)
+	digests, seen := []any{}, map[string]bool{}
+	if trusted {
+		for _, entry := range queueFileEntries(path) {
+			if digest := queueItemDigest(entry.text); !seen[digest] {
+				seen[digest] = true
+				digests = append(digests, digest)
+			}
+		}
+	}
 	updateState(func(next object) {
 		records := stateMap(next, "queueTrust")
 		if trusted {
-			records[key] = object{"at": float64(nowSec()), "path": path}
+			now := float64(nowSec())
+			records[key] = object{"at": now, "used": now, "path": path, "items": digests}
 			return
 		}
 		delete(records, key)
+	})
+}
+
+func touchQueueTrust(path string, now int64) {
+	key := queueTrustKey(path)
+	if record := getMap(getMap(readState(), "queueTrust"), key); record == nil || float64(now)-numberOr(record, "used", 0) < 3600 {
+		return
+	}
+	updateState(func(next object) {
+		if record := getMap(getMap(next, "queueTrust"), key); record != nil {
+			record["used"] = float64(now)
+		}
 	})
 }
 

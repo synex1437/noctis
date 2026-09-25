@@ -406,6 +406,8 @@
   "status.launchFailed": "!!  a reinicialização automática de %s falhou às %s — retome com: %s",
   "doctor.schedulerSleeper": "(normal: não há launchd/systemd/schtasks aqui, então um processo dormente leve é usado no lugar)",
   "queue.trustAsk": "☰ %s nesta pasta tem %d item(ns) em aberto. Ele não está conduzindo esta sessão: uma checklist pode vir junto com um repositório, e conduzir significa percorrê-la sem parar para perguntar. Para permitir: noctis queue trust (%s)",
+  "queue.trustChanged": "☰ %s tem %d item(ns) em aberto adicionado(s) ou alterado(s) desde que você confiou nele; um pull ou uma troca de branch pode trazê-los. Ele não conduz esta sessão até você lê-los e confiar nele de novo: noctis queue trust (%s)",
+  "queue.importTrust": "%[2]s agora tem %[1]d item(ns) em aberto em que você não confiou: eles não conduzem nenhuma sessão até você lê-los e executar noctis queue trust de novo.",
   "queue.trustGranted": "Este arquivo pode conduzir sessões: %s",
   "queue.trustRevoked": "Este arquivo não conduz mais sessões: %s",
   "queue.trustNone": "Nenhum arquivo de fila aqui (procurado: %s).",

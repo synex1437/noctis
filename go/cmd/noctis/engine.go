@@ -413,20 +413,19 @@ func newQueueEntry(ordinal int, text string, checked bool) queueEntry {
 	return entry
 }
 
-func queueSnapshot(file string) queueView {
+func readQueueText(file string) (string, bool) {
 	info := statSafe(file)
 	if info == nil {
-		return queueView{}
+		return "", false
 	}
 	handle, err := os.Open(file)
 	if err != nil {
 		warn("queue file unreadable: %v", err)
-		return queueView{}
+		return "", false
 	}
 	defer handle.Close()
 	length := info.Size()
 	if length > queueMaxBytes {
-		warn("queue file %s is %d KB; only the first %d KB are read", filepath.Base(file), length/1024, queueMaxBytes/1024)
 		length = queueMaxBytes
 	}
 	buffer := make([]byte, length)
@@ -436,6 +435,17 @@ func queueSnapshot(file string) queueView {
 		if cut := strings.LastIndex(content, "\n"); cut > 0 {
 			content = content[:cut]
 		}
+	}
+	return content, true
+}
+
+func queueSnapshot(file string) queueView {
+	if info := statSafe(file); info != nil && info.Size() > queueMaxBytes {
+		warn("queue file %s is %d KB; only the first %d KB are read", filepath.Base(file), info.Size()/1024, queueMaxBytes/1024)
+	}
+	content, ok := readQueueText(file)
+	if !ok {
+		return queueView{}
 	}
 	entries, plain := parseQueueEntries(content)
 	view := queueView{plain: plain}
