@@ -1,6 +1,6 @@
 # noctis — Tasarım ve Hata Analizi
 
-> Turkish, author's working notes: the design goals, the architecture and the numbered bug log (#1–#130) of every release. The English reference is [REFERENCE.md](REFERENCE.md); the host adapters are in [HOSTS.md](HOSTS.md).
+> Turkish, author's working notes: the design goals, the architecture and the numbered bug log (#1–#270) of every release. The English reference is [REFERENCE.md](REFERENCE.md); the host adapters are in [HOSTS.md](HOSTS.md).
 
 ## 1. Hedefler
 
@@ -16,7 +16,7 @@
 Claude Code ──statusLine JSON (her asistan mesajı)──▶ noctis statusline ──▶ usage.json   (0 token)
             ──hook: UserPromptSubmit / PostToolBatch──▶ noctis hook ──▶ karar
                        │  eşik yok → sessiz çıkış (0 token)
-                       │  kısa bekleme → hook içinde uyu → sessiz dön (bağlam korunur)
+                       │  kısa bekleme (≤330 dk) → hook içinde uyu → tek satır systemMessage ile dön (bağlam korunur)
                        │  uzun bekleme → checkpoint + dur + Görev Zamanlayıcı (resume)
                        │  Fable ≥%95 → settings.model=opus (+ yeniden başlatma planı)
             ──hook: StopFailure(rate_limit) / Notification(quota_auto_resume_*)──▶ yedek plan / iptal
@@ -37,7 +37,7 @@ Tek yazar ilkesi: her dosyanın tek bir yazar süreci var; `state.json` için `w
 
 ## 3. Olay akışları
 
-**A. 5 saat %92, VS Code açık.** PostToolBatch → checkpoint (transcript'ten, model çağrısı yok) → `waits[sid]` + izleyici görevi (reset+90 s+180 s) → hook `resets_at + 90 s`'ye kadar 30 s'lik dilimlerle uyur (duvar saati; PC uykusuna dayanıklı) → bekleme kaydı silinir, izleyici iptal edilir, bip+toast → hook sessiz döner → sonraki model çağrısı sıfırlanmış pencerede yapılır. Ek token: 0.
+**A. 5 saat %92, VS Code açık.** PostToolBatch → checkpoint (transcript'ten, model çağrısı yok) → `waits[sid]` + izleyici görevi (reset+90 s+180 s) → devam anına en fazla 330 dk varsa (`wait.maxInHookMinutes`) hook `resets_at + 90 s`'ye kadar 15 s'lik dilimlerle uyur (duvar saati; PC uykusuna dayanıklı); her dilimde kalp atışı yazar, 5 dk'da bir kullanımı tazeler (`wait.earlyResetPollMinutes`) ve pencere erken sıfırlandıysa beklemeyi o an bitirir → bekleme kaydı silinir, checkpoint tüketilir, izleyici iptal edilir, masaüstü bildirimi (+ ayarlıysa webhook) → hook kullanıcıya tek satır `systemMessage` ile döner (bekleme sırasında çalışma ağacı değiştiyse ya da limit oturumun alt ajanlarını yarıda kestiyse Claude'a da kısa bir `additionalContext` notu) → sonraki model çağrısı sıfırlanmış pencerede yapılır. Ek token: bekleme bağlama metin eklemez; ama istem önbelleğinin (prompt cache) ömründen uzun sürerse sonraki ilk çağrı bütün bağlamı önbelleğe yeniden yazar (bağlam boyu kadar cache write; `noctis report`'ta görünür).
 
 **B. Aynı durumda kullanıcı Esc'ye bastı / VS Code kapandı.** Hook öldü; bekleme kaydı kaldı. Kullanıcı aynı oturumda yazmaya devam ederse ilk hook "yarım kalmış hook içi bekleme" görür ve izleyiciyi iptal eder. Kimse devam etmezse izleyici görev reset+270 s'de çalışır: transcript reset'ten sonra değişmemişse yeni pencerede `--resume` ile devam eder.
 
@@ -45,7 +45,7 @@ Tek yazar ilkesi: her dosyanın tek bir yazar süreci var; `state.json` için `w
 
 **D. Fable %95 (OAuth verisi).** UserPromptSubmit → settings.model=opus, `modelSwitched` kaydı, prompt bloklanır ve "/model opus sonra tekrar gönder" denir (token 0; PostModelSwitch hook'u yeni modeli kaydeder, tekrar gönderilen prompt geçer). PostToolBatch'te yakalanırsa checkpoint + dur + 20 s sonra runner Opus ile yeni pencerede `--resume`. Yeni pencere `NOCTIS_HANDOFF=<sid>` ortam değişkeniyle tanınır; eski pencere kilitlenir. Fable kovası sıfırlanınca (`fableResetsAt` geçince) varsayılan `fable`'a döner.
 
-**E. Gerçek 429.** StopFailure → OAuth'tan taze veri → suçlu pencere (eşiğe 5 puan yakın olan) belirlenir; hiçbiri değilse ve oturum Fable'daysa Fable kapasitesi varsayılır → Opus'a geçiş + 120 s sonra Opus ile devam. Dahili otomatik devam tetiklenirse (`quota_auto_resume_fired`) runner iptal; `stale`/`disabled` gelirse toast + runner planlanan saatte devam ettirir. Kullanım verisi hiç yoksa 30/60 dk sonra tekrar dener, 3. denemede bildirimle vazgeçer (sonsuz pencere döngüsü yok).
+**E. Gerçek 429.** StopFailure → OAuth'tan taze veri → suçlu pencere belirlenir: hata mesajı bir pencereyi adlandırıyorsa o, yoksa sunucu tavanına yakın (≥%90) pencere; oturum Fable'daysa ve Fable kovası ≥%90 ise (ya da mesaj Fable diyorsa) Fable kapasitesi → Opus'a geçiş + 120 s sonra Opus ile devam. Suçlu yoksa geçici hata: aynı modelde 10/20/30/45/60 dk sonra tekrar dener (`wait.retryMinutes`), art arda altıncı hatada bildirimle bırakır. Fable dışında açık oturum yeniden başlatılmadan yerinde uyandırılır (`wake.sameSession`, en fazla 330 dk sonrası için; bilinen bir pencereden ya da aşırı yükten sonra limitler önce yeniden okunur), runner 300 s sonra uyandırmanın tutup tutmadığına bakar. Dahili otomatik devam tetiklenirse (`quota_auto_resume_fired`) runner iptal; `stale`/`disabled` gelirse toast + runner planlanan saatte devam ettirir. Kullanım verisi hiç yoksa runner 10, 10, 20, 30 ve 45 dk arayla veriye bakar, beşinci bakışta bildirimle vazgeçer (sonsuz pencere döngüsü yok).
 
 ## 4. Token maliyeti
 
@@ -53,15 +53,15 @@ Tek yazar ilkesi: her dosyanın tek bir yazar süreci var; `state.json` için `w
 | --- | --- |
 | statusLine | 0 (Claude'a gösterilmez) |
 | Hook, eşik altı (her prompt ve araç turu) | 0 (çıktı yok) |
-| Hook içi bekleme | 0 |
+| Hook içi bekleme | Metin 0 (kullanıcıya tek satır `systemMessage`; çalışma ağacı değiştiyse ya da alt ajanlar yarıda kesildiyse kısa bir `additionalContext` notu). Bekleme istem önbelleğinin ömrünü aşarsa sonraki ilk çağrı bütün bağlamı önbelleğe yeniden yazar (bağlam boyu kadar cache write) |
 | Uzun bekleme durdurma mesajı | ~40–60 token (bir kez) |
 | Fable geçiş mesajı | ~40 token (bir kez) |
-| Devam prompt'u | ~25 token (veya kuyruğa alınan kendi prompt'unuz) |
+| Devam prompt'u | ~25 token (veya kuyruğa alınan kendi prompt'unuz); güvenilen kuyrukta liste adı ve en fazla 3 sonraki madde eklenir. `--resume` bütün konuşmayı geri yükler: istem önbelleğinin ömrü dolduktan sonraki devamda ilk çağrı bütün bağlamı önbelleğe yeniden yazar |
 | SessionStart işaretçisi | ~60 token, yalnızca yetim checkpoint varsa, bir kez |
 | Yönlendirme talimatı (additionalContext) | ~70 token, yalnızca araştırma isteklerinde |
 | `systemMessage` bildirimleri | 0 (yalnızca kullanıcıya gösterilir) |
 
-Checkpoint model çağrısı yapmadan transcript'ten üretilir; `--resume` tam bağlamı geri getirdiği için ek özetleme tokenı harcanmaz.
+Checkpoint model çağrısı yapmadan transcript'ten üretilir; `--resume` tam bağlamı geri getirdiği için ek özetleme tokenı harcanmaz. Uzun beklemenin asıl bedeli önbellektir: hook içinde beklense de `--resume` ile dönülse de istem önbelleğinin ömrü dolduysa ilk çağrı bütün bağlamı önbelleğe yeniden yazar; `noctis report` bunu cache write sütununda gösterir.
 
 **F. Araştırma isteği.** UserPromptSubmit → deterministik sınıflandırıcı (kod sinyali yok + araştırma sinyali/URL var) → Fable'a tek satır talimat + kullanıcıya tek satır bildirim → Fable `noctis:lite` (Opus 5, xhigh) alt-ajanına tek Agent çağrısı yapar → arama/okuma tokenları Opus'ta ve alt-ajanın kendi bağlamında kalır → Fable sonucu aktarır. Fable ana thread'de WebSearch/WebFetch denerse PreToolUse (agent_id yoksa) en fazla 3 kez reddeder; sonraki prompt yönlendirmeyi sıfırlar.
 
@@ -77,7 +77,7 @@ Checkpoint model çağrısı yapmadan transcript'ten üretilir; `--resume` tam b
 | 6 | config.json bozuk JSON | Varsayılanlar kullanılır, bir kez uyarı, `status`/`doctor` gösterir |
 | 7 | settings.json bozuk JSON | Asla üzerine yazılmaz (model geçişi log'a düşer); kurulum reddeder |
 | 8 | Aynı state.json'a paralel hook yazımı (alt ajan + ana ajan) | `wx` kilit + 3 s bekleme + 15 s bayat kilit temizliği; test: 12 paralel yazım kayıpsız |
-| 9 | PC uykuya girdi, hook içi bekleme | 30 s dilimli duvar saati kontrolü; uyanınca kalan süreye göre devam |
+| 9 | PC uykuya girdi, hook içi bekleme | 15 s dilimli duvar saati kontrolü; uyanınca kalan süreye göre devam |
 | 10 | VS Code beklemede kapandı | İzleyici görev reset+270 s'de yeni pencerede devam ettirir |
 | 11 | Kullanıcı Esc ile beklemeyi kesti ve devam etti | Sonraki hook yarım beklemeyi tanır, izleyiciyi iptal eder (hayalet pencere yok) |
 | 12 | Runner ve dahili auto-continue aynı anda | `quota_auto_resume_fired` → runner iptal; ayrıca transcript reset'ten sonra değiştiyse runner hiçbir şey yapmaz |
@@ -85,12 +85,12 @@ Checkpoint model çağrısı yapmadan transcript'ten üretilir; `--resume` tam b
 | 14 | Yeni pencere Opus'ta ama eski veride model Fable görünüyor | Runner `modelOverrides[sid]=opus` yazar; ilk prompt Fable kuralına takılmaz |
 | 15 | Aynı sid için ikinci bekleme → eski sleeper yetim kalır | `registerWait` önce eski görevi/sleeper'ı iptal eder |
 | 16 | Runner'ın başlattığı oturum kendi içinde yeni bekleme planlar, runner biterken kaydı siler | Silme yalnızca kayıt aynı `startedAt`'a sahipse; runner kendi `scheduled` bilgisini başlatmadan önce düşürür (kendini öldürmez) |
-| 17 | Görev Zamanlayıcı yok / PowerShell hata | Ayrılmış Node "sleeper" sürecine düşer, log'a yazar; `status`'ta yöntem görünür |
+| 17 | Görev Zamanlayıcı yok / PowerShell hata | Ayrılmış `noctis sleeper` sürecine (aynı binary) düşer, log'a yazar; `status`'ta yöntem görünür |
 | 18 | Görev geçmiş bir saate kuruluyor | En az now+15 s; `StartWhenAvailable` kaçırılan görevi hemen çalıştırır |
 | 19 | Laptop pilde | `AllowStartIfOnBatteries`, `DontStopIfGoingOnBatteries`, `WakeToRun` |
-| 20 | Runner çalışırken hata fırlattı | `main().catch` → log + toast ("otomatik devam başarısız") |
-| 21 | Runner tekrar 429 yiyor (veri yok) | Deneme sayacı, 30/60 dk geri çekilme, 3. denemede bildirimle durma |
-| 22 | OAuth token yok/expired/401/429 | 15–30 dk geri çekilme, Fable kuralı pasif, token asla log'a yazılmaz |
+| 20 | Runner çalışırken hata fırlattı | `main`'deki `recover` → errors.log'a `fatal:` satırı; yeniden başlatma olmazsa (claude yok, klasör yok, başlatma başarısız) bildirim elle çalıştırılacak komutu verir |
+| 21 | Runner tekrar 429 yiyor (veri yok) | Deneme sayacı, 10/20/30/45 dk geri çekilme (`wait.retryMinutes`), beşinci bakışta bildirimle durma |
+| 22 | OAuth token yok/expired/401/429 | Geri çekilme: token yoksa ve 401/403'te 30 dk, 429'da ve tanınmayan yanıt biçiminde 10 dk, diğer hatalarda 2 dk; Fable kuralı pasif, token asla log'a yazılmaz |
 | 23 | OAuth yanıt şeması değişti | `limits[]` + düz alanlar birlikte denenir; Fable kovası bulunamazsa `note` ile görünür kılınır |
 | 24 | Fable eşiğinde `-p` (yönetici) çağrısı | Prompt bloklanır, mesaj çıktıya düşer; yönetici `noctis model` ile Opus seçer |
 | 25 | Devam prompt'unda tırnak/`%`/`^`/satır sonu | `sanitizePrompt` + tam cmd meta-karakter tırnaklaması; Windows pencere modu JSON spec + `Start-Process` (kabuk yok) |
@@ -104,7 +104,7 @@ Checkpoint model çağrısı yapmadan transcript'ten üretilir; `--resume` tam b
 | 33 | Kod işi yanlışlıkla ucuz modele gider | Sınıflandırıcı tek yönlü temkinli: herhangi bir kod sinyali (kelime kökü, dosya yolu/uzantısı, sembol) yönlendirmeyi keser; kısa/süreç cümleleri hariç; Fable'a "kod gerekiyorsa normal çalış" kaçışı; alt-ajan `NEEDS_CODE` ile geri verir |
 | 34 | Fable talimata uymayıp kendi araştırır | PreToolUse WebSearch/WebFetch reddi (ana thread, 3 deneme), alt-ajan aramaları `agent_id` ile serbest |
 | 35 | Yönlendirme reddi sonsuz döngüye girer | Deneme sayacı; 3'ten sonra izin verilir ve WARN yazılır |
-| 36 | Ana oturum ve izleyici görev PC uykusundan aynı anda uyanır | Hook kalp atışı (30 sn) + runner 45 sn bekleyip yeniden okur; kalp atışı tazeyse 5 dk sonra tekrar bakar (en fazla 6 kez) |
+| 36 | Ana oturum ve izleyici görev PC uykusundan aynı anda uyanır | Hook kalp atışı (her 15 sn'lik dilimde; 120 sn'den yeniyse canlı) + runner 45 sn bekleyip yeniden okur; kalp atışı tazeyse 5 dk sonra tekrar bakar (en fazla 6 kez) |
 | 37 | state.json aylar içinde şişer | Oturum kapanışında (SessionEnd) ve her yazımda 3 günlük TTL ile budama |
 | 38 | Hatalar kayboluyor | `errors.log` yalnızca WARN/ERROR; `doctor` ve `status` son kayıtları gösterir |
 | 39 | Tek büyük model çağrısı %91'den %100'e sıçratıyor | Ani yükseliş öngörüsü: aynı penceredeki son 30 dk sıçramalarının en büyüğü + mevcut kullanım ≥ %100 ise (kullanım ≥ %60 şartıyla) eşikten önce durur |
@@ -128,7 +128,7 @@ Checkpoint model çağrısı yapmadan transcript'ten üretilir; `--resume` tam b
 | 57 | Sıkıştırma sonrası checkpoint "son istek" olarak özet metnini alır | `isCompactSummary`/önek tespiti; özet ayrı bölümde, gerçek istek korunur |
 | 58 | Esc + `/clear` sonrası eski oturumun izleyicisi saatler sonra pencere açar | SessionStart(clear): aynı klasörde son 10 dk'da güncellenen ve hook içi beklemesi olan oturum serbest bırakılır; park edilmiş uzun beklemeler dokunulmaz |
 | 59 | `/clear` sonrası canlı model bilinmez, Fable kuralı ilk prompt'ta yanlış çalışabilir | Önceki oturumun canlı modeli yeni kimliğe taşınır |
-| 60 | Geçici API 429'u Fable kapasitesi sanılıp varsayılan model bir hafta Opus'a takılır | Fable şüphesi yalnızca OAuth Fable kovası ≥%90 ise; aksi halde 30 dk sonra aynı modelde tekrar dene, 3 denemede bildir |
+| 60 | Geçici API 429'u Fable kapasitesi sanılıp varsayılan model bir hafta Opus'a takılır | Fable şüphesi yalnızca OAuth Fable kovası ≥%90 ise; aksi halde aynı modelde 10/20/30/45/60 dk sonra tekrar dene, art arda altıncı hatada bildir |
 | 61 | StopFailure `async` iken `-p` süreci çıkınca planlama yarım kalabilir | StopFailure senkron; yalnızca gözlemsel hook'lar async |
 | 62 | hooks.json salt okunur konumda; öz-onarım yazamayınca durum çubuğu kırılır | Öz-onarım hatası yutulur ve WARN yazılır |
 | 63 | state.json yarım yazılmış/bozuk (elektrik kesintisi, disk dolu) → bekleyen işler kaybolur | Her yazım öncesi `.bak`; okunamazsa yedekten toparlanır |
@@ -149,7 +149,7 @@ Checkpoint model çağrısı yapmadan transcript'ten üretilir; `--resume` tam b
 | 82 | Yanlış yönlendirme (lite `NEEDS_CODE`) aynı kelimeyle tekrar eder | PostToolUse(Agent) sonucu izler; sinyal başına hata/başarı sayacı, 2 hata → kapalı, başarı > hata → açık |
 | 83 | Saatler sonra dönen oturum hangi dosyaların yarım kaldığını bilmez | Checkpoint'e `git status --short` |
 | 84 | Fable'ın haftadan önce biteceği görülmez | fable.json geçmişinden ETA, durum çubuğunda |
-| 85 | Claude madde arasında "diğer işe geçiyorum" deyip turu bitirir, kuyruk durur | Stop hook: açık madde varsa devam zorlanır; ilerlemesiz 4 zorlama → dur + bildirim; oturum başına 200 tavan; limitteyse zorlama yok |
+| 85 | Claude madde arasında "diğer işe geçiyorum" deyip turu bitirir, kuyruk durur | Stop hook: açık madde varsa devam zorlanır; ilerlemesiz 4 zorlama ya da 200 zorlama → dur + bildirim (aynı dosya için bir kez), vazgeçme iki sayacı da sıfırlar; oturum başına yerel takvim gününde 600 tavan (`queue.maxContinuesPerDay`; vazgeçme sıfırlamaz, gece yarısı sıfırlanır); limitteyse zorlama yok |
 | 86 | (kaldırıldı) Temiz oturumla yeniden başlatma fikri | Kullanıcı kararı: iş aynı oturumda kalır, sıkıştırma Claude Code'a bırakılır; eklenti bağlam yüzünden asla oturum kapatmaz |
 | 91 | Durum çubuğu susmuş + API kesik: son bilinen düşük değerle körlemesine devam (hard modda %100'e vurdu) | Bayat veri öngörüsü: `used + eğim × bayatlık` eşiği aşarsa dur; durum çubuğu görmemiş oturumda 60 sn'de bayat |
 | 87 | Kullanıcı autocompact'ı 60'a çekmiş, %85 kapısı hiç çalışmaz | `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` okunur, kapı override−5 |
@@ -161,7 +161,7 @@ Checkpoint model çağrısı yapmadan transcript'ten üretilir; `--resume` tam b
 | 95 | Soak `hook-kill` kaosu Go'nun hızı yüzünden `close` olayını kaçırıp sonsuza kadar bekliyordu | Test hatası: dinleyici öldürmeden önce bağlanır |
 | 96 | Kendi kendini üzerine yazma (`setup` çalışan binary'yi yerleştirmeye çalışınca ETXTBSY) | Çalışan binary hedefse veya içerik aynıysa atlanır |
 | 97 | Marketplace bootstrap hook'u `sh ensure-binary.sh` çağırıyordu: Git Bash olmayan Windows'ta her oturum başında hata; kabuk biçimli komutlar PowerShell'de `& ` ister, bash'te istemez — iki kabuğa uyan tek komut yok | Kabuk tamamen kaldırıldı: tüm hook'lar exec biçimi, depo `bin/noctis.exe` (windows-amd64) + `bin/noctis` POSIX başlatıcısı gönderir (libuv `bin/noctis` → `.exe` çözer), bootstrap `noctis ensure` binary içinde; Windows'ta çalışan exe yeniden adlandırılıp (`.old`) değiştirilir, geçici dosya pid'li + rename; skill'ler binary'yi doğrudan çağırır; lab senaryosu eklendi |
-| 98 | Kuyruk bittiğinde oturum sessizce duruyordu; gece kuyruğu süren kullanıcı sabaha kadar bitip bitmediğini bilemiyordu | Stop hook, kuyruğu bu oturumda sürdüyse (stopGuard) tek satır `✔ Kuyruk bitti` + bip/toast/webhook, karar günlüğüne `queue finished`; sonraki Stop'lar sessiz |
+| 98 | Kuyruk bittiğinde oturum sessizce duruyordu; gece kuyruğu süren kullanıcı sabaha kadar bitip bitmediğini bilemiyordu | Stop hook, kuyruğu bu oturumda sürdüyse (stopGuard) tek satır `✔ Kuyruk bitti` + masaüstü bildirimi/webhook, karar günlüğüne `queue finished`; sonraki Stop'lar sessiz |
 | 99 | Aynı bekleme için iki runner (eski sleeper + elle `noctis resume`, ya da iki zamanlayıcı) aynı anda ateşlenince iki `claude --resume` açılıyordu (hard soak `double-resume` kaosunda yakalandı) | Oturum state kilidi altında sahiplenilir: `handedOff[sid]` canlı bir pid taşıyorsa ikinci runner başlatmaz (`skip-launch` günlüğü) |
 | 100 | Taze kurulumda ilk `SessionStart` yerel veri olmadığı için %99'daki kullanıcıya hiçbir şey söylemiyordu | Yerel veri yoksa/bayatsa tek OAuth okuması (5 sn zaman aşımı, geri çekilmeye saygılı), ardından `session.alreadyOver` bildirimi pencere+sıfırlanma başına bir kez |
 | 101 | Kuyruk vazgeçmesi (`stuck`) stopGuard kaydını siliyordu; sonra kuyruk bitince "bu oturum sürdü mü" bilgisi kaybolduğundan `✔ Kuyruk bitti` bildirimi gelmiyordu | Vazgeçmede sayaçlar sıfırlanır ama kayıt kalır (`cycles` artar); aynı dosya için `stuck` uyarısı tekrarlanmaz; bitiş bildirimi korunur |
@@ -184,13 +184,13 @@ Checkpoint model çağrısı yapmadan transcript'ten üretilir; `--resume` tam b
 | 118 | Kenar tazeleme aralığı yalnızca sıçrama büyüklüğüne bakıyordu (30/60/120 sn); eşiğe 1.5 puan kala 60 sn'lik önbellek + atlanan durum çubuğu güncellemesi + 7 puanlık tek çağrı = %97.5'te izin verilen çağrı (14 günlük soak, seed 3) | Aralık eşiğe uzaklığa da bağlı: ≤2 puan → 15 sn, ≤4 puan → 30 sn (`nearEdgePollClose`) |
 | 119 | Duvarda park etmiş oturumun penceresi kapatılınca (`SessionEnd`) workflow kaydı siliniyor, 3 günlük TTL uzun beklemelerde de budanıyordu; runner'ın yeniden başlatma prompt'u workflow'u anmıyor, Claude sıfırdan başlıyordu (hard soak yakaladı) | Bekleyen `waits[sid]` varken `SessionEnd` ve budama workflow kaydına dokunmaz |
 | 92 | Node başlatma hook başına ~25 ms yiyor, Node kurulu olmayan makinede plugin ölü | Motor Go'ya taşındı (`go/cmd/noctis`, stdlib-only, 6 platform binary'si repo'da); lab 179/179 ve kaos soak birebir; p50 41 → 7 ms; kurulum PowerShell/sh + binary içi `install` |
-| 64 | 429 suçlusu kullanıcı eşiğine göre aranıyordu; hafta %87'deyken gelen geçici 429 "haftalık kapasite" sanılıp iş bir hafta beklemeye alınabilirdi (soak'ta yakalandı) | Suçlu yalnızca sunucu tavanına yakın (≥%90) pencere; aksi halde geçici hata: 30 dk sonra tekrar |
+| 64 | 429 suçlusu kullanıcı eşiğine göre aranıyordu; hafta %87'deyken gelen geçici 429 "haftalık kapasite" sanılıp iş bir hafta beklemeye alınabilirdi (soak'ta yakalandı) | Suçlu yalnızca sunucu tavanına yakın (≥%90) pencere; aksi halde geçici hata: 10/20/30/45/60 dk merdiveniyle tekrar |
 
 ## 5b. Benzer projelerden alınan fikirler
 
 - **heavy-usage** (statusLine → JSON → UserPromptSubmit, iki fazlı uyarı/wind-down): uyarı bandı buradan; fark: bizde durdurma her model çağrısından önce (PostToolBatch) ve hook içi bekleme ile bağlam korunuyor.
 - **usage-guard** (PreToolUse `continue:false`, snooze, Slack/webhook bildirimleri): webhook alarmı buradan; snooze bizde `off <dk>`.
-- **claude-code-cockpit** (StopFailure + `asyncRewake` + exit 2 ile aynı oturumu uyandırma): belgelenmemiş davranışa dayandığı ve dahili otomatik devamla çift devam riski taşıdığı için alınmadı; "reset saati bilinmeden asla uyandırma" kuralı bizde de var (veri yoksa 3 denemede vazgeç).
+- **claude-code-cockpit** (StopFailure + `asyncRewake` + exit 2 ile aynı oturumu uyandırma): belgelenmemiş davranışa dayandığı ve dahili otomatik devamla çift devam riski taşıdığı için önce alınmadı; v5'te runner yedeğiyle alındı (5f madde 8, `wake.sameSession`): bilinen bir pencereden ya da aşırı yükten sonra uyandırmadan önce limitler yeniden okunur, oturum hâlâ duraklama noktasındaysa runner'a bırakılır, uyandırma tutmazsa runner 300 s sonra yeniden başlatır. Veri yoksa açık oturum 10 dk sonra uyandırılır; yeniden başlatma 10, 10, 20, 30, 45 dk arayla veriye bakar ve beşinci bakışta vazgeçer.
 - **claude-auto-retry** (tmux'a "continue" yazma): terminale bağımlı; bizde `--resume` ile yeni süreç.
 - **Claude-Code-Usage-Monitor** (burn-rate ve bitiş tahmini): ani yükseliş öngörüsü buradan esinlenildi, ancak sadece resmi `rate_limits` deltalarıyla.
 
@@ -416,7 +416,7 @@ düzeltildi ve sürüm notlarında listelendi.
 
 ## 6. Test listesi
 
-`tests/lab.js` — sahte `claude`, ayrı süreçte sahte kullanım API'si (saat kayması simülasyonu dahil), sıkıştırılmış saatler; 179 kontrol (hepsi geçti): bayat veri öngörüsü, Stop kapısı, temiz başlatma, autocompact uyumu, selftest/report, karar katmanı (öğrenen yönlendirici, Fable ETA, git), uptime katmanı (headless çıkarımı, ölü hook, öğrenilen tavan, ETA), kuyruk modu ve lite yazma politikası, alt-ajan kapısı (eşikte ret / altında sessiz), uyarlanır uyarı bandı, sıkıştırma öncesi erken durma (bağlam %90 vs %30 karşılaştırmalı), sıkıştırma özetli checkpoint, `/clear` devri (yarım bekleme serbest, park edilen korunur, model taşındı), bağlam farkındalı yönlendirme (kodlama oturumunda araştır → Fable, sessiz oturumda → lite, web sinyali her durumda → lite), özet/uzun metin ayrımı, talimat uzunluğu, paralel statusLine kilidi, saat kayması düzeltmesi, hooks.json öz-onarımı, öz-denetim (bir kez/gün), yetim checkpoint bağlamı, eşik altı sessizlik + hot path süresi, uyarı bandı (bir kez), ani yükseliş öngörüsü, hook içi bekleme (kalp atışı, izleyici iptali, checkpoint tüketimi), öldürülen hook → runner kurtarması (hesap/ortam/effort doğrulaması), haftalık uzun bekleme + prompt kuyruğu + izleyici değişimi, Fable akışı (OAuth başlıkları, ayar geçişi, devir kilidi, ortam işareti, kota sonrası geri dönüş), bayat veri → API yedeği, kenar tazeleme, 429 suçlu tespiti + Fable şüphesi + dahili devam iptali, 22 TR/EN sınıflandırma örneği + ret/izin/üst sınır, iki hesap izolasyonu, 12 paralel yazım, 300 KB transcript checkpoint'i, budama, oturum sonu temizliği, config hatası bildirimi, errors.log içeriği, doctor, kurulum/kaldırma. Önceki bash regresyonundan taşınan kontroller: 17 sınıflandırma örneği (Türkçe ekler dahil), yönlendirme çıktısı + PreToolUse ret/izin/üst sınır + alt-ajan muafiyeti, oturum sonu temizliği, errors.log içeriği, kalp atışı ve runner yeniden kontrolü, ayrıca v1'den:
+`tests/lab.js` — sahte `claude`, ayrı süreçte sahte kullanım API'si (saat kayması simülasyonu dahil), sıkıştırılmış saatler; 179 kontrolle başladı, bugün 614 kontrol (hepsi geçiyor): bayat veri öngörüsü, Stop kapısı, temiz başlatma, autocompact uyumu, selftest/report, karar katmanı (öğrenen yönlendirici, Fable ETA, git), uptime katmanı (headless çıkarımı, ölü hook, öğrenilen tavan, ETA), kuyruk modu ve lite yazma politikası, alt-ajan kapısı (eşikte ret / altında sessiz), uyarlanır uyarı bandı, sıkıştırma öncesi erken durma (bağlam %90 vs %30 karşılaştırmalı), sıkıştırma özetli checkpoint, `/clear` devri (yarım bekleme serbest, park edilen korunur, model taşındı), bağlam farkındalı yönlendirme (kodlama oturumunda araştır → Fable, sessiz oturumda → lite, web sinyali her durumda → lite), özet/uzun metin ayrımı, talimat uzunluğu, paralel statusLine kilidi, saat kayması düzeltmesi, hooks.json öz-onarımı, öz-denetim (bir kez/gün), yetim checkpoint bağlamı, eşik altı sessizlik + hot path süresi, uyarı bandı (bir kez), ani yükseliş öngörüsü, hook içi bekleme (kalp atışı, izleyici iptali, checkpoint tüketimi), öldürülen hook → runner kurtarması (hesap/ortam/effort doğrulaması), haftalık uzun bekleme + prompt kuyruğu + izleyici değişimi, Fable akışı (OAuth başlıkları, ayar geçişi, devir kilidi, ortam işareti, kota sonrası geri dönüş), bayat veri → API yedeği, kenar tazeleme, 429 suçlu tespiti + Fable şüphesi + dahili devam iptali, 22 TR/EN sınıflandırma örneği + ret/izin/üst sınır, iki hesap izolasyonu, 12 paralel yazım, 300 KB transcript checkpoint'i, budama, oturum sonu temizliği, config hatası bildirimi, errors.log içeriği, doctor, kurulum/kaldırma. Önceki bash regresyonundan taşınan kontroller: 17 sınıflandırma örneği (Türkçe ekler dahil), yönlendirme çıktısı + PreToolUse ret/izin/üst sınır + alt-ajan muafiyeti, oturum sonu temizliği, errors.log içeriği, kalp atışı ve runner yeniden kontrolü, ayrıca v1'den:
 statusLine yakalama, eşik altı sessizlik, hook içi bekleme (süre + temizlik + izleyici iptali), haftalık durdurma + prompt kuyruğu + tek sleeper, skill muafiyeti, cancel, SessionStart işaretçisi (bir kez), PostModelSwitch, Fable prompt bloğu + settings geçişi, Fable batch yeniden başlatma, runner devir kilidi (eski pencere bloklu, yeni pencere serbest), devam argümanları/ortam değişkenleri, `__proto__` sertleştirme, StopFailure suçlu pencere; ayrıca birim: OAuth payload ayrıştırma (limits[] / düz / çöp), evaluate, tırnaklama, süre/hash; runner dalları (hâlâ limitli → yeniden planla, transcript değişmiş → atla, kuyruk prompt'u ile başlat, veri yok → tekrar dene/vazgeç, mode none), 12 paralel yazım, kesilen bekleme, zincir statusLine, off/on/model/checkpoint, kurulum (iki hesap, yabancı statusLine zinciri, bozuk settings reddi, kaldırma, iç içe kaynak koruması).
 
 Windows'ta elle doğrulanacaklar: (1) durum çubuğunda `🛡` satırı; (2) `noctis doctor` tüm satırlar OK; (3) `thresholds.session5h`'i geçici olarak mevcut kullanımın altına çekip bir prompt gönderin → hook içi bekleme ve reset sonrası devam; (4) Görev Zamanlayıcı'da `Noctis-*` görevinin oluşup silindiği; (5) `notify.ps1`'i elle çalıştırıp tek sesli toast (odaklanma yardımı açıkken sessiz); (6) `launch.ps1` ile yeni pencere ve `NOCTIS_HANDOFF` değişkeni.
