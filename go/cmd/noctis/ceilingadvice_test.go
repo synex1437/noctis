@@ -32,13 +32,16 @@ func TestNoPauseIsAdvisedWhereThePaidCreditCeilingIgnoresIt(t *testing.T) {
 				return strings.Contains(text, "/noctis:pause") || strings.Contains(text, "noctis off")
 			}
 			start := getString(hookOutput(t, onSessionStart, agentHookInput("SessionStart", "ca", project, object{"source": "startup"}), cfg), "systemMessage")
-			if !strings.Contains(start, "⏸") || advises(start) == c.ignored {
+			if !strings.Contains(start, "⏸") || advises(start) || strings.Contains(start, T("session.typedHint")) == c.ignored {
 				t.Errorf("session start, with a pause ignored=%v: %q", c.ignored, start)
 			}
 			prompt := promptInput("ca", project, "start with the parser refactor")
-			blocked := hookOutput(t, onUserPromptSubmit, prompt, cfg)
-			if getString(blocked, "decision") != "block" || advises(getString(blocked, "reason")) == c.ignored {
-				t.Errorf("the paused prompt, with a pause ignored=%v: %v", c.ignored, blocked)
+			answer := hookOutput(t, onUserPromptSubmit, prompt, cfg)
+			switch {
+			case c.ignored && (getString(answer, "decision") != "block" || advises(getString(answer, "reason"))):
+				t.Errorf("at the paid-credit ceiling the prompt was not held, or was told that a pause lifts the stop: %v", answer)
+			case !c.ignored && (getString(answer, "decision") == "block" || advises(getString(answer, "systemMessage"))):
+				t.Errorf("below the paid-credit ceiling the prompt you typed was held, or was pointed at a pause: %v", answer)
 			}
 			updateState(func(state object) { state["disabledUntil"] = float64(now + 3600) })
 			paused := hookOutput(t, onUserPromptSubmit, prompt, cfg)

@@ -955,6 +955,7 @@ func emptyState() object {
 		"launchFailures":   object{},
 		"failureRetries":   object{},
 		"queueVerify":      object{},
+		"typedTurns":       object{},
 	}
 }
 
@@ -1198,6 +1199,7 @@ func pruneState(state object, now int64) {
 		"launchFailures": stateEntryTTLSeconds,
 		"failureRetries": stateEntryTTLSeconds,
 		"modelOverrides": launchRecordTTLSeconds,
+		"typedTurns":     stateEntryTTLSeconds,
 	} {
 		for key, raw := range stateMap(state, name) {
 			entry, _ := raw.(object)

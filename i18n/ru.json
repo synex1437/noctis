@@ -453,5 +453,8 @@
   "doctor.fixHostSetup": "выполни noctis setup --host %s",
   "doctor.fixHint": "   решение: %s",
   "doctor.allGood": "Всё, что нужно плагину, на месте.",
-  "doctor.issuesFound": "Пунктов выше, требующих внимания: %d."
+  "doctor.issuesFound": "Пунктов выше, требующих внимания: %d.",
+  "wait.typedGoesAhead": "⚠ лимит %s %s%% (%s): твой промпт всё равно выполняется.",
+  "wait.typedLimit": "noctis остановит его только на лимите использования.",
+  "session.typedHint": " Промпты, которые ты вводишь сам, всё равно выполняются."
 }

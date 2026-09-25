@@ -453,5 +453,8 @@
   "doctor.fixHostSetup": "运行 noctis setup --host %s",
   "doctor.fixHint": "   解决：%s",
   "doctor.allGood": "插件需要的一切都已就位。",
-  "doctor.issuesFound": "上面有 %d 项需要处理。"
+  "doctor.issuesFound": "上面有 %d 项需要处理。",
+  "wait.typedGoesAhead": "⚠ %s 窗口 %s%%（%s）：你的提示仍会继续执行。",
+  "wait.typedLimit": "noctis 只会在达到用量上限时停止它。",
+  "session.typedHint": "你自己输入的提示仍会继续执行。"
 }

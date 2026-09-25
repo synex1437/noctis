@@ -15,8 +15,8 @@ func TestPauseNoticesPromiseOnlyWhatTheGuardWillDo(t *testing.T) {
 	relaunching := object{"resume": object{"mode": "window"}}
 	manual := object{"resume": object{"mode": "none"}}
 
-	if text := alreadyOverNotice(threshold); !strings.Contains(text, "/noctis:pause 120") {
-		t.Fatalf("below the ceiling the session start no longer says how to keep working: %q", text)
+	if text := alreadyOverNotice(threshold); !strings.Contains(text, T("session.typedHint")) || strings.Contains(text, "/noctis:pause") {
+		t.Fatalf("below the ceiling the session start does not say that prompts you type still go ahead: %q", text)
 	}
 	if text := alreadyOverNotice(ceiling); strings.Contains(text, "/noctis:pause") {
 		t.Fatalf("at the 100 %% ceiling, where a pause is ignored, the session start still advises one: %q", text)

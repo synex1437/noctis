@@ -34,6 +34,7 @@ const stats = {
   blocked: 0,
   allowed: 0,
   allowedOverThreshold: 0,
+  typedPasses: 0,
   parked: 0,
   parkRefused: 0,
   routed: 0,
@@ -130,12 +131,15 @@ function runJob(lab, account, random, index, world) {
     }
     stats.allowed += 1;
 
-    const overFive = world.fiveUsed >= thresholds.session5h + 3;
-    const overWeek = world.weekUsed >= thresholds.weeklyAll + 3;
-    if (isGate && (overFive || overWeek)) {
+    const typedTurn = Boolean((account.state().typedTurns || {})[sid]);
+    const pastPausePoint = world.fiveUsed >= thresholds.session5h + 3 || world.weekUsed >= thresholds.weeklyAll + 3;
+    const atLimit = Math.round(world.fiveUsed) >= 100 || Math.round(world.weekUsed) >= 100;
+    if (isGate && (typedTurn ? atLimit : pastPausePoint)) {
       stats.allowedOverThreshold += 1;
-      fail(`${sid} turn ${turn}: ${event} let the session past the wall`,
+      fail(`${sid} turn ${turn}: ${event} let the session past the ${typedTurn ? 'usage limit in the turn of a prompt you typed' : 'wall'}`,
         `5h ${world.fiveUsed.toFixed(1)}% (limit ${thresholds.session5h}), weekly ${world.weekUsed.toFixed(1)}% (limit ${thresholds.weeklyAll}); hook said ${out.slice(0, 120) || '(nothing)'}`);
+    } else if (isGate && typedTurn && pastPausePoint) {
+      stats.typedPasses += 1;
     }
     if (/hookSpecificOutput|additionalContext/.test(out)) stats.routed += 1;
   }
@@ -278,6 +282,7 @@ async function main() {
     console.log(`  bunlardan park edilen             : ${stats.parked}`);
     console.log(`  park edilemeyip söylenen          : ${stats.parkRefused}`);
     console.log(`  eşiği aşmasına izin verilen       : ${stats.allowedOverThreshold}  ${stats.allowedOverThreshold === 0 ? '✓' : '✗ KORUMA SIZDIRDI'}`);
+    console.log(`  yazılan prompt'un turunda eşikten geçen: ${stats.typedPasses}`);
     console.log('');
     console.log('── ne kadara mal oldu ───────────────────────────────────');
     console.log(`  hook süresi  medyan ${at(0.5).toFixed(1)} ms · p95 ${at(0.95).toFixed(1)} ms · p99 ${at(0.99).toFixed(1)} ms · en kötü ${at(1).toFixed(1)} ms`);

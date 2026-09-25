@@ -42,6 +42,8 @@ func baseCatalog() map[string]map[string]string {
 			"wait.savedManual":      "⏸ %s limit %s%%: work saved; resume it yourself after %s.",
 			"wait.saved":            "⏸ %s limit %s%%: work saved, auto-resume at %s%s.",
 			"wait.savedHint":        "To keep working anyway: /noctis:pause 120 (or `noctis off 120`).",
+			"wait.typedGoesAhead":   "⚠ %s window %s%% (%s): your prompt goes ahead anyway.",
+			"wait.typedLimit":       "noctis stops it only at the usage limit.",
 			"wait.pauseReason":      "Pause reason: %s.",
 			"wait.earlyReset":       "⚡ %s limit reset ahead of schedule after %s of waiting — continuing where you stopped.",
 			"wait.earlyResetNotify": "%s limit reset early: the session continues now.",
@@ -85,6 +87,7 @@ func baseCatalog() map[string]map[string]string {
 			"session.checkpoint":       "%s: the previous session was paused at %s because of a usage limit; resume note %s (full context: %s).",
 			"session.alreadyOver":      "⏸ %s usage is already %s%%: new work pauses until %s and resumes on its own.",
 			"session.pauseHint":        " To keep working anyway: /noctis:pause 120.",
+			"session.typedHint":        " Prompts you type still go ahead.",
 
 			"queue.stuckNotify":    "Queue not progressing: %d open items, session stopped (%s).",
 			"queue.stuckMessage":   "⛔ Queue not progressing (%d open); auto-continue stopped — see errors.log.",
@@ -509,6 +512,8 @@ func baseCatalog() map[string]map[string]string {
 			"wait.savedManual":      "⏸ %s limit %%%s: iş kaydedildi; %s sonrasında kendiniz devam ettirin.",
 			"wait.saved":            "⏸ %s limit %%%s: iş kaydedildi, otomatik devam: %s%s.",
 			"wait.savedHint":        "Yine de çalışmak için: /noctis:pause 120 (veya `noctis off 120`).",
+			"wait.typedGoesAhead":   "⚠ %s pencere %%%s (%s): prompt'un yine de devam ediyor.",
+			"wait.typedLimit":       "noctis onu yalnızca kullanım sınırında durdurur.",
 			"wait.pauseReason":      "Duraklama nedeni: %s.",
 			"wait.earlyReset":       "⚡ %s limiti planlanandan önce sıfırlandı (%s beklendi) — kaldığın yerden devam ediliyor.",
 			"wait.earlyResetNotify": "%s limiti erken sıfırlandı: oturum şimdi devam ediyor.",
@@ -552,6 +557,7 @@ func baseCatalog() map[string]map[string]string {
 			"session.checkpoint":       "%s: önceki oturum %s tarihinde kullanım limiti nedeniyle duraklatıldı; devam notu %s (tam bağlam: %s).",
 			"session.alreadyOver":      "⏸ %s kullanımı zaten %%%s: yeni iş duraklar ve %s sonrasında kendiliğinden devam eder.",
 			"session.pauseHint":        " Yine de çalışmak için: /noctis:pause 120.",
+			"session.typedHint":        " Yazdığın prompt'lar yine de devam eder.",
 
 			"queue.stuckNotify":    "Kuyruk ilerlemiyor: %d açık madde, oturum durdu (%s).",
 			"queue.stuckMessage":   "⛔ Kuyruk ilerlemiyor (%d açık); otomatik devam durduruldu — errors.log'a bak.",

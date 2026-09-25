@@ -60,7 +60,7 @@ func TestAPauseForAnotherReasonThanItsPausePointSaysWhy(t *testing.T) {
 	if stop, want := savedStop(cfg, "batch", plain, plain.until, ""), savedNotice(cfg, plain.label, formatNumber(93), formatTime(plain.until), ""); stop != want {
 		t.Errorf("a pause at its pause point changed its wording: %q, want %q", stop, want)
 	}
-	if notice, want := alreadyOverNotice(plain), T("session.alreadyOver", plain.label, formatNumber(93), formatTime(plain.until))+T("session.pauseHint"); notice != want {
+	if notice, want := alreadyOverNotice(plain), T("session.alreadyOver", plain.label, formatNumber(93), formatTime(plain.until))+T("session.typedHint"); notice != want {
 		t.Errorf("the session-start notice at the pause point changed its wording: %q, want %q", notice, want)
 	}
 
