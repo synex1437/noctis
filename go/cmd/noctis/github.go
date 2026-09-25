@@ -252,8 +252,8 @@ func runQueue() {
 		fmt.Fprintln(os.Stderr, T("queue.usage"))
 		os.Exit(2)
 	}
-	authors, named := importAuthors(cwd, repo)
-	arguments := []string{"issue", "list", "--state", "open", "--limit", limit, "--json", "number,title,labels,author"}
+	wanted := importAuthorNames()
+	arguments := []string{"issue", "list", "--state", "open", "--limit", limit, "--json", "number,title,labels,author,url"}
 	if repo != "" {
 		arguments = append(arguments, "--repo", repo)
 	}
@@ -269,6 +269,10 @@ func runQueue() {
 	if err := jsonUnmarshal(output, &issues); err != nil {
 		fmt.Fprintln(os.Stderr, T("queue.ghFailed", err))
 		os.Exit(1)
+	}
+	authors, named := map[string]bool{}, ""
+	if len(issues) > 0 {
+		authors, named = importAuthors(cwd, issuesHost(repo, issues), wanted)
 	}
 	existing, _ := os.ReadFile(destination)
 	fileLines := strings.Split(strings.TrimPrefix(string(existing), "\uFEFF"), "\n")
@@ -379,26 +383,58 @@ func runQueue() {
 	}
 }
 
-func importAuthors(cwd, repo string) (map[string]bool, string) {
-	authors, names := map[string]bool{}, []string{}
-	if args.present["author"] {
-		for _, value := range args.values["author"] {
-			for _, login := range strings.Split(value, ",") {
-				if login = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(login), "@")); login != "" && !authors[login] {
-					authors[login] = true
-					names = append(names, login)
-				}
+func importAuthorNames() []string {
+	if !args.present["author"] {
+		return []string{"@me"}
+	}
+	names := []string{}
+	for _, value := range args.values["author"] {
+		for _, login := range strings.Split(value, ",") {
+			if login = strings.ToLower(strings.TrimSpace(login)); login != "@me" {
+				login = strings.TrimPrefix(login, "@")
+			}
+			if login != "" && !slices.Contains(names, login) {
+				names = append(names, login)
 			}
 		}
-		if len(names) == 0 {
-			fmt.Fprintln(os.Stderr, T("queue.usage"))
-			os.Exit(2)
-		}
-		return authors, strings.Join(names, ", ")
 	}
-	arguments := []string{"api", "user", "--jq", ".login"}
+	if len(names) == 0 {
+		fmt.Fprintln(os.Stderr, T("queue.usage"))
+		os.Exit(2)
+	}
+	return names
+}
+
+func issuesHost(repo string, issues []any) string {
 	if strings.Count(repo, "/") >= 2 {
 		host, _, _ := strings.Cut(repo, "/")
+		return host
+	}
+	for _, raw := range issues {
+		if link, err := url.Parse(getString(toObject(raw), "url")); err == nil && link.Hostname() != "" {
+			return strings.ToLower(link.Hostname())
+		}
+	}
+	return ""
+}
+
+func importAuthors(cwd, host string, wanted []string) (map[string]bool, string) {
+	authors, names := map[string]bool{}, []string{}
+	for _, login := range wanted {
+		if login == "@me" {
+			login = importLogin(cwd, host)
+		}
+		if !authors[login] {
+			authors[login] = true
+			names = append(names, login)
+		}
+	}
+	return authors, strings.Join(names, ", ")
+}
+
+func importLogin(cwd, host string) string {
+	arguments := []string{"api", "user", "--jq", ".login"}
+	if host != "" {
 		arguments = []string{"api", "--hostname", host, "user", "--jq", ".login"}
 	}
 	command := exec.Command("gh", arguments...)
@@ -417,7 +453,7 @@ func importAuthors(cwd, repo string) (map[string]bool, string) {
 		fmt.Fprintln(os.Stderr, T("queue.importWho", err))
 		os.Exit(1)
 	}
-	return map[string]bool{login: true}, login
+	return login
 }
 
 func queueIssueItems(content string) (map[string]bool, map[string]issueID) {
