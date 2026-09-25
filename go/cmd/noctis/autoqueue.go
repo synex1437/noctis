@@ -643,8 +643,11 @@ func runsCodeAnotherWay(text string, words []shellToken, powershell, lenient boo
 	if substitutes(text, powershell, lenient) || dotSourcing.get().MatchString(text) {
 		return true
 	}
+	readers := xargsRunsOnlyReaders(text, words)
 	for index, word := range words {
-		if word.names(func(name string) bool { return codeRunners[name] || pythonRunner.get().MatchString(name) }) {
+		if word.names(func(name string) bool {
+			return codeRunners[name] && (name != "xargs" || !readers) || pythonRunner.get().MatchString(name)
+		}) {
 			return true
 		}
 		if word.names(func(name string) bool { return name == "env" }) {
@@ -656,6 +659,92 @@ func runsCodeAnotherWay(text string, words []shellToken, powershell, lenient boo
 		}
 	}
 	return false
+}
+
+var (
+	xargsReaders    = wordSet("echo printf cat grep egrep fgrep rg wc ls head tail sort uniq cut file stat du basename dirname realpath readlink touch rm mkdir rmdir")
+	xargsValueFlags = wordSet("-a -d -E -I -L -n -P -s -J -R -S --arg-file --delimiter --max-args --max-procs --max-chars --process-slot-var")
+)
+
+func xargsRunsOnlyReaders(command string, tokens []shellToken) bool {
+	named := 0
+	for _, token := range tokens {
+		if token.names(func(name string) bool { return name == "xargs" }) {
+			named++
+		}
+	}
+	for _, words := range pipelineWords(command) {
+		for index, word := range words {
+			if plain, path := wordPrograms(word); plain == "xargs" || path == "xargs" {
+				named--
+				if !xargsRunsReader(words[index+1:]) {
+					return false
+				}
+			}
+		}
+	}
+	return named == 0
+}
+
+func xargsRunsReader(words []string) bool {
+	for i := 0; i < len(words); i++ {
+		switch word := words[i]; {
+		case word == "--":
+			return i+1 == len(words) || xargsReaders[plainWord(words[i+1])]
+		case strings.HasPrefix(word, "-"):
+			if xargsValueFlags[word] {
+				i++
+			}
+		default:
+			return xargsReaders[plainWord(word)]
+		}
+	}
+	return true
+}
+
+func pipelineWords(command string) [][]string {
+	segments, words := [][]string{}, []string{}
+	var text strings.Builder
+	open := false
+	endWord := func() {
+		if open {
+			words = append(words, text.String())
+		}
+		text.Reset()
+		open = false
+	}
+	for i := 0; i < len(command); i++ {
+		switch c := command[i]; {
+		case c == '\'' || c == '"':
+			end := i + 1
+			for ; end < len(command) && command[end] != c; end++ {
+				if c == '"' && command[end] == '\\' && end+1 < len(command) {
+					end++
+				}
+				text.WriteByte(command[end])
+			}
+			open, i = true, end
+		case c == '\\' && i+1 < len(command):
+			i++
+			text.WriteByte(command[i])
+			open = true
+		case c == ' ' || c == '\t':
+			endWord()
+		case strings.IndexByte("\n\r;&|()", c) >= 0:
+			endWord()
+			if len(words) > 0 {
+				segments, words = append(segments, words), []string{}
+			}
+		default:
+			text.WriteByte(c)
+			open = true
+		}
+	}
+	endWord()
+	if len(words) > 0 {
+		segments = append(segments, words)
+	}
+	return segments
 }
 
 func substitutes(text string, powershell, lenient bool) bool {
