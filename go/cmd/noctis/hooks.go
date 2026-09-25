@@ -694,12 +694,18 @@ func agentWritePolicy(input, cfg object) {
 
 	switch {
 	case runsAsAgent(input, liteAgentType(cfg)):
-		if steersMainModel(cfg, filePath) {
+		targets, followed := writeTargets(filePath, getString(input, "cwd"))
+		if !followed {
+			logInfo("lite agent write denied (a link it cannot follow): %s", filePath)
+			emit(object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "The lite agent may not write through a link that noctis cannot follow to a file (a loop, or more than 8 links in a row). Return the content in your answer instead."}})
+			return
+		}
+		if steersMainModel(cfg, targets) {
 			logInfo("lite agent write denied (steers the main model): %s", filePath)
 			emit(object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": fmt.Sprintf("The lite agent may not write CLAUDE.md, the queue files (%s) or anything under .claude/: those files steer the main model. Return the content in your answer instead.", strings.Join(queueFileNames(cfg), ", "))}})
 			return
 		}
-		if textExtensions[strings.ToLower(filepath.Ext(filePath))] {
+		if textDocuments(targets) {
 			return
 		}
 		logInfo("lite agent write denied: %s", orDefault(filePath, "(no path)"))
@@ -710,11 +716,8 @@ func agentWritePolicy(input, cfg object) {
 	}
 }
 
-func steersMainModel(cfg object, file string) bool {
-	if file == "" {
-		return false
-	}
-	for _, path := range []string{file, resolvedWritePath(file)} {
+func steersMainModel(cfg object, targets []string) bool {
+	for _, path := range targets {
 		parts := strings.FieldsFunc(path, func(r rune) bool { return r == '/' || r == '\\' })
 		if len(parts) == 0 {
 			continue
@@ -737,19 +740,81 @@ func steersMainModel(cfg object, file string) bool {
 	return false
 }
 
-func resolvedWritePath(file string) string {
-	dir, rest := file, ""
-	for {
-		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
-			return filepath.Join(resolved, rest)
+func textDocuments(targets []string) bool {
+	for _, path := range targets {
+		if !textExtensions[strings.ToLower(filepath.Ext(path))] {
+			return false
 		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		rest = filepath.Join(filepath.Base(dir), rest)
-		dir = parent
 	}
+	return len(targets) > 0
+}
+
+func writeTargets(file, cwd string) ([]string, bool) {
+	if file == "" {
+		return nil, true
+	}
+	if !filepath.IsAbs(file) {
+		if !filepath.IsAbs(cwd) {
+			cwd, _ = os.Getwd()
+		}
+		file = cwd + string(filepath.Separator) + file
+	}
+	targets, readings := []string{file}, []string{file}
+	if clean := filepath.Clean(file); clean != file {
+		readings = append(readings, clean)
+	}
+	for _, reading := range readings {
+		reached, ok := followWrite(reading)
+		if !ok {
+			return nil, false
+		}
+		targets = append(targets, reached...)
+	}
+	return targets, true
+}
+
+func followWrite(file string) ([]string, bool) {
+	volume := filepath.VolumeName(file)
+	dest := volume + string(filepath.Separator)
+	pending := pathParts(file[len(volume):])
+	reached := []string{}
+	hops, links := 0, 0
+	for len(pending) > 0 {
+		part := pending[0]
+		pending = pending[1:]
+		if part == "." {
+			continue
+		}
+		if part == ".." {
+			dest = filepath.Dir(dest)
+			continue
+		}
+		next := filepath.Join(dest, part)
+		info, err := os.Lstat(next)
+		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+			dest = next
+			continue
+		}
+		links++
+		if len(pending) == 0 {
+			hops++
+			reached = append(reached, next)
+		}
+		link, err := os.Readlink(next)
+		if err != nil || link == "" || hops > 8 || links > 40 {
+			return nil, false
+		}
+		if root := filepath.VolumeName(link); root != "" || os.IsPathSeparator(link[0]) {
+			dest = orDefault(root, filepath.VolumeName(dest)) + string(filepath.Separator)
+			link = link[len(root):]
+		}
+		pending = append(pathParts(link), pending...)
+	}
+	return append(reached, dest), true
+}
+
+func pathParts(path string) []string {
+	return strings.FieldsFunc(path, func(r rune) bool { return r == '/' || r == filepath.Separator })
 }
 
 var reportTools = map[string]bool{"SubagentHandback": true, "StructuredOutput": true}
