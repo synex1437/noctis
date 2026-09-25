@@ -730,6 +730,11 @@ func uninstallFrom(configDir string) error {
 	if !stored.ok {
 		return errors.New(T("install.uninstallBroken", configFile, stored.err))
 	}
+	cancelled, err := cancelAccountRelaunches(configDir)
+	if err != nil {
+		return err
+	}
+	fmt.Println(T("install.cancelled", cancelled))
 	if settings.data != nil {
 		if err := undoSetupSettings(settingsFile, settings.data, stored.data); err != nil {
 			return err
@@ -742,7 +747,44 @@ func uninstallFrom(configDir string) error {
 			fmt.Println(T("install.removed", installRoot))
 		}
 	}
+	settleStateDir(configDir)
 	return nil
+}
+
+func cancelAccountRelaunches(configDir string) (int, error) {
+	previous := files
+	defer func() { files = previous }()
+	files = pathsFor(configDir, files.pluginRoot)
+	state := readState()
+	_, found := pendingOf(state)
+	sids := sortedKeys(found)
+	if len(sids) > 0 && !cancelSessions(sids, state) {
+		return 0, errors.New(T("install.cancelFailed", files.errors))
+	}
+	return len(sids), nil
+}
+
+func settleStateDir(configDir string) {
+	guardDir := filepath.Join(configDir, pluginName)
+	if !args.present["purge"] {
+		if statSafe(guardDir) != nil {
+			fmt.Println(T("install.stateKept", guardDir))
+		}
+		return
+	}
+	info, err := os.Lstat(guardDir)
+	if err != nil {
+		return
+	}
+	if !info.IsDir() {
+		fmt.Println(T("install.purgeLink", guardDir))
+		return
+	}
+	if err := os.RemoveAll(guardDir); err != nil {
+		fmt.Println(T("install.purgeFailed", guardDir, err))
+		return
+	}
+	fmt.Println(T("install.purged", guardDir))
 }
 
 var setupRecords = []string{"managedModel", "managedEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep", "managedFunctionHooks"}
@@ -819,7 +861,7 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 
 var setupFlags = []string{"profile", "preset", "permissions", "updates", "no-model", "no-lean", "no-ask", "config-dir", "account", "host", "code", "research", "planning", "digest", "explore", "fallback"}
 
-var installFlags = append([]string{"source", "uninstall"}, setupFlags...)
+var installFlags = append([]string{"source", "uninstall", "purge"}, setupFlags...)
 
 var permissionChoices = []string{"auto", "acceptEdits", "plan", "default", "keep"}
 
@@ -1014,6 +1056,10 @@ func runInstall() {
 	if code := checkSetupArgs("install", installFlags); code != 0 {
 		os.Exit(code)
 	}
+	if args.present["purge"] && !args.present["uninstall"] {
+		fmt.Fprintln(os.Stderr, T("install.purgeAlone"))
+		os.Exit(2)
+	}
 	sourceRoot := files.pluginRoot
 	if source := flagString("source"); source != "" {
 		sourceRoot, _ = filepath.Abs(expandHome(source))
@@ -1166,12 +1212,18 @@ func uninstallHost(host, configDir string) error {
 	if err != nil {
 		return err
 	}
+	cancelled, err := cancelAccountRelaunches(configDir)
+	if err != nil {
+		return err
+	}
+	fmt.Println(T("install.cancelled", cancelled))
 	installRoot := filepath.Join(configDir, pluginName, "plugin")
 	if statSafe(installRoot) != nil {
 		if err := os.RemoveAll(installRoot); err == nil {
 			fmt.Println(T("install.removed", installRoot))
 		}
 	}
+	settleStateDir(configDir)
 	fmt.Println(T("host.uninstalled", spec.display))
 	return nil
 }
@@ -1283,6 +1335,9 @@ func pathsFor(configDir, pluginRoot string) paths {
 	os.Setenv("NOCTIS_PLUGIN_ROOT", pluginRoot)
 
 	previousFlags, hadFlag := args.flags["account"]
+	if args.flags == nil {
+		args.flags = map[string]string{}
+	}
 	args.flags["account"] = configDir
 	initPaths()
 	if hadFlag {

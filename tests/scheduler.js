@@ -153,6 +153,34 @@ async function scenarioCancelStopsTheTimer(lab) {
     !readLog(logFile).some((e) => e.kind === 'fire'));
 }
 
+async function scenarioUninstallStopsTheTimer(lab) {
+  const account = newAccount(lab, 'systemd-uninstall');
+  account.install((config) => { config.wait.maxInHookMinutes = 1; });
+  const logFile = path.join(lab.root, 'scheduler-uninstall.jsonl');
+  installStubs(lab, logFile, ['systemd-run', 'systemctl']);
+  const extraEnv = { NOCTIS_SCHEDULER_LOG: logFile, NOCTIS_NO_TASKS: '' };
+
+  parkSession(account, 'sysU', 600, extraEnv);
+
+  const wait = (account.state().waits || {}).sysU;
+  check('uninstall: a systemd wait exists for the uninstall to cancel',
+    wait && wait.scheduled && wait.scheduled.method === 'systemd');
+  const unit = wait && wait.scheduled && wait.scheduled.unit;
+
+  const output = account.run(['install', '--uninstall', '--config-dir', account.dir, '--host', 'claude'], undefined, extraEnv);
+
+  const entries = readLog(logFile);
+  check('uninstall: the unit was stopped by name',
+    entries.some((e) => e.kind === 'stop' && e.unit === unit),
+    entries.filter((e) => e.kind === 'stop').map((e) => e.unit).join(',') || 'nothing was stopped');
+  check('uninstall: the wait is gone from state', (account.state().waits || {}).sysU === undefined);
+  check('uninstall: it says how many relaunches it cancelled', /: 1$/m.test(output), output);
+
+  await sleep(2000);
+  check('uninstall: the cancelled timer did not fire',
+    !readLog(logFile).some((e) => e.kind === 'fire'));
+}
+
 async function eventually(condition, seconds) {
   const deadline = Date.now() + seconds * 1000;
   while (Date.now() < deadline) {
@@ -571,6 +599,7 @@ async function main() {
     } else {
       await scenarioSystemdFiresAndResumes(lab);
       await scenarioCancelStopsTheTimer(lab);
+      await scenarioUninstallStopsTheTimer(lab);
       await scenarioSystemdRunnerReschedulesItself(lab);
       await scenarioSystemdRelaunchPausesAgain(lab);
       scenarioLaunchdPlistIsValid(lab);

@@ -161,7 +161,7 @@ type parsedArgs struct {
 	present    map[string]bool
 }
 
-var switchFlags = map[string]bool{"help": true, "h": true, "json": true, "skip-task": true, "watch": true, "uninstall": true, "no-model": true, "no-ask": true, "no-lean": true}
+var switchFlags = map[string]bool{"help": true, "h": true, "json": true, "skip-task": true, "watch": true, "uninstall": true, "purge": true, "no-model": true, "no-ask": true, "no-lean": true}
 
 func parseArgs(argv []string) parsedArgs {
 	out := parsedArgs{flags: map[string]string{}, values: map[string][]string{}, present: map[string]bool{}}

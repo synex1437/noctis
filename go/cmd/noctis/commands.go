@@ -284,8 +284,7 @@ func runCancel() {
 	}
 }
 
-func cancelPending(target string) int {
-	state := readState()
+func pendingOf(state object) ([]object, map[string]bool) {
 	pending := []object{getMap(state, "waits"), getMap(state, "handedOff"), getMap(state, "launchFailures")}
 	found := map[string]bool{}
 	for _, bucket := range pending {
@@ -293,6 +292,12 @@ func cancelPending(target string) int {
 			found[sid] = true
 		}
 	}
+	return pending, found
+}
+
+func cancelPending(target string) int {
+	state := readState()
+	pending, found := pendingOf(state)
 	sids := sortedKeys(found)
 	if target != "" {
 		key, unique := resolveSid(target, pending...)
@@ -310,6 +315,19 @@ func cancelPending(target string) int {
 		fmt.Println(T("cancel.none"))
 		return 0
 	}
+	if !cancelSessions(sids, state) {
+		fmt.Fprintln(os.Stderr, T("cancel.notSaved", files.errors))
+		return 1
+	}
+	shorts := []string{}
+	for _, sid := range sids {
+		shorts = append(shorts, shortSid(sid))
+	}
+	fmt.Println(T("cancel.done", strings.Join(shorts, ", ")))
+	return 0
+}
+
+func cancelSessions(sids []string, state object) bool {
 	applied, failures := false, writeFailures
 	updateState(func(next object) {
 		applied = true
@@ -320,16 +338,12 @@ func cancelPending(target string) int {
 		}
 	})
 	if !applied || writeFailures != failures {
-		fmt.Fprintln(os.Stderr, T("cancel.notSaved", files.errors))
-		return 1
+		return false
 	}
-	shorts := []string{}
 	for _, sid := range sids {
 		cancelRunner(sid, state)
-		shorts = append(shorts, shortSid(sid))
 	}
-	fmt.Println(T("cancel.done", strings.Join(shorts, ", ")))
-	return 0
+	return true
 }
 
 func runOff() {
