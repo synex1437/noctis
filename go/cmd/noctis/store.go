@@ -430,12 +430,17 @@ func copyObject(source object) object {
 
 var utf8BOM = []byte("\xef\xbb\xbf")
 
-func readJSONStrict(file string) strictRead {
+func readFileRetrying(file string) ([]byte, error) {
 	content, err := readFileShared(file)
 	for attempt := 0; err != nil && !errors.Is(err, os.ErrNotExist) && attempt < 8; attempt++ {
 		time.Sleep(time.Duration(5+attempt*10) * time.Millisecond)
 		content, err = readFileShared(file)
 	}
+	return content, err
+}
+
+func readJSONStrict(file string) strictRead {
+	content, err := readFileRetrying(file)
 	if err != nil {
 		dropParsed(file)
 		if errors.Is(err, os.ErrNotExist) {

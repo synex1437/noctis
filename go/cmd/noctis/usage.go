@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -349,7 +350,7 @@ func oauthTokenState() (string, string) {
 	if token := os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"); token != "" {
 		return token, "present"
 	}
-	credentials := readJSON(files.credentials)
+	credentials := credentialsFile()
 	if credentials == nil && isDarwin {
 		credentials = keychainCredentials()
 	}
@@ -394,16 +395,51 @@ func keychainServiceName() string {
 	return keychainServiceFor(relaunchConfigDir(wait))
 }
 
+func oauthCredentials(content []byte) (object, error) {
+	defer clear(content)
+	var item *struct {
+		ClaudeAiOauth *struct {
+			AccessToken any `json:"accessToken"`
+			ExpiresAt   any `json:"expiresAt"`
+		} `json:"claudeAiOauth"`
+	}
+	var mismatch *json.UnmarshalTypeError
+	err := json.Unmarshal(bytes.TrimPrefix(content, utf8BOM), &item)
+	switch {
+	case errors.As(err, &mismatch) && mismatch.Field == "":
+		return nil, nil
+	case err != nil && mismatch == nil:
+		return nil, err
+	case item == nil:
+		return nil, nil
+	case item.ClaudeAiOauth == nil:
+		return object{}, nil
+	}
+	return object{"claudeAiOauth": object{"accessToken": item.ClaudeAiOauth.AccessToken, "expiresAt": item.ClaudeAiOauth.ExpiresAt}}, nil
+}
+
+func credentialsFile() object {
+	content, err := readFileRetrying(files.credentials)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err == nil {
+		var credentials object
+		if credentials, err = oauthCredentials(content); err == nil {
+			return credentials
+		}
+	}
+	warn("readJson %s: %s", filepath.Base(files.credentials), err)
+	return nil
+}
+
 func keychainCredentials() object {
 	output, err := runWithTimeout(exec.Command("security", "find-generic-password", "-s", keychainServiceName(), "-w"), 5*time.Second)
 	if err != nil {
 		return nil
 	}
-	var parsed object
-	if err := jsonUnmarshalObject([]byte(strings.TrimSpace(string(output))), &parsed); err != nil {
-		return nil
-	}
-	return parsed
+	credentials, _ := oauthCredentials(output)
+	return credentials
 }
 
 func usageEndpoint() *url.URL {
