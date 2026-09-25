@@ -32,6 +32,7 @@ var (
 	queuePriority      = lazyRegexp(`(?i)\(p([0-9])\)`)
 	queueAfter         = lazyRegexp(`(?i)\(after\s+([^)]+)\)`)
 	queueTag           = lazyRegexp(`#([A-Za-z][\w-]*)`)
+	queueReference     = lazyRegexp(`^(?:\d+|#\pL[\pL\pN_-]*|(?:` + issueRepoPattern + `)?#\d+)$`)
 )
 
 var (
@@ -282,10 +283,12 @@ func recordProjectDir(record object) {
 }
 
 type queueView struct {
-	total   int
-	blocked int
-	items   []string
-	plain   bool
+	total         int
+	blocked       int
+	items         []string
+	plain         bool
+	unmatched     []string
+	unmatchedMore int
 }
 
 func parseQueueEntries(content string) ([]queueEntry, bool) {
@@ -403,7 +406,7 @@ func newQueueEntry(ordinal int, text string, checked bool) queueEntry {
 	for _, found := range queueAfter.FindAllStringSubmatch(entry.text, -1) {
 		for _, reference := range strings.Split(found[1], ",") {
 			if reference = strings.TrimSpace(reference); reference != "" {
-				entry.after = append(entry.after, strings.ToLower(reference))
+				entry.after = append(entry.after, reference)
 			}
 		}
 	}
@@ -470,7 +473,8 @@ func queueSnapshot(file string) queueView {
 		}
 		doneByOrdinal[entry.ordinal] = entry.checked
 	}
-	satisfied := func(self queueEntry, reference string) bool {
+	satisfied := func(self queueEntry, reference string) (done, matched bool) {
+		reference = strings.ToLower(reference)
 		key := ""
 		if at := strings.LastIndexByte(reference, '#'); at >= 0 {
 			number := reference[at+1:]
@@ -488,15 +492,15 @@ func queueSnapshot(file string) queueView {
 					waiting--
 				}
 			}
-			return others <= 0 || waiting <= 0
+			return others <= 0 || waiting <= 0, carriers[key] > 0
 		}
 		ordinal, err := strconv.Atoi(reference)
-		if err != nil || ordinal < 1 || ordinal > len(entries) || ordinal == self.ordinal {
-			return true
+		if err != nil || ordinal < 1 || ordinal > len(entries) {
+			return true, false
 		}
-		return doneByOrdinal[ordinal]
+		return ordinal == self.ordinal || doneByOrdinal[ordinal], true
 	}
-	eligible := []queueEntry{}
+	eligible, named := []queueEntry{}, map[string]bool{}
 	for _, entry := range entries {
 		if entry.checked {
 			continue
@@ -504,9 +508,17 @@ func queueSnapshot(file string) queueView {
 		view.total++
 		ready := true
 		for _, reference := range entry.after {
-			if !satisfied(entry, reference) {
-				ready = false
-				break
+			done, matched := satisfied(entry, reference)
+			ready = ready && done
+			shown := truncateText(reference, queueReferenceChars)
+			if matched || !queueReference.MatchString(reference) || named[strings.ToLower(shown)] {
+				continue
+			}
+			named[strings.ToLower(shown)] = true
+			if len(view.unmatched) < queueUnmatchedKept {
+				view.unmatched = append(view.unmatched, shown)
+			} else {
+				view.unmatchedMore++
 			}
 		}
 		if ready {

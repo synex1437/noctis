@@ -61,6 +61,8 @@
   "queue.doneMessage": "✔ Coda completata — %s non ha elementi aperti; arresto pulito.",
   "queue.blockedNotify": "Coda bloccata: %d elementi aperti in %s aspettano dipendenze non completate.",
   "queue.blockedMessage": "⛔ Coda bloccata: %d elemento/i aperto/i aspettano dipendenze (after …) mai completate; mi fermo.",
+  "queue.unmatched": "⚠ (after …) ignorato in %s — nessun tag, issue o numero di elemento corrisponde: %s. Controlla come è scritto.",
+  "queue.unmatchedMore": "%s e altri %d",
   "queue.modeNotice": "☰ Modalità coda: %s ha %d elemento/i aperto/i — Claude li porta a termine senza chiedere (/%s:pause per fermarsi; rinomina il file o imposta queue.files per disattivarla).",
   "queue.autoNotice": "☰ Rilevato lavoro in %d passi — registrato come checklist; Claude completa ogni passo senza chiedere (/%s:pause per fermarsi).",
   "queue.autoLabel": "il lavoro dalla tua richiesta",

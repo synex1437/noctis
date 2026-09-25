@@ -171,23 +171,24 @@ func runQueueTrust(cfg object, cwd, action string) {
 		trustQueueFile(target, true)
 		rememberOpenIssues(cfg, target)
 		fmt.Println(T("queue.trustGranted", target))
+		printUnmatchedReferences(target, queueSnapshot(target))
 	case "untrust":
 		trustQueueFile(target, false)
 		fmt.Println(T("queue.trustRevoked", target))
 	default:
-		trusted, fresh := queueTrustGap(cfg, target)
-		if trusted {
+		view := queueSnapshot(target)
+		switch trusted, fresh := queueTrustGap(cfg, target); {
+		case trusted:
 			fmt.Println(T("queue.trustGranted", target))
-			return
-		}
-		if len(fresh) > 0 {
+		case len(fresh) > 0:
 			fmt.Println(T("queue.trustChanged", filepath.Base(target), len(fresh), pluginName))
 			for _, text := range fresh {
 				fmt.Println("  - [ ] " + printableItem(text))
 			}
-			return
+		default:
+			fmt.Println(T("queue.trustAsk", filepath.Base(target), view.total, pluginName))
 		}
-		fmt.Println(T("queue.trustAsk", filepath.Base(target), queueSnapshot(target).total, pluginName))
+		printUnmatchedReferences(target, view)
 	}
 }
 
@@ -198,6 +199,17 @@ func printableItem(text string) string {
 		}
 		return r
 	}, text)
+}
+
+func printUnmatchedReferences(target string, view queueView) {
+	if len(view.unmatched) == 0 {
+		return
+	}
+	list := printableItem(strings.Join(view.unmatched, ", "))
+	if view.unmatchedMore > 0 {
+		list = T("queue.unmatchedMore", list, view.unmatchedMore)
+	}
+	fmt.Println(T("queue.unmatched", filepath.Base(target), list))
 }
 
 func runQueue() {

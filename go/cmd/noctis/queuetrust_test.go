@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -122,5 +123,70 @@ func TestRequireTrustOffLetsAnyQueueFileDrive(t *testing.T) {
 	output := stopHookOutput(t, stopInput("st4", project), cfg)
 	if getString(output, "decision") != "block" || !strings.Contains(getString(output, "reason"), "write the release notes") {
 		t.Fatalf("queue.requireTrust=false no longer lets a TASKS.md drive the Stop hook: %v", output)
+	}
+}
+
+func TestTheStopHookNamesAnAfterReferenceThatMatchesNoItemOnce(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, false)
+	queuePath := writeQueueFile(t, project, "# q\n- [ ] (P0) fix the login redirect #auth\n- [ ] migrate the users (after #atuh)\n- [ ] seed the demo data (after #auth, #atuh, #sede)\n")
+	trustQueueFile(queuePath, true)
+	again := object{"hook_event_name": "Stop", "session_id": "st9", "cwd": project, "stop_hook_active": true}
+
+	first := stopHookOutput(t, stopInput("st9", project), cfg)
+	reason := getString(first, "reason")
+	if getString(first, "decision") != "block" || !strings.Contains(reason, "Queue continues: 3 open") || !strings.Contains(reason, " 1 item(s) wait on unfinished dependencies") {
+		t.Fatalf("an (after …) reference no item matches changed which items are eligible: %v", first)
+	}
+	if strings.Count(reason, "#atuh") != 1 || strings.Count(reason, "#sede") != 1 {
+		t.Fatalf("the continuation does not name #atuh and #sede, the (after …) references no item matches, once each: %q", reason)
+	}
+	if message := getString(first, "systemMessage"); !strings.Contains(message, T("queue.unmatched", "TASKS.md", "#atuh, #sede")) {
+		t.Fatalf("the user is not told which (after …) references no item matches: %q", message)
+	}
+
+	next := stopHookOutput(t, again, cfg)
+	if getString(next, "decision") != "block" || strings.Contains(getString(next, "reason"), "#atuh") || strings.Contains(getString(next, "systemMessage"), "#atuh") {
+		t.Fatalf("the next continuation names the same unmatched references again: %v", next)
+	}
+
+	writeQueueFile(t, project, "# q\n- [ ] (P0) fix the login redirect #auth\n- [ ] migrate the users (after #atuh)\n- [ ] seed the demo data (after #auth, #atuh, #sede)\n- [ ] write the notes (after #dcos)\n")
+	trustQueueFile(queuePath, true)
+	later := stopHookOutput(t, again, cfg)
+	if reason := getString(later, "reason"); !strings.Contains(reason, "#dcos") || strings.Contains(reason, "#atuh") || strings.Contains(reason, "#sede") {
+		t.Fatalf("a newly mistyped reference is not named on its own: %q", reason)
+	}
+}
+
+func TestTheStopHookNamesAtMostFiveUnmatchedAfterReferencesEachCutShortAndCountsTheRest(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, false)
+	long := "#" + strings.Repeat("x", 59)
+	queuePath := writeQueueFile(t, project, "# q\n- [ ] (P0) fix the login redirect #auth\n- [ ] migrate the users (after "+long+", #Atuh, 7, owner/repo#12)\n- [ ] seed the demo data (after #sede, #dcos, #auht, 9)\n- [ ] clean up the logs (after the release)\n")
+	trustQueueFile(queuePath, true)
+	again := object{"hook_event_name": "Stop", "session_id": "st10", "cwd": project, "stop_hook_active": true}
+
+	first := stopHookOutput(t, stopInput("st10", project), cfg)
+	shown := truncateText(long, 40) + ", #Atuh, 7, owner/repo#12, #sede"
+	if reason := getString(first, "reason"); !strings.Contains(reason, "nothing waits for them: "+shown+" and 3 more.") || strings.Contains(reason, long) || strings.Contains(reason, "#dcos") || strings.Contains(reason, "release") {
+		t.Fatalf("the continuation does not name the first five unmatched (after …) references, each cut to 40 characters, and count the other three: %q", reason)
+	}
+	if message := getString(first, "systemMessage"); !strings.Contains(message, T("queue.unmatched", "TASKS.md", T("queue.unmatchedMore", shown, 3))) {
+		t.Fatalf("the notice does not name the first five unmatched (after …) references and count the other three: %q", message)
+	}
+
+	many := []string{}
+	for index := 1; index <= 55; index++ {
+		many = append(many, fmt.Sprintf("#t%d", index))
+	}
+	writeQueueFile(t, project, "# q\n- [ ] (P0) fix the login redirect #auth\n- [ ] migrate the users (after "+strings.Join(many, ", ")+")\n")
+	trustQueueFile(queuePath, true)
+	crowded := stopHookOutput(t, again, cfg)
+	if reason := getString(crowded, "reason"); !strings.Contains(reason, "nothing waits for them: #t1, #t2, #t3, #t4, #t5 and 50 more.") {
+		t.Fatalf("55 unmatched (after …) references are not named five at most with a count of the rest: %q", reason)
+	}
+	if told := getList(getMap(getMap(readState(), "stopGuard"), "st10"), "unmatched"); len(told) != 50 {
+		t.Fatalf("the session's stopGuard keeps %d unmatched references, want the first 50: %v", len(told), told)
+	}
+	if next := stopHookOutput(t, again, cfg); getString(next, "decision") != "block" || strings.Contains(getString(next, "reason"), "#t1") || strings.Contains(getString(next, "systemMessage"), "#t1") {
+		t.Fatalf("the next continuation names the same unmatched references again: %v", next)
 	}
 }

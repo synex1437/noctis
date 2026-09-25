@@ -87,6 +87,9 @@ const (
 	etaMinSpanSeconds       = 1800
 	queueMaxBytes           = 1024 * 1024
 	queueMaxItems           = 15
+	queueUnmatchedKept      = 50
+	queueUnmatchedNamed     = 5
+	queueReferenceChars     = 40
 	openTaskLimit           = 50
 	defaultUsageURL         = "https://api.anthropic.com/api/oauth/usage"
 	aliveHookMaxChecks      = 6

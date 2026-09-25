@@ -61,6 +61,8 @@
   "queue.doneMessage": "✔ File terminée — %s n'a plus d'éléments ouverts ; arrêt propre.",
   "queue.blockedNotify": "File bloquée : %d éléments ouverts dans %s attendent des dépendances non terminées.",
   "queue.blockedMessage": "⛔ File bloquée : %d élément(s) ouvert(s) attendent des dépendances (after …) jamais terminées ; arrêt.",
+  "queue.unmatched": "⚠ (after …) ignoré dans %s — aucun tag, ticket ou numéro d'élément ne correspond : %s. Vérifie l'orthographe.",
+  "queue.unmatchedMore": "%s et %d autres",
   "queue.modeNotice": "☰ Mode file d'attente : %s contient %d élément(s) ouvert(s) — Claude les traite sans demander (/%s:pause pour arrêter ; renomme le fichier ou règle queue.files pour te désinscrire).",
   "queue.autoNotice": "☰ Travail en %d étapes détecté — suivi comme une checklist ; Claude termine chaque étape sans demander (/%s:pause pour arrêter).",
   "queue.autoLabel": "le travail issu de ta demande",

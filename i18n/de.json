@@ -61,6 +61,8 @@
   "queue.doneMessage": "✔ Warteschlange erledigt — %s hat keine offenen Punkte mehr; sauberer Stopp.",
   "queue.blockedNotify": "Warteschlange blockiert: %d offene Punkte in %s warten auf unerledigte Abhängigkeiten.",
   "queue.blockedMessage": "⛔ Warteschlange blockiert: %d offene Punkte warten auf (after …)-Abhängigkeiten, die nie erledigt wurden; Stopp.",
+  "queue.unmatched": "⚠ (after …) in %s ignoriert — kein Tag, kein Issue und keine Punktnummer passt: %s. Prüf die Schreibweise.",
+  "queue.unmatchedMore": "%s und %d weitere",
   "queue.modeNotice": "☰ Warteschlangenmodus: %s hat %d offene(n) Punkt(e) — Claude arbeitet sie ohne Rückfrage ab (/%s:pause zum Stoppen; benenne die Datei um oder setze queue.files, um das abzuschalten).",
   "queue.autoNotice": "☰ Auftrag mit %d Schritten erkannt — als Checkliste erfasst; Claude erledigt jeden Schritt ohne Rückfrage (/%s:pause zum Stoppen).",
   "queue.autoLabel": "der Auftrag aus deiner Anfrage",
