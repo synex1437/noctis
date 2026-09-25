@@ -2220,8 +2220,13 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 		interval := math.Max(1, numberOr(usageCfg, "blindProbeSeconds", 60))
 		probedFrom := numberOr(readJSON(files.fable), "fetchedAt", 0)
 		for round := 1; round <= rounds; round++ {
+			latest := readJSON(files.fable)
+			rateLimited := strings.HasPrefix(getString(latest, "error"), "http-429")
+			if rateLimited && numberOr(latest, "backoffUntil", 0) > float64(nowSec())+float64(rounds-round+1)*interval {
+				break
+			}
 			sleepUntil(float64(nowSec())+interval, nil)
-			probe := refreshFable(cfg, nowSec(), "blind-probe", 0, true)
+			probe := refreshFable(cfg, nowSec(), "blind-probe", 0, !rateLimited)
 
 			if fetched := numberOr(probe, "fetchedAt", 0); fetched > probedFrom {
 				usage = currentUsage(nowSec())

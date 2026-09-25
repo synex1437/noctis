@@ -425,12 +425,13 @@ func usageEndpoint() *url.URL {
 }
 
 type fetchResult struct {
-	status    int
-	body      []byte
-	date      string
-	sentAt    int64
-	roundTrip time.Duration
-	err       string
+	status     int
+	body       []byte
+	date       string
+	retryAfter string
+	sentAt     int64
+	roundTrip  time.Duration
+	err        string
 }
 
 func fetchOauthUsage(token, version string) fetchResult {
@@ -461,7 +462,23 @@ func fetchOauthUsage(token, version string) fetchResult {
 	if readErr != nil && !errors.Is(readErr, io.EOF) {
 		return fetchResult{err: "truncated-response " + readErr.Error()}
 	}
-	return fetchResult{status: response.StatusCode, body: body, date: response.Header.Get("Date"), sentAt: sentAt, roundTrip: roundTrip}
+	return fetchResult{status: response.StatusCode, body: body, date: response.Header.Get("Date"), retryAfter: response.Header.Get("Retry-After"), sentAt: sentAt, roundTrip: roundTrip}
+}
+
+func retryAfterSeconds(result fetchResult) int64 {
+	value := strings.TrimSpace(result.retryAfter)
+	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return seconds
+	}
+	at, err := http.ParseTime(value)
+	if err != nil {
+		return 0
+	}
+	reference, err := http.ParseTime(result.date)
+	if err != nil {
+		reference = time.Now()
+	}
+	return int64(math.Ceil(at.Sub(reference).Seconds()))
 }
 
 func sanePercent(value float64) (float64, bool) {
@@ -708,7 +725,7 @@ func refreshFable(cfg object, now int64, reason string, maxAge float64, ignoreBa
 		case 401, 403:
 			backoff = 1800
 		case 429:
-			backoff = 600
+			backoff = min(max(600, retryAfterSeconds(response)), 3600)
 		}
 		message := "http-" + itoa(response.status)
 		if response.err != "" {
