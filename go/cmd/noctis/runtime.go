@@ -726,14 +726,7 @@ func relaunchDidNothing(wait object, start time.Time, result launchResult) bool 
 }
 
 func waitContinued(wait object) bool {
-	until := numberOr(wait, "until", 0)
-	switch kind := getString(wait, "kind"); {
-	case kind == "fable":
-		return false
-	case kind == "stopfailure" && until <= numberOr(wait, "startedAt", 0)+1:
-		return sessionContinuedAfter(wait, until)
-	}
-	return sessionActiveAfter(wait, until)
+	return getString(wait, "kind") != "fable" && sessionContinuedAfter(wait, numberOr(wait, "until", 0))
 }
 
 func mergeInto(target, source object) {
@@ -889,7 +882,8 @@ func resumeWait(sid, release string) {
 	kind := getString(wait, "kind")
 	if waitContinued(wait) {
 		clearWaitAndConsume(sid, state)
-		logInfo("runner %s: transcript changed after reset, session already continued", sid)
+		journal(sid, "resume", "skip-launch", "the session went on in its own window after the reset", nil)
+		logInfo("runner %s: the session went on after the reset; not relaunching it", sid)
 		return
 	}
 	resume := section(cfg, "resume")
@@ -1017,7 +1011,7 @@ func resumeWait(sid, release string) {
 
 			return
 		}
-		if getString(wait, "kind") != "fable" && sessionContinuedAfter(wait, numberOr(wait, "until", 0)) {
+		if waitContinued(wait) {
 			continued = true
 			return
 		}

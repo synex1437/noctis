@@ -119,3 +119,80 @@ func TestAnEntryClaudeCodeWritesItselfDuringTheUsageCheckKeepsTheRelaunch(t *tes
 		})
 	}
 }
+
+func relaunchWithEntriesWrittenBeforeTheRunner(t *testing.T, sid, kind string, entries []string) string {
+	t.Helper()
+	calls := takeoverSandbox(t)
+	previousHost := activeHost
+	t.Cleanup(func() { activeHost = previousHost })
+	activeHost = "claude"
+	now := float64(nowSec())
+	reset := now - 280
+	cwd := t.TempDir()
+	lines := []string{userPromptLine(reset-3600, "fix the parser"), apiErrorLine(reset - 3599)}
+	for _, entry := range entries {
+		lines = append(lines, strings.ReplaceAll(entry, "{at}", transcriptStamp(reset+10)))
+	}
+	transcript := writeTranscriptAt(t, cwd, lines, reset+10)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, limitsBody(2, now+5*3600, 20, now+3*86400))
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("NOCTIS_USAGE_URL", server.URL)
+	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "lab")
+	config := releaseConfig()
+	config["fable"] = object{"source": "oauth"}
+	config["resume"] = object{"mode": "headless", "prompt": "carry on"}
+	mustWriteJSON(files.config, config)
+	wait := object{"kind": kind, "window": "five_hour", "label": "5h", "used": float64(100), "threshold": nil,
+		"until": reset, "startedAt": reset - 3599, "resumeAt": reset + 270, "attempts": float64(0), "cwd": cwd, "transcript": transcript, "launchMode": "headless"}
+	if kind == "batch" {
+		wait["hit"], wait["threshold"] = "threshold", float64(92)
+	}
+	updateState(func(state object) { stateMap(state, "waits")[sid] = wait })
+	resumeWait(sid, "")
+	return calls
+}
+
+func TestAnEntryClaudeCodeWritesItselfBeforeTheRunnerStartsKeepsTheRelaunch(t *testing.T) {
+	stopHookSummary := `{"type":"system","subtype":"stop_hook_summary","timestamp":"{at}","hookCount":1}`
+	cases := []struct {
+		name    string
+		kind    string
+		entries []string
+	}{
+		{"a stop hook summary", "stopfailure", []string{stopHookSummary}},
+		{"a compaction boundary and its summary", "stopfailure", []string{`{"type":"system","subtype":"compact_boundary","timestamp":"{at}"}`, `{"type":"user","isCompactSummary":true,"timestamp":"{at}","message":{"role":"user","content":"This session is being continued from a previous conversation"}}`}},
+		{"a stop hook summary during a paused batch", "batch", []string{stopHookSummary}},
+	}
+	for index, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sid := fmt.Sprintf("before-runner%d", index+1)
+
+			calls := relaunchWithEntriesWrittenBeforeTheRunner(t, sid, tc.kind, tc.entries)
+
+			if got := launchesOf(calls, sid); got != 1 {
+				t.Fatalf("%s written after the reset, before the runner started, was taken for the session going on: the session was relaunched %d time(s), want 1, so the work stops (journal %v)", tc.name, got, journaledFor(sid))
+			}
+		})
+	}
+}
+
+func TestTheRunnerDoesNotRelaunchASessionThatWentOnBeforeItStarted(t *testing.T) {
+	for index, kind := range []string{"stopfailure", "batch"} {
+		t.Run(kind, func(t *testing.T) {
+			sid := fmt.Sprintf("went-on%d", index+1)
+			prompt := `{"type":"user","timestamp":"{at}","message":{"role":"user","content":"keep going"}}`
+			answer := `{"type":"assistant","timestamp":"{at}","message":{"role":"assistant","content":[{"type":"text","text":"Carrying on with the parser."}]}}`
+
+			calls := relaunchWithEntriesWrittenBeforeTheRunner(t, sid, kind, []string{prompt, answer})
+
+			if got := launchesOf(calls, sid); got != 0 {
+				t.Fatalf("the session went on in its own window after the reset, and the runner still relaunched it %d time(s)", got)
+			}
+			if journal := journaledFor(sid); !slices.Contains(journal, "skip-launch") {
+				t.Fatalf("the runner left no journal entry saying why it did not relaunch the session: %v", journal)
+			}
+		})
+	}
+}
