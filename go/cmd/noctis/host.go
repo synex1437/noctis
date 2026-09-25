@@ -616,36 +616,82 @@ func hostDefaultOutput(host, event string) object {
 	return nil
 }
 
-func bypassFlag(host, arg string) (bypass, takesValue bool) {
-	name, _, hasValue := strings.Cut(arg, "=")
-	switch host + " " + name {
-	case "claude --dangerously-skip-permissions", "claude --allow-dangerously-skip-permissions",
-		"codex --dangerously-bypass-approvals-and-sandbox", "copilot --allow-all-tools", "droid --skip-permissions-unsafe":
-		return true, false
-	case "claude --permission-mode", "droid --auto":
-		return true, !hasValue
+const (
+	flagAlone = iota
+	flagOptionalValue
+	flagValue
+	flagValues
+)
+
+var relaunchFlags = map[string]map[string]int{
+	"claude":      {"--verbose": flagAlone, "--ax-screen-reader": flagAlone, "--debug": flagOptionalValue, "-d": flagOptionalValue, "--remote-control": flagOptionalValue, "--name": flagValue, "-n": flagValue, "--disallowedTools": flagValues, "--disallowed-tools": flagValues, "--tools": flagValues, "--max-budget-usd": flagValue, "--max-turns": flagValue, "--strict-mcp-config": flagAlone},
+	"codex":       {"--model": flagValue, "-m": flagValue, "--config": flagValue, "-c": flagValue, "--color": flagValue, "--sandbox": flagValue, "-s": flagValue},
+	"copilot":     {"--model": flagValue, "--log-level": flagValue, "--no-color": flagAlone, "--screen-reader": flagAlone, "--deny-tool": flagValue},
+	"droid":       {"--model": flagValue, "-m": flagValue, "--reasoning-effort": flagValue, "-r": flagValue},
+	"antigravity": {"--verbose": flagAlone},
+}
+
+var codexConfigKeys = map[string]bool{"model": true, "model_reasoning_effort": true}
+
+func harmlessFlagValue(host, name, value string) bool {
+	if host != "codex" {
+		return true
 	}
-	return false, false
+	switch name {
+	case "-c", "--config":
+		key, _, _ := strings.Cut(value, "=")
+		return codexConfigKeys[strings.TrimSpace(key)]
+	case "-s", "--sandbox":
+		return value == "read-only"
+	}
+	return true
+}
+
+func harmlessExtraArgs(host string, args []string) int {
+	name, value, inline := strings.Cut(args[0], "=")
+	kind, known := relaunchFlags[host][name]
+	if !known {
+		return 0
+	}
+	if inline {
+		if kind == flagAlone || !harmlessFlagValue(host, name, value) {
+			return 0
+		}
+		return 1
+	}
+	hasValue := len(args) > 1 && !strings.HasPrefix(args[1], "-")
+	switch {
+	case kind == flagAlone, kind == flagOptionalValue && !hasValue:
+		return 1
+	case !hasValue || !harmlessFlagValue(host, name, args[1]):
+		return 0
+	case kind == flagValues:
+		count := 2
+		for count < len(args) && !strings.HasPrefix(args[count], "-") {
+			count++
+		}
+		return count
+	}
+	return 2
 }
 
 func relaunchExtraArgs(host string, resume object, sid string) []string {
-	configured := getList(resume, "extraArgs")
+	configured := []string{}
+	for _, arg := range getList(resume, "extraArgs") {
+		configured = append(configured, fmt.Sprint(arg))
+	}
 	extra, dropped := []string{}, []string{}
 	for index := 0; index < len(configured); index++ {
-		arg := fmt.Sprint(configured[index])
-		bypass, takesValue := bypassFlag(host, arg)
-		if !bypass {
-			extra = append(extra, arg)
+		kept := harmlessExtraArgs(host, configured[index:])
+		if kept == 0 {
+			dropped = append(dropped, configured[index])
 			continue
 		}
-		dropped = append(dropped, arg)
-		if takesValue && index+1 < len(configured) {
-			index++
-			dropped = append(dropped, fmt.Sprint(configured[index]))
-		}
+		extra = append(extra, configured[index:index+kept]...)
+		index += kept - 1
 	}
 	if len(dropped) > 0 {
-		warn("resume.extraArgs: %s dropped from the relaunch; unattended permissions come from the resume settings, never from extra arguments", strings.Join(dropped, " "))
+		warn("resume.extraArgs: %s dropped from the relaunch; only the flags docs/REFERENCE.md lists for %s are passed on, never ones that widen what the session may do", strings.Join(dropped, " "), host)
 		journal(sid, "resume", "extra-arg-dropped", strings.Join(dropped, " "), nil)
 	}
 	return extra
