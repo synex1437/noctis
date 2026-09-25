@@ -267,6 +267,7 @@
   "install.permissionsOther": "   permissions.defaultMode=%s (antes da configuração: %s, um modo que a configuração não consegue definir; defina-o de novo no settings.json para voltar atrás)",
   "install.permissionsKept": "   permissions.defaultMode mantido em %s (a configuração só o altera na primeira configuração da conta ou com --permissions)",
   "install.permissionsNone": "   permissions.defaultMode continua sem valor (a configuração só o altera na primeira configuração da conta ou com --permissions)",
+  "install.relaunchInherit": "   resume.permissionMode=inherit (antes auto): uma sessão reiniciada mantém o modo de permissão em que estava a correr",
   "install.lean": "   env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1: a compactação enxuta pode funcionar (os hooks de função do Claude Code, em acesso antecipado; isso carrega o módulo de hooks de cada plugin instalado; --no-lean para deixá-la desligada)",
   "install.leanKept": "   a compactação enxuta não pode funcionar: settings.json define CLAUDE_CODE_ENABLE_FUNCTION_HOOKS como %s, e a configuração mantém o seu valor (com 1 ela funciona)",
   "install.leanOff": "   compactação enxuta desligada: compaction.lean é false, e CLAUDE_CODE_ENABLE_FUNCTION_HOOKS fica como está",

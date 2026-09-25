@@ -95,7 +95,7 @@
     "mode": "window",
     "terminal": "auto",
     "closePrevious": true,
-    "permissionMode": "auto",
+    "permissionMode": "inherit",
     "prompt": "Continue. The task was paused at a usage-limit threshold; pick up exactly where you left off and finish the pending work.",
     "remoteControl": false,
     "extraArgs": [],

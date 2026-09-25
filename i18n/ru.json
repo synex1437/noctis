@@ -267,6 +267,7 @@
   "install.permissionsOther": "   permissions.defaultMode=%s (до настройки: %s — этот режим настройка задать не может; чтобы вернуть его, впиши его снова в settings.json)",
   "install.permissionsKept": "   permissions.defaultMode оставлен: %s (настройка меняет его только при первой настройке учётной записи или с --permissions)",
   "install.permissionsNone": "   permissions.defaultMode остался не заданным (настройка меняет его только при первой настройке учётной записи или с --permissions)",
+  "install.relaunchInherit": "   resume.permissionMode=inherit (было auto): перезапущенная сессия сохраняет режим разрешений, в котором работала",
   "install.lean": "   env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1: облегчённое сжатие может работать (функциональные хуки Claude Code в раннем доступе; это загружает модуль хуков каждого установленного плагина; --no-lean, чтобы оставить его выключенным)",
   "install.leanKept": "   облегчённое сжатие не может работать: settings.json задаёт CLAUDE_CODE_ENABLE_FUNCTION_HOOKS = %s, и настройка оставляет твоё значение (с 1 оно заработает)",
   "install.leanOff": "   облегчённое сжатие выключено: compaction.lean = false, а CLAUDE_CODE_ENABLE_FUNCTION_HOOKS оставлен как есть",

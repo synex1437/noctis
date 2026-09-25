@@ -553,6 +553,10 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		} else {
 			permissionNote = T("install.permissionsNone")
 		}
+	} else if resume := section(config, "resume"); getString(resume, "permissionMode") == "auto" {
+		resume["permissionMode"] = "inherit"
+		config["resume"] = resume
+		permissionNote = T("install.relaunchInherit")
 	}
 	if err := writeInstallConfig(configFile, config); err != nil {
 		return err

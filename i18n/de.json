@@ -267,6 +267,7 @@
   "install.permissionsOther": "   permissions.defaultMode=%s (vor dem Setup: %s, das das Setup nicht setzen kann; zum Zurückkehren in settings.json wieder eintragen)",
   "install.permissionsKept": "   permissions.defaultMode bleibt %s (das Setup ändert es nur beim ersten Setup des Kontos oder mit --permissions)",
   "install.permissionsNone": "   permissions.defaultMode bleibt ungesetzt (das Setup ändert es nur beim ersten Setup des Kontos oder mit --permissions)",
+  "install.relaunchInherit": "   resume.permissionMode=inherit (vorher auto): eine neu gestartete Sitzung behält den Berechtigungsmodus, in dem sie lief",
   "install.lean": "   env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1: schlanke Kompaktierung kann laufen (die Funktions-Hooks von Claude Code im frühen Zugang; das lädt das Hook-Modul jedes installierten Plugins; mit --no-lean bleibt sie aus)",
   "install.leanKept": "   schlanke Kompaktierung kann nicht laufen: settings.json setzt CLAUDE_CODE_ENABLE_FUNCTION_HOOKS auf %s, und das Setup lässt deinen Wert stehen (mit 1 läuft sie)",
   "install.leanOff": "   schlanke Kompaktierung aus: compaction.lean ist false, und CLAUDE_CODE_ENABLE_FUNCTION_HOOKS bleibt, wie es ist",

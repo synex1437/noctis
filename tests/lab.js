@@ -1276,10 +1276,12 @@ async function scenarioBudgetWakeWebhook(acc) {
   const hard = acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'bd1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('hard stop pauses until local midnight', hard.includes('"continue":false') && acc.state().waits.bd1.hit === 'budget', true);
   acc.run(['cancel', 'bd1']);
+  let relaunchMode;
   acc.setConfig((config) => {
     config.budget.dailyWeeklyPercent = 0;
     config.budget.hardStop = false;
     config.wait.maxInHookMinutes = 330;
+    relaunchMode = config.resume.permissionMode;
     config.resume.permissionMode = 'inherit';
   });
   acc.statusline('pm1', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400);
@@ -1296,7 +1298,7 @@ async function scenarioBudgetWakeWebhook(acc) {
   acc.run(['resume', '--sid', 'pm1', '--account', acc.dir]);
   check('relaunch inherits the session permission mode', (callsLog().find((line) => line.includes('--resume pm1')) || '').includes('--permission-mode plan'), true);
   acc.setConfig((config) => {
-    config.resume.permissionMode = 'auto';
+    config.resume.permissionMode = relaunchMode;
     config.wake.sameSession = true;
     config.wake.graceSeconds = 60;
   });

@@ -267,6 +267,7 @@
   "install.permissionsOther": "   permissions.defaultMode=%s（セットアップ前: %s。このモードはセットアップでは設定できません。元に戻すには settings.json に書き直してください）",
   "install.permissionsKept": "   permissions.defaultMode は %s のままにしました（セットアップが変更するのは、そのアカウントの最初のセットアップか --permissions 指定時だけです）",
   "install.permissionsNone": "   permissions.defaultMode は未設定のままにしました（セットアップが変更するのは、そのアカウントの最初のセットアップか --permissions 指定時だけです）",
+  "install.relaunchInherit": "   resume.permissionMode=inherit（以前は auto）: 再起動したセッションは、実行していたときの権限モードを保ちます",
   "install.lean": "   env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1: 軽量圧縮が動作できます（Claude Code の早期アクセスの関数フック。インストール済みのすべてのプラグインのフックモジュールを読み込みます。オフのままにするには --no-lean）",
   "install.leanKept": "   軽量圧縮は動作できません: settings.json が CLAUDE_CODE_ENABLE_FUNCTION_HOOKS を %s にしており、セットアップはその値を変えません（1 にすれば動作します）",
   "install.leanOff": "   軽量圧縮はオフ: compaction.lean が false で、CLAUDE_CODE_ENABLE_FUNCTION_HOOKS はそのままです",

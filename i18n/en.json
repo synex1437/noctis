@@ -267,6 +267,7 @@
   "install.permissionsOther": "   permissions.defaultMode=%s (before setup: %s, which setup cannot set; set it again in settings.json to go back)",
   "install.permissionsKept": "   permissions.defaultMode left at %s (setup changes it only on the account's first setup or with --permissions)",
   "install.permissionsNone": "   permissions.defaultMode left unset (setup changes it only on the account's first setup or with --permissions)",
+  "install.relaunchInherit": "   resume.permissionMode=inherit (was auto): a relaunched session keeps the permission mode it ran in",
   "install.lean": "   env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1: lean compaction can run (Claude Code's early-access function hooks; this loads the hooks module of every installed plugin; --no-lean to leave it off)",
   "install.leanKept": "   lean compaction cannot run: settings.json sets CLAUDE_CODE_ENABLE_FUNCTION_HOOKS to %s, and setup leaves your value (1 lets it run)",
   "install.leanOff": "   lean compaction off: compaction.lean is false, and CLAUDE_CODE_ENABLE_FUNCTION_HOOKS is left as it is",
