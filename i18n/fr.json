@@ -29,6 +29,7 @@
   "wait.readyTail": " ; reprise du travail.",
   "wait.readyNone": ".",
   "wait.dataReady": "Les données d'usage %s sont revenues, sous la limite%s",
+  "wait.signInExpired": "Connexion Claude expirée : l'usage ne peut plus être actualisé tant que Claude Code ne s'est pas reconnecté, donc une réinitialisation anticipée de la limite %s passe inaperçue d'ici là. Ouvre Claude Code une fois pour qu'il renouvelle la connexion ; l'attente se termine quand même comme prévu : %s.",
   "wait.wakeMessage": "[noctis] %s limit reset at %s (%s%% when paused). Continue exactly where you left off; the task list and pending work are unchanged.",
   "scoped.promptBlock": "🔁 %s %s%% : le modèle par défaut est maintenant %s ; tapez /model %s et renvoyez la demande.",
   "scoped.reason": "%s hebdomadaire %s%% → %s",

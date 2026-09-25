@@ -1004,7 +1004,7 @@ func pruneState(state object, now int64) {
 	for key, raw := range stateMap(state, "notified") {
 		at, _ := toNumber(raw)
 		ttl := float64(stateEntryTTLSeconds)
-		if strings.HasPrefix(key, "queue:") || strings.HasPrefix(key, "update:") || strings.HasPrefix(key, "restart:") {
+		if strings.HasPrefix(key, "queue:") || strings.HasPrefix(key, "update:") || strings.HasPrefix(key, "restart:") || key == "signInExpired" {
 			ttl = 30 * 86400
 		}
 		if float64(now)-at > ttl {

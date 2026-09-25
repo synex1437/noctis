@@ -29,6 +29,7 @@
   "wait.readyTail": "؛ استئناف العمل.",
   "wait.readyNone": ".",
   "wait.dataReady": "عادت بيانات استخدام %s وهي دون الحد%s",
+  "wait.signInExpired": "انتهت صلاحية تسجيل الدخول إلى Claude: لا يمكن تحديث الاستخدام حتى يسجّل Claude Code الدخول من جديد، لذا لن يُلاحَظ تصفير حد %s مبكرًا حتى ذلك الحين. افتح Claude Code مرة ليجدّد تسجيل الدخول؛ ومع ذلك ينتهي الانتظار كما هو مخطط: %s.",
   "wait.wakeMessage": "[noctis] %s limit reset at %s (%s%% when paused). Continue exactly where you left off; the task list and pending work are unchanged.",
   "scoped.promptBlock": "🔁 %s %s%%: النموذج الافتراضي الآن %s؛ اكتب /model %s وأعد إرسال الطلب.",
   "scoped.reason": "%s أسبوعيًا %s%% → %s",

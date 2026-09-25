@@ -29,6 +29,7 @@
   "wait.readyTail": ". 작업을 재개합니다.",
   "wait.readyNone": ".",
   "wait.dataReady": "%s 사용량 데이터가 돌아왔고 한도 아래입니다%s",
+  "wait.signInExpired": "Claude 로그인이 만료되었습니다: Claude Code가 다시 로그인할 때까지 사용량을 새로 고칠 수 없어서, 그때까지는 %s 한도가 일찍 초기화되어도 알아채지 못합니다. Claude Code를 한 번 열어 로그인을 갱신하게 하세요. 대기는 그래도 예정대로 끝납니다: %s.",
   "wait.wakeMessage": "[noctis] %s limit reset at %s (%s%% when paused). Continue exactly where you left off; the task list and pending work are unchanged.",
   "scoped.promptBlock": "🔁 %s %s%%: 기본 모델이 %s로 바뀌었습니다. /model %s 를 입력하고 요청을 다시 보내세요.",
   "scoped.reason": "%s 주간 %s%% → %s",

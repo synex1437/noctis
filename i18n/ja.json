@@ -29,6 +29,7 @@
   "wait.readyTail": "。作業を再開します。",
   "wait.readyNone": "。",
   "wait.dataReady": "%sの使用量データが戻り、上限を下回っています%s",
+  "wait.signInExpired": "Claude のサインインの有効期限が切れました。Claude Code がサインインし直すまで使用量を更新できないため、それまでは %s の上限が早めにリセットされても気付けません。Claude Code を一度開いてサインインを更新させてください。待機は予定どおり終わります: %s。",
   "wait.wakeMessage": "[noctis] %s limit reset at %s (%s%% when paused). Continue exactly where you left off; the task list and pending work are unchanged.",
   "scoped.promptBlock": "🔁 %s %s%%: 既定モデルは %s になりました。/model %s と入力して依頼を再送してください。",
   "scoped.reason": "%s 週次 %s%% → %s",

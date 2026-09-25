@@ -29,6 +29,7 @@
   "wait.readyTail": "; riprendo il lavoro.",
   "wait.readyNone": ".",
   "wait.dataReady": "I dati di utilizzo %s sono tornati e sono sotto il limite%s",
+  "wait.signInExpired": "Accesso a Claude scaduto: l'utilizzo non può essere aggiornato finché Claude Code non accede di nuovo, quindi fino ad allora un azzeramento anticipato del limite %s passa inosservato. Apri Claude Code una volta perché rinnovi l'accesso; l'attesa finisce comunque come previsto: %s.",
   "wait.wakeMessage": "[noctis] %s limit reset at %s (%s%% when paused). Continue exactly where you left off; the task list and pending work are unchanged.",
   "scoped.promptBlock": "🔁 %s %s%%: il modello predefinito ora è %s; digita /model %s e reinvia la richiesta.",
   "scoped.reason": "%s settimanale %s%% → %s",

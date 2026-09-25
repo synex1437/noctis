@@ -54,6 +54,7 @@ func baseCatalog() map[string]map[string]string {
 			"wait.readyTail":        "; resuming work.",
 			"wait.readyNone":        ".",
 			"wait.dataReady":        "%s usage data is back and below the limit%s",
+			"wait.signInExpired":    "Claude sign-in expired: usage can't be refreshed until Claude Code signs in again, so an early reset of the %s limit goes unnoticed until then. Open Claude Code once to renew it; the wait still ends as planned: %s.",
 			"wait.wakeMessage":      "[noctis] %s limit reset at %s (%s%% when paused). Continue exactly where you left off; the task list and pending work are unchanged.",
 
 			"scoped.promptBlock":     "🔁 %s %s%%: default model is now %s; type /model %s and resend the request.",
@@ -499,6 +500,7 @@ func baseCatalog() map[string]map[string]string {
 			"wait.readyTail":        "; iş devam ettiriliyor.",
 			"wait.readyNone":        ".",
 			"wait.dataReady":        "%s kullanım verisi geri geldi, limitin altında%s",
+			"wait.signInExpired":    "Claude oturum açmasının süresi doldu: Claude Code yeniden giriş yapana kadar kullanım yenilenemez, bu yüzden %s limitinin erken sıfırlanması o zamana kadar fark edilmez. Yenilemesi için Claude Code'u bir kez aç; bekleme yine planlandığı gibi biter: %s.",
 			"wait.wakeMessage":      "[noctis] %s limit reset at %s (%s%% when paused). Continue exactly where you left off; the task list and pending work are unchanged.",
 
 			"scoped.promptBlock":     "🔁 %s %%%s: varsayılan model %s oldu; /model %s yazıp isteği tekrar gönder.",
