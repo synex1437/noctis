@@ -2220,7 +2220,7 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 
 	usageAt := numberOr(usageFile, "updatedAt", 0)
 	snapshot := currentUsage(now)
-	usageStale := usageAt == 0 || float64(now)-usageAt > staleSeconds || (snapshot.fiveHour != nil && snapshot.fiveHour.staleness > staleSeconds) || (snapshot.sevenDay != nil && snapshot.sevenDay.staleness > staleSeconds)
+	usageStale := usageAt == 0 || float64(now)-usageAt > staleSeconds || windowStale(snapshot, staleSeconds)
 	fableCandidate := scopedModelPattern(cfg).MatchString(model)
 	edge := nearEdge(cfg, snapshot)
 	fableLimit, fableGuarded := scopedThresholdEnabled(cfg)

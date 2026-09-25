@@ -944,10 +944,14 @@ func deliveringReport(input object) bool {
 	return len(calls) > 0
 }
 
+func windowStale(usage usageView, staleSeconds float64) bool {
+	return (usage.fiveHour != nil && usage.fiveHour.staleness > staleSeconds) || (usage.sevenDay != nil && usage.sevenDay.staleness > staleSeconds)
+}
+
 func subagentLimit(cfg object, now int64) decision {
 	usage := currentUsage(now)
 	edge := nearEdge(cfg, usage)
-	if edge || float64(now)-usage.updatedAt > usageStaleSeconds(cfg) {
+	if staleSeconds := usageStaleSeconds(cfg); edge || float64(now)-usage.updatedAt > staleSeconds || windowStale(usage, staleSeconds) {
 		maxAge := -1.0
 		if edge {
 			maxAge = edgePollSeconds(cfg, usage)
