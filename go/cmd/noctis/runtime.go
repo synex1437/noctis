@@ -533,6 +533,17 @@ func sanitizePrompt(text string) string {
 	return value
 }
 
+func relaunchPrompt(text string) string {
+	if isWindows {
+		return sanitizePrompt(text)
+	}
+	value := strings.TrimSpace(text)
+	if strings.HasPrefix(value, "-") {
+		value = "Continue. " + value
+	}
+	return value
+}
+
 type launchSpec struct {
 	sid            string
 	model          string
@@ -985,7 +996,7 @@ func resumeWait(sid, release string) {
 	if getBool(wait, "overload", false) {
 		prompt = T("overload.wakeMessage", getString(wait, "label"), formatNumber(numberOr(wait, "attempt", 1)), durationText(numberOr(wait, "resumeAt", 0)-numberOr(wait, "startedAt", numberOr(wait, "resumeAt", 0)))) + " " + prompt
 	}
-	prompt = sanitizePrompt(prompt)
+	prompt = relaunchPrompt(prompt)
 	claimed, watcher := false, 0
 	updateState(func(next object) {
 
