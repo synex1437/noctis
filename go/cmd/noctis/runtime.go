@@ -1016,7 +1016,7 @@ func resumeWait(sid, release string) {
 
 			return
 		}
-		if waitContinued(wait) {
+		if getString(wait, "kind") != "fable" && sessionContinuedAfter(wait, numberOr(wait, "until", 0)) {
 			continued = true
 			return
 		}
@@ -1033,7 +1033,8 @@ func resumeWait(sid, release string) {
 	})
 	if continued {
 		clearWaitAndConsume(sid, state)
-		logInfo("runner %s: transcript changed after reset while usage was checked, session already continued", sid)
+		journal(sid, "resume", "skip-launch", "the session went on in its own window while usage was checked", nil)
+		logInfo("runner %s: the session went on after the reset while usage was checked; not relaunching it", sid)
 		return
 	}
 	if !claimed {
