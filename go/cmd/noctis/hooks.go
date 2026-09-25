@@ -272,7 +272,7 @@ func onSessionStart(input, cfg object) {
 			state = readState()
 		}
 
-		if !usage.hasAny || float64(now)-usage.updatedAt > usageStaleSeconds(cfg) {
+		if staleSeconds := usageStaleSeconds(cfg); !usage.hasAny || float64(now)-usage.updatedAt > staleSeconds || windowStale(usage, staleSeconds) {
 
 			if refreshed := refreshFable(cfg, now, "session-start", -1, false); numberOr(refreshed, "fetchedAt", 0) > 0 {
 				usage = currentUsage(now)
