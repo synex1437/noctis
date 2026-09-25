@@ -85,7 +85,11 @@ func earlyRelease(cfg object, sid string, record object, poll, relaunch bool) st
 	now := nowSec()
 	pollEvery := earlyResetPollSeconds(cfg)
 	if poll && pollEvery > 0 && currentHost().limits {
-		refreshFable(cfg, now, "early-reset", math.Max(1, pollEvery-2), false)
+		backoff := numberOr(readJSON(files.fable), "backoffUntil", 0)
+		fable := refreshFable(cfg, now, "early-reset", math.Max(1, pollEvery-2), false)
+		if getString(fable, "error") == "no-token" && numberOr(fable, "backoffUntil", 0) != backoff {
+			tellSignInExpired(cfg, record, numberOr(fable, "fetchedAt", 0))
+		}
 	}
 	threshold := numberOr(record, "threshold", 0)
 	if threshold <= 0 {
@@ -104,6 +108,26 @@ func earlyRelease(cfg object, sid string, record object, poll, relaunch bool) st
 		return "data"
 	}
 	return ""
+}
+
+func tellSignInExpired(cfg, record object, lastReading float64) {
+	if _, tokenState := oauthTokenState(); tokenState != "expired" {
+		return
+	}
+	first := false
+	updateState(func(state object) {
+		notified := stateMap(state, "notified")
+		if told, ok := getNumber(notified, "signInExpired"); ok && told >= lastReading {
+			return
+		}
+		notified["signInExpired"] = float64(nowSec())
+		first = true
+	})
+	if !first {
+		return
+	}
+	logInfo("the Claude sign-in expired during the %s wait: usage cannot be refreshed until Claude Code signs in again", getString(record, "window"))
+	notify(cfg, pluginName, T("wait.signInExpired", getString(record, "label"), formatTime(numberOr(record, "resumeAt", 0))))
 }
 
 func sleepUntil(epoch float64, onTick func() bool) bool {

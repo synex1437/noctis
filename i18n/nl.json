@@ -29,6 +29,7 @@
   "wait.readyTail": "; werk wordt hervat.",
   "wait.readyNone": ".",
   "wait.dataReady": "%s-gebruiksdata is terug en ligt onder de limiet%s",
+  "wait.signInExpired": "Claude-aanmelding verlopen: het gebruik kan pas weer worden opgehaald als Claude Code opnieuw aanmeldt, dus een vroege reset van de %s-limiet blijft tot dan onopgemerkt. Open Claude Code één keer zodat het de aanmelding vernieuwt; het wachten eindigt toch zoals gepland: %s.",
   "wait.wakeMessage": "[noctis] %s limit reset at %s (%s%% when paused). Continue exactly where you left off; the task list and pending work are unchanged.",
   "scoped.promptBlock": "🔁 %s %s%%: standaardmodel is nu %s; typ /model %s en stuur het verzoek opnieuw.",
   "scoped.reason": "%s wekelijks %s%% → %s",

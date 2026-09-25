@@ -29,6 +29,7 @@
   "wait.readyTail": "; resuming work.",
   "wait.readyNone": ".",
   "wait.dataReady": "%s usage data is back and below the limit%s",
+  "wait.signInExpired": "Claude sign-in expired: usage can't be refreshed until Claude Code signs in again, so an early reset of the %s limit goes unnoticed until then. Open Claude Code once to renew it; the wait still ends as planned: %s.",
   "wait.wakeMessage": "[noctis] %s limit reset at %s (%s%% when paused). Continue exactly where you left off; the task list and pending work are unchanged.",
   "scoped.promptBlock": "🔁 %s %s%%: default model is now %s; type /model %s and resend the request.",
   "scoped.reason": "%s weekly %s%% → %s",

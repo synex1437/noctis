@@ -29,6 +29,7 @@
   "wait.readyTail": "；恢复工作。",
   "wait.readyNone": "。",
   "wait.dataReady": "%s 用量数据已恢复，低于限额%s",
+  "wait.signInExpired": "Claude 登录已过期：在 Claude Code 重新登录之前无法刷新用量，因此在此之前 %s 限额的提前重置不会被察觉。打开一次 Claude Code 让它续期登录；等待仍会按计划结束：%s。",
   "wait.wakeMessage": "[noctis] %s limit reset at %s (%s%% when paused). Continue exactly where you left off; the task list and pending work are unchanged.",
   "scoped.promptBlock": "🔁 %s %s%%：默认模型现在是 %s；输入 /model %s 并重新发送请求。",
   "scoped.reason": "%s 每周 %s%% → %s",

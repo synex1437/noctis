@@ -29,6 +29,7 @@
   "wait.readyTail": "; iş devam ettiriliyor.",
   "wait.readyNone": ".",
   "wait.dataReady": "%s kullanım verisi geri geldi, limitin altında%s",
+  "wait.signInExpired": "Claude oturum açmasının süresi doldu: Claude Code yeniden giriş yapana kadar kullanım yenilenemez, bu yüzden %s limitinin erken sıfırlanması o zamana kadar fark edilmez. Yenilemesi için Claude Code'u bir kez aç; bekleme yine planlandığı gibi biter: %s.",
   "wait.wakeMessage": "[noctis] %s limit reset at %s (%s%% when paused). Continue exactly where you left off; the task list and pending work are unchanged.",
   "scoped.promptBlock": "🔁 %s %%%s: varsayılan model %s oldu; /model %s yazıp isteği tekrar gönder.",
   "scoped.reason": "%s haftalık %%%s → %s",
