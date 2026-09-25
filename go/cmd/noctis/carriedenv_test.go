@@ -187,3 +187,41 @@ func TestAHookThatJoinedAWaitLeavesTheProxiesToTheJobThatResumesIt(t *testing.T)
 		})
 	}
 }
+
+func TestARunnerTheTaskSchedulerStartsGetsThePathCertificatesAndProxiesOfTheSessionThatPaused(t *testing.T) {
+	windowsTaskSandbox(t)
+	mustWriteJSON(files.config, object{"resume": object{"mode": "none"}, "alarm": object{"enabled": false}, "wait": object{"heartbeatGraceSeconds": float64(0)}})
+	previous := args
+	t.Cleanup(func() { args = previous })
+	session := map[string]string{"PATH": os.Getenv("PATH"), "NODE_EXTRA_CA_CERTS": "/etc/corp/ca.pem"}
+	for name, value := range sessionProxies {
+		session[name] = value
+	}
+	for name, value := range session {
+		t.Setenv(name, value)
+	}
+	sid := "task-environment"
+	now := float64(nowSec())
+	updateState(func(state object) {
+		stateMap(state, "waits")[sid] = object{"kind": "fable", "window": "fable", "until": now, "resumeAt": now + 60, "startedAt": now}
+	})
+	if scheduled := scheduleRunner(loadConfig(), sid, now+60); getString(scheduled, "method") != "task" {
+		t.Fatalf("the wait was not scheduled as a task: %v", scheduled)
+	}
+	for name := range session {
+		t.Setenv(name, "")
+	}
+	t.Setenv("PATH", t.TempDir())
+
+	args = parseArgs(runnerArgs("resume", sid, files.configDir))
+	runResume()
+
+	for name, want := range session {
+		if got := os.Getenv(name); got != want {
+			t.Errorf("the runner the scheduled task started resumed the session with %s=%q, want the paused session's %q", name, got, want)
+		}
+	}
+	if getMap(getMap(readState(), "waits"), sid) != nil {
+		t.Fatal("the runner never got as far as closing the wait")
+	}
+}

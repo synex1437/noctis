@@ -1386,11 +1386,13 @@ func scheduleRunnerLocked(cfg object, sid string, atEpoch, rearms float64) objec
 	cancelRunnerKeepingTask(sid, readState(), replacingTask)
 	var scheduled object
 	if replacingTask {
+		keepEnvironmentForRunner(sid, slices.Concat(carriedEnvNames, proxyEnvNames))
 		result := scheduleWindowsTask(taskName(sid), at, runnerArgs("resume", sid, `"`+files.configDir+`"`), getBool(section(cfg, "alarm"), "wakePc", true))
 		if result.ok {
 			scheduled = object{"method": "task", "taskName": taskName(sid), "at": at, "watcherPid": float64(startResetWatcher(cfg, sid, at))}
 		} else {
 			removeScheduledTask(taskName(sid))
+			dropProxiesForRunner(sid)
 			warn("task scheduling failed, falling back to sleeper: %s", orDefault(result.err, result.stderr))
 		}
 	} else if nativeAllowed {
