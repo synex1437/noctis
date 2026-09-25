@@ -997,7 +997,7 @@ func resumeWait(sid, release string) {
 		prompt = T("overload.wakeMessage", getString(wait, "label"), formatNumber(numberOr(wait, "attempt", 1)), durationText(numberOr(wait, "resumeAt", 0)-numberOr(wait, "startedAt", numberOr(wait, "resumeAt", 0)))) + " " + prompt
 	}
 	prompt = relaunchPrompt(prompt)
-	claimed, watcher := false, 0
+	claimed, continued, watcher := false, false, 0
 	updateState(func(next object) {
 
 		if handoffHeldFor(next, sid, startedAt) > 0 {
@@ -1005,6 +1005,10 @@ func resumeWait(sid, release string) {
 		}
 		if record := getMap(getMap(next, "waits"), sid); record == nil || numberOr(record, "startedAt", -1) != startedAt {
 
+			return
+		}
+		if waitContinued(wait) {
+			continued = true
 			return
 		}
 		claimed, watcher = true, liveRunner(getMap(getMap(next, "handedOff"), sid))
@@ -1018,6 +1022,11 @@ func resumeWait(sid, release string) {
 			delete(record, "scheduled")
 		}
 	})
+	if continued {
+		clearWaitAndConsume(sid, state)
+		logInfo("runner %s: transcript changed after reset while usage was checked, session already continued", sid)
+		return
+	}
 	if !claimed {
 		leaveSessionToItsRunner(sid)
 		return
