@@ -1821,6 +1821,9 @@ async function scenarioWorkflows(acc) {
 
 async function scenarioFirstRunEdges(acc) {
   const now = nowSec();
+  const usageFile = path.join(acc.guardDir, 'usage.json');
+  fs.rmSync(usageFile, { force: true });
+  fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
   acc.statusline('fr1', 'claude-fable-5-1', 30, now + 7200, 99, now + 3 * 86400, 10);
   const start = acc.hook({ hook_event_name: 'SessionStart', session_id: 'fr1', cwd: PROJECT_DIR, source: 'startup' });
   check('first run at 99 %: session start explains the pause and the escape hatch', start.includes('zaten %99') && start.includes('/noctis:pause 120'), true);
@@ -1843,7 +1846,6 @@ async function scenarioFirstRunEdges(acc) {
   writeJson(settingsFile, { ...readJson(settingsFile), model: 'fable' });
   acc.hook({ hook_event_name: 'StopFailure', session_id: 'fr1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, error_type: 'billing_error' });
   check('billing_error: nothing scheduled, model untouched', acc.state().waits.fr1 === undefined && readJson(settingsFile).model === 'fable' && acc.run(['why', '--last', '1']).includes('account-error'), true);
-  const usageFile = path.join(acc.guardDir, 'usage.json');
   const savedUsage = fs.readFileSync(usageFile, 'utf8');
   acc.setConfig((config) => {
     config.fable.source = 'off';
