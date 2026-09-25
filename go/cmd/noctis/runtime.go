@@ -737,6 +737,7 @@ func runResume() {
 		fmt.Fprintln(os.Stderr, T("resume.usage"))
 		os.Exit(2)
 	}
+	takeProxiesForRunner(sid)
 	resumeWait(sid, flagString("release"))
 	bootOutFinishedLaunchdJob(sid)
 }
