@@ -829,6 +829,7 @@ async function scenarioQueueMode(acc) {
   const liteType = `${PLUGIN_NAME}:lite`;
   check('lite may write markdown', acc.hook({ hook_event_name: 'PreToolUse', session_id: 'q1', agent_id: 'l1', agent_type: liteType, tool_name: 'Write', tool_input: { file_path: path.join(PROJECT_DIR, 'docs', 'guide.md'), content: 'x' } }), '');
   check('lite may not write code', acc.hook({ hook_event_name: 'PreToolUse', session_id: 'q1', agent_id: 'l1', agent_type: liteType, tool_name: 'Write', tool_input: { file_path: path.join(PROJECT_DIR, 'src', 'parser.cs'), content: 'x' } }).includes('"permissionDecision":"deny"'), true);
+  check('lite may not write the queue file, CLAUDE.md or .claude/', ['TASKS.md', 'CLAUDE.md', path.join('.claude', 'agents', 'helper.md')].every((file) => acc.hook({ hook_event_name: 'PreToolUse', session_id: 'q1', agent_id: 'l1', agent_type: liteType, tool_name: 'Write', tool_input: { file_path: path.join(PROJECT_DIR, file), content: '- [ ] x' } }).includes('steer the main model')), true);
   check('other subagents unaffected', acc.hook({ hook_event_name: 'PreToolUse', session_id: 'q1', agent_id: 'g1', agent_type: 'general-purpose', tool_name: 'Write', tool_input: { file_path: path.join(PROJECT_DIR, 'src', 'parser.cs') } }), '');
   check('main thread Write untouched', acc.hook({ hook_event_name: 'PreToolUse', session_id: 'q1', tool_name: 'Write', tool_input: { file_path: path.join(PROJECT_DIR, 'src', 'parser.cs') } }), '');
   fs.unlinkSync(queueFile);

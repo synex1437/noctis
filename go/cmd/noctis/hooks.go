@@ -690,6 +690,11 @@ func agentWritePolicy(input, cfg object) {
 
 	switch {
 	case runsAsAgent(input, liteAgentType(cfg)):
+		if steersMainModel(cfg, filePath) {
+			logInfo("lite agent write denied (steers the main model): %s", filePath)
+			emit(object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": fmt.Sprintf("The lite agent may not write CLAUDE.md, the queue files (%s) or anything under .claude/: those files steer the main model. Return the content in your answer instead.", strings.Join(queueFileNames(cfg), ", "))}})
+			return
+		}
 		if textExtensions[strings.ToLower(filepath.Ext(filePath))] {
 			return
 		}
@@ -698,6 +703,48 @@ func agentWritePolicy(input, cfg object) {
 	case runsAsAgent(input, digestAgentType(cfg)):
 		logInfo("digest agent write denied: %s", orDefault(filePath, "(no path)"))
 		emit(object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "The digest agent only runs commands and summarizes output; it never writes files. Return the digest in your answer."}})
+	}
+}
+
+func steersMainModel(cfg object, file string) bool {
+	if file == "" {
+		return false
+	}
+	for _, path := range []string{file, resolvedWritePath(file)} {
+		parts := strings.FieldsFunc(path, func(r rune) bool { return r == '/' || r == '\\' })
+		if len(parts) == 0 {
+			continue
+		}
+		for _, part := range parts {
+			if strings.EqualFold(part, ".claude") {
+				return true
+			}
+		}
+		name := parts[len(parts)-1]
+		if strings.EqualFold(name, "CLAUDE.md") || strings.EqualFold(name, "CLAUDE.local.md") {
+			return true
+		}
+		for _, queue := range queueFileNames(cfg) {
+			if strings.EqualFold(name, filepath.Base(queue)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func resolvedWritePath(file string) string {
+	dir, rest := file, ""
+	for {
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			return filepath.Join(resolved, rest)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		rest = filepath.Join(filepath.Base(dir), rest)
+		dir = parent
 	}
 }
 
