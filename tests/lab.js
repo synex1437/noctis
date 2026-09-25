@@ -8,6 +8,9 @@ const { spawn, spawnSync } = require('child_process');
 const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, isAlive, processTable } = require('./harness');
 const { leanChecks } = require('./lean');
 const PLUGIN_VERSION = readJson(path.join(SOURCE_ROOT, '.claude-plugin', 'plugin.json')).version;
+const SHIPPED_THRESHOLDS = readJson(path.join(SOURCE_ROOT, 'config.default.json')).thresholds;
+const WEEKLY_OVER = SHIPPED_THRESHOLDS.weeklyAll + 1;
+const FABLE_OVER = SHIPPED_THRESHOLDS.weeklyFable + 1;
 const REPO_SUMS = path.join(SOURCE_ROOT, 'bin', 'SHA256SUMS');
 const repoSumsAtStart = fingerprint(REPO_SUMS);
 
@@ -356,7 +359,7 @@ async function scenarioDefaultInstallRelaunch() {
   const now = nowSec();
   const pauseAndRelaunch = (sid, sessionEnv) => {
     fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
-    acc.run(['statusline'], acc.statuslineInput(sid, 'claude-fable-5-1', 50, now + 7200, 90, now + 2 * 86400), sessionEnv);
+    acc.run(['statusline'], acc.statuslineInput(sid, 'claude-fable-5-1', 50, now + 7200, WEEKLY_OVER, now + 2 * 86400), sessionEnv);
     const stop = acc.hook({ hook_event_name: 'PostToolBatch', session_id: sid, cwd: PROJECT_DIR, transcript_path: TRANSCRIPT }, sessionEnv);
     const wait = (acc.state().waits || {})[sid];
     acc.run(['statusline'], acc.statuslineInput(sid, 'claude-fable-5-1', 5, now + 7200, 23, now + 3 * 86400), sessionEnv);
@@ -391,7 +394,7 @@ async function scenarioDefaultInstallRelaunch() {
 
 async function scenarioWeeklyLongWait(acc) {
   const now = nowSec();
-  acc.statusline('s3', 'claude-fable-5-1', 50, now + 7200, 90, now + 2 * 86400);
+  acc.statusline('s3', 'claude-fable-5-1', 50, now + 7200, WEEKLY_OVER, now + 2 * 86400);
   const stop = acc.hook({ hook_event_name: 'PostToolBatch', session_id: 's3', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('weekly stop', stop.includes('"continue":false'), true);
   check('weekly stop message short', JSON.parse(stop).stopReason.length < 140, true);
@@ -418,7 +421,7 @@ async function scenarioFableFlow(acc) {
   mock.limits = [
     { kind: 'session', percent: 30, resets_at: new Date((now + 1800) * 1000).toISOString() },
     { kind: 'weekly_all', percent: 40, resets_at: new Date((now + 3 * 86400) * 1000).toISOString() },
-    { kind: 'weekly_scoped', percent: 96, resets_at: new Date((now + 2 * 86400) * 1000).toISOString(), scope: { group: 'model', model: { display_name: 'Fable' } } },
+    { kind: 'weekly_scoped', percent: FABLE_OVER, resets_at: new Date((now + 2 * 86400) * 1000).toISOString(), scope: { group: 'model', model: { display_name: 'Fable' } } },
   ];
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
   acc.statusline('s4', 'claude-fable-5-1', 30, now + 1800, 40, now + 3 * 86400);
@@ -636,7 +639,7 @@ async function scenarioRouter(acc) {
 
 async function scenarioIsolationAndConcurrency(accA, accB) {
   const now = nowSec();
-  accA.statusline('shared', 'claude-opus-5', 50, now + 7200, 90, now + 2 * 86400);
+  accA.statusline('shared', 'claude-opus-5', 50, now + 7200, WEEKLY_OVER, now + 2 * 86400);
   accB.statusline('shared', 'claude-opus-5', 10, now + 7200, 10, now + 3 * 86400);
   const stopA = accA.hook({ hook_event_name: 'PostToolBatch', session_id: 'shared', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('account A stops', stopA.includes('"continue":false'), true);
@@ -757,7 +760,7 @@ async function scenarioCompactAndClear(acc) {
 
 async function scenarioAgentGateAndWarnBand(accA) {
   const now = nowSec();
-  accA.statusline('fo1', 'claude-fable-5-1', 50, now + 7200, 90, now + 2 * 86400);
+  accA.statusline('fo1', 'claude-fable-5-1', 50, now + 7200, WEEKLY_OVER, now + 2 * 86400);
   const plainStop = accA.hook({ hook_event_name: 'PostToolBatch', session_id: 'fo1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('weekly limit -> wait on the same account, never handed elsewhere', plainStop.includes('⏸') && accA.state().waits.fo1.kind === 'batch' && !plainStop.includes('↪'), true);
   accA.run(['cancel', 'fo1']);
@@ -856,7 +859,7 @@ async function scenarioUptime(acc) {
   acc.setConfig((config) => {
     config.resume.mode = 'window';
   });
-  acc.statusline('seen', 'claude-opus-5', 50, now + 7200, 90, now + 2 * 86400);
+  acc.statusline('seen', 'claude-opus-5', 50, now + 7200, WEEKLY_OVER, now + 2 * 86400);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'seen', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'ghost', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('interactive session keeps window mode', acc.state().waits.seen.launchMode, 'window');
@@ -2152,22 +2155,23 @@ async function scenarioDataReturns(acc) {
   const now = nowSec();
   const fiveReset = now + 3 * 3600;
   const weekReset = now + 5 * 86400;
+  const nearWeekly = SHIPPED_THRESHOLDS.weeklyAll - 5;
   const fableFile = path.join(acc.guardDir, 'fable.json');
   const usageFile = path.join(acc.guardDir, 'usage.json');
   const transcript = path.join(LAB_ROOT, 'data-returns.jsonl');
   fs.copyFileSync(TRANSCRIPT, transcript);
   const touch = (epoch) => fs.utimesSync(transcript, new Date(epoch * 1000), new Date(epoch * 1000));
   const goBlind = () => {
-    writeJson(fableFile, { fetchedAt: now - 3600, five_hour: { used: 30, resetsAt: fiveReset }, seven_day: { used: 84, resetsAt: weekReset } });
-    writeJson(usageFile, { ...readJson(usageFile), updatedAt: nowSec() - 120, five_hour: { used: 30, resetsAt: fiveReset }, seven_day: { used: 84, resetsAt: weekReset }, history: {} });
+    writeJson(fableFile, { fetchedAt: now - 3600, five_hour: { used: 30, resetsAt: fiveReset }, seven_day: { used: nearWeekly, resetsAt: weekReset } });
+    writeJson(usageFile, { ...readJson(usageFile), updatedAt: nowSec() - 120, five_hour: { used: 30, resetsAt: fiveReset }, seven_day: { used: nearWeekly, resetsAt: weekReset }, history: {} });
     lab.setOutage('rate-limited');
     touch(nowSec() - 3600);
   };
   const recovered = [
     { kind: 'session', percent: 30, resets_at: new Date(fiveReset * 1000).toISOString() },
-    { kind: 'weekly_all', percent: 84.5, resets_at: new Date(weekReset * 1000).toISOString() },
+    { kind: 'weekly_all', percent: nearWeekly + 0.5, resets_at: new Date(weekReset * 1000).toISOString() },
   ];
-  const freshReading = () => acc.run(['statusline'], acc.statuslineInput('dr-other', 'claude-opus-5', 30, fiveReset, 84.5, weekReset), { NOCTIS_NO_EARLY_TRIGGER: '' });
+  const freshReading = () => acc.run(['statusline'], acc.statuslineInput('dr-other', 'claude-opus-5', 30, fiveReset, nearWeekly + 0.5, weekReset), { NOCTIS_NO_EARLY_TRIGGER: '' });
   const resumeNotice = /limit sıfırlandı; iş devam ettiriliyor|kullanım verisi geri geldi/;
   acc.setConfig((config) => {
     config.alarm.webhook = { url: `http://127.0.0.1:${lab.mockPort}/webhook/data-returns`, preset: 'generic' };
@@ -2699,7 +2703,7 @@ async function scenarioBundle(acc) {
 
 async function scenarioSilentFailures(acc) {
   const now = nowSec();
-  acc.statusline('sf1', 'claude-fable-5-1', 20, now + 7200, 93, now + 2 * 86400);
+  acc.statusline('sf1', 'claude-fable-5-1', 20, now + 7200, WEEKLY_OVER, now + 2 * 86400);
   const bare = acc.run([], { hook_event_name: 'UserPromptSubmit', session_id: 'sf1', cwd: PROJECT_DIR, prompt: 'keep going on the refactor' });
   check('no-command hook call still guards the session', bare.includes('⏸') || bare.includes('"decision"'), true);
   check('and says the wiring is wrong', bare.includes('noctis doctor'), true);
@@ -2714,7 +2718,7 @@ async function scenarioSilentFailures(acc) {
 
   const lockFile = path.join(acc.guardDir, 'state.lock');
   fs.writeFileSync(lockFile, String(process.pid));
-  acc.statusline('sf2', 'claude-fable-5-1', 20, now + 7200, 93, now + 2 * 86400);
+  acc.statusline('sf2', 'claude-fable-5-1', 20, now + 7200, WEEKLY_OVER, now + 2 * 86400);
   const refused = acc.run(['hook'], { hook_event_name: 'UserPromptSubmit', session_id: 'sf2', cwd: PROJECT_DIR, prompt: 'continue' });
   fs.rmSync(lockFile, { force: true });
   check('a wait that cannot be stored does not pause the session', refused.includes('could not save the pause') || refused.includes('duraklatma kaydedilemedi'), true);

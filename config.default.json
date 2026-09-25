@@ -3,8 +3,8 @@
   "mode": "enforce",
   "thresholds": {
     "session5h": 92,
-    "weeklyAll": 89,
-    "weeklyFable": 95
+    "weeklyAll": 95,
+    "weeklyFable": 97
   },
   "credits": {
     "allowPaid": false,

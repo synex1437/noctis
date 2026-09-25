@@ -322,7 +322,7 @@ async function main() {
   if (!config || typeof config !== 'object') writeJson(acc.configFile, {});
   acc.setConfig((current) => {
     current.mode = 'enforce';
-    current.thresholds = { session5h: 92, weeklyAll: 89, weeklyFable: 95 };
+    current.thresholds = { ...readJson(path.join(SOURCE_ROOT, 'config.default.json')).thresholds };
     current.wait = { ...(current.wait || {}), maxInHookMinutes: 330 };
   });
   lab.setLimits([{ kind: 'session', percent: 30, resets_at: new Date((nowSec() + 7200) * 1000).toISOString() }]);

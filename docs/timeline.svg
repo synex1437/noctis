@@ -79,7 +79,7 @@
     <text x="359" y="123" class="cd">notification (+ webhook, if set)</text>
 
     <rect x="575" y="296" width="280" height="76" rx="10" class="card" stroke="#5b9bff"/>
-    <text x="589" y="322" class="ct" fill="#5b9bff">Weekly reaches 89 %</text>
+    <text x="589" y="322" class="ct" fill="#5b9bff">Weekly reaches 95 %</text>
     <text x="589" y="342" class="cd">saved · relaunch scheduled</text>
     <text x="589" y="359" class="cd">early reset watched · PC may sleep</text>
 

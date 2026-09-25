@@ -1027,7 +1027,8 @@ func TestOnlyPlainCallsOfThePluginBinaryCountAsItsOwnCommands(t *testing.T) {
 func TestAControlCommandFromAFableSessionStillMeetsTheModelSwitch(t *testing.T) {
 	cfg, project := controlSandbox(t, 40, 40)
 	now := float64(nowSec())
-	mustWriteJSON(files.fable, object{"fetchedAt": now, "fable": object{"used": float64(96), "resetsAt": now + 86400}})
+	used := builtinThresholds["weeklyFable"] + 1
+	mustWriteJSON(files.fable, object{"fetchedAt": now, "fable": object{"used": used, "resetsAt": now + 86400}})
 	sid := "cp-fable"
 	updateState(func(state object) {
 		stateMap(state, "modelOverrides")[sid] = object{"model": "claude-fable-5-1", "at": now}
@@ -1035,7 +1036,7 @@ func TestAControlCommandFromAFableSessionStillMeetsTheModelSwitch(t *testing.T) 
 	output := hookOutput(t, onUserPromptSubmit, promptInput(sid, project, "/noctis:pause 120"), cfg)
 	fallback := getString(section(cfg, "models"), "fallback")
 	if getString(output, "decision") != "block" || !strings.Contains(getString(output, "reason"), fallback) {
-		t.Fatalf("a control prompt from a Fable session at 96%% of the Fable bucket skipped the model switch: %v", output)
+		t.Fatalf("a control prompt from a Fable session at %v%% of the Fable bucket skipped the model switch: %v", used, output)
 	}
 	if model := settingsModel(); model != fallback {
 		t.Fatalf("the default model was not switched to %q: %q", fallback, model)
