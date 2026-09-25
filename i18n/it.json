@@ -406,6 +406,8 @@
   "status.launchFailed": "!!  il riavvio automatico di %s non è riuscito alle %s — riprendilo con: %s",
   "doctor.schedulerSleeper": "(normale: qui non c'è launchd/systemd/schtasks, quindi si usa un leggero processo dormiente)",
   "queue.trustAsk": "☰ %s in questa cartella ha %d elemento/i aperto/i. Non sta guidando questa sessione: una checklist può arrivare insieme a un repository, e guidare significa percorrerla senza fermarsi a chiedere. Per consentirlo: noctis queue trust (%s)",
+  "queue.trustChanged": "☰ %s ha %d elemento/i aperto/i aggiunto/i o modificato/i da quando gli hai dato fiducia; un pull o un cambio di branch può portarli. Non guida questa sessione finché non li leggi e non gli dai di nuovo fiducia: noctis queue trust (%s)",
+  "queue.importTrust": "%[2]s ora contiene %[1]d elemento/i aperto/i a cui non hai dato fiducia: non guidano nessuna sessione finché non li leggi e non esegui di nuovo noctis queue trust.",
   "queue.trustGranted": "Questo file può guidare le sessioni: %s",
   "queue.trustRevoked": "Questo file non guida più le sessioni: %s",
   "queue.trustNone": "Nessun file di coda qui (cercato: %s).",

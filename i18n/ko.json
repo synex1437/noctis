@@ -406,6 +406,8 @@
   "status.launchFailed": "!!  %s 의 자동 재시작이 %s 에 실패했습니다 — 다음으로 재개하세요: %s",
   "doctor.schedulerSleeper": "(정상입니다: 여기에는 launchd/systemd/schtasks 가 없어 가벼운 대기 프로세스를 대신 사용합니다)",
   "queue.trustAsk": "☰ 이 폴더의 %s 에 열린 항목이 %d개 있습니다. 이 세션을 이끌고 있지는 않습니다: 체크리스트는 저장소와 함께 올 수 있고, 이끈다는 것은 묻기 위해 멈추지 않고 끝까지 처리한다는 뜻입니다. 허용하려면: noctis queue trust (%s)",
+  "queue.trustChanged": "☰ %s 에 신뢰한 뒤로 추가되거나 바뀐 열린 항목이 %d개 있습니다. pull이나 브랜치 전환으로 들어올 수 있습니다. 그 항목들을 읽고 다시 신뢰할 때까지 이 세션을 이끌지 않습니다: noctis queue trust (%s)",
+  "queue.importTrust": "%[2]s 에 아직 신뢰하지 않은 열린 항목이 %[1]d개 있습니다. 그 항목들을 읽고 noctis queue trust를 다시 실행할 때까지 어떤 세션도 이끌지 않습니다.",
   "queue.trustGranted": "이 파일은 세션을 이끌 수 있습니다: %s",
   "queue.trustRevoked": "이 파일은 더 이상 세션을 이끌지 않습니다: %s",
   "queue.trustNone": "여기에는 큐 파일이 없습니다(찾은 곳: %s).",

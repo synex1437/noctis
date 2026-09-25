@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 const issueRepoPattern = `(?:\w[\w-]*(?:\.[\w-]+)+/)?\w[\w.-]*/[\w.-]+`
@@ -174,12 +175,29 @@ func runQueueTrust(cfg object, cwd, action string) {
 		trustQueueFile(target, false)
 		fmt.Println(T("queue.trustRevoked", target))
 	default:
-		if queueTrusted(cfg, target) {
+		trusted, fresh := queueTrustGap(cfg, target)
+		if trusted {
 			fmt.Println(T("queue.trustGranted", target))
+			return
+		}
+		if len(fresh) > 0 {
+			fmt.Println(T("queue.trustChanged", filepath.Base(target), len(fresh), pluginName))
+			for _, text := range fresh {
+				fmt.Println("  - [ ] " + printableItem(text))
+			}
 			return
 		}
 		fmt.Println(T("queue.trustAsk", filepath.Base(target), queueSnapshot(target).total, pluginName))
 	}
+}
+
+func printableItem(text string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) {
+			return -1
+		}
+		return r
+	}, text)
 }
 
 func runQueue() {
@@ -341,6 +359,11 @@ func runQueue() {
 			others = []string{"?"}
 		}
 		fmt.Println(T("queue.importSkipped", skipped, strings.Join(others, ", "), named))
+	}
+	if absolute, err := filepath.Abs(target); err == nil {
+		if trusted, fresh := queueTrustGap(cfg, absolute); !trusted && len(fresh) > 0 {
+			fmt.Println(T("queue.importTrust", len(fresh), filepath.Base(target)))
+		}
 	}
 }
 

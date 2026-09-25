@@ -210,18 +210,21 @@ func onSessionStart(input, cfg object) {
 	}
 	if queuePath := sessionQueueFile(cfg, sid, queueDirs(input)...); queuePath != "" {
 		snapshot := queueSnapshot(queuePath)
-		if !queueTrusted(cfg, queuePath) {
+		if trusted, fresh := queueTrustGap(cfg, queuePath); !trusted {
 
-			if snapshot.total > 0 {
+			if len(fresh) > 0 {
+				queueNotice = T("queue.trustChanged", filepath.Base(queuePath), len(fresh), pluginName)
+			} else if snapshot.total > 0 {
 				queueNotice = T("queue.trustAsk", filepath.Base(queuePath), snapshot.total, pluginName)
 			}
-			logInfo("queue file %s found but not trusted (%d open): no directive injected", queuePath, snapshot.total)
+			logInfo("queue file %s found but not trusted (%d open, %d added or changed since a trust): no directive injected", queuePath, snapshot.total, len(fresh))
 		} else {
 			rememberOpenIssues(cfg, queuePath)
 			if isAutoQueue(queuePath) {
 				contexts = append(contexts, autoQueueDirective(queuePath, snapshot.total))
 			} else {
 				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total))
+				touchQueueTrust(queuePath, now)
 			}
 			logInfo("queue mode for %s: %s (%d open)", sid, queuePath, snapshot.total)
 		}
@@ -1112,6 +1115,20 @@ func allowFileRequest(sid, tool, path, action, role string) {
 	emit(object{"hookSpecificOutput": object{"hookEventName": "PermissionRequest", "decision": object{"behavior": "allow"}}})
 }
 
+func noteQueueTrustGap(sid, queuePath string, fresh []string, now int64) {
+	key := "queue:trustgap:" + queueTrustKey(queuePath) + ":" + queueItemDigest(strings.Join(fresh, "\n"))
+	if getMap(readState(), "notified")[key] != nil {
+		return
+	}
+	updateState(func(next object) { stateMap(next, "notified")[key] = float64(now) })
+	journal(sid, "Stop", "allow-stop", "queue items not trusted", object{"new": len(fresh)})
+	logInfo("queue file %s has %d item(s) added or changed since its trust; not driving %s", queuePath, len(fresh), sid)
+	if observing {
+		return
+	}
+	emit(object{"systemMessage": T("queue.trustChanged", filepath.Base(queuePath), len(fresh), pluginName)})
+}
+
 func onStop(input, cfg object) {
 	now := nowSec()
 	sid := sessionKey(input)
@@ -1128,7 +1145,13 @@ func onStop(input, cfg object) {
 	clearOverload(state, sid)
 	clearFailureRetries(state, sid)
 	queuePath := sessionQueueFile(cfg, sid, queueDirs(input)...)
-	if queuePath == "" || !queueTrusted(cfg, queuePath) {
+	if queuePath == "" {
+		return
+	}
+	if trusted, fresh := queueTrustGap(cfg, queuePath); !trusted {
+		if len(fresh) > 0 {
+			noteQueueTrustGap(sid, queuePath, fresh, now)
+		}
 		return
 	}
 	queueLabel := filepath.Base(queuePath)
@@ -1230,6 +1253,9 @@ func onStop(input, cfg object) {
 	}
 	guard["forced"] = numberOr(guard, "forced", 0) + 1
 	updateState(func(next object) { stateMap(next, "stopGuard")[sid] = guard })
+	if !isAutoQueue(queuePath) {
+		touchQueueTrust(queuePath, now)
+	}
 	journal(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), object{"forced": numberOr(guard, "forced", 0)})
 	logInfo("queue continue #%s for %s: %d open", formatNumber(numberOr(guard, "forced", 0)), sid, snapshot.total)
 	nextItem := ""

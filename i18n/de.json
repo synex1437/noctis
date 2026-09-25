@@ -406,6 +406,8 @@
   "status.launchFailed": "!!  automatischer Neustart von %s um %s fehlgeschlagen — setze ihn fort mit: %s",
   "doctor.schedulerSleeper": "(normal: hier gibt es kein launchd/systemd/schtasks, daher wird ein leichtgewichtiger Sleeper-Prozess verwendet)",
   "queue.trustAsk": "☰ %s in diesem Ordner enthält %d offene(n) Punkt(e). Sie steuert diese Sitzung nicht: eine Checkliste kann mit einem Repository mitkommen, und steuern heißt, sie ohne Rückfrage abzuarbeiten. Zum Erlauben: noctis queue trust (%s)",
+  "queue.trustChanged": "☰ %s hat %d offene(n) Punkt(e), die hinzugekommen sind oder sich geändert haben, seit du der Datei vertraut hast; ein Pull oder ein Branch-Wechsel kann sie mitbringen. Sie steuert diese Sitzung nicht, bis du sie gelesen und der Datei erneut vertraut hast: noctis queue trust (%s)",
+  "queue.importTrust": "%[2]s enthält jetzt %[1]d offene(n) Punkt(e), denen du nicht vertraut hast: sie steuern keine Sitzung, bis du sie gelesen und noctis queue trust erneut ausgeführt hast.",
   "queue.trustGranted": "Diese Datei darf Sitzungen steuern: %s",
   "queue.trustRevoked": "Diese Datei steuert keine Sitzungen mehr: %s",
   "queue.trustNone": "Keine Warteschlangendatei hier (gesucht wurde: %s).",

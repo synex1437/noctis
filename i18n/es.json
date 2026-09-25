@@ -406,6 +406,8 @@
   "status.launchFailed": "!!  el reinicio automático de %s falló a las %s — reanúdalo con: %s",
   "doctor.schedulerSleeper": "(normal: aquí no hay launchd/systemd/schtasks, así que se usa un proceso durmiente ligero)",
   "queue.trustAsk": "☰ %s en esta carpeta tiene %d elemento(s) abierto(s). No está dirigiendo esta sesión: una lista de comprobación puede venir con un repositorio, y dirigir significa recorrerla sin detenerse a preguntar. Para permitirlo: noctis queue trust (%s)",
+  "queue.trustChanged": "☰ %s tiene %d elemento(s) abierto(s) añadido(s) o cambiado(s) desde que confiaste en él; un pull o un cambio de rama puede traerlos. No dirige esta sesión hasta que los leas y vuelvas a confiar en él: noctis queue trust (%s)",
+  "queue.importTrust": "%[2]s tiene ahora %[1]d elemento(s) abierto(s) en los que no has confiado: no dirigen ninguna sesión hasta que los leas y vuelvas a ejecutar noctis queue trust.",
   "queue.trustGranted": "Este archivo puede dirigir sesiones: %s",
   "queue.trustRevoked": "Este archivo ya no dirige sesiones: %s",
   "queue.trustNone": "No hay archivo de cola aquí (se buscó: %s).",

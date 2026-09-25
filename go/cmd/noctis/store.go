@@ -91,6 +91,7 @@ const (
 	defaultUsageURL         = "https://api.anthropic.com/api/oauth/usage"
 	aliveHookMaxChecks      = 6
 	fallbackClaudeVersion   = "2.1.267"
+	queueTrustTTLSeconds    = 30 * 86400
 )
 
 var (
@@ -972,6 +973,12 @@ func pruneState(state object, now int64) {
 	for sid, raw := range stateMap(state, "resumePrompts") {
 		if float64(now)-numberOr(toObject(raw), "at", 0) > 86400 {
 			delete(stateMap(state, "resumePrompts"), sid)
+		}
+	}
+	for key, raw := range stateMap(state, "queueTrust") {
+		record := toObject(raw)
+		if last := max(numberOr(record, "at", 0), numberOr(record, "used", 0)); float64(now)-last > queueTrustTTLSeconds {
+			delete(stateMap(state, "queueTrust"), key)
 		}
 	}
 	for key, raw := range stateMap(state, "githubSeen") {
