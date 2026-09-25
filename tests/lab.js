@@ -1398,6 +1398,9 @@ async function scenarioBudgetWakeWebhook(acc) {
   const setupSettings = readJson(path.join(setupDir, 'settings.json'));
   check('setup wires statusLine and keeps the old one chained', setupSettings.statusLine.command.includes('noctis') && readJson(path.join(setupDir, PLUGIN_NAME, 'config.json')).statusline.chainCommand === 'my-bar', true);
   check('setup applies the threshold preset', readJson(path.join(setupDir, PLUGIN_NAME, 'config.json')).thresholds.session5h, 85);
+  check('setup leaves the router off unless it is told to turn it on', readJson(path.join(setupDir, PLUGIN_NAME, 'config.json')).router.enabled, false);
+  const routerOn = acc.run(['setup', '--config-dir', setupDir, '--router', 'on']);
+  check('setup --router on turns the router on and says how to turn it off', readJson(path.join(setupDir, PLUGIN_NAME, 'config.json')).router.enabled === true && routerOn.includes('--router off'), true);
   check('setup prints the doctor', setup.includes('plugin konumu'), true);
   check('unknown preset is rejected', acc.runFull(['setup', '--config-dir', setupDir, '--preset', 'weird']).status, 1);
   acc.statusline('bd1', 'claude-fable-5-1', 5, now + 7200, 10, now + 3 * 86400);
@@ -1658,6 +1661,7 @@ async function scenarioShippedProfile(acc) {
   check('shipped profile: the main session runs Opus at max effort', settings.model === 'opus' && settings.env.CLAUDE_CODE_EFFORT_LEVEL === 'max' && config.models.primary === 'opus' && config.roles.profile === 'noctis', true);
   check('shipped profile: the Fable cap stays watched and leads back to the code model', config.models.scopedPattern === 'fable' && config.models.fallback === 'opus' && config.router.subagentModels.Plan === 'opus' && config.router.subagentModels.Explore === 'haiku', true);
   acc.statusline('sp1', 'claude-opus-5-5', 20, now + 7200, 10, now + 3 * 86400, 30);
+  check('shipped profile: the router is off, so a research prompt stays in the main session', config.router.enabled === false && !acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'sp1', cwd: PROJECT_DIR, prompt: 'En iyi mekanik klavye 2026 araştır' }).includes('Non-code research'), true);
   const fanOutPrompt = { hook_event_name: 'UserPromptSubmit', session_id: 'sp1', cwd: PROJECT_DIR, prompt: 'Audit every route handler under src/routes for missing auth checks and fix what you find' };
   check('shipped profile: a fan-out prompt gets no workflow suggestion', acc.hook(fanOutPrompt).includes('🧩'), false);
   acc.setConfig((config) => {

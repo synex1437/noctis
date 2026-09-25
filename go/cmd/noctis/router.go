@@ -194,7 +194,7 @@ func recentCodingActivity(transcriptPath string, now int64) bool {
 func classifyPrompt(cfg object, learned object, prompt, transcriptPath string, now int64) verdict {
 	text := strings.TrimSpace(prompt)
 	router := section(cfg, "router")
-	if !getBool(router, "enabled", true) {
+	if !getBool(router, "enabled", false) {
 		return verdict{reason: "router-off"}
 	}
 	if forcedLite.MatchString(text) {
