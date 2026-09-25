@@ -32,7 +32,7 @@ func processAlive(pid int) bool {
 func processExited(pid int) bool {
 	stat, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
 	if err != nil {
-		return false
+		return errors.Is(syscall.Kill(pid, 0), syscall.ESRCH)
 	}
 	end := bytes.LastIndexByte(stat, ')')
 	if end < 0 || end+2 >= len(stat) {
