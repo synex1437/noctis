@@ -41,7 +41,7 @@ A command you run that crashes prints `noctis <command> crashed: <reason>` with 
 
 | Inside Claude Code | What it runs |
 |---|---|
-| `/noctis:setup` | Asks which roles profile you want (unless you pass `--profile` or a role flag), then runs `noctis setup --profile …` with your words written as flags (`economy` becomes `--profile economy`, a folder `--config-dir <folder>`) |
+| `/noctis:setup` | Asks which roles profile you want (unless you pass `--profile` or a role flag) and whether research and writing prompts go to the `noctis:lite` subagent (unless you pass `--router`; the router stays off unless you say yes), then runs `noctis setup --profile …` with that answer as `--router on` or `--router off` and your words written as flags (`economy` becomes `--profile economy`, a folder `--config-dir <folder>`) |
 | `/noctis:status` | `noctis status`, then `noctis why --last 10` |
 | `/noctis:pause [minutes]` | `noctis off <minutes>`; the skill turns a duration such as `2 hours` into minutes (default 60, at most one week) |
 | `/noctis:resume` | `noctis on` |
