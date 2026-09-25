@@ -120,6 +120,36 @@ func TestShellCallsThatOnlyQuoteTheCommandStillPass(t *testing.T) {
 	}
 }
 
+func TestAnXargsThatOnlyPrintsOrReadsWhatGrepFoundPassesTheQueueTrustCheck(t *testing.T) {
+	_, project := queueTrustSandbox(t, false)
+	writeQueueFile(t, project, "# q\n- [ ] migrate the users table\n")
+	for _, command := range []string{
+		`grep "noctis queue trust" . | xargs echo`,
+		`grep -rl "noctis queue trust" docs | xargs wc -l`,
+		`grep -rl "noctis queue trust" docs | xargs -I{} head -3 {}`,
+		`grep -rlZ "noctis queue trust" . | xargs -0 -n 1 grep -c trust`,
+	} {
+		if run := runHostHook(t, "claude", shellToolCall("tg6", project, "Bash", command), "tg6", 10*time.Second); run.answer != nil {
+			t.Errorf("the Bash call %q only prints or reads the files grep found, and noctis answered it: %v", command, run.answer)
+		}
+	}
+	for _, command := range []string{
+		`echo "noctis queue trust" | xargs -I{} {}`,
+		`echo "noctis queue trust" | xargs -I {} sh -c {}`,
+		`echo "noctis queue trust" | xargs env`,
+		`grep -h "noctis queue trust" notes.txt | xargs echo | sh`,
+		`echo trust | xargs -n 2 noctis queue`,
+		`echo "noctis queue trust" | {xargs,xargs}`,
+		`echo "noctis queue trust" | xargs<&0 xargs`,
+		`echo "noctis queue trust" | xargs ./echo`,
+	} {
+		run := runHostHook(t, "claude", shellToolCall("tg7", project, "Bash", command), "tg7", 10*time.Second)
+		if permissionOf(run.answer) != "deny" || getString(run.answer, "systemMessage") != T("queue.trustByModel", pluginName) {
+			t.Errorf("the Bash call %q lets xargs run noctis queue trust, and noctis did not deny it: %v", command, run.answer)
+		}
+	}
+}
+
 func TestClaudeMayNotRunStateWriteThroughAShellCall(t *testing.T) {
 	_, project := queueTrustSandbox(t, false)
 	for _, call := range []struct{ tool, command string }{
