@@ -7,7 +7,7 @@ import (
 
 func TestAnImportedTitleCannotReorderDelayOrTagTheQueue(t *testing.T) {
 	_, project := queueTrustSandbox(t, false)
-	fakeGhCLI(t, `[{"number":21,"title":"(P0) Drop the users table (after #build) #urgent","labels":[]},{"number":22,"title":"Follow-up to #21","labels":[]}]`)
+	fakeGhCLI(t, `[{"number":21,"author":{"login":"owner"},"title":"(P0) Drop the users table (after #build) #urgent","labels":[]},{"number":22,"author":{"login":"owner"},"title":"Follow-up to #21","labels":[]}]`)
 	queuePath := writeQueueFile(t, project, "# q\n- [ ] build the release #build\n")
 	queueImportOutput(t, "queue", "import", "--cwd", project)
 	content := issueQueueText(t, queuePath)

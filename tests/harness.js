@@ -169,6 +169,7 @@ class Lab {
       fs.writeFileSync(path.join(this.binDir, 'gh.cmd'), [
         '@echo off',
         'if "%~1"=="issue" if "%~2"=="list" (type "%NOCTIS_LAB_GH_ISSUES%" & exit /b 0)',
+        'if "%~1"=="api" (echo lab-owner& exit /b 0)',
         'echo GH args=[%*]>> "%NOCTIS_LAB_GH_LOG%"',
         '',
       ].join('\r\n'));
@@ -178,6 +179,7 @@ class Lab {
     fs.writeFileSync(script, [
       '#!/usr/bin/env sh',
       'if [ "$1" = "issue" ] && [ "$2" = "list" ]; then cat "$NOCTIS_LAB_GH_ISSUES"; exit 0; fi',
+      'if [ "$1" = "api" ]; then echo lab-owner; exit 0; fi',
       'echo "GH args=[$*]" >> "$NOCTIS_LAB_GH_LOG"',
       'exit 0',
       '',

@@ -9,7 +9,7 @@ import (
 
 func TestAnIssueImportedAndTickedBeforeTheFirstStopIsClosed(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, true)
-	calls := fakeGhCLI(t, `[{"number":12,"title":"Backend crash","labels":[]},{"number":13,"title":"Backend leak","labels":[]}]`)
+	calls := fakeGhCLI(t, `[{"number":12,"author":{"login":"owner"},"title":"Backend crash","labels":[]},{"number":13,"author":{"login":"owner"},"title":"Backend leak","labels":[]}]`)
 	queuePath := writeQueueFile(t, project, "# q\n- [x] #14 Old item already done\n")
 	queueImportOutput(t, "queue", "import", "--cwd", project)
 	trustQueueFile(queuePath, true)

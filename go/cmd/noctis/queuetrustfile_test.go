@@ -53,7 +53,7 @@ func TestQueueImportWritesARelativeFileInTheProjectFolder(t *testing.T) {
 	home, project := t.TempDir(), t.TempDir()
 	queue := filepath.Join(project, "TASKS.md")
 	cliWrite(t, queue, []byte("- [ ] first\n"))
-	fakeGhCLI(t, `[{"number": 1, "title": "T", "labels": []}]`)
+	fakeGhCLI(t, `[{"number":1,"author":{"login":"owner"},"title": "T", "labels": []}]`)
 
 	run := startNoctisCLIAt(t, home, "", nil, "queue", "import", "--file", "TASKS.md", "--cwd", project)()
 

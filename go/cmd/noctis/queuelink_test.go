@@ -92,7 +92,7 @@ func TestQueueImportDoesNotCreateAFileThroughADanglingLink(t *testing.T) {
 }
 
 func TestQueueImportWritesThroughALinkInsideTheFolder(t *testing.T) {
-	fakeGhCLI(t, `[{"number":12,"title":"Backend crash","labels":[]}]`)
+	fakeGhCLI(t, `[{"number":12,"author":{"login":"owner"},"title":"Backend crash","labels":[]}]`)
 	project := t.TempDir()
 	if err := os.Mkdir(filepath.Join(project, "planning"), 0o755); err != nil {
 		t.Fatal(err)
@@ -115,7 +115,7 @@ func TestQueueImportWritesThroughALinkInsideTheFolder(t *testing.T) {
 }
 
 func TestQueueImportIntoANamedFileElsewhereStillWorks(t *testing.T) {
-	fakeGhCLI(t, `[{"number":12,"title":"Backend crash","labels":[]}]`)
+	fakeGhCLI(t, `[{"number":12,"author":{"login":"owner"},"title":"Backend crash","labels":[]}]`)
 	project := t.TempDir()
 	named := filepath.Join(t.TempDir(), "backlog.md")
 	if run := runNoctisCLI(t, nil, "queue", "import", "--cwd", project, "--file", named); run.code != 0 {
