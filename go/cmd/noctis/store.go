@@ -848,7 +848,7 @@ func loadConfig() object {
 	return merged
 }
 
-var builtinThresholds = map[string]float64{"session5h": 92, "weeklyAll": 89, "weeklyFable": 95}
+var builtinThresholds = map[string]float64{"session5h": 92, "weeklyAll": 95, "weeklyFable": 97}
 
 func thresholdSwitchedOff(value any) bool {
 	switch typed := value.(type) {

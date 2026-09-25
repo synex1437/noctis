@@ -14,7 +14,8 @@ for (let i = 2; i < process.argv.length; i += 2) {
 
 const HOUR = 3600;
 const DAY = 86400;
-const THRESHOLDS = { five: 92, week: 89, fable: 95 };
+const SHIPPED = readJson(path.join(__dirname, '..', 'config.default.json')).thresholds;
+const THRESHOLDS = { five: SHIPPED.session5h, week: SHIPPED.weeklyAll, fable: SHIPPED.weeklyFable };
 const CODING_PROMPTS = ['auth.js dosyasındaki hatayı düzelt', 'Refactor the payment module and add unit tests', 'npm test çalıştır ve kırmızıları düzelt', 'Implement caching for the api layer', 'Bu fonksiyonu optimize et', 'Add a migration for the orders table'];
 const RESEARCH_PROMPTS = ['En iyi mekanik klavye 2026 araştır', 'Compare pricing of Claude Max and ChatGPT Pro plans', 'Anthropic güncel haberleri neler', 'Latest research on intermittent fasting', 'Şu yazıyı özetle https://example.com/article'];
 const OTHER_PROMPTS = ['Bu konuşmayı özetle', 'devam et', 'Write a short poem about autumn', 'JWT nasıl çalışır kısaca anlat'];

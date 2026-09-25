@@ -17,8 +17,8 @@ var keepModelPattern = lazyRegexp(`(?i)fable|opus`)
 
 var thresholdPresets = map[string]object{
 	"conservative": {"session5h": float64(85), "weeklyAll": float64(82), "weeklyFable": float64(90)},
-	"balanced":     {"session5h": float64(92), "weeklyAll": float64(89), "weeklyFable": float64(95)},
-	"aggressive":   {"session5h": float64(96), "weeklyAll": float64(94), "weeklyFable": float64(98)},
+	"balanced":     {"session5h": float64(92), "weeklyAll": float64(95), "weeklyFable": float64(97)},
+	"aggressive":   {"session5h": float64(96), "weeklyAll": float64(97), "weeklyFable": float64(98)},
 }
 
 func binaryFileName() string {

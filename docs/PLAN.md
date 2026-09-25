@@ -4,8 +4,8 @@
 
 ## 1. Hedefler
 
-1. 5 saatlik pencere %92, haftalık (tüm modeller) %89 → işi unutmadan durdur/beklet, sıfırlanınca alarm + kaldığı yerden devam.
-2. Haftalık Fable %95 → Opus 5 (effort max) yeni varsayılan olsun ve aktif iş Opus ile sürsün.
+1. 5 saatlik pencere %92, haftalık (tüm modeller) %95 → işi unutmadan durdur/beklet, sıfırlanınca alarm + kaldığı yerden devam.
+2. Haftalık Fable %97 → Opus 5 (effort max) yeni varsayılan olsun ve aktif iş Opus ile sürsün.
 3. Kendi limitini doğru takip etsin (resmi veri), sıfırlanma saatini bilsin.
 4. Token maliyeti fark edilemez olsun; kodsuz araştırma işleri Opus 5 alt-ajanına gitsin, kodlama daima Fable 5.1 max.
 5. Sessiz ölüm ya da yanlış davranış olmasın; her hata log'a ve mümkünse kullanıcıya bildirime düşsün.
@@ -18,7 +18,7 @@ Claude Code ──statusLine JSON (her asistan mesajı)──▶ noctis statusli
                        │  eşik yok → sessiz çıkış (0 token)
                        │  kısa bekleme (≤330 dk) → hook içinde uyu → tek satır systemMessage ile dön (bağlam korunur)
                        │  uzun bekleme → checkpoint + dur + Görev Zamanlayıcı (resume)
-                       │  Fable ≥%95 → settings.model=opus (+ yeniden başlatma planı)
+                       │  Fable ≥%97 → settings.model=opus (+ yeniden başlatma planı)
             ──hook: StopFailure(rate_limit) / Notification(quota_auto_resume_*)──▶ yedek plan / iptal
             ──hook: PostModelSwitch──▶ oturumun canlı modeli (Fable kuralı için)
             ──hook: SessionStart(startup)──▶ yetim checkpoint varsa 2 satırlık işaretçi
@@ -41,9 +41,9 @@ Tek yazar ilkesi: her dosyanın tek bir yazar süreci var; `state.json` için `w
 
 **B. Aynı durumda kullanıcı Esc'ye bastı / VS Code kapandı.** Hook öldü; bekleme kaydı kaldı. Kullanıcı aynı oturumda yazmaya devam ederse ilk hook "yarım kalmış hook içi bekleme" görür ve izleyiciyi iptal eder. Kimse devam etmezse izleyici görev reset+270 s'de çalışır: transcript reset'ten sonra değişmemişse yeni pencerede `--resume` ile devam eder.
 
-**C. Haftalık %89, 2 gün kaldı.** PostToolBatch → checkpoint → `continue:false` + stopReason (≈45 token, konuşmada kalır) → görev reset+90 s. UserPromptSubmit gelirse prompt bloklanır, metni `queuedPrompt` olarak saklanır ve devamda gönderilir.
+**C. Haftalık %95, 2 gün kaldı.** PostToolBatch → checkpoint → `continue:false` + stopReason (≈45 token, konuşmada kalır) → görev reset+90 s. UserPromptSubmit gelirse prompt bloklanır, metni `queuedPrompt` olarak saklanır ve devamda gönderilir.
 
-**D. Fable %95 (OAuth verisi).** UserPromptSubmit → settings.model=opus, `modelSwitched` kaydı, prompt bloklanır ve "/model opus sonra tekrar gönder" denir (token 0; PostModelSwitch hook'u yeni modeli kaydeder, tekrar gönderilen prompt geçer). PostToolBatch'te yakalanırsa checkpoint + dur + 20 s sonra runner Opus ile yeni pencerede `--resume`. Yeni pencere `NOCTIS_HANDOFF=<sid>` ortam değişkeniyle tanınır; eski pencere kilitlenir. Fable kovası sıfırlanınca (`fableResetsAt` geçince) varsayılan `fable`'a döner.
+**D. Fable %97 (OAuth verisi).** UserPromptSubmit → settings.model=opus, `modelSwitched` kaydı, prompt bloklanır ve "/model opus sonra tekrar gönder" denir (token 0; PostModelSwitch hook'u yeni modeli kaydeder, tekrar gönderilen prompt geçer). PostToolBatch'te yakalanırsa checkpoint + dur + 20 s sonra runner Opus ile yeni pencerede `--resume`. Yeni pencere `NOCTIS_HANDOFF=<sid>` ortam değişkeniyle tanınır; eski pencere kilitlenir. Fable kovası sıfırlanınca (`fableResetsAt` geçince) varsayılan `fable`'a döner.
 
 **E. Gerçek 429.** StopFailure → OAuth'tan taze veri → suçlu pencere belirlenir: hata mesajı bir pencereyi adlandırıyorsa o, yoksa sunucu tavanına yakın (≥%90) pencere; oturum Fable'daysa ve Fable kovası ≥%90 ise (ya da mesaj Fable diyorsa) Fable kapasitesi → Opus'a geçiş + 120 s sonra Opus ile devam. Suçlu yoksa geçici hata: aynı modelde 10/20/30/45/60 dk sonra tekrar dener (`wait.retryMinutes`), art arda altıncı hatada bildirimle bırakır. Fable dışında açık oturum yeniden başlatılmadan yerinde uyandırılır (`wake.sameSession`, en fazla 330 dk sonrası için; bilinen bir pencereden ya da aşırı yükten sonra limitler önce yeniden okunur), runner 300 s sonra uyandırmanın tutup tutmadığına bakar. Dahili otomatik devam tetiklenirse (`quota_auto_resume_fired`) runner iptal; `stale`/`disabled` gelirse toast + runner planlanan saatte devam ettirir. Kullanım verisi hiç yoksa runner 10, 10, 20, 30 ve 45 dk arayla veriye bakar, beşinci bakışta bildirimle vazgeçer (sonsuz pencere döngüsü yok).
 
