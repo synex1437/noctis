@@ -264,7 +264,7 @@
   "report.errors": "最近的错误（%s）：",
   "report.cost": "按 API 折算的成本：%s（标价；订阅用户仅供参考）",
   "report.unpriced": "没有已知价格：%s（请在 config.json 中添加 report.pricing）",
-  "report.saved": "从主模型分流节省了约 %s（这些调用花了 %s 而不是 %s）",
+  "report.saved": "按 API 标价估算，并非节省的套餐配额：这些调用比在主模型上少花约 %s（花了 %s 而不是 %s）",
   "report.bundle": "已写出问题报告包：%s（日志、判断记录、状态、配置；家目录路径、令牌和 webhook 已脱敏 — 请附到 issue 上）",
   "install.header": "\n== %s",
   "install.copied": "   插件已复制 -> %s",

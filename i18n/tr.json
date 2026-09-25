@@ -264,7 +264,7 @@
   "report.errors": "Son hatalar (%s):",
   "report.cost": "API karşılığı maliyet: %s (liste fiyatı; abonelikte bilgi amaçlı)",
   "report.unpriced": "fiyatı bilinmeyen model: %s (config.json'a report.pricing ekle)",
-  "report.saved": "Birincil modelden uzak tutulanlar ≈ %s tasarruf sağladı (o çağrılar %s tuttu, birincilde %s olurdu)",
+  "report.saved": "API liste fiyatlarıyla tahmin, plan kotası tasarrufu değil: o çağrılar birincil modelde olacağından ≈ %s daha ucuza geldi (%s tuttu, birincilde %s olurdu)",
   "report.bundle": "hata raporu paketi yazıldı: %s (log, günlük, durum, config; ev dizini, jeton ve webhook'lar maskelendi — issue'ya ekleyin)",
   "install.header": "\n== %s",
   "install.copied": "   plugin kopyalandı -> %s",

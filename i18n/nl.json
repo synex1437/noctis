@@ -264,7 +264,7 @@
   "report.errors": "Recente fouten (%s):",
   "report.cost": "API-equivalente kosten: %s (catalogusprijzen; informatief bij een abonnement)",
   "report.unpriced": "geen prijs bekend voor: %s (voeg report.pricing toe in config.json)",
-  "report.saved": "Het weghouden van het hoofdmodel bespaarde ≈ %s (die aanroepen kostten %s in plaats van %s)",
+  "report.saved": "Schatting tegen API-catalogusprijzen, geen bespaard abonnementsquotum: die aanroepen kostten ≈ %s minder dan op het hoofdmodel (%s in plaats van %s)",
   "report.bundle": "bugrapport-bundel geschreven: %s (logs, journaal, status, config; thuispad, tokens en webhooks weggelaten — voeg hem toe aan een issue)",
   "install.header": "\n== %s",
   "install.copied": "   plugin gekopieerd -> %s",

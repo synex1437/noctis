@@ -264,7 +264,7 @@
   "report.errors": "Letzte Fehler (%s):",
   "report.cost": "API-äquivalente Kosten: %s (Listenpreise; bei einem Abo nur zur Information)",
   "report.unpriced": "kein Preis bekannt für: %s (report.pricing in config.json ergänzen)",
-  "report.saved": "Das Fernhalten vom Hauptmodell hat ≈ %s gespart (diese Aufrufe kosteten %s statt %s)",
+  "report.saved": "Schätzung nach API-Listenpreisen, kein eingespartes Tarifkontingent: diese Aufrufe kosteten ≈ %s weniger als mit dem Hauptmodell (%s statt %s)",
   "report.bundle": "Fehlerbericht-Paket geschrieben: %s (Logs, Journal, Zustand, Konfig; Home-Pfad, Tokens und Webhooks geschwärzt — häng es an ein Issue an)",
   "install.header": "\n== %s",
   "install.copied": "   Plugin kopiert -> %s",

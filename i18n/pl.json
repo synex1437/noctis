@@ -264,7 +264,7 @@
   "report.errors": "Ostatnie błędy (%s):",
   "report.cost": "Koszt w przeliczeniu na API: %s (ceny katalogowe; przy abonamencie tylko informacyjnie)",
   "report.unpriced": "brak znanej ceny dla: %s (dodaj report.pricing w config.json)",
-  "report.saved": "Odciążenie głównego modelu oszczędziło ≈ %s (te wywołania kosztowały %s zamiast %s)",
+  "report.saved": "Oszacowanie według cen katalogowych API, a nie zaoszczędzony limit planu: te wywołania kosztowały ≈ %s mniej niż na głównym modelu (%s zamiast %s)",
   "report.bundle": "zapisano paczkę zgłoszenia błędu: %s (logi, dziennik, stan, konfiguracja; ścieżka domowa, tokeny i webhooki zamaskowane — dołącz do zgłoszenia)",
   "install.header": "\n== %s",
   "install.copied": "   wtyczka skopiowana -> %s",

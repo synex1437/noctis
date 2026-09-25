@@ -1208,6 +1208,7 @@ func reportJSON(cfg object, data reportData) object {
 			"cost":           roundTo(actual, 4),
 			"costOnPrimary":  roundTo(onPrimary, 4),
 			"savedVsPrimary": roundTo(onPrimary-actual, 4),
+			"basis":          "API list-price estimate, not plan quota saved",
 		},
 		"otherSubagentTokens": data.otherSub.total(),
 		"events":              data.events,
@@ -1235,7 +1236,7 @@ func reportText(cfg object, data reportData) string {
 	}
 	actual, onPrimary := data.keptOffSavings()
 	lines = append(lines, "", T("report.keptOff", getString(section(cfg, "models"), "primary"), formatTokens(data.keptOff.total()), data.keptOff.calls, formatTokens(data.otherSub.total())))
-	if data.primaryPriced && data.keptOff.calls > 0 {
+	if data.primaryPriced && data.keptOff.calls > 0 && onPrimary-actual > 0 {
 		lines = append(lines, T("report.saved", formatUSD(onPrimary-actual), formatUSD(actual), formatUSD(onPrimary)))
 	}
 	lines = append(lines, "", T("report.events", data.events["route"], data.events["wait"], data.events["scoped"], data.events["continue"], data.events["resume"]))
@@ -1292,7 +1293,7 @@ func reportHTML(cfg object, data reportData) string {
 	}
 	actual, onPrimary := data.keptOffSavings()
 	saved := ""
-	if data.primaryPriced && data.keptOff.calls > 0 {
+	if data.primaryPriced && data.keptOff.calls > 0 && onPrimary-actual > 0 {
 		saved = `<p>` + html.EscapeString(T("report.saved", formatUSD(onPrimary-actual), formatUSD(actual), formatUSD(onPrimary))) + `</p>`
 	}
 	write(`</tbody></table><p>%s</p></section><section><p>%s</p>%s<p>%s</p></section>`, html.EscapeString(T("report.cost", formatUSD(data.totalCost()))), html.EscapeString(T("report.keptOff", getString(section(cfg, "models"), "primary"), formatTokens(data.keptOff.total()), data.keptOff.calls, formatTokens(data.otherSub.total()))), saved, html.EscapeString(T("report.events", data.events["route"], data.events["wait"], data.events["scoped"], data.events["continue"], data.events["resume"])))
