@@ -349,6 +349,14 @@ func queueTrusted(cfg object, path string) bool {
 	return trusted
 }
 
+func trustedQueueSnapshot(cfg object, path string) (queueView, bool) {
+	content, _ := readQueueText(path)
+	if trusted, _, _ := queueTrustGapOf(cfg, path, content); !trusted {
+		return queueView{}, false
+	}
+	return queueSnapshotOf(path, content), true
+}
+
 func queueNeedsTrust(cfg object, path string) bool {
 	return !isAutoQueue(path) && getBool(section(cfg, "queue"), "requireTrust", true)
 }
@@ -361,6 +369,11 @@ func queueEditRule(cfg object, path string) string {
 }
 
 func queueTrustGap(cfg object, path string) (bool, []string, bool) {
+	content, _ := readQueueText(path)
+	return queueTrustGapOf(cfg, path, content)
+}
+
+func queueTrustGapOf(cfg object, path, content string) (bool, []string, bool) {
 	if !queueNeedsTrust(cfg, path) {
 		return true, nil, false
 	}
@@ -373,7 +386,7 @@ func queueTrustGap(cfg object, path string) (bool, []string, bool) {
 	}
 	lines, open := digestSet(getList(record, "lines")), digestSet(getList(record, "open"))
 	changed := []string{}
-	for _, unit := range queueTrustUnits(path) {
+	for _, unit := range queueTrustUnits(content) {
 		if !lines[unit.line] || unit.open != "" && !open[unit.open] {
 			changed = append(changed, unit.shown)
 		}
@@ -396,24 +409,11 @@ func queueItemDigest(text string) string {
 	return hex.EncodeToString(sum[:16])
 }
 
-func queueFileEntries(path string) []queueEntry {
-	content, ok := readQueueText(path)
-	if !ok {
-		return nil
-	}
-	entries, _ := parseQueueEntries(content)
-	return entries
-}
-
 type queueTrustUnit struct {
 	line, open, shown string
 }
 
-func queueTrustUnits(path string) []queueTrustUnit {
-	content, ok := readQueueText(path)
-	if !ok {
-		return nil
-	}
+func queueTrustUnits(content string) []queueTrustUnit {
 	entries, plain := parseQueueEntries(content)
 	starts, covered := map[int]queueEntry{}, map[int]bool{}
 	for _, entry := range entries {
@@ -451,8 +451,9 @@ func trustQueueFile(path string, trusted bool) {
 	key := queueTrustKey(path)
 	lines, open := []any{}, []any{}
 	if trusted {
+		content, _ := readQueueText(path)
 		seenLines, seenOpen := map[string]bool{}, map[string]bool{}
-		for _, unit := range queueTrustUnits(path) {
+		for _, unit := range queueTrustUnits(content) {
 			if !seenLines[unit.line] {
 				seenLines[unit.line] = true
 				lines = append(lines, unit.line)

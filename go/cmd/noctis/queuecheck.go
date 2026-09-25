@@ -75,9 +75,10 @@ func rearmQueueCheck(cfg, input object, sid string) {
 	logInfo("queue %s held: %q runs again at the next stop of %s", path, queueCheckCommand(cfg), sid)
 }
 
-func queueTicks(path string) []any {
+func queueTicks(content string) []any {
 	ticked, seen := []any{}, map[string]bool{}
-	for _, entry := range queueFileEntries(path) {
+	entries, _ := parseQueueEntries(content)
+	for _, entry := range entries {
 		if digest := queueItemDigest(entry.text); entry.checked && !seen[digest] {
 			seen[digest] = true
 			ticked = append(ticked, digest)
@@ -186,13 +187,13 @@ func runQueueCheck(line, folder string, limit float64) (string, string) {
 	return "failed: " + err.Error(), tail.text()
 }
 
-func gateQueue(cfg, input object, sid, path, label string, started int64) object {
+func gateQueue(cfg, input object, sid, path, content, label string, started int64) object {
 	command := queueCheckCommand(cfg)
 	if command == "" {
 		return nil
 	}
 	record := queueCheckRecord(readState(), path)
-	ticked := queueTicks(path)
+	ticked := queueTicks(content)
 	if !queueCheckDue(record, ticked) || observed(sid, "Stop", "verify-queue", command, nil) {
 		return nil
 	}
