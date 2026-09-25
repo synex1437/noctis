@@ -363,14 +363,17 @@ func runStatusline() {
 	fmt.Println(line)
 }
 
-func runChain(chain string, input []byte) string {
-	var command *exec.Cmd
+func platformShell(line string) *exec.Cmd {
 	if isWindows {
-		command = windowsShell(chain)
+		command := windowsShell(line)
 		command.Env = append(os.Environ(), "NoDefaultCurrentDirectoryInExePath=1")
-	} else {
-		command = exec.Command("sh", "-c", chain)
+		return command
 	}
+	return exec.Command("sh", "-c", line)
+}
+
+func runChain(chain string, input []byte) string {
+	command := platformShell(chain)
 	command.Stdin = strings.NewReader(string(input))
 	output, err := runTreeWithTimeout(command, 4*time.Second)
 	if err != nil {
@@ -976,17 +979,19 @@ func resumeWait(sid, release string) {
 		if len(dirs) > 1 && queueFile(cfg, dirs[1]) == queuePath {
 			launchDir = dirs[1]
 		}
-		listName := filepath.Base(queuePath)
-		if isAutoQueue(queuePath) {
-			listName = queuePath
-		}
-		prompt += " Task list: " + listName + " (do not redo items already marked done)"
-		items := queueSnapshot(queuePath).items
-		if len(items) > 3 {
-			items = items[:3]
-		}
-		if len(items) > 0 {
-			prompt += " Next: " + strings.Join(items, " | ") + "."
+		if !queueHeld(cfg, readState(), queuePath) {
+			listName := filepath.Base(queuePath)
+			if isAutoQueue(queuePath) {
+				listName = queuePath
+			}
+			prompt += " Task list: " + listName + " (do not redo items already marked done)"
+			items := queueSnapshot(queuePath).items
+			if len(items) > 3 {
+				items = items[:3]
+			}
+			if len(items) > 0 {
+				prompt += " Next: " + strings.Join(items, " | ") + "."
+			}
 		}
 	}
 	if workspaceChanged(wait) {

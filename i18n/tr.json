@@ -62,6 +62,8 @@
   "queue.doneMessage": "✔ Kuyruk bitti — %s içinde açık madde kalmadı; temiz duruluyor.",
   "queue.blockedNotify": "Kuyruk tıkalı: %[2]s içindeki %[1]d açık madde tamamlanmamış bağımlılıkları bekliyor.",
   "queue.blockedMessage": "⛔ Kuyruk tıkalı: %d açık madde hiç tamamlanmayan (after …) bağımlılıklarını bekliyor; duruluyor.",
+  "queue.heldNotify": "Kuyruk bekletiliyor: `%[1]s` art arda %[2]d kez başarısız oldu; %[3]s komut geçene kadar bekliyor.",
+  "queue.heldMessage": "⛔ Kuyruk bekletiliyor: `%[1]s` art arda %[2]d kez başarısız oldu, bu yüzden %[3]s komut geçene kadar ilerlemiyor. Bir prompt yazdıktan sonra Claude ilk kez durduğunda komut yeniden çalışır.",
   "queue.unmatched": "⚠ %s içinde (after …) yok sayıldı — hiçbir etiket, issue ya da madde numarası eşleşmiyor: %s. Yazımı kontrol et.",
   "queue.unmatchedMore": "%s ve %d tane daha",
   "queue.modeNotice": "☰ Kuyruk modu: %s içinde %d açık madde var — Claude sormadan sırayla yapar (/%s:pause durdurur; dosyayı yeniden adlandır ya da queue.files ile kapat).",

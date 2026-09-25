@@ -62,6 +62,8 @@
   "queue.doneMessage": "✔ Coda completata — %s non ha elementi aperti; arresto pulito.",
   "queue.blockedNotify": "Coda bloccata: %d elementi aperti in %s aspettano dipendenze non completate.",
   "queue.blockedMessage": "⛔ Coda bloccata: %d elemento/i aperto/i aspettano dipendenze (after …) mai completate; mi fermo.",
+  "queue.heldNotify": "Coda in attesa: `%[1]s` è fallito %[2]d volta/e di fila; %[3]s aspetta finché il comando non passa.",
+  "queue.heldMessage": "⛔ Coda in attesa: `%[1]s` è fallito %[2]d volta/e di fila, quindi %[3]s non va avanti finché il comando non passa. Viene rieseguito al primo arresto dopo che hai scritto un prompt.",
   "queue.unmatched": "⚠ (after …) ignorato in %s — nessun tag, issue o numero di elemento corrisponde: %s. Controlla come è scritto.",
   "queue.unmatchedMore": "%s e altri %d",
   "queue.modeNotice": "☰ Modalità coda: %s ha %d elemento/i aperto/i — Claude li porta a termine senza chiedere (/%s:pause per fermarsi; rinomina il file o imposta queue.files per disattivarla).",

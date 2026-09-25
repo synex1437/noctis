@@ -62,6 +62,8 @@
   "queue.doneMessage": "✔ 큐 완료 — %s에 미완료 항목이 없습니다. 정상 종료합니다.",
   "queue.blockedNotify": "큐 차단됨: %[2]s의 미완료 %[1]d개가 끝나지 않은 의존성을 기다립니다.",
   "queue.blockedMessage": "⛔ 큐 차단됨: 미완료 %d개가 끝나지 않는 (after …) 의존성을 기다립니다. 정지합니다.",
+  "queue.heldNotify": "큐 보류됨: `%[1]s` 명령이 %[2]d번 연속 실패했습니다. 명령이 통과할 때까지 기다립니다 (%[3]s).",
+  "queue.heldMessage": "⛔ 큐 보류됨: `%[1]s` 명령이 %[2]d번 연속 실패해서, 명령이 통과할 때까지 진행하지 않습니다 (%[3]s). 프롬프트를 입력한 뒤 처음 멈출 때 다시 실행됩니다.",
   "queue.unmatched": "⚠ %s의 (after …)를 무시했습니다 — 일치하는 태그, 이슈, 항목 번호가 없습니다: %s. 철자를 확인하세요.",
   "queue.unmatchedMore": "%s 외 %d개",
   "queue.modeNotice": "☰ 큐 모드: %s에 열린 항목이 %d개 있습니다 — Claude가 묻지 않고 처리합니다(/%s:pause 로 중단; 파일 이름을 바꾸거나 queue.files를 설정하면 해제됩니다).",

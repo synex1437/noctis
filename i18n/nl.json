@@ -62,6 +62,8 @@
   "queue.doneMessage": "✔ Wachtrij klaar — %s heeft geen open items meer; netjes gestopt.",
   "queue.blockedNotify": "Wachtrij geblokkeerd: %d open items in %s wachten op onvoltooide afhankelijkheden.",
   "queue.blockedMessage": "⛔ Wachtrij geblokkeerd: %d open item(s) wachten op (after …)-afhankelijkheden die nooit klaarkwamen; stoppen.",
+  "queue.heldNotify": "Wachtrij aangehouden: `%[1]s` is %[2]d keer achter elkaar mislukt; %[3]s wacht tot het commando slaagt.",
+  "queue.heldMessage": "⛔ Wachtrij aangehouden: `%[1]s` is %[2]d keer achter elkaar mislukt, dus %[3]s gaat pas verder als het commando slaagt. Het draait opnieuw bij de eerste stop nadat je een prompt hebt getypt.",
   "queue.unmatched": "⚠ (after …) genegeerd in %s — geen tag, issue of puntnummer komt overeen: %s. Controleer de spelling.",
   "queue.unmatchedMore": "%s en nog %d",
   "queue.modeNotice": "☰ Wachtrijmodus: %s heeft %d open punt(en) — Claude werkt ze af zonder te vragen (/%s:pause om te stoppen; hernoem het bestand of stel queue.files in om dit uit te zetten).",

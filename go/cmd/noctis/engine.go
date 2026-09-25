@@ -784,13 +784,19 @@ func runTreeWithTimeout(command *exec.Cmd, timeout time.Duration) ([]byte, error
 	return runUntil(command, timeout, func() { killTree(command.Process) })
 }
 
+var errTimedOut = errors.New("timeout")
+
 func runUntil(command *exec.Cmd, timeout time.Duration, stop func()) ([]byte, error) {
 	var buffer bytes.Buffer
 	command.Stdout = &buffer
+	err := waitUntil(command, timeout, stop)
+	return buffer.Bytes(), err
+}
 
+func waitUntil(command *exec.Cmd, timeout time.Duration, stop func()) error {
 	command.WaitDelay = 500 * time.Millisecond
 	if err := command.Start(); err != nil {
-		return nil, err
+		return err
 	}
 	done := make(chan error, 1)
 	go func() { done <- command.Wait() }()
@@ -799,11 +805,11 @@ func runUntil(command *exec.Cmd, timeout time.Duration, stop func()) ([]byte, er
 		if errors.Is(err, exec.ErrWaitDelay) {
 			err = nil
 		}
-		return buffer.Bytes(), err
+		return err
 	case <-time.After(timeout):
 		stop()
 		<-done
-		return buffer.Bytes(), fmt.Errorf("timeout")
+		return errTimedOut
 	}
 }
 
@@ -1941,16 +1947,16 @@ func hookBudget(host, event string) (float64, bool) {
 	return 0, false
 }
 
-func waitsInHook(waitCfg object, learnedCap, remaining float64) bool {
+func waitsInHook(waitCfg object, learnedCap, remaining, reserve float64) bool {
 	limit := math.Max(1, numberOr(waitCfg, "maxInHookMinutes", 0)) * 60
 	if learnedCap > 0 {
-		limit = math.Min(limit, math.Max(60, learnedCap-60))
+		limit = math.Min(limit, math.Max(60, learnedCap-60)-reserve)
 	}
 	if budget, known := hookBudget(activeHost, activeEvent); known {
 		if budget < minInHookBudgetSeconds {
 			return false
 		}
-		limit = math.Min(limit, budget-hookBudgetSlackSeconds)
+		limit = math.Min(limit, budget-hookBudgetSlackSeconds-reserve)
 	}
 	return remaining <= limit
 }
@@ -1962,7 +1968,7 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 	waitCfg := section(cfg, "wait")
 	resumeAt := wait.until + math.Max(0, numberOr(waitCfg, "resetMarginSeconds", 0))
 	learnedCap := numberOr(readState(), "hookCapSeconds", 0)
-	inHook := waitsInHook(waitCfg, learnedCap, resumeAt-float64(now))
+	inHook := waitsInHook(waitCfg, learnedCap, resumeAt-float64(now), queueCheckReserve(kind, cfg))
 	if current := getMap(getMap(readState(), "waits"), sid); kind != "prompt" && joinableWait(current, wait.window, wait.until) {
 		return joinWait(kind, sid, cfg, wait, current, resumeAt, inHook, now)
 	}

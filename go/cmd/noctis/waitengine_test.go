@@ -1468,7 +1468,7 @@ func TestAWaitSleepsInTheHookOnlyWhenTheHookItRunsInOutlastsIt(t *testing.T) {
 	}
 	for _, tc := range cases {
 		activeHost, activeEvent = tc.host, tc.event
-		if got := waitsInHook(tc.waitCfg, tc.learnedCap, tc.remaining); got != tc.inHook {
+		if got := waitsInHook(tc.waitCfg, tc.learnedCap, tc.remaining, 0); got != tc.inHook {
 			budget, known := hookBudget(tc.host, tc.event)
 			t.Errorf("%s %q (hook budget %ss, known %t, maxInHookMinutes %s, learned cap %s): a wait %ss away sleeps in the hook %t, want %t", tc.host, tc.event, formatNumber(budget), known, formatNumber(numberOr(tc.waitCfg, "maxInHookMinutes", 0)), formatNumber(tc.learnedCap), formatNumber(tc.remaining), got, tc.inHook)
 		}
