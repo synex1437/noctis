@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -106,9 +107,16 @@ func TestNotesNoctisLeavesForItselfDoNotFailTheDoctor(t *testing.T) {
 
 	path := os.Getenv("PATH")
 	t.Setenv("PATH", t.TempDir())
-	if reason := notify(object{}, pluginName, "probe"); reason == "" {
-		t.Fatal("a machine without a desktop notifier reported the notification as shown")
+	files.notifyScript = filepath.Join(files.pluginRoot, "scripts", "notify.ps1")
+	previousWindows := isWindows
+	t.Cleanup(func() { isWindows = previousWindows })
+	for _, windows := range []bool{previousWindows, true} {
+		isWindows = windows
+		if reason := notify(object{}, pluginName, "probe"); reason == "" {
+			t.Fatalf("a machine without a desktop notifier reported the notification as shown (windows %v)", windows)
+		}
 	}
+	isWindows = previousWindows
 	t.Setenv("PATH", path)
 
 	if content, _ := os.ReadFile(files.errors); len(content) > 0 {
