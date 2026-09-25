@@ -1,19 +1,49 @@
 name: release
 on:
-  push:
-    tags: ['v*']
-  workflow_dispatch:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: write
   id-token: write
   attestations: write
 
+concurrency: release
+
 jobs:
-  release:
+  version:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Release each version once, when ci first passes on main with it
+        id: tag
+        run: |
+          tag="v$(jq -r .version .claude-plugin/plugin.json)"
+          found=0
+          git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null || found=$?
+          case $found in
+            0) echo "$tag is already released" ;;
+            2) echo "tag=$tag" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$found" ;;
+          esac
+
+  release:
+    needs: version
+    if: needs.version.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24.7'
@@ -81,5 +111,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          target_commitish: ${{ github.event.workflow_run.head_sha }}
           files: dist/*
           generate_release_notes: true
