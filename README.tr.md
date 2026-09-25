@@ -279,7 +279,7 @@ Bilinmesi gereken üç sınır. Kullanım verisi Claude Code'un durum çubuğu y
 
 ## Katkı
 
-`noctis doctor` çıktısı ve ilgili `errors.log` / `noctis why --last 20` satırlarıyla gönderilen hata raporları en işe yarar şeydir; `noctis report --bundle` bunların hepsini bir zip'e koyar (token'lar ve webhook adresleri gizlenir, dosya yolları ve istem metinleri gizlenmez; eklemeden önce okuyun). Derleme ve test döngüsü için [CONTRIBUTING.md](CONTRIBUTING.md) dosyasına bakın (İngilizce).
+`noctis doctor` çıktısı ve ilgili `errors.log` / `noctis why --last 20` satırlarıyla gönderilen hata raporları en işe yarar şeydir; `noctis report --bundle` bunların hepsini bir zip'e koyar (token'lar ve webhook adresleri gizlenir, ev klasörünüz `~` olarak görünür; sıfırlanmaya kadar park edilen istemler, açık görevlerin başlıkları ve `settings.json` içindeki izin kuralları çıkarılır, yalnızca uzunlukları kalır; dosya yolları ve log'larda yazanlar gizlenmez, eklemeden önce okuyun). Derleme ve test döngüsü için [CONTRIBUTING.md](CONTRIBUTING.md) dosyasına bakın (İngilizce).
 
 ## Lisans
 

@@ -227,7 +227,8 @@ func homeAsTilde(text string) string {
 	if isWindows {
 		flags = "(?i)"
 	}
-	for _, form := range []string{home, forwardSlashes(home)} {
+	escaped := string(marshalCompact(home))
+	for _, form := range []string{home, forwardSlashes(home), escaped[1 : len(escaped)-1]} {
 		text = regexp.MustCompile(flags+regexp.QuoteMeta(form)+`([^\pL\pN_-]|$)`).ReplaceAllString(text, "~$1")
 	}
 	return text

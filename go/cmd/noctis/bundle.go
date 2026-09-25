@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const bundleTailBytes = 512 * 1024
@@ -26,12 +27,7 @@ var (
 )
 
 func redactBundleText(text string) string {
-	home := homeDir()
-	if home != "" {
-		text = strings.ReplaceAll(text, home, "~")
-		text = strings.ReplaceAll(text, forwardSlashes(home), "~")
-	}
-
+	text = homeAsTilde(text)
 	for _, secret := range configuredSecrets() {
 		text = strings.ReplaceAll(text, secret, "<redacted>")
 	}
@@ -105,6 +101,40 @@ func redactSecretKeys(value any) any {
 	return value
 }
 
+func bundleState(content []byte) []byte {
+	var state object
+	if jsonUnmarshalObject(bytes.TrimPrefix(content, utf8BOM), &state) != nil || state == nil {
+		return []byte(fmt.Sprintf("state.json is not a JSON object (%d bytes); left out\n", len(content)))
+	}
+	for _, raw := range getMap(state, "waits") {
+		if wait := toObject(raw); wait != nil && getString(wait, "queuedPrompt") != "" {
+			wait["queuedPrompt"] = fmt.Sprintf("<redacted prompt, length %d>", utf8.RuneCountInString(getString(wait, "queuedPrompt")))
+		}
+	}
+	for _, raw := range getMap(state, "tasks") {
+		for _, item := range getMap(toObject(raw), "items") {
+			if task := toObject(item); task != nil && getString(task, "subject") != "" {
+				task["subject"] = fmt.Sprintf("<redacted task, length %d>", utf8.RuneCountInString(getString(task, "subject")))
+			}
+		}
+	}
+	return marshalPretty(state)
+}
+
+func listsAsCounts(value any) any {
+	switch typed := value.(type) {
+	case object:
+		out := object{}
+		for key, inner := range typed {
+			out[key] = listsAsCounts(inner)
+		}
+		return out
+	case []any:
+		return fmt.Sprintf("<redacted list, length %d>", len(typed))
+	}
+	return value
+}
+
 func tailOfFile(path string, limit int64) []byte {
 	info := statSafe(path)
 	if info == nil {
@@ -153,7 +183,10 @@ func writeBundle(cfg object) (string, error) {
 	} {
 		add(file.name, tailOfFile(file.path, bundleTailBytes))
 	}
-	for _, file := range []struct{ name, path string }{{"state.json", files.state}, {"usage.json", files.usage}, {"fable.json", files.fable}} {
+	if content, err := os.ReadFile(files.state); err == nil {
+		add("state.json", bundleState(content))
+	}
+	for _, file := range []struct{ name, path string }{{"usage.json", files.usage}, {"fable.json", files.fable}} {
 		if content, err := os.ReadFile(file.path); err == nil {
 			add(file.name, content)
 		}
@@ -164,7 +197,7 @@ func writeBundle(cfg object) (string, error) {
 	}
 	if settings := readJSONStrict(files.settings); settings.ok && settings.data != nil {
 
-		subset := object{"model": settings.data["model"], "statusLine": redactSecretKeys(getMap(settings.data, "statusLine")), "permissions": getMap(settings.data, "permissions")}
+		subset := object{"model": settings.data["model"], "statusLine": redactSecretKeys(getMap(settings.data, "statusLine")), "permissions": listsAsCounts(settings.data["permissions"])}
 		if env := getMap(settings.data, "env"); env != nil {
 			subset["env"] = object{"CLAUDE_CODE_EFFORT_LEVEL": env["CLAUDE_CODE_EFFORT_LEVEL"]}
 		}
