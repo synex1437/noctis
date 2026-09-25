@@ -450,9 +450,13 @@ func endTypedTurn(state object, sid string) {
 
 func letTypedPromptThrough(cfg, state object, sid string, result decision, now int64) (string, string) {
 	wait := result.wait
+	if observed(sid, "UserPromptSubmit", "typed-prompt", hitLabel(wait), usageFacts(result.usage)) {
+		updateState(func(next object) { stateMap(next, "typedTurns")[sid] = object{"at": float64(now)} })
+		return "", ""
+	}
 	journal(sid, "UserPromptSubmit", "typed-prompt", hitLabel(wait), usageFacts(result.usage))
 	logInfo("typed prompt for %s goes past the pause point: %s %s%%", sid, wait.window, formatNumber(wait.used))
-	if parked := getMap(getMap(state, "waits"), sid); parked != nil && !hookSleeping(parked) && !observing {
+	if parked := getMap(getMap(state, "waits"), sid); parked != nil && !hookSleeping(parked) {
 		clearWaitAndConsume(sid, state)
 		logInfo("typed prompt for %s: pending wait cleared", sid)
 	}
@@ -498,6 +502,9 @@ func noteTypedTurn(state object, sid, event string, result decision) {
 			turn["noted"] = true
 		}
 	})
+	if observed(sid, event, "typed-turn", hitLabel(result.wait), usageFacts(result.usage)) {
+		return
+	}
 	journal(sid, event, "typed-turn", hitLabel(result.wait), usageFacts(result.usage))
 	logInfo("the typed turn of %s goes on past the pause point: %s %s%%", sid, result.wait.window, formatNumber(result.wait.used))
 }
