@@ -169,6 +169,7 @@ Install for another tool from the zip or clone: `./scripts/install.sh --host cod
 | `checkpoints/<sid>.md` | The checkpoint of each paused session, kept 7 days |
 | `queues/<session>.md` | Checklists noctis wrote from long prompts; one is removed when its job is done or you steer the session by hand, otherwise 7 days after it last changed, and never while its session waits on a pause |
 | `quiet/<session>.json` | Markers for the quiet fast path |
+| `proxies/<session>.json` | The proxy variables (`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY` and their lower-case forms) of a paused session whose resume launchd or systemd will start, readable only by you (mode 0600). A proxy URL can hold a password, so these stay off the `systemd-run` command line and out of the plist: the runner reads the file and removes it when it starts; cancelling or rescheduling that job removes or rewrites it |
 | `compact.log` | One JSON line per compaction the lean module trimmed: `at`, `sid`, `trigger` (`auto`, `manual`, `plugin`), `rows`, `changed`, `trimmed` (characters), the `tokensBefore` and `tokensAfter` Claude Code reported, `agent` for a subagent's own compaction and, for an early one, `ctx`, the context fill that asked for it; the last 200 are kept. `noctis status` counts them, `noctis why` lists them |
 | `lean.json` | The sessions the lean module ran in, the last 50; a session missing from it gets the `ctx ▲` mark and the `/compact` notice |
 | `launches/` | Relaunch scripts, pid files, selftest markers |

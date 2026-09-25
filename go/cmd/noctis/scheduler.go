@@ -128,16 +128,51 @@ func scheduleAtMinute(at float64) time.Time {
 	return moment
 }
 
-var carriedEnvNames = []string{"PATH", "DISPLAY", "WAYLAND_DISPLAY", "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy"}
+var carriedEnvNames = []string{"PATH", "DISPLAY", "WAYLAND_DISPLAY", "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS"}
 
-func carriedEnvironment() [][2]string {
+var proxyEnvNames = []string{"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy"}
+
+func environmentOf(names []string) [][2]string {
 	carried := [][2]string{}
-	for _, name := range carriedEnvNames {
+	for _, name := range names {
 		if value := os.Getenv(name); value != "" && !strings.ContainsAny(value, "\r\n") {
 			carried = append(carried, [2]string{name, value})
 		}
 	}
 	return carried
+}
+
+func carriedEnvironment() [][2]string {
+	return environmentOf(carriedEnvNames)
+}
+
+func runnerProxiesFile(sid string) string {
+	return filepath.Join(files.guardDir, "proxies", safeName(sid)+".json")
+}
+
+func keepProxiesForRunner(sid string) {
+	dropProxiesForRunner(sid)
+	proxies := object{}
+	for _, pair := range environmentOf(proxyEnvNames) {
+		proxies[pair[0]] = pair[1]
+	}
+	if len(proxies) > 0 {
+		mustWriteJSON(runnerProxiesFile(sid), proxies)
+	}
+}
+
+func dropProxiesForRunner(sid string) {
+	_ = os.Remove(runnerProxiesFile(sid))
+}
+
+func takeProxiesForRunner(sid string) {
+	stored := readJSON(runnerProxiesFile(sid))
+	for _, name := range proxyEnvNames {
+		if value := getString(stored, name); value != "" {
+			_ = os.Setenv(name, value)
+		}
+	}
+	dropProxiesForRunner(sid)
 }
 
 func launchdPlistBody(label, executable string, commandArgs []string, at float64, workingDir string) string {
@@ -180,11 +215,13 @@ func scheduleLaunchd(sid string, at float64, commandArgs []string) (object, bool
 		warn("launchd plist write failed: %v", err)
 		return nil, false
 	}
+	keepProxiesForRunner(sid)
 	domain := "gui/" + currentUID()
 	if _, err := runScheduler(exec.Command("launchctl", "bootstrap", domain, path), 15*time.Second); err != nil {
 		if _, legacyErr := runScheduler(exec.Command("launchctl", "load", "-w", path), 15*time.Second); legacyErr != nil {
 			warn("launchd registration failed: %v", legacyErr)
 			_ = os.Remove(path)
+			dropProxiesForRunner(sid)
 			return nil, false
 		}
 	}
@@ -275,6 +312,7 @@ func scheduleSystemd(sid string, at float64, commandArgs []string, wake bool) (o
 	}
 	cancelSystemd(systemdUnit(sid) + "*")
 	unit := systemdJobUnit(sid, at)
+	keepProxiesForRunner(sid)
 	_, err = runScheduler(exec.Command("systemd-run", systemdRunArgs(unit, executable, commandArgs, at, wake)...), 15*time.Second)
 	if err != nil && wake {
 
@@ -283,6 +321,7 @@ func scheduleSystemd(sid string, at float64, commandArgs []string, wake bool) (o
 	}
 	if err != nil {
 		warn("systemd-run scheduling failed: %v", err)
+		dropProxiesForRunner(sid)
 		return nil, false
 	}
 	return object{"method": "systemd", "unit": unit, "at": at}, true
@@ -310,12 +349,14 @@ func cancelNative(sid string, scheduled object) {
 			label = launchdLabel(sid)
 		}
 		cancelLaunchd(label)
+		dropProxiesForRunner(sid)
 	case "systemd":
 		unit := getString(scheduled, "unit")
 		if !systemdJobOf(sid, unit) {
 			unit = systemdUnit(sid)
 		}
 		cancelSystemd(unit)
+		dropProxiesForRunner(sid)
 	}
 }
 
