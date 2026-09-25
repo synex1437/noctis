@@ -63,6 +63,10 @@ func nearCeiling(cfg object, usage usageView) bool {
 	return (usage.fiveHour != nil && usage.fiveHour.used >= edge) || (usage.sevenDay != nil && usage.sevenDay.used >= edge)
 }
 
+func pauseHonoured(wait *waitPlan) bool {
+	return wait.hit != "ceiling" && !wait.pauseIgnored
+}
+
 func guardPaused(cfg, state object, now int64) bool {
 	if numberOr(state, "disabledUntil", 0) <= float64(now) {
 		return false

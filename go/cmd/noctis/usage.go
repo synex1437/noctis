@@ -1127,13 +1127,14 @@ func compactionGuardPercent(cfg object) float64 {
 }
 
 type waitPlan struct {
-	window    string
-	label     string
-	used      float64
-	threshold float64
-	until     float64
-	hit       string
-	cause     string
+	window       string
+	label        string
+	used         float64
+	threshold    float64
+	until        float64
+	hit          string
+	cause        string
+	pauseIgnored bool
 }
 
 type warnPlan struct {
@@ -1199,7 +1200,8 @@ func evaluate(cfg object, usage usageView, model string, contextPercent float64,
 			}
 		}
 	}
-	if ceiling := ceilingHit(cfg, usage); ceiling != nil && (result.wait == nil || ceiling.until > result.wait.until) {
+	ceiling := ceilingHit(cfg, usage)
+	if ceiling != nil && (result.wait == nil || ceiling.until > result.wait.until) {
 		result.wait = ceiling
 	}
 	scopedValue := scopedThresholdValue(cfg)
@@ -1213,6 +1215,9 @@ func evaluate(cfg object, usage usageView, model string, contextPercent float64,
 				threshold: scopedThreshold(cfg), until: usage.fable.resetsAt, hit: "threshold",
 			}
 		}
+	}
+	if result.wait != nil && ceiling != nil {
+		result.wait.pauseIgnored = true
 	}
 	return result
 }

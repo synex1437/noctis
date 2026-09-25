@@ -2062,7 +2062,7 @@ func heldPlan(current object, wait *waitPlan) *waitPlan {
 
 func savedStop(cfg object, kind string, wait *waitPlan, resumeAt float64, suffix string) string {
 	stop := savedNotice(cfg, wait.label, formatNumber(wait.used), formatTime(resumeAt), suffix) + pauseWhy(wait)
-	if kind == "prompt" && wait.hit != "ceiling" {
+	if kind == "prompt" && pauseHonoured(wait) {
 		stop += " " + T("wait.savedHint")
 	}
 	return stop
