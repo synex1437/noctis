@@ -203,7 +203,7 @@ func runCheck() {
 	code, verdict := 0, "ok"
 	result := evaluate(cfg, usage, model, 0, false)
 	switch {
-	case !usage.hasAny, float64(now)-usage.updatedAt > staleSeconds:
+	case !usage.hasAny, float64(now)-usage.updatedAt > staleSeconds, windowStale(usage, staleSeconds):
 		code, verdict = 20, "no-data"
 	case result.wait != nil, result.fableHit:
 		code, verdict = 11, "over"
