@@ -124,3 +124,18 @@ func TestModelOverrideOutlivesTheLongestWait(t *testing.T) {
 		t.Error("transient per-session records must still expire, or state grows for as long as the plugin is installed")
 	}
 }
+
+func TestTwoReadingsInTheSameSecondAreNotTakenForABurst(t *testing.T) {
+	sandboxFiles(t)
+	now := nowSec()
+	reset, weekReset := float64(now+2*3600), float64(now+3*86400)
+	statusReading(now-120, 20, reset, 10, weekReset)
+	statusReading(now-120, 86, reset, 10, weekReset)
+	statusReading(now-60, 88, reset, 10, weekReset)
+	if burst := currentUsage(now).fiveHour.burst; burst != 2 {
+		t.Errorf("readings of 20 and 86 %% in the same second, then 88 %% a minute later, made a burst of %v points, want the 2 points from 86 to 88", burst)
+	}
+	if plan := evaluate(releaseConfig(), currentUsage(now), "claude-opus-5", 0, false).wait; plan != nil {
+		t.Errorf("88 %% with a pause point of 92 %% paused on a %s after two readings of the same second", plan.hit)
+	}
+}
