@@ -212,3 +212,134 @@ func TestPurgeWithoutUninstallChangesNothing(t *testing.T) {
 	}
 	box.untouched(t, run)
 }
+
+func fakeMarketplaceClaude(t *testing.T, box cliBox, known, switchedOn string, refused bool) {
+	t.Helper()
+	bin := filepath.Dir(box.calls)
+	if isWindows {
+		refusal := ""
+		if refused {
+			refusal = "exit /b 1\r\n"
+		}
+		cliWrite(t, filepath.Join(bin, "claude.cmd"), []byte("@echo off\r\necho %*>>\""+box.calls+"\"\r\necho %*| findstr /c:\"--auto-update\" >nul || exit /b 0\r\n"+refusal+"copy /y \""+switchedOn+"\" \""+known+"\" >nul\r\n"))
+		return
+	}
+	refusal := ""
+	if refused {
+		refusal = "exit 1\n"
+	}
+	script := filepath.Join(bin, "claude")
+	cliWrite(t, script, []byte("#!/bin/sh\necho \"$*\" >> \""+box.calls+"\"\ncase \"$*\" in *--auto-update*) ;; *) exit 0 ;; esac\n"+refusal+"cp \""+switchedOn+"\" \""+known+"\"\n"))
+	if err := os.Chmod(script, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUninstallGivesBackTheMarketplaceAutoUpdateOnlyWhenSetupSwitchedItOn(t *testing.T) {
+	cases := []struct {
+		name, before, later, want string
+		refused, givenBack        bool
+	}{
+		{"setup switched it on where it had no value", "", "", "", false, true},
+		{"setup switched it on where it was off", "false", "", "false", false, true},
+		{"it was on before setup", "true", "", "true", false, false},
+		{"the person switched it off after setup", "", "false", "false", false, false},
+		{"setup could not switch it on and the person did later", "false", "true", "true", true, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			box := newCLIBox(t)
+			root := filepath.Join(box.account, "plugins", "cache", "test-mkt", pluginName, pluginVersion)
+			if err := copyTree(box.root, root); err != nil {
+				t.Fatal(err)
+			}
+			box.env["NOCTIS_PLUGIN_ROOT"] = root
+			known := filepath.Join(box.account, "plugins", "known_marketplaces.json")
+			entry := func(autoUpdate string) []byte {
+				field := ""
+				if autoUpdate != "" {
+					field = `, "autoUpdate": ` + autoUpdate
+				}
+				return []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}, "lastUpdated": "2026-09-01T00:00:00.000Z"` + field + `}}`)
+			}
+			cliWrite(t, known, entry(c.before))
+			switchedOn := filepath.Join(t.TempDir(), "on.json")
+			cliWrite(t, switchedOn, entry("true"))
+			fakeMarketplaceClaude(t, box, known, switchedOn, c.refused)
+			setup := box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep")
+			box.configured(t, setup, box.account, "economy")
+			if c.later != "" {
+				cliWrite(t, known, entry(c.later))
+			}
+
+			run := box.run(t, "install", "--uninstall", "--config-dir", box.account, "--host", "claude")
+
+			if run.code != 0 {
+				t.Fatalf("uninstall failed:\n%s", run)
+			}
+			marketplace := getMap(readJSON(known), "test-mkt")
+			got := ""
+			if value, had := marketplace["autoUpdate"]; had {
+				got = fmt.Sprint(value)
+			}
+			if got != c.want {
+				t.Fatalf("autoUpdate is %q after the uninstall, want %q\nsetup:\n%s\nuninstall:\n%s", got, c.want, setup, run)
+			}
+			if getString(marketplace, "lastUpdated") != "2026-09-01T00:00:00.000Z" || getString(getMap(marketplace, "source"), "repo") != "synex1437/noctis" {
+				t.Fatalf("the uninstall changed more of the marketplace entry than autoUpdate: %v", marketplace)
+			}
+			if said := strings.Contains(run.stdout, "auto-update"); said != c.givenBack {
+				t.Fatalf("the uninstall mentioned auto-update=%v, want %v:\n%s", said, c.givenBack, run)
+			}
+		})
+	}
+}
+
+func TestSetupSaysWhenItCannotRecordTheAutoUpdateItSwitchedOn(t *testing.T) {
+	box := newCLIBox(t)
+	owner := t.TempDir()
+	root := filepath.Join(owner, "plugins", "cache", "test-mkt", pluginName, pluginVersion)
+	if err := copyTree(box.root, root); err != nil {
+		t.Fatal(err)
+	}
+	box.env["NOCTIS_PLUGIN_ROOT"] = root
+	known := filepath.Join(owner, "plugins", "known_marketplaces.json")
+	cliWrite(t, known, []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}}}`))
+	switchedOn := filepath.Join(t.TempDir(), "on.json")
+	cliWrite(t, switchedOn, []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}, "autoUpdate": true}}`))
+	fakeMarketplaceClaude(t, box, known, switchedOn, false)
+
+	run := box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep")
+
+	box.configured(t, run, box.account, "economy")
+	if !strings.Contains(run.stdout, "could not record that it switched marketplace auto-update on for test-mkt") {
+		t.Fatalf("setup switched auto-update on where no noctis config could hold the record, without saying the uninstall will not undo it:\n%s", run)
+	}
+	if statSafe(filepath.Join(owner, pluginName)) != nil {
+		t.Fatalf("setup created a noctis folder in %s, an account it was not given:\n%s", owner, run)
+	}
+}
+
+func TestUninstallSaysItLeftTheAutoUpdateWhenItCannotReadTheMarketplaces(t *testing.T) {
+	box := newCLIBox(t)
+	root := filepath.Join(box.account, "plugins", "cache", "test-mkt", pluginName, pluginVersion)
+	if err := copyTree(box.root, root); err != nil {
+		t.Fatal(err)
+	}
+	box.env["NOCTIS_PLUGIN_ROOT"] = root
+	known := filepath.Join(box.account, "plugins", "known_marketplaces.json")
+	cliWrite(t, known, []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}}}`))
+	switchedOn := filepath.Join(t.TempDir(), "on.json")
+	cliWrite(t, switchedOn, []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}, "autoUpdate": true}}`))
+	fakeMarketplaceClaude(t, box, known, switchedOn, false)
+	box.configured(t, box.run(t, "setup", "--config-dir", box.account, "--profile", "economy", "--permissions", "keep"), box.account, "economy")
+	broken := []byte(`{"test-mkt": {"autoUpdate": true`)
+	cliWrite(t, known, broken)
+
+	run := box.run(t, "install", "--uninstall", "--config-dir", box.account, "--host", "claude")
+
+	if run.code != 0 || !strings.Contains(run.stdout, "marketplace auto-update for test-mkt left as it is: "+known) {
+		t.Fatalf("the uninstall did not go on and say it left the auto-update it could not set back:\n%s", run)
+	}
+	cliUnchanged(t, known, broken)
+}
