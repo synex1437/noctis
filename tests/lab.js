@@ -1713,7 +1713,7 @@ async function scenarioQueuePriorities(acc) {
   ].join('\n'));
   acc.statusline('qp2', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
   const rewritten = acc.hook({ hook_event_name: 'Stop', session_id: 'qp2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
-  check('queue: a rewrite with items nobody trusted drives nothing and says how many are new', !rewritten.includes('"decision":"block"') && rewritten.includes(' 4 ') && rewritten.includes('noctis queue trust'), true);
+  check('queue: a rewrite with items nobody trusted drives nothing and says how many are new', !rewritten.includes('"decision":"block"') && rewritten.includes(' 8 ') && rewritten.includes('noctis queue trust'), true);
   check('queue: status lists the items added since the trust', acc.run(['queue', 'status', '--file', queueFile]).includes('- [ ] Write the release notes'), true);
   const byClaude = JSON.parse(acc.hook({ hook_event_name: 'PreToolUse', session_id: 'qp2', cwd: PROJECT_DIR, tool_name: 'Bash', tool_input: { command: `cd ${PROJECT_DIR} && noctis queue trust --file ${queueFile}` } }) || '{}');
   check('queue: Claude running noctis queue trust itself is denied and the user is told', (byClaude.hookSpecificOutput || {}).permissionDecision === 'deny' && String(byClaude.systemMessage).includes('!noctis queue trust'), true);
