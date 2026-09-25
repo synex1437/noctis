@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAPauseForAnotherReasonThanItsPausePointSaysWhy(t *testing.T) {
@@ -65,6 +66,7 @@ func TestAPauseForAnotherReasonThanItsPausePointSaysWhy(t *testing.T) {
 
 	why := " " + T("wait.pauseReason", T("hit.burst"))
 	early := limitCfgWith(t, cfg, object{"resetMarginSeconds": float64(0)})
+	freshReadingAsTheWaitStarts()
 	held := &waitPlan{window: "five_hour", label: windowLabel("five_hour"), used: 88, threshold: 92, until: float64(nowSec() + 2), hit: "burst"}
 	outcome := enforceWait("batch", agentHookInput("PostToolBatch", "why-early", project, nil), early, decision{wait: held, usage: currentUsage(nowSec())})
 	if want := T("wait.earlyReset", held.label, durationText(0)) + why; outcome.stop != "" || outcome.notice != want {
@@ -76,6 +78,15 @@ func TestAPauseForAnotherReasonThanItsPausePointSaysWhy(t *testing.T) {
 	if want := T("wait.resumed", held.label, formatNumber(88), durationText(0)) + why; outcome.stop != "" || outcome.notice != want {
 		t.Errorf("a burst wait held in the hook to its end: %+v, want the notice %q", outcome, want)
 	}
+}
+
+func freshReadingAsTheWaitStarts() {
+	if left := time.Second - time.Duration(time.Now().Nanosecond()); left < 500*time.Millisecond {
+		time.Sleep(left)
+	}
+	usage := readJSON(files.usage)
+	usage["updatedAt"] = float64(nowSec())
+	mustWriteJSON(files.usage, usage)
 }
 
 func limitCfgWith(t *testing.T, cfg object, wait object) object {
