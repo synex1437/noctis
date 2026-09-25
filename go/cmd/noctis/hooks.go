@@ -1306,6 +1306,22 @@ func onStop(input, cfg object) {
 	guard["lastOpen"] = float64(snapshot.total)
 	guard["at"] = float64(now)
 	queue := section(cfg, "queue")
+	today := localDay(now)
+	continuedToday := 0.0
+	if record := getMap(getMap(state, "stopDay"), sid); getString(record, "day") == today {
+		continuedToday = numberOr(record, "continues", 0)
+	}
+	if perDay := numberOr(queue, "maxContinuesPerDay", 600); perDay > 0 && continuedToday >= perDay {
+		journal(sid, "Stop", "allow-stop", "daily continue limit", object{"open": snapshot.total, "today": continuedToday})
+		limitKey := sid + ":queueDay:" + today
+		if observing || getMap(state, "notified")[limitKey] != nil {
+			return
+		}
+		updateState(func(next object) { stateMap(next, "notified")[limitKey] = float64(now) })
+		warn("queue continued %s times today for %s, the queue.maxContinuesPerDay limit: %d open; stop allowed until midnight", formatNumber(continuedToday), sid, snapshot.total)
+		emit(object{"systemMessage": T("queue.dayLimitMessage", formatNumber(continuedToday), snapshot.total)})
+		return
+	}
 	maxIdle := math.Max(1, numberOr(queue, "maxIdleContinues", 4))
 	if limit := stopBlockCap(); limit > 0 {
 		maxIdle = math.Max(1, math.Min(maxIdle, math.Floor(limit)))
@@ -1363,11 +1379,14 @@ func onStop(input, cfg object) {
 		delete(guard, "unmatched")
 	}
 	guard["forced"] = numberOr(guard, "forced", 0) + 1
-	updateState(func(next object) { stateMap(next, "stopGuard")[sid] = guard })
+	updateState(func(next object) {
+		stateMap(next, "stopGuard")[sid] = guard
+		stateMap(next, "stopDay")[sid] = object{"day": today, "continues": continuedToday + 1, "at": float64(now)}
+	})
 	if !isAutoQueue(queuePath) {
 		touchQueueTrust(queuePath, now)
 	}
-	journal(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), object{"forced": numberOr(guard, "forced", 0)})
+	journal(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), object{"forced": numberOr(guard, "forced", 0), "today": continuedToday + 1})
 	logInfo("queue continue #%s for %s: %d open", formatNumber(numberOr(guard, "forced", 0)), sid, snapshot.total)
 	nextItem := ""
 	if len(snapshot.items) > 0 {

@@ -415,6 +415,7 @@
   "queue.trustChanged": "☰ %s 에 신뢰한 뒤로 추가되거나 바뀐 열린 항목이 %d개 있습니다. pull이나 브랜치 전환으로 들어올 수 있습니다. 그 항목들을 읽고 다시 신뢰할 때까지 이 세션을 이끌지 않습니다: noctis queue trust (%s)",
   "queue.importTrust": "%[2]s 에 아직 신뢰하지 않은 열린 항목이 %[1]d개 있습니다. 그 항목들을 읽고 noctis queue trust를 다시 실행할 때까지 어떤 세션도 이끌지 않습니다.",
   "queue.trustByModel": "🔒 Claude가 noctis queue trust를 직접 실행하려 해서 noctis가 거부했습니다. 신뢰된 파일은 묻지 않고 세션을 이끌기 때문에, 파일을 읽은 뒤 직접 신뢰해야 합니다. 신뢰하려면: !noctis queue trust (%s)",
+  "queue.dayLimitMessage": "⛔ 큐: 이 세션은 오늘 %s번 계속되어 일일 한도에 도달했습니다 (queue.maxContinuesPerDay). 자동 계속을 자정까지 멈춥니다 (미완료 %d개).",
   "queue.trustGranted": "이 파일은 세션을 이끌 수 있습니다: %s",
   "queue.trustRevoked": "이 파일은 더 이상 세션을 이끌지 않습니다: %s",
   "queue.trustNone": "여기에는 큐 파일이 없습니다(찾은 곳: %s).",

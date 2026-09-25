@@ -415,6 +415,7 @@
   "queue.trustChanged": "☰ %s には、信頼してから追加または変更された未完了の項目が %d 件あります。pull やブランチの切り替えで入ってくることがあります。それらを読んで再び信頼するまで、このセッションを進行させません: noctis queue trust（%s）",
   "queue.importTrust": "%[2]s には、まだ信頼していない未完了の項目が %[1]d 件あります。それらを読んで noctis queue trust をもう一度実行するまで、どのセッションも進行させません。",
   "queue.trustByModel": "🔒 Claude が noctis queue trust を自分で実行しようとしたので、noctis が拒否しました。信頼されたファイルは確認なしでセッションを進行させるため、読んだうえで信頼するのはあなたの役目です。信頼するには: !noctis queue trust（%s）",
+  "queue.dayLimitMessage": "⛔ キュー: このセッションは今日 %s 回継続され、1 日の上限に達しました (queue.maxContinuesPerDay)。自動継続は深夜 0 時まで停止します（未完了 %d 件）。",
   "queue.trustGranted": "このファイルはセッションを進行させられます: %s",
   "queue.trustRevoked": "このファイルはもうセッションを進行させません: %s",
   "queue.trustNone": "ここにキューのファイルはありません（探した場所: %s）。",
