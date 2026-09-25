@@ -84,3 +84,13 @@ func TestAnExitedChildNobodyReapedIsNotAlive(t *testing.T) {
 		t.Fatalf("processAlive(%d) is true for a zombie", pid)
 	}
 }
+
+func TestAProcessReapedWhileItIsCheckedCountsAsExited(t *testing.T) {
+	child := exec.Command("sh", "-c", "exit 0")
+	if err := child.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if pid := child.Process.Pid; !processExited(pid) {
+		t.Fatalf("processExited(%d) is false for a process that exited and was reaped, so processAlive, which asks it after kill(pid, 0) found the process, calls a zombie reaped between the two looks alive", pid)
+	}
+}
