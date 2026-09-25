@@ -993,6 +993,7 @@ func resumeWait(sid, release string) {
 				prompt += " Next: " + strings.Join(items, " | ") + "."
 			}
 		}
+		prompt += queueEditRule(cfg, queuePath)
 	}
 	if workspaceChanged(wait) {
 		journal(sid, "resume", "workspace-changed", "tree differs from the checkpoint", nil)
