@@ -408,6 +408,7 @@
   "queue.trustAsk": "☰ %s nesta pasta tem %d item(ns) em aberto. Ele não está conduzindo esta sessão: uma checklist pode vir junto com um repositório, e conduzir significa percorrê-la sem parar para perguntar. Para permitir: noctis queue trust (%s)",
   "queue.trustChanged": "☰ %s tem %d item(ns) em aberto adicionado(s) ou alterado(s) desde que você confiou nele; um pull ou uma troca de branch pode trazê-los. Ele não conduz esta sessão até você lê-los e confiar nele de novo: noctis queue trust (%s)",
   "queue.importTrust": "%[2]s agora tem %[1]d item(ns) em aberto em que você não confiou: eles não conduzem nenhuma sessão até você lê-los e executar noctis queue trust de novo.",
+  "queue.trustByModel": "🔒 O Claude tentou executar noctis queue trust por conta própria; o noctis recusou, porque um arquivo confiável conduz sessões sem perguntar e só você deve confiar nele, depois de lê-lo. Para confiar nele: !noctis queue trust (%s)",
   "queue.trustGranted": "Este arquivo pode conduzir sessões: %s",
   "queue.trustRevoked": "Este arquivo não conduz mais sessões: %s",
   "queue.trustNone": "Nenhum arquivo de fila aqui (procurado: %s).",

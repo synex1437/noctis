@@ -2018,6 +2018,13 @@ func runHook() {
 		return
 	}
 	input["hook_event_name"] = event
+	if event == "PreToolUse" && shellTools[getString(input, "tool_name")] {
+		denyQueueTrustByModel(input)
+		if !emitted {
+			emitFallback()
+		}
+		return
+	}
 	handlers := map[string]func(object, object){
 		"SessionStart":      onSessionStart,
 		"SessionEnd":        onSessionEnd,

@@ -420,6 +420,94 @@ func touchQueueTrust(path string, now int64) {
 	})
 }
 
+var nestedShells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true, "pwsh": true, "powershell": true, "cmd": true, "eval": true}
+
+func denyQueueTrustByModel(input object) {
+	command := getString(getMap(input, "tool_input"), "command")
+	if !strings.Contains(command, "trust") || !runsQueueTrust(command, 0) {
+		return
+	}
+	cfg := loadConfig()
+	sid := sessionKey(input)
+	applySessionLocale(cfg, readState(), sid)
+	journal(sid, "PreToolUse", "deny-queue-trust", truncateText(command, 200), nil)
+	logInfo("denied noctis queue trust run by the model in %s", sid)
+	emit(object{
+		"systemMessage":      T("queue.trustByModel", pluginName),
+		"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "Only the user may trust a queue file: a trusted file drives sessions without asking, so a person reads its items first. Do not run noctis queue trust yourself and do not trust the file another way. Tell the user the file waits for their trust; after reading it they can type !noctis queue trust themselves."},
+	})
+}
+
+func runsQueueTrust(command string, depth int) bool {
+	if depth > 3 {
+		return false
+	}
+	for _, words := range looseShellSegments(command) {
+		shell := false
+		for index, word := range words {
+			if programName(word.text) == pluginName {
+				rest := []string{}
+				for _, next := range words[index+1:] {
+					rest = append(rest, next.text)
+				}
+				if parsed := parseArgs(rest); len(parsed.positional) >= 2 && parsed.positional[0] == "queue" && parsed.positional[1] == "trust" {
+					return true
+				}
+			}
+			if shell && word.quoted && runsQueueTrust(word.text, depth+1) {
+				return true
+			}
+			shell = shell || nestedShells[programName(word.text)]
+		}
+	}
+	return false
+}
+
+func programName(word string) string {
+	return strings.TrimSuffix(strings.ToLower(word[strings.LastIndexAny(word, `/\`)+1:]), ".exe")
+}
+
+func looseShellSegments(command string) [][]shellWord {
+	segments, words := [][]shellWord{}, []shellWord{}
+	var text strings.Builder
+	open, quoted := false, false
+	endWord := func() {
+		if open {
+			words = append(words, shellWord{text: text.String(), quoted: quoted})
+		}
+		text.Reset()
+		open, quoted = false, false
+	}
+	for i := 0; i < len(command); i++ {
+		switch c := command[i]; {
+		case c == '\'' || c == '"':
+			end := i + 1
+			for ; end < len(command) && command[end] != c; end++ {
+				if c == '"' && command[end] == '\\' && end+1 < len(command) && strings.IndexByte(`"\`, command[end+1]) >= 0 {
+					end++
+				}
+				text.WriteByte(command[end])
+			}
+			open, quoted, i = true, true, end
+		case c == ' ' || c == '\t':
+			endWord()
+		case strings.IndexByte("\n\r;&|(){}`", c) >= 0:
+			endWord()
+			if len(words) > 0 {
+				segments, words = append(segments, words), []shellWord{}
+			}
+		default:
+			text.WriteByte(c)
+			open = true
+		}
+	}
+	endWord()
+	if len(words) > 0 {
+		segments = append(segments, words)
+	}
+	return segments
+}
+
 func autoQueueDirective(path string, count int) string {
 	return fmt.Sprintf(`[noctis] This request is a multi-step job (%d items). It was written as a checklist to %s. Work through it in order, mark each item "- [x]" in that file the moment it is done, and do not stop, summarize or ask for confirmation between items; the session continues until every item is ticked.`, count, path)
 }

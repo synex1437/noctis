@@ -1683,6 +1683,9 @@ async function scenarioQueuePriorities(acc) {
   const rewritten = acc.hook({ hook_event_name: 'Stop', session_id: 'qp2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
   check('queue: a rewrite with items nobody trusted drives nothing and says how many are new', !rewritten.includes('"decision":"block"') && rewritten.includes(' 4 ') && rewritten.includes('noctis queue trust'), true);
   check('queue: status lists the items added since the trust', acc.run(['queue', 'status', '--file', queueFile]).includes('- [ ] Write the release notes'), true);
+  const byClaude = JSON.parse(acc.hook({ hook_event_name: 'PreToolUse', session_id: 'qp2', cwd: PROJECT_DIR, tool_name: 'Bash', tool_input: { command: `cd ${PROJECT_DIR} && noctis queue trust --file ${queueFile}` } }) || '{}');
+  check('queue: Claude running noctis queue trust itself is denied and the user is told', (byClaude.hookSpecificOutput || {}).permissionDecision === 'deny' && String(byClaude.systemMessage).includes('!noctis queue trust'), true);
+  check('queue: any other shell call gets no answer', acc.hook({ hook_event_name: 'PreToolUse', session_id: 'qp2', cwd: PROJECT_DIR, tool_name: 'Bash', tool_input: { command: `noctis queue status --file ${queueFile}` } }), '');
   acc.run(['queue', 'trust', '--file', queueFile]);
   const sloppy = JSON.parse(acc.hook({ hook_event_name: 'Stop', session_id: 'qp2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false })).reason;
   check('queue: sloppy boxes, bare boxes and TODO markers all count; notes do not', sloppy.includes('Queue continues: 4 open'), true);
