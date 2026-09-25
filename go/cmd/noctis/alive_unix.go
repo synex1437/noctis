@@ -64,3 +64,30 @@ func processName(pid int) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+func processStarted(pid int) string {
+	if !validPid(pid) {
+		return ""
+	}
+	if _, err := os.Stat("/proc/self/stat"); err == nil {
+		stat, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+		if err != nil {
+			return ""
+		}
+		end := bytes.LastIndexByte(stat, ')')
+		if end < 0 {
+			return ""
+		}
+		if fields := strings.Fields(string(stat[end+1:])); len(fields) > 19 {
+			return fields[19]
+		}
+		return ""
+	}
+	command := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "lstart=")
+	command.Env = append(os.Environ(), "LC_ALL=C", "TZ=UTC")
+	out, err := runWithTimeout(command, 5*time.Second)
+	if err != nil {
+		return ""
+	}
+	return strings.Join(strings.Fields(string(out)), " ")
+}

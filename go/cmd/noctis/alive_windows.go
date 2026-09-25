@@ -4,6 +4,7 @@ package main
 
 import (
 	"math"
+	"strconv"
 	"syscall"
 	"unsafe"
 )
@@ -47,4 +48,20 @@ func processName(pid int) string {
 		}
 	}
 	return ""
+}
+
+func processStarted(pid int) string {
+	if !validPid(pid) {
+		return ""
+	}
+	handle, err := syscall.OpenProcess(processQueryLimitedInformation, false, uint32(pid))
+	if err != nil {
+		return ""
+	}
+	defer syscall.CloseHandle(handle)
+	var created, exited, kernel, user syscall.Filetime
+	if err := syscall.GetProcessTimes(handle, &created, &exited, &kernel, &user); err != nil {
+		return ""
+	}
+	return strconv.FormatInt(created.Nanoseconds(), 10)
 }
