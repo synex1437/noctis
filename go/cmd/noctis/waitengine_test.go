@@ -2061,3 +2061,59 @@ func TestPausingKeepsEveryWaitAndNamesTheOnesThatStillResumeOnTheirOwn(t *testin
 		t.Fatalf("the pause removed waits: %v", waits)
 	}
 }
+
+func TestAPauseListsOnlyWaitsThatResumeByThemselvesAndOffersToCancelAllOnlyWhenNothingElseIsPending(t *testing.T) {
+	first, second, other := "1a2b3c4d-first", "5e6f7a8b-second", "77777777-other"
+	for _, row := range []struct {
+		name      string
+		config    object
+		methods   map[string]string
+		pending   string
+		listed    []string
+		cancelAll bool
+	}{
+		{"two scheduled waits and nothing else", object{}, map[string]string{first: "systemd", second: "systemd"}, "", []string{first, second}, true},
+		{"resume mode none only notifies at the reset", object{"resume": object{"mode": "none"}}, map[string]string{first: "systemd", second: "systemd"}, "", nil, false},
+		{"a wait stored when no scheduler was available", object{}, map[string]string{first: "systemd", second: "manual"}, "", []string{first}, false},
+		{"a failed relaunch of another session", object{}, map[string]string{first: "systemd", second: "systemd"}, "launchFailures", []string{first, second}, false},
+		{"a relaunch of another session under way", object{}, map[string]string{first: "systemd", second: "systemd"}, "handedOff", []string{first, second}, false},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			sandboxFiles(t)
+			mustWriteJSON(files.config, row.config)
+			updateState(func(state object) {
+				for sid, method := range row.methods {
+					wait := liveWait(3 * 86400)
+					wait["scheduled"] = object{"method": method, "at": numberOr(wait, "resumeAt", 0)}
+					stateMap(state, "waits")[sid] = wait
+				}
+				if row.pending != "" {
+					stateMap(state, row.pending)[other] = object{"at": float64(nowSec()), "model": "opus"}
+				}
+			})
+			code := 0
+			stdout := capturedStdout(t, func() { code = pauseGuard("60") })
+			if code != 0 {
+				t.Fatalf("off 60 exited %d:\n%s", code, stdout)
+			}
+			listed := map[string]bool{}
+			for _, sid := range row.listed {
+				listed[sid] = true
+				if !strings.Contains(stdout, "noctis cancel --sid "+shortSid(sid)) {
+					t.Fatalf("the pause does not name %s, which still resumes on its own:\n%s", sid, stdout)
+				}
+			}
+			for _, sid := range []string{first, second, other} {
+				if !listed[sid] && strings.Contains(stdout, shortSid(sid)) {
+					t.Fatalf("the pause lists %s among the waits that still resume on their own, but nothing will resume it:\n%s", sid, stdout)
+				}
+			}
+			if strings.Contains(stdout, T("off.cancelAll")) != row.cancelAll {
+				t.Fatalf("the pause offers noctis cancel for all = %t, want %t: noctis cancel also drops what is not listed:\n%s", !row.cancelAll, row.cancelAll, stdout)
+			}
+			if waits := getMap(readState(), "waits"); len(waits) != len(row.methods) {
+				t.Fatalf("the pause removed waits: %v", waits)
+			}
+		})
+	}
+}

@@ -373,27 +373,34 @@ func pauseGuard(request string) int {
 		return 1
 	}
 	fmt.Println(T("off.done", pluginName, formatTime(until)))
-	printWaitsThatStillResume(readState(), nowSec())
+	printWaitsThatStillResume(loadConfig(), readState(), nowSec())
 	return 0
 }
 
-func printWaitsThatStillResume(state object, now int64) {
+func printWaitsThatStillResume(cfg, state object, now int64) {
 	waits, handedOff := getMap(state, "waits"), getMap(state, "handedOff")
-	lines, skipped := []string{}, false
+	relaunches := getString(section(cfg, "resume"), "mode") != "none"
+	lines, listed, skipped := []string{}, map[string]bool{}, false
 	for _, sid := range sortedKeys(waits) {
 		wait := toObject(waits[sid])
 		if !waitLive(wait, now) {
 			continue
 		}
-		if getMap(handedOff, sid) != nil || (hookSleeping(wait) && holderAlive(wait)) {
+		if !relaunches || getString(getMap(wait, "scheduled"), "method") == "manual" || getMap(handedOff, sid) != nil || (hookSleeping(wait) && holderAlive(wait)) {
 			skipped = true
 			continue
 		}
+		listed[sid] = true
 		where := orDefault(getString(wait, "projectDir"), orDefault(getString(wait, "cwd"), shortSid(sid)))
 		lines = append(lines, T("status.waitLine", where, getString(wait, "kind"), getString(wait, "label"), formatTime(numberOr(wait, "resumeAt", 0)))+T("off.cancelOne", shortSid(sid)))
 	}
 	if len(lines) == 0 {
 		return
+	}
+	for _, others := range []object{handedOff, getMap(state, "launchFailures")} {
+		for sid := range others {
+			skipped = skipped || !listed[sid]
+		}
 	}
 	fmt.Println(T("off.pending"))
 	fmt.Println(strings.Join(lines, "\n"))
