@@ -449,30 +449,19 @@ var labelledRouterCorpus = []routerCase{
 }
 
 var ownWorkStillSentToTheLiteAgent = map[string]bool{
-	"compare the output of the old and new serializer":       true,
-	"which is better here, a map or a switch":                true,
-	"is this the best approach for the retry logic":          true,
-	"repodaki son commitleri karşılaştır":                    true,
-	"iki branchi karşılaştır ve farkları anlat":              true,
-	"eski ve yeni serializer'ın çıktısını karşılaştır":       true,
-	"retry mantığı için en iyi yaklaşım bu mu":               true,
-	"benim yazdığımla main'deki implementasyonu karşılaştır": true,
+	"compare the output of the old and new serializer": true,
+	"repodaki son commitleri karşılaştır":              true,
+	"iki branchi karşılaştır ve farkları anlat":        true,
+	"eski ve yeni serializer'ın çıktısını karşılaştır": true,
 }
 
 var ownWorkSentToTheLiteAgentInAColdSession = map[string]bool{
-	"show the recent commits on this branch":                        true,
-	"compare these two functions and tell me which one is faster":   true,
-	"what's the best way to split this file":                        true,
 	"investigate the memory leak in the worker":                     true,
 	"look into why the nightly job keeps failing":                   true,
-	"summarize the latest changes in this repo":                     true,
 	"compare the performance of the two caching strategies I wrote": true,
 	"look up where we set the retry limit":                          true,
 	"research how our session tokens are stored":                    true,
 	"look into the pricing page bug, the totals are wrong":          true,
-	"investigate the recent spike in 500 errors from our api":       true,
-	"bu iki fonksiyonu karşılaştır, hangisi daha hızlı":             true,
-	"bu dosyayı bölmenin en iyi yolu ne":                            true,
 	"worker'daki bellek sızıntısını araştır":                        true,
 	"gece çalışan job neden sürekli patlıyor, incele":               true,
 	"bu değişiklikleri incele":                                      true,
@@ -480,6 +469,9 @@ var ownWorkSentToTheLiteAgentInAColdSession = map[string]bool{
 	"tüm endpointlerde yetki kontrolü eksik mi incele":              true,
 	"yazdığım iki cache stratejisinin performansını karşılaştır":    true,
 	"session tokenlarını nasıl sakladığımızı araştır":               true,
+	"which is better here, a map or a switch":                       true,
+	"is this the best approach for the retry logic":                 true,
+	"retry mantığı için en iyi yaklaşım bu mu":                      true,
 }
 
 var researchKeptOnTheMainModel = map[string]bool{
@@ -685,6 +677,108 @@ func TestResearchNamingSourcesPricesTrendsOrArticlesStillRoutes(t *testing.T) {
 			if result := classifyPrompt(cfg, nil, prompt, session.transcript, now); !result.route {
 				t.Errorf("%s research stayed on the main model (%s): %q", session.name, result.reason, prompt)
 			}
+		}
+	}
+}
+
+var ownWorkAskedWithAWebWord = []string{
+	"What's the best way to structure this?",
+	"Bu modül için en iyi yapı hangisi?",
+	"compare this module with the old one",
+	"which is the best place for these two functions",
+	"is my component the best fit for the new layout",
+	"compare parseConfig and loadConfig",
+	"which is better, retry_count or max_retries",
+	"what's the best way to call fetchUser() here",
+	"bu fonksiyonu yazmanın en iyi yolu ne",
+	"şu iki dosyayı karşılaştır",
+	"bizim api için en iyi hata biçimi hangisi",
+	"projemizin klasör yapısı için en iyi düzen hangisi",
+	"modülümüz için en iyi yapı hangisi",
+}
+
+var researchAskedWithAWebWord = []string{
+	"find the best library for parsing yaml",
+	"compare the prices of the top three CI services",
+	"what are the best code editors this year",
+	"what's the best database for our startup",
+	"compare the iPhone 17 and Pixel 10 cameras for our trip",
+	"which is better for students, macOS or Windows",
+	"latest news from @the_verge about foldable phones",
+	"bu yıl çıkan en iyi filmler hangileri",
+	"bu yıl yapılan en iyi filmler hangileri",
+	"şirketimiz için en iyi muhasebe programı hangisi",
+	"en iyi ev yapımı pizza tarifi",
+	"find the latest papers on arXiv about speculative decoding",
+	"what are the latest changes to useState in React 19",
+	"what's the best theme for my code editor",
+	"what are this year's best code editors",
+	"is this promo code the best deal",
+	"best pizza near my zip code",
+	"benim kod editörüm için en iyi tema hangisi",
+	"bu indirim kodu en iyi fiyat mı",
+	"bu modüler kanepenin en iyi fiyatı nerede",
+	"bu projektör için en iyi fiyat nerede",
+	"bu fonksiyonel antrenman için en iyi ayakkabı hangisi",
+}
+
+var comparisonsAboutThis = []string{
+	"What's the best structure for this?",
+	"What's the best way to handle this?",
+	"Is this the best way to do it?",
+	"compare these two implementations",
+	"which is better for this, a mutex or a channel",
+	"Bunun için en iyi yapı hangisi?",
+	"bu iki yaklaşımı karşılaştır",
+	"bu ikisini karşılaştır, hangisi daha hızlı",
+}
+
+var researchAboutThisWithANewsOrPriceWord = []string{
+	"what are the latest reviews of this laptop",
+	"compare the prices of this phone and the Pixel 10",
+	"bu telefonla ilgili en son haberler neler",
+}
+
+func TestAWebWordLeavesAQuestionAboutTheUsersOwnCodeOnTheMainModel(t *testing.T) {
+	cfg := object{"router": object{"enabled": true}}
+	now := nowSec()
+	coding := sessionTranscript(t, editTurns(now-120)...)
+	for _, prompt := range ownWorkAskedWithAWebWord {
+		for _, session := range []struct{ name, transcript string }{{"in a session that has touched no file", ""}, {"in a coding session", coding}} {
+			if result := classifyPrompt(cfg, nil, prompt, session.transcript, now); result.route {
+				t.Errorf("%s the user's own work went to the lite agent (%s/%s): %q", session.name, result.reason, result.signal, prompt)
+			}
+		}
+	}
+}
+
+func TestAWebWordStillRoutesResearchThatPointsAtNoCodeOfTheUser(t *testing.T) {
+	cfg := object{"router": object{"enabled": true}}
+	for _, prompt := range researchAskedWithAWebWord {
+		if result := classifyPrompt(cfg, nil, prompt, "", nowSec()); !result.route || result.reason != "web-words" {
+			t.Errorf("in a session that has touched no file research stayed on the main model (%s): %q", result.reason, prompt)
+		}
+	}
+}
+
+func TestAComparisonAboutThisInACodingSessionStaysOnTheMainModel(t *testing.T) {
+	cfg := object{"router": object{"enabled": true}}
+	now := nowSec()
+	coding := sessionTranscript(t, editTurns(now-120)...)
+	for _, prompt := range comparisonsAboutThis {
+		if result := classifyPrompt(cfg, nil, prompt, coding, now); result.route {
+			t.Errorf("in a coding session the user's own work went to the lite agent (%s/%s): %q", result.reason, result.signal, prompt)
+		}
+	}
+}
+
+func TestResearchAboutThisWithANewsOrPriceWordStillRoutesInACodingSession(t *testing.T) {
+	cfg := object{"router": object{"enabled": true}}
+	now := nowSec()
+	coding := sessionTranscript(t, editTurns(now-120)...)
+	for _, prompt := range researchAboutThisWithANewsOrPriceWord {
+		if result := classifyPrompt(cfg, nil, prompt, coding, now); !result.route {
+			t.Errorf("in a coding session research with a news, review or price word stayed on the main model (%s): %q", result.reason, prompt)
 		}
 	}
 }
