@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -211,6 +212,25 @@ func homeDir() string {
 		return home
 	}
 	return ""
+}
+
+func homeAsTilde(text string) string {
+	home := homeDir()
+	if home == "" {
+		return text
+	}
+	home = filepath.Clean(home)
+	if filepath.Dir(home) == home {
+		return text
+	}
+	flags := ""
+	if isWindows {
+		flags = "(?i)"
+	}
+	for _, form := range []string{home, forwardSlashes(home)} {
+		text = regexp.MustCompile(flags+regexp.QuoteMeta(form)+`([^\pL\pN_-]|$)`).ReplaceAllString(text, "~$1")
+	}
+	return text
 }
 
 func looksLikePluginRoot(dir string) bool {

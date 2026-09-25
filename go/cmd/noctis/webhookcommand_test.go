@@ -63,6 +63,91 @@ func TestNoctisWebhookSaysWhetherTheMessageArrived(t *testing.T) {
 	})
 }
 
+func TestAGenericWebhookNamesTheAccountFolderButNotThePathToIt(t *testing.T) {
+	var mu sync.Mutex
+	var sent []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		sent = body
+		mu.Unlock()
+	}))
+	defer server.Close()
+	home := webhookAccount(t, server.URL+"/hook")
+	run := startNoctisCLIAt(t, home, "", nil, "webhook", "--title", "T", "--body", "B")()
+	if run.code != 0 {
+		t.Fatalf("the message was not delivered:\n%s", run)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	var payload map[string]any
+	if err := json.Unmarshal(sent, &payload); err != nil {
+		t.Fatalf("the generic payload is not JSON: %s", sent)
+	}
+	for key, value := range payload {
+		if text, _ := value.(string); strings.Contains(text, home) {
+			t.Errorf("the generic webhook sent the path of the account folder, and with it the user name, in %q: %s", key, text)
+		}
+	}
+	if payload["account"] != ".claude" {
+		t.Errorf("the generic webhook must still name the account by its folder, .claude; it sent %v", payload["account"])
+	}
+}
+
+func TestEveryWebhookPresetShowsTheHomeFolderAsATilde(t *testing.T) {
+	var mu sync.Mutex
+	var title string
+	var sent []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		title, sent = r.Header.Get("Title"), body
+		mu.Unlock()
+	}))
+	defer server.Close()
+	for _, preset := range []string{"generic", "telegram", "discord", "slack", "ntfy"} {
+		t.Run(preset, func(t *testing.T) {
+			home := t.TempDir()
+			cliWrite(t, filepath.Join(home, ".claude", pluginName, "config.json"), []byte(`{"alarm": {"webhook": {"url": "`+server.URL+`/hook", "preset": "`+preset+`", "chatId": "42"}}}`))
+			project := filepath.Join(home, "work", "app")
+			run := startNoctisCLIAt(t, home, "", nil, "webhook", "--title", "Paused in "+project, "--body", "open a terminal in "+project+" or in "+home)()
+			if run.code != 0 {
+				t.Fatalf("the message was not delivered:\n%s", run)
+			}
+			mu.Lock()
+			texts := []string{title}
+			var payload map[string]any
+			if json.Unmarshal(sent, &payload) == nil {
+				for _, value := range payload {
+					if text, ok := value.(string); ok {
+						texts = append(texts, text)
+					}
+				}
+			} else {
+				texts = append(texts, string(sent))
+			}
+			mu.Unlock()
+			got := strings.Join(texts, "\n")
+			if strings.Contains(got, home) {
+				t.Errorf("the %s webhook sent the home folder, and with it the user name: %s", preset, got)
+			}
+			if strings.Count(got, filepath.Join("~", "work", "app")) != 2 || !strings.Contains(got, "or in ~") {
+				t.Errorf("the %s webhook must show the folders under home as ~ in the title and the body: %s", preset, got)
+			}
+		})
+	}
+}
+
+func TestTheHomeFolderBecomesATildeOnlyWhereItsNameEnds(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "al")
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	got := homeAsTilde("in " + filepath.Join(home, "app") + ", " + home + "ice and " + home + ".")
+	if want := "in " + filepath.Join("~", "app") + ", " + home + "ice and ~."; got != want {
+		t.Errorf("home %s:\n got %s\nwant %s", home, got, want)
+	}
+}
+
 func TestAnOpenCircuitHoldsAMessageUntilItClosesButLetsATestThrough(t *testing.T) {
 	var mu sync.Mutex
 	requests := 0
