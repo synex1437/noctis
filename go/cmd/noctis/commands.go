@@ -93,7 +93,7 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	}
 	lines = append(lines, modelLine)
 	routerText := T("status.routerOff")
-	if getBool(section(cfg, "router"), "enabled", true) {
+	if getBool(section(cfg, "router"), "enabled", false) {
 		routerText = T("status.routerOn", liteAgentType(cfg))
 	}
 	lines = append(lines, T("status.router", routerText))

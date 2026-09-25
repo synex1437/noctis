@@ -43,7 +43,7 @@
     "scopedLabel": "Fable"
   },
   "router": {
-    "enabled": true,
+    "enabled": false,
     "agent": "lite",
     "minPromptLength": 15,
     "maxDeniesPerPrompt": 3,

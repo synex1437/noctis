@@ -471,6 +471,46 @@ func configureRoles(configFile string, config object, pluginRoot string, rolesAr
 	return nil
 }
 
+func configureRouter(configFile string, config object) {
+	router := section(config, "router")
+	enabled := getBool(router, "enabled", false)
+	if choice := choiceOf(routerChoices, flagString("router")); choice != "" {
+		enabled = choice == "on"
+	} else if stdinIsTerminal() && !args.present["no-ask"] {
+		enabled = askRouter(bufio.NewReader(os.Stdin), enabled, liteAgentType(config))
+	}
+	router["enabled"] = enabled
+	config["router"] = router
+	mustWriteJSON(configFile, config)
+	if enabled {
+		fmt.Println(T("setup.routerOn", liteAgentType(config)))
+	} else {
+		fmt.Println(T("setup.routerOff", liteAgentType(config)))
+	}
+}
+
+func askRouter(reader *bufio.Reader, current bool, agent string) bool {
+	fallback := "off"
+	if current {
+		fallback = "on"
+	}
+	for {
+		fmt.Printf("%s [%s]: ", T("setup.routerQuestion", agent), fallback)
+		line, err := reader.ReadString('\n')
+		answer := strings.TrimSpace(line)
+		if answer == "" {
+			return current
+		}
+		if choice := choiceOf(routerChoices, answer); choice != "" {
+			return choice == "on"
+		}
+		if err != nil {
+			return current
+		}
+		fmt.Println("  " + T("setup.routerBadAnswer", answer))
+	}
+}
+
 func applyPreset(configFile string, config object, preset string) error {
 	if preset == "" {
 		return nil
@@ -706,6 +746,7 @@ func installInto(configDir, sourceRoot string, noModel bool, defaults object) er
 	if err := configureRoles(configFile, config, installRoot, added["roles"], providerModels(readJSONStrict(filepath.Join(configDir, "settings.json")).data)); err != nil {
 		return err
 	}
+	configureRouter(configFile, config)
 	if err := wireSettings(configDir, binary, config, configFile, defaults, noModel); err != nil {
 		return err
 	}
@@ -864,7 +905,7 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 	return nil
 }
 
-var setupFlags = []string{"profile", "preset", "permissions", "updates", "no-model", "no-lean", "no-ask", "config-dir", "account", "host", "code", "research", "planning", "digest", "explore", "fallback"}
+var setupFlags = []string{"profile", "preset", "permissions", "updates", "router", "no-model", "no-lean", "no-ask", "config-dir", "account", "host", "code", "research", "planning", "digest", "explore", "fallback"}
 
 var installFlags = append([]string{"source", "uninstall", "purge"}, setupFlags...)
 
@@ -872,7 +913,9 @@ var permissionChoices = []string{"auto", "acceptEdits", "plan", "default", "keep
 
 var updateChoices = []string{"on", "off", "keep"}
 
-var flagChoices = map[string][]string{"permissions": permissionChoices, "updates": updateChoices}
+var routerChoices = []string{"on", "off"}
+
+var flagChoices = map[string][]string{"permissions": permissionChoices, "updates": updateChoices, "router": routerChoices}
 
 func choiceOf(choices []string, value string) string {
 	for _, choice := range choices {
@@ -1287,6 +1330,7 @@ func setupInto(configDir, pluginRoot string, defaults object) error {
 	if err := configureRoles(configFile, config, pluginRoot, added["roles"], providerModels(readJSONStrict(filepath.Join(configDir, "settings.json")).data)); err != nil {
 		return err
 	}
+	configureRouter(configFile, config)
 	if err := wireSettings(configDir, binary, config, configFile, defaults, args.present["no-model"]); err != nil {
 		return err
 	}

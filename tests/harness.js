@@ -416,7 +416,8 @@ class Account {
   }
 
   install(mutateConfig, { asShipped = false } = {}) {
-    const result = spawnSync(process.env.NOCTIS_BINARY || this.lab.snapshotBinary || sourceBinary(), ['install', '--source', this.lab.sourceRoot || SOURCE_ROOT, '--config-dir', this.dir], { encoding: 'utf8', env: this.env() });
+    const router = asShipped ? [] : ['--router', 'on'];
+    const result = spawnSync(process.env.NOCTIS_BINARY || this.lab.snapshotBinary || sourceBinary(), ['install', '--source', this.lab.sourceRoot || SOURCE_ROOT, '--config-dir', this.dir, ...router], { encoding: 'utf8', env: this.env() });
     if (result.status !== 0) throw new Error(`install failed: ${result.stderr}`);
     writeJson(path.join(this.dir, '.credentials.json'), { claudeAiOauth: { accessToken: this.token, expiresAt: Date.now() + 30 * 86400000 } });
     if (!asShipped) {
