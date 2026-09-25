@@ -120,6 +120,29 @@ func TestClaudeIsNotToldTheUsageIsPastThePausePointWhenThePauseComesEarly(t *tes
 	}
 }
 
+func TestInObserveModeAPromptYouTypeAtAPausePointIsOnlyJournaled(t *testing.T) {
+	cfg, project := controlSandbox(t, 93, 40)
+	defer func(previous bool) { observing = previous }(observing)
+	observing = true
+	sid := "tp-observe"
+	output := hookOutput(t, onUserPromptSubmit, promptInput(sid, project, "fix the parser"), cfg)
+	if getString(output, "decision") == "block" || getString(output, "systemMessage") != "" || contextOf(output) != "" {
+		t.Fatalf("observe mode parked or warned about a prompt typed past the pause point, or told Claude about it: %v", output)
+	}
+	if output := hookOutput(t, onPostToolBatch, mainBatch(sid, project, shellCall("Bash", "go test ./...")), cfg); output != nil {
+		t.Fatalf("observe mode acted on a batch of the typed turn: %v", output)
+	}
+	journal, _ := os.ReadFile(files.decisions)
+	if !strings.Contains(string(journal), `"action":"would-typed-prompt"`) || !strings.Contains(string(journal), `"action":"would-typed-turn"`) || strings.Contains(string(journal), `"action":"typed-prompt"`) || strings.Contains(string(journal), `"action":"would-pause"`) {
+		t.Fatalf("observe mode did not journal the typed prompt and its turn as would-…:\n%s", journal)
+	}
+	observing = false
+	warning := T("wait.typedGoesAhead", windowLabel("five_hour"), formatNumber(93), T("hit.threshold", formatNumber(92)))
+	if output := hookOutput(t, onUserPromptSubmit, promptInput(sid, project, "now the lexer"), cfg); !strings.Contains(getString(output, "systemMessage"), warning) {
+		t.Fatalf("the first prompt enforce mode let past the pause point after observe mode came without its warning, as if observe mode had shown it: %v", output)
+	}
+}
+
 func TestATypedTurnThatEndsInAnAPIErrorLeavesWhatFollowsToThePausePoint(t *testing.T) {
 	cfg, project := controlSandbox(t, 93, 40)
 	sid := "tp-failure"
