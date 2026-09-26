@@ -50,6 +50,8 @@ func FuzzAutoQueueItems(f *testing.F) {
 	f.Add(strings.Repeat("Add the thing and then fix the other thing. ", 20))
 	f.Add("```\ncode fence\n```\nAdd a test for it and then deploy it and finally write the notes down.")
 	f.Add("[x] done\n[ ] not done\n[] weird\nTODO: something")
+	f.Add("Do not implement any of the following yet; just estimate each.\n- add a thing to it\n- fix the other thing\n- write the notes down")
+	f.Add("Bunların hiçbirini henüz uygulama, sadece planla.\n- bir şey ekle ona\n- diğer şeyi düzelt\n- notları yaz")
 	f.Fuzz(func(t *testing.T, prompt string) {
 		items := autoQueueItems(prompt)
 		if len(items) > autoQueueMaxItems {
@@ -73,6 +75,12 @@ func FuzzAutoQueueItems(f *testing.F) {
 
 			if words := strings.Fields(item); len(words) > 0 && !strings.Contains(prompt, words[0]) {
 				t.Fatalf("item %q is not from the prompt", item)
+			}
+		}
+		job := promptJobOf(prompt)
+		for _, reason := range []string{heldBackWork(job.text, job.prose, job.lead), heldBackWork(prompt, prompt, true)} {
+			if reason != "" && !strings.Contains(reason, `"`) {
+				t.Fatalf("a held-back reason quotes nothing: %q", reason)
 			}
 		}
 	})

@@ -594,19 +594,33 @@ func onUserPromptSubmit(input, cfg object) {
 		}
 	}
 	if getBool(section(cfg, "queue"), "auto", true) && getBool(section(cfg, "queue"), "enabled", true) && !observing && !promptFromPlugin && getString(getMap(getMap(state, "autoQueues"), sid), "source") == "" && followedQueueFile(cfg, queueDirs(input)...) == "" {
-		if items := autoQueueItems(getString(input, "prompt")); len(items) > 0 {
-			if path := startAutoQueue(sid, getString(input, "cwd"), items, now); path != "" {
+		job := promptJobOf(getString(input, "prompt"))
+		split := len(job.items) == 0 && severalJobsLikely(getString(input, "prompt"))
+		held := ""
+		switch {
+		case len(job.items) > 0:
+			held = heldBackWork(job.text, job.prose, job.lead)
+		case split:
+			held = heldBackWork(job.text, job.text, false)
+		}
+		switch {
+		case held != "":
+			endAutoQueue(sid, true)
+			journal(sid, "UserPromptSubmit", "no-auto-queue", held, nil)
+			logInfo("no auto queue for %s: %s", sid, held)
+		case len(job.items) > 0:
+			if path := startAutoQueue(sid, getString(input, "cwd"), job.items, now); path != "" {
 				rememberOpenIssues(cfg, path)
-				contexts = append(contexts, autoQueueDirective(path, len(items)))
-				systemMessage = joinNotices(systemMessage, T("queue.autoNotice", len(items), pluginName))
+				contexts = append(contexts, autoQueueDirective(path, len(job.items)))
+				systemMessage = joinNotices(systemMessage, T("queue.autoNotice", len(job.items), pluginName))
 				resetIdleGuard(readState(), sid)
 			}
-		} else if severalJobsLikely(getString(input, "prompt")) {
+		case split:
 			if path := startSplitQueue(sid, getString(input, "cwd"), getString(input, "prompt"), now); path != "" {
 				contexts = append(contexts, splitQueueDirective(path))
 				resetIdleGuard(readState(), sid)
 			}
-		} else {
+		default:
 			endAutoQueue(sid, true)
 		}
 	}
