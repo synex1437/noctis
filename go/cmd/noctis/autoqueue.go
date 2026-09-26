@@ -159,10 +159,19 @@ func stepLike(unit string) bool {
 	return !descriptiveStarters(firstWord(unit))
 }
 
-func autoQueueItems(prompt string) []string {
+// promptJob is what a prompt asks for when it reads like a multi-step job.
+type promptJob struct {
+	items []string // the steps, in order
+	text  string   // the prompt without its code blocks
+	prose string   // the words around the listed steps
+	lead  bool     // the steps are lines of their own, so the words around them may be read alone
+}
+
+func promptJobOf(prompt string) promptJob {
 	text := strings.TrimSpace(codeFence.ReplaceAllString(prompt, " "))
+	job := promptJob{text: text}
 	if len([]rune(text)) < autoQueueMinChars || endsQuestion(text) || hasBugReportMarker(text) {
-		return nil
+		return job
 	}
 	listed, lines := []string{}, []string{}
 	logLines, questions := 0, 0
@@ -186,22 +195,25 @@ func autoQueueItems(prompt string) []string {
 		lines = append(lines, line)
 	}
 	if logLines >= 2 || questions > len(listed) {
-		return nil
+		return job
 	}
-	items := listed
+	items, prose := listed, lines
 	if len(items) < autoQueueMinItems {
-		items = items[:0]
+		items, prose = items[:0], []string{}
 		for _, line := range lines {
 			if stepLike(line) && imperativeLike(line) {
 				if item := cleanItem(line); item != "" {
 					items = append(items, item)
+					continue
 				}
 			}
+			prose = append(prose, line)
 		}
 		if len(items) < autoQueueMinLines || len(items)*2 < len(lines) {
 			items = items[:0]
 		}
 	}
+	job.lead = len(items) > 0
 	if len(items) == 0 && len(lines) == 1 && hasSequenceMarker(text) {
 		for _, unit := range sentenceSplit.Split(text, -1) {
 			if stepLike(unit) && imperativeLike(unit) {
@@ -213,15 +225,17 @@ func autoQueueItems(prompt string) []string {
 		if len(items) < autoQueueMinSentences {
 			items = items[:0]
 		}
+		prose = []string{text}
 	}
 	items = dedupeItems(items)
 	if len(items) < autoQueueMinItems {
-		return nil
+		return job
 	}
 	if len(items) > autoQueueMaxItems {
 		items = items[:autoQueueMaxItems]
 	}
-	return items
+	job.items, job.prose = items, strings.Join(prose, "\n")
+	return job
 }
 
 func dedupeItems(items []string) []string {
