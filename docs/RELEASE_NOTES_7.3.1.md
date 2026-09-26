@@ -90,9 +90,10 @@ it, a `UserPromptSubmit` hook takes about 7 ms (11.5 ms with 7.3.0's launcher, 5
 and a `Stop` hook about 5.5 ms (10.5 and 4 ms).
 
 **A state write parses and encodes the state once.** Each write of `state.json` parsed the file it
-replaced a second time to decide whether to back it up, and encoded the new state twice. In a hook
-that wrote a 264 KB state three times, noctis's own work dropped from about 50 ms to about 31 ms;
-small states gain little. A `state.json` that an editor saved with a byte order mark is now backed
+replaced a second time to decide whether to back it up, and encoded the new state twice. With a
+264 KB state, a `UserPromptSubmit` hook that changes it now takes about 23 ms where it took 30
+(Linux, noctis run directly, medians of 60 calls); a hook that leaves the state as it was, and a
+small state, gain little. A `state.json` that an editor saved with a byte order mark is now backed
 up like any other.
 
 ## Known limits
