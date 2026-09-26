@@ -68,6 +68,7 @@
   "queue.heldMessage": "⛔ File en attente : `%[1]s` a échoué %[2]d fois de suite, donc %[3]s ne reprend pas tant que la commande ne passe pas. Elle est relancée au premier arrêt après que tu as tapé un prompt.",
   "queue.unmatched": "⚠ (after …) ignoré dans %s — aucun tag, ticket ou numéro d'élément ne correspond : %s. Vérifie l'orthographe.",
   "queue.unmatchedMore": "%s et %d autres",
+  "queue.emptyLines": "☰ %s : %d ligne(s) vide(s) de la checklist ignorée(s) (ligne %s) ; un \"- [ ]\" vide n'est pas une tâche.",
   "queue.modeNotice": "☰ Mode file d'attente : %s contient %d élément(s) ouvert(s) — Claude les traite sans demander (/%s:pause pour arrêter ; renomme le fichier ou règle queue.files pour te désinscrire).",
   "queue.autoNotice": "☰ Travail en %d étapes détecté — suivi comme une checklist ; Claude termine chaque étape sans demander (/%s:stop pour arrêter).",
   "queue.autoLabel": "le travail issu de ta demande",

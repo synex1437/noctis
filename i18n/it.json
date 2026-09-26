@@ -68,6 +68,7 @@
   "queue.heldMessage": "⛔ Coda in attesa: `%[1]s` è fallito %[2]d volta/e di fila, quindi %[3]s non va avanti finché il comando non passa. Viene rieseguito al primo arresto dopo che hai scritto un prompt.",
   "queue.unmatched": "⚠ (after …) ignorato in %s — nessun tag, issue o numero di elemento corrisponde: %s. Controlla come è scritto.",
   "queue.unmatchedMore": "%s e altri %d",
+  "queue.emptyLines": "☰ %s: righe vuote della checklist ignorate: %d (riga %s); un \"- [ ]\" vuoto non è un'attività.",
   "queue.modeNotice": "☰ Modalità coda: %s ha %d elemento/i aperto/i — Claude li porta a termine senza chiedere (/%s:pause per fermarsi; rinomina il file o imposta queue.files per disattivarla).",
   "queue.autoNotice": "☰ Rilevato lavoro in %d passi — registrato come checklist; Claude completa ogni passo senza chiedere (/%s:stop per terminare).",
   "queue.autoLabel": "il lavoro dalla tua richiesta",

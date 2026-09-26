@@ -301,6 +301,16 @@ type queueView struct {
 	plain         bool
 	unmatched     []string
 	unmatchedMore int
+	empty         []int
+}
+
+// emptyLineList names the empty checklist lines of a view by line number.
+func emptyLineList(view queueView) string {
+	numbers := make([]string, 0, len(view.empty))
+	for _, line := range view.empty {
+		numbers = append(numbers, strconv.Itoa(line))
+	}
+	return truncateText(strings.Join(numbers, ", "), 40)
 }
 
 func shortReferences(references []string) []string {
@@ -517,7 +527,7 @@ func queueSnapshotOf(file, content string) queueView {
 				waitingOn[key]++
 			}
 		}
-		doneByOrdinal[entry.ordinal] = entry.checked
+		doneByOrdinal[entry.ordinal] = entry.checked || entry.text == ""
 	}
 	satisfied := func(self queueEntry, reference string) (done, matched bool) {
 		reference = strings.ToLower(reference)
@@ -549,6 +559,10 @@ func queueSnapshotOf(file, content string) queueView {
 	eligible, named := []queueEntry{}, map[string]bool{}
 	for _, entry := range entries {
 		if entry.checked {
+			continue
+		}
+		if entry.text == "" {
+			view.empty = append(view.empty, entry.first+1)
 			continue
 		}
 		view.total++

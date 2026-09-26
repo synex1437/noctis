@@ -1689,6 +1689,13 @@ func onStop(input, cfg object) {
 	} else {
 		delete(guard, "unmatched")
 	}
+	emptyLines, emptyNew := emptyLineList(snapshot), false
+	if emptyLines != "" {
+		emptyNew = getString(guard, "empty") != emptyLines
+		guard["empty"] = emptyLines
+	} else {
+		delete(guard, "empty")
+	}
 	guard["forced"] = numberOr(guard, "forced", 0) + 1
 	updateState(func(next object) {
 		stateMap(next, "stopGuard")[sid] = guard
@@ -1730,6 +1737,14 @@ func onStop(input, cfg object) {
 		blockedNote += fmt.Sprintf(" These (after …) references match no tag, issue or item number, so nothing waits for them: %s. Mention them to the user so the file can be fixed.", note)
 		unmatchedNotice = T("queue.unmatched", queueLabel, notice)
 	}
+	emptyNotice := ""
+	if emptyNew {
+		blockedNote += fmt.Sprintf(" The empty checklist line(s) at line %s are not items; leave them as they are.", emptyLines)
+		// /noctis:start named them by their line in the file it copied.
+		if !isAutoQueue(queuePath) {
+			emptyNotice = T("queue.emptyLines", queueLabel, len(snapshot.empty), emptyLines)
+		}
+	}
 	where := filepath.Base(queuePath)
 	if isAutoQueue(queuePath) {
 		where = queuePath
@@ -1739,7 +1754,7 @@ func onStop(input, cfg object) {
 		reason = waitContext + "\n" + reason
 	}
 	output := object{"decision": "block", "reason": reason}
-	if systemMessage = joinNotices(systemMessage, result.notice, unmatchedNotice); systemMessage != "" {
+	if systemMessage = joinNotices(systemMessage, result.notice, unmatchedNotice, emptyNotice); systemMessage != "" {
 		output["systemMessage"] = systemMessage
 	}
 	emit(output)

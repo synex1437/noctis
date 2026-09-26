@@ -68,6 +68,7 @@
   "queue.heldMessage": "⛔ Cola en espera: `%[1]s` falló en %[2]d intento(s) seguidos, así que %[3]s no sigue hasta que el comando pase. Se vuelve a ejecutar en la primera parada después de que escribas un prompt.",
   "queue.unmatched": "⚠ (after …) ignorado en %s — ninguna etiqueta, incidencia o número de elemento coincide: %s. Revisa la ortografía.",
   "queue.unmatchedMore": "%s y %d más",
+  "queue.emptyLines": "☰ %s: se ignoran %d línea(s) vacía(s) de la lista de comprobación (línea %s); un \"- [ ]\" vacío no es una tarea.",
   "queue.modeNotice": "☰ Modo cola: %s tiene %d elemento(s) abierto(s) — Claude los resuelve sin preguntar (/%s:pause para parar; renombra el archivo o ajusta queue.files para desactivarlo).",
   "queue.autoNotice": "☰ Trabajo de %d pasos detectado — registrado como lista de comprobación; Claude termina cada paso sin preguntar (/%s:stop para terminar).",
   "queue.autoLabel": "el trabajo de tu petición",

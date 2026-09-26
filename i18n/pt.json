@@ -68,6 +68,7 @@
   "queue.heldMessage": "⛔ Fila em espera: `%[1]s` falhou em %[2]d tentativa(s) seguidas, então %[3]s não avança até o comando passar. Ele roda de novo na primeira parada depois que você digitar um prompt.",
   "queue.unmatched": "⚠ (after …) ignorado em %s — nenhuma tag, issue ou número de item corresponde: %s. Confira a grafia.",
   "queue.unmatchedMore": "%s e mais %d",
+  "queue.emptyLines": "☰ %s: %d linha(s) vazia(s) da checklist ignorada(s) (linha %s); um \"- [ ]\" vazio não é uma tarefa.",
   "queue.modeNotice": "☰ Modo fila: %s tem %d item(ns) em aberto — o Claude resolve todos sem perguntar (/%s:pause para parar; renomeie o arquivo ou ajuste queue.files para desativar).",
   "queue.autoNotice": "☰ Trabalho de %d passos detectado — registrado como checklist; o Claude conclui cada passo sem perguntar (/%s:stop encerra).",
   "queue.autoLabel": "o trabalho do seu pedido",

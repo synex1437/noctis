@@ -71,6 +71,7 @@
   "queue.heldMessage": "⛔ Kuyruk bekletiliyor: `%[1]s` art arda %[2]d kez başarısız oldu, bu yüzden %[3]s komut geçene kadar ilerlemiyor. Bir prompt yazdıktan sonra Claude ilk kez durduğunda komut yeniden çalışır.",
   "queue.unmatched": "⚠ %s içinde (after …) yok sayıldı — hiçbir etiket, issue ya da madde numarası eşleşmiyor: %s. Yazımı kontrol et.",
   "queue.unmatchedMore": "%s ve %d tane daha",
+  "queue.emptyLines": "☰ %s: %d boş checklist satırı yok sayılıyor (satır %s); boş bir \"- [ ]\" iş değildir.",
   "queue.modeNotice": "☰ Kuyruk modu: %s içinde %d açık madde var — Claude sormadan sırayla yapar (/%s:pause durdurur; dosyayı yeniden adlandır ya da queue.files ile kapat).",
   "queue.autoNotice": "☰ %d adımlık iş algılandı — checklist olarak izleniyor; Claude her adımı sormadan bitirir (/%s:stop durdurur).",
   "queue.autoLabel": "prompt'taki iş",
