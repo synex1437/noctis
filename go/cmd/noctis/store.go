@@ -695,7 +695,11 @@ func writeEncodedAtomic(file string, encoded []byte) error {
 var writeFailures = 0
 
 func mustWriteJSON(file string, value any) {
-	if err := writeJSONAtomic(file, value); err != nil {
+	mustWriteEncoded(file, marshalPretty(value))
+}
+
+func mustWriteEncoded(file string, encoded []byte) {
+	if err := writeEncodedAtomic(file, encoded); err != nil {
 		writeFailures++
 		fail("write %s failed: %v", filepath.Base(file), err)
 	}
@@ -1360,6 +1364,9 @@ func updateState(mutator func(state object)) object {
 			result = state
 			return
 		}
+		// Bytes that readStateWithBytes returned have just been parsed as the state, so they need no
+		// second parse to be worth a backup.
+		parsed := before != nil
 		if before == nil {
 			before, _ = readFileShared(files.state)
 		}
@@ -1367,12 +1374,12 @@ func updateState(mutator func(state object)) object {
 			result = state
 			return
 		}
-		if before != nil && usableStateJSON(before) {
+		if before != nil && (parsed || usableStateJSON(before)) {
 			if err := os.WriteFile(files.stateBackup, before, 0o600); err != nil {
 				warn("state.json backup not written: %v", err)
 			}
 		}
-		mustWriteJSON(files.state, state)
+		mustWriteEncoded(files.state, encoded)
 		result = state
 	})
 	drainPrunedRunners()
