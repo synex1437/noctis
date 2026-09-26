@@ -151,8 +151,12 @@ function checkLauncher() {
   try {
     const bin = path.join(root, 'bin');
     fs.mkdirSync(bin, { recursive: true });
-    fs.copyFileSync(path.join(ROOT, 'bin', 'noctis'), path.join(bin, 'noctis'));
-    fs.chmodSync(path.join(bin, 'noctis'), 0o755);
+    // The copy reads a kernel folder of the test's own, so every source of the answer can be set.
+    const shipped = fs.readFileSync(path.join(ROOT, 'bin', 'noctis'), 'utf8');
+    const kernelLine = 'kernel=/proc/sys/kernel\n';
+    check('launcher: asks the kernel first', shipped.includes(kernelLine), `no line ${JSON.stringify(kernelLine)} in bin/noctis`);
+    const kernel = path.join(root, 'kernel');
+    fs.writeFileSync(path.join(bin, 'noctis'), shipped.replace(kernelLine, `kernel='${kernel}'\n`), { mode: 0o755 });
     const stub = (relative) => {
       const file = path.join(bin, relative);
       fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -161,12 +165,49 @@ function checkLauncher() {
     for (const relative of ['linux-amd64/noctis', 'linux-arm64/noctis', 'darwin-arm64/noctis', 'darwin-amd64/noctis', 'windows-amd64/noctis.exe', 'noctis.exe']) stub(relative);
     const fake = path.join(root, 'fake');
     fs.mkdirSync(fake);
-    fs.writeFileSync(path.join(fake, 'uname'), '#!/bin/sh\ncase "$1" in -s) echo "$FAKE_S" ;; -m) echo "$FAKE_M" ;; esac\n', { mode: 0o755 });
-    const run = (system, machine, extra = {}, cwd = root, script = path.join(bin, 'noctis')) => spawnSync('sh', [script, 'version'], {
-      cwd,
-      encoding: 'utf8',
-      env: { ...process.env, PATH: `${fake}${path.delimiter}${process.env.PATH}`, FAKE_S: system, FAKE_M: machine, ...extra },
-    });
+    const unameLog = path.join(root, 'uname.log');
+    fs.writeFileSync(path.join(fake, 'uname'), `#!/bin/sh\necho "$*" >> '${unameLog}'\ncase "$1" in -sm) echo "$FAKE_S $FAKE_M" ;; *) echo "uname $* was not expected" >&2; exit 1 ;; esac\n`, { mode: 0o755 });
+    const inherited = { ...process.env };
+    delete inherited.OSTYPE;
+    delete inherited.HOSTTYPE;
+    // An empty OSTYPE and HOSTTYPE in the environment keep bash (sh on macOS) from setting its own.
+    const run = ({ kernelSays = [], shellSays = ['', ''], unameSays = ['', ''], extra = {}, cwd = root, script = path.join(bin, 'noctis') } = {}) => {
+      fs.rmSync(kernel, { recursive: true, force: true });
+      const [ostype, arch] = kernelSays;
+      if (ostype !== undefined) {
+        fs.mkdirSync(kernel);
+        fs.writeFileSync(path.join(kernel, 'ostype'), `${ostype}\n`);
+        if (arch !== undefined) fs.writeFileSync(path.join(kernel, 'arch'), `${arch}\n`);
+      }
+      fs.rmSync(unameLog, { force: true });
+      const result = spawnSync('sh', [script, 'version'], {
+        cwd,
+        encoding: 'utf8',
+        env: { ...inherited, PATH: `${fake}${path.delimiter}${process.env.PATH}`, OSTYPE: shellSays[0], HOSTTYPE: shellSays[1], FAKE_S: unameSays[0], FAKE_M: unameSays[1], ...extra },
+      });
+      const unameCalls = fs.existsSync(unameLog) ? fs.readFileSync(unameLog, 'utf8').trim().split('\n').length : 0;
+      return { ...result, unameCalls, shown: `exit ${result.status}, uname ran ${unameCalls}x: ${(result.stdout || '').trim()} ${(result.stderr || '').trim()}` };
+    };
+    const runs = (result, expected, unameCalls) => result.status === 0 && result.stdout.trim() === `${expected} version` && result.unameCalls === unameCalls;
+    for (const [ostype, arch, expected] of [['Linux', 'x86_64', 'linux-amd64/noctis'], ['Linux', 'aarch64', 'linux-arm64/noctis']]) {
+      const result = run({ kernelSays: [ostype, arch], shellSays: ['darwin23', 'arm64'] });
+      check(`launcher: the kernel's ${ostype} ${arch} runs bin/${expected} without uname, whatever the shell says`, runs(result, expected, 0), result.shown);
+    }
+    for (const [ostype, hosttype, expected, kernelSays] of [
+      ['linux-gnu', 'x86_64', 'linux-amd64/noctis'],
+      ['linux-gnu', 'aarch64', 'linux-arm64/noctis', ['Linux']],
+      ['msys', 'x86_64', 'windows-amd64/noctis.exe'],
+      ['cygwin', 'x86_64', 'windows-amd64/noctis.exe'],
+      ['msys', 'aarch64', 'noctis.exe'],
+    ]) {
+      const result = run({ kernelSays, shellSays: [ostype, hosttype] });
+      check(`launcher: bash's ${ostype} ${hosttype} runs bin/${expected} without uname${kernelSays ? ' (a kernel before 6.1 has no arch file)' : ''}`, runs(result, expected, 0), result.shown);
+    }
+    // macOS's /bin/bash is one build for two CPUs, so its HOSTTYPE may name the other one.
+    for (const [hosttype, machine, expected] of [['x86_64', 'arm64', 'darwin-arm64/noctis'], ['arm64', 'x86_64', 'darwin-amd64/noctis']]) {
+      const result = run({ shellSays: ['darwin23', hosttype], unameSays: ['Darwin', machine] });
+      check(`launcher: on macOS uname's ${machine}, asked once, wins over bash's HOSTTYPE ${hosttype}`, runs(result, expected, 1), result.shown);
+    }
     const expectations = [
       ['Linux', 'x86_64', 'linux-amd64/noctis'],
       ['Linux', 'aarch64', 'linux-arm64/noctis'],
@@ -178,17 +219,20 @@ function checkLauncher() {
       ['MINGW64_NT-10.0-26100', 'aarch64', 'noctis.exe'],
     ];
     for (const [system, machine, expected] of expectations) {
-      const result = run(system, machine);
-      check(`launcher: ${system} ${machine} runs bin/${expected}`, result.status === 0 && result.stdout.trim() === `${expected} version`,
-        `exit ${result.status}: ${(result.stdout || '').trim()} ${(result.stderr || '').trim()}`);
+      const result = run({ unameSays: [system, machine] });
+      check(`launcher: uname's ${system} ${machine} runs bin/${expected}, asked once`, runs(result, expected, 1), result.shown);
     }
-    const unsupported = run('Linux', 'armv7l');
-    check('launcher: an unsupported CPU stops with its name instead of running an amd64 binary',
-      unsupported.status === 1 && /armv7l/.test(unsupported.stderr) && !unsupported.stdout.trim(),
-      `exit ${unsupported.status}: ${(unsupported.stdout || '').trim()} ${(unsupported.stderr || '').trim()}`);
-    const cdpath = run('Linux', 'x86_64', { CDPATH: `.${path.delimiter}${root}` }, root, 'bin/noctis');
-    check('launcher: an exported CDPATH does not break the plugin root', cdpath.status === 0 && cdpath.stdout.trim() === 'linux-amd64/noctis version',
-      `exit ${cdpath.status}: ${(cdpath.stdout || '').trim()} ${(cdpath.stderr || '').trim()}`);
+    const foreign = run({ shellSays: ['linux', 'x86_64-linux'], unameSays: ['Darwin', 'arm64'] });
+    check('launcher: an OSTYPE and HOSTTYPE bash never sets (tcsh exports these) are left to uname', runs(foreign, 'darwin-arm64/noctis', 1), foreign.shown);
+    for (const [label, options] of [['the kernel', { kernelSays: ['Linux', 'armv7l'] }], ['uname', { unameSays: ['Linux', 'armv7l'] }]]) {
+      const unsupported = run(options);
+      check(`launcher: an unsupported CPU named by ${label} stops with its name instead of running an amd64 binary`,
+        unsupported.status === 1 && /armv7l/.test(unsupported.stderr) && !unsupported.stdout.trim(), unsupported.shown);
+    }
+    const cdpath = run({ kernelSays: ['Linux', 'x86_64'], extra: { CDPATH: `.${path.delimiter}${root}` }, script: 'bin/noctis' });
+    check('launcher: a relative path with an exported CDPATH still finds the binaries', runs(cdpath, 'linux-amd64/noctis', 0), cdpath.shown);
+    const bare = run({ kernelSays: ['Linux', 'x86_64'], cwd: bin, script: 'noctis' });
+    check('launcher: run by its bare name from its own folder, it finds the binaries next to it', runs(bare, 'linux-amd64/noctis', 0), bare.shown);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

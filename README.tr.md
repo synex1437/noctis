@@ -225,7 +225,7 @@ O hafta sonunda size ihtiyaç duyan hiçbir şey yok. Checkpoint son isteği, do
 | Deterministik, karar başına sıfır token, günlüklü (`noctis why`) | ✅ | ✅ | istem güdümlü | değişir |
 | Aşırı yük (529/5xx) için limitten ayrı, jitter'lı geri çekilme | ✅ | — | — | bazıları |
 | ccusage uyumlu maliyet raporu (`noctis report --json`), cron/CI için çıkış kodu kapısı | ✅ | ✅ / — | — | — |
-| Kurulacak çalışma ortamı yok (kendi başına çalışan tek binary; Linux'ta hook başına ~5 ms, macOS ya da Linux'ta marketplace kurulumunun sh başlatıcısı üzerinden ~11 ms) | ✅ | değişir | değişir | değişir |
+| Kurulacak çalışma ortamı yok (kendi başına çalışan tek binary; Linux'ta hook başına ~5 ms, macOS ya da Linux'ta marketplace kurulumunun sh başlatıcısı üzerinden ~6 ms) | ✅ | değişir | değişir | değişir |
 | Limit kararlarını uygulanmadan önce izlemek için gözlem modu | ✅ | — | — | — |
 | Dinamik workflow: çok parçalı işlerde size önerilir (varsayılan kapalı), limite yakınken reddedilir, duraklamadan sonra kurtarılır | ✅ | — | — | — |
 | Rol profili: kod, araştırma, planlama, özet, arama ve yedek için hangi modelin çalışacağı | ✅ | — | — | — |

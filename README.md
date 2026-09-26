@@ -225,7 +225,7 @@ Nothing in that weekend needs you. The checkpoint holds the last request, touche
 | Deterministic, zero tokens per decision, journaled (`noctis why`) | ✅ | ✅ | prompt-driven | varies |
 | Overload (529/5xx) backoff with jitter, separate from limit handling | ✅ | — | — | some |
 | ccusage-compatible cost report (`noctis report --json`), exit-code gate for crons/CI | ✅ | ✅ / — | — | — |
-| No runtime to install (one self-contained binary; on Linux ~5 ms per hook, ~11 ms through the sh launcher of a macOS or Linux marketplace install) | ✅ | varies | varies | varies |
+| No runtime to install (one self-contained binary; on Linux ~5 ms per hook, ~6 ms through the sh launcher of a macOS or Linux marketplace install) | ✅ | varies | varies | varies |
 | Observe mode to watch the limit decisions before they are enforced | ✅ | — | — | — |
 | Dynamic workflows: suggested to you for fan-out (off by default), gated near the limit, rescued after a pause | ✅ | — | — | — |
 | Roles profile: which model does code, research, planning, digests, search, fallback | ✅ | — | — | — |
