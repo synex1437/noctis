@@ -21,6 +21,7 @@
   "wait.earlyReset": "⚡ Il limite %s si è azzerato prima del previsto dopo %s di attesa — si riprende da dove ti eri fermato.",
   "wait.earlyResetNotify": "Limite %s azzerato in anticipo: la sessione continua ora.",
   "wait.cancelled": "▶ Attesa %s annullata — si continua.",
+  "wait.continuedElsewhere": "⏹ Mentre questa finestra aspettava, la sessione è andata avanti in un'altra finestra; questa si ferma qui così il lavoro non viene fatto due volte.",
   "wait.sleeperSuffix": " (processo in background)",
   "wait.notifyReset": "Limite %s azzerato; il lavoro continua.",
   "workspace.changed": "⚠ l'albero di lavoro è cambiato durante l'attesa (i file, il commit o git status differiscono dal checkpoint).",

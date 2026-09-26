@@ -21,6 +21,7 @@
   "wait.earlyReset": "⚡ Limit %s zresetował się wcześniej niż planowano po %s czekania — wracamy tam, gdzie skończyłeś.",
   "wait.earlyResetNotify": "Limit %s zresetowany wcześniej: sesja rusza dalej.",
   "wait.cancelled": "▶ Limit %s: czekanie anulowane — jedziemy dalej.",
+  "wait.continuedElsewhere": "⏹ Gdy to okno czekało, sesja poszła dalej w innym oknie; to okno zatrzymuje się tutaj, żeby praca nie była robiona dwa razy.",
   "wait.sleeperSuffix": " (proces w tle)",
   "wait.notifyReset": "Limit %s zresetowany; praca trwa dalej.",
   "workspace.changed": "⚠ drzewo robocze zmieniło się podczas oczekiwania (pliki, commit lub git status różnią się od checkpointu).",

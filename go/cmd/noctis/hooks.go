@@ -190,8 +190,7 @@ func onSessionStart(input, cfg object) {
 	cwd := getString(input, "cwd")
 	waits := getMap(state, "waits")
 	handedOff := getMap(state, "handedOff")
-	if source == "resume" && waits[sid] != nil && handedOff[sid] == nil && !isHandoffSession(sid) {
-		clearWaitAndConsume(sid, state)
+	if source == "resume" && waits[sid] != nil && handedOff[sid] == nil && !isHandoffSession(sid) && takeWait(sid, getMap(waits, sid), "resume", true) {
 		logInfo("manual resume of %s: pending wait cleared", sid)
 	}
 	if source == "clear" {
@@ -335,8 +334,7 @@ func releaseClearedSession(newSid, cwd string, now int64) {
 			break
 		}
 	}
-	if wait := getMap(waits, chosen.sid); wait != nil && hookSleeping(wait) && getMap(getMap(state, "handedOff"), chosen.sid) == nil {
-		clearWait(chosen.sid, state)
+	if wait := getMap(waits, chosen.sid); wait != nil && hookSleeping(wait) && getMap(getMap(state, "handedOff"), chosen.sid) == nil && clearWait(chosen.sid, state) {
 		logInfo("/clear in %s: interrupted wait of %s released", cwd, chosen.sid)
 	}
 	override := getMap(getMap(state, "modelOverrides"), chosen.sid)
@@ -462,8 +460,7 @@ func letTypedPromptThrough(cfg, state object, sid string, result decision, now i
 	}
 	journal(sid, "UserPromptSubmit", "typed-prompt", hitLabel(wait), usageFacts(result.usage))
 	logInfo("typed prompt for %s goes past the pause point: %s %s%%", sid, wait.window, formatNumber(wait.used))
-	if parked := getMap(getMap(state, "waits"), sid); parked != nil && !hookSleeping(parked) {
-		clearWaitAndConsume(sid, state)
+	if parked := getMap(getMap(state, "waits"), sid); parked != nil && !hookSleeping(parked) && clearWaitAndConsume(sid, state) {
 		logInfo("typed prompt for %s: pending wait cleared", sid)
 	}
 	key := fmt.Sprintf("%s:typed:%s:%s", sid, wait.window, formatNumber(wait.until))
@@ -741,7 +738,11 @@ func onAgentSpawn(input, cfg, state object, now int64) {
 		}
 		outcome := enforceWait("batch", input, cfg, result)
 		if outcome.stop != "" {
-			emit(object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": outcome.stop}})
+			denied := object{"hookSpecificOutput": object{"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": outcome.stop}}
+			if outcome.halt {
+				denied["continue"], denied["stopReason"] = false, outcome.stop
+			}
+			emit(denied)
 			return
 		}
 		systemMessage = outcome.notice
@@ -2089,7 +2090,7 @@ func onStopFailure(input, cfg object) {
 	wakeable := currentHost().wake && getBool(wakeCfg, "sameSession", true) && interactive && getString(record, "window") != "fable" && resumeAt-float64(now) <= math.Max(1, numberOr(wakeCfg, "maxMinutes", 330))*60
 	runnerAt := resumeAt
 	if wakeable {
-		runnerAt += math.Max(60, numberOr(wakeCfg, "graceSeconds", 300))
+		runnerAt += wakeGraceSeconds(cfg)
 	}
 
 	if !registerWait(sid, record, cfg) {
@@ -2146,20 +2147,12 @@ func wakeSameSession(cfg object, sid string, record object, resumeAt float64) {
 	watch := newWaitWatch(cfg, sid, true)
 	watch.startedAt = startedAt
 
-	updateState(func(next object) {
-		if wait := getMap(getMap(next, "waits"), sid); wait != nil && numberOr(wait, "startedAt", -1) == startedAt {
-			wait["waking"] = float64(nowSec())
-		}
-	})
-	defer updateState(func(next object) {
-		if wait := getMap(getMap(next, "waits"), sid); wait != nil {
-			delete(wait, "waking")
-		}
-	})
+	rescheduleOwnWait(sid, startedAt, func(wait object) { wait["waking"] = float64(nowSec()) })
+	defer rescheduleOwnWait(sid, startedAt, func(wait object) { delete(wait, "waking") })
 	sleepUntilEvery(resumeAt, watch.tickSeconds(), watch.tick)
 	state := readState()
-	wait := getMap(getMap(state, "waits"), sid)
-	if watch.cancelled || wait == nil || numberOr(wait, "startedAt", -1) != startedAt {
+	wait := ownWait(state, sid, startedAt)
+	if watch.cancelled || wait == nil {
 		logInfo("wake %s: wait cleared meanwhile, nothing to do", sid)
 		return
 	}
@@ -2183,13 +2176,20 @@ func wakeSameSession(cfg object, sid string, record object, resumeAt float64) {
 			return
 		}
 	}
+	woke := false
 	updateState(func(next object) {
-		if current := getMap(getMap(next, "waits"), sid); current != nil {
+		if current := ownWait(next, sid, startedAt); current != nil && continuedElsewhere(next, sid, startedAt, getString(current, "holder")) == "" {
 			current["wakeAttemptedAt"] = float64(nowSec())
 
 			delete(current, "waking")
+			woke = true
 		}
 	})
+	if !woke {
+		journal(sid, "StopFailure", "continued-elsewhere", getString(record, "label"), nil)
+		logInfo("wake %s: the session went on elsewhere meanwhile; not waking it a second time", sid)
+		return
+	}
 	journal(sid, "StopFailure", "wake-same-session", getString(record, "label"), object{"resumeAt": resumeAt})
 	logInfo("wake %s: waking the session in place (exit 2)", sid)
 	message := T("wait.wakeMessage", getString(record, "label"), formatTime(resumeAt), formatNumber(numberOr(record, "used", 0)))
@@ -2222,8 +2222,8 @@ func onNotification(input, cfg object) {
 	})
 	switch kind {
 	case "quota_auto_resume_fired":
-		if getMap(getMap(state, "waits"), sid) != nil {
-			clearWait(sid, state)
+		if wait := getMap(getMap(state, "waits"), sid); wait != nil {
+			takeWait(sid, wait, "builtin", false)
 		}
 		logInfo("builtin auto-continue fired for %s; runner cancelled", sid)
 	case "quota_auto_resume_stale":

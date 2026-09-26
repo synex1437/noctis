@@ -773,47 +773,9 @@ func leaveSessionToItsRunner(sid string) {
 	logInfo("runner %s: another runner already holds the session; not launching twice", sid)
 }
 
-func rescheduleOwnWait(sid string, startedAt float64, change func(record object)) bool {
-	stored := false
-	updateState(func(next object) {
-		if record := getMap(getMap(next, "waits"), sid); record != nil && numberOr(record, "startedAt", -1) == startedAt {
-			change(record)
-			stored = true
-		}
-	})
-	return stored
-}
-
-func clearOwnWait(sid string, startedAt float64) bool {
-	state := readState()
-	if numberOr(getMap(getMap(state, "waits"), sid), "startedAt", -1) != startedAt {
-		return false
-	}
-	cancelRunner(sid, state)
-	removed := false
-	updateState(func(next object) {
-		if numberOr(getMap(getMap(next, "waits"), sid), "startedAt", -1) == startedAt {
-			delete(stateMap(next, "waits"), sid)
-			removed = true
-		}
-	})
-	return removed
-}
-
 func leaveReplacedWait(sid string) {
 	journal(sid, "resume", "skip-launch", "the wait was replaced while this runner worked on it", nil)
 	logInfo("runner %s: the wait was replaced while this runner worked on it; its own runner resumes it", sid)
-}
-
-func releaseHandoff(sid string, startedAt float64) {
-	updateState(func(next object) {
-		if int(numberOr(getMap(getMap(next, "handedOff"), sid), "pid", 0)) == os.Getpid() {
-			delete(stateMap(next, "handedOff"), sid)
-		}
-		if record := getMap(getMap(next, "waits"), sid); record != nil && numberOr(record, "startedAt", -1) == startedAt {
-			delete(stateMap(next, "waits"), sid)
-		}
-	})
 }
 
 func resumeWait(sid, release string) {
@@ -839,7 +801,10 @@ func resumeWait(sid, release string) {
 	}
 	auto := getMap(getMap(state, "autoResume"), sid)
 	if getString(auto, "type") == "quota_auto_resume_fired" && numberOr(auto, "at", 0) >= numberOr(wait, "startedAt", 0) {
-		clearWaitAndConsume(sid, state)
+		if !takeWait(sid, wait, "builtin", true) {
+			leaveReplacedWait(sid)
+			return
+		}
 		logInfo("runner %s: builtin auto-continue already resumed the session", sid)
 		return
 	}
@@ -865,11 +830,10 @@ func resumeWait(sid, release string) {
 			if !rescheduleOwnWait(sid, startedAt, func(record object) {
 				record["aliveChecks"] = float64(checks)
 				record["resumeAt"] = retryAt
-			}) {
+			}) || !scheduleOwnRunner(cfg, sid, startedAt, retryAt) {
 				leaveReplacedWait(sid)
 				return
 			}
-			scheduleRunner(cfg, sid, retryAt)
 			logInfo("runner %s: waiting hook still alive (heartbeat), re-check %d at %s", sid, checks, localISO(retryAt))
 			return
 		}
@@ -881,7 +845,10 @@ func resumeWait(sid, release string) {
 	}
 	kind := getString(wait, "kind")
 	if waitContinued(wait) {
-		clearWaitAndConsume(sid, state)
+		if !takeWait(sid, wait, "session", true) {
+			leaveReplacedWait(sid)
+			return
+		}
 		journal(sid, "resume", "skip-launch", "the session went on in its own window after the reset", nil)
 		logInfo("runner %s: the session went on after the reset; not relaunching it", sid)
 		return
@@ -900,11 +867,10 @@ func resumeWait(sid, release string) {
 				record["hit"], record["cause"], record["used"], record["threshold"] = plan.hit, plan.cause, plan.used, plan.threshold
 				record["startedAt"] = float64(now)
 				delete(record, "earlyTriggeredAt")
-			}) {
+			}) || !scheduleOwnRunner(cfg, sid, float64(now), resumeAt) {
 				leaveReplacedWait(sid)
 				return
 			}
-			scheduleRunner(cfg, sid, resumeAt)
 			logInfo("runner %s: limit still active (%s %%%s), rescheduled to %s", sid, plan.label, formatNumber(plan.used), localISO(resumeAt))
 			return
 		}
@@ -924,11 +890,10 @@ func resumeWait(sid, release string) {
 				record["attempts"], record["resumeAt"] = float64(attempts), retryAt
 				record["startedAt"] = float64(now)
 				delete(record, "earlyTriggeredAt")
-			}) {
+			}) || !scheduleOwnRunner(cfg, sid, float64(now), retryAt) {
 				leaveReplacedWait(sid)
 				return
 			}
-			scheduleRunner(cfg, sid, retryAt)
 			warn("runner %s: no usage data, retry %d at %s", sid, attempts, localISO(retryAt))
 			return
 		}
@@ -945,16 +910,24 @@ func resumeWait(sid, release string) {
 		}
 	}
 	if getString(resume, "mode") == "none" {
-		clearWait(sid, state)
+		if !clearWait(sid, state) {
+			leaveReplacedWait(sid)
+		}
 		return
 	}
 	if wakeAt := numberOr(wait, "wakeAttemptedAt", 0); wakeAt > 0 && sessionActiveAfter(wait, wakeAt) {
-		clearWaitAndConsume(sid, state)
+		if !takeWait(sid, wait, "wake", true) {
+			leaveReplacedWait(sid)
+			return
+		}
 		if ready != "" {
 			notify(cfg, pluginName, ready)
 		}
 		journal(sid, "resume", "skip-launch", "same-session wake succeeded", nil)
 		logInfo("runner %s: same-session wake already continued the session", sid)
+		return
+	} else if wakeAt > 0 && float64(nowSec()) < wakeAt+wakeGraceSeconds(cfg) {
+		checkOnWakeAfterItsGrace(cfg, sid, startedAt, wakeAt)
 		return
 	}
 	model := orDefault(getString(wait, "modelOverride"), resolveSessionModel(cfg, readState(), readJSON(files.usage), sid))
@@ -1005,13 +978,14 @@ func resumeWait(sid, release string) {
 		prompt = T("overload.wakeMessage", getString(wait, "label"), formatNumber(numberOr(wait, "attempt", 1)), durationText(numberOr(wait, "resumeAt", 0)-numberOr(wait, "startedAt", numberOr(wait, "resumeAt", 0)))) + " " + prompt
 	}
 	prompt = relaunchPrompt(prompt)
-	claimed, continued, watcher := false, false, 0
+	claimed, continued, woken, watcher := false, false, 0.0, 0
 	updateState(func(next object) {
 
 		if handoffHeldFor(next, sid, startedAt) > 0 {
 			return
 		}
-		if record := getMap(getMap(next, "waits"), sid); record == nil || numberOr(record, "startedAt", -1) != startedAt {
+		record := ownWait(next, sid, startedAt)
+		if record == nil {
 
 			return
 		}
@@ -1019,21 +993,31 @@ func resumeWait(sid, release string) {
 			continued = true
 			return
 		}
+		if wakeAt := numberOr(record, "wakeAttemptedAt", 0); wakeAt > numberOr(wait, "wakeAttemptedAt", 0) {
+			woken = wakeAt
+			return
+		}
 		claimed, watcher = true, liveRunner(getMap(getMap(next, "handedOff"), sid))
 		stateMap(next, "handedOff")[sid] = object{"at": float64(nowSec()), "model": model, "mode": getString(resume, "mode"), "pid": float64(os.Getpid()), "waitStartedAt": startedAt}
+		markContinued(next, sid, record, "runner")
 		stateMap(next, "resumePrompts")[sid] = object{"hash": promptDigest(prompt), "at": float64(nowSec())}
 		stateMap(next, "modelOverrides")[sid] = object{"model": model, "at": float64(nowSec())}
 		if checkpoint := getMap(getMap(next, "checkpoints"), sid); checkpoint != nil {
 			checkpoint["consumed"] = true
 		}
-		if record := getMap(getMap(next, "waits"), sid); record != nil {
-			delete(record, "scheduled")
-		}
+		delete(record, "scheduled")
 	})
 	if continued {
-		clearWaitAndConsume(sid, state)
+		if !takeWait(sid, wait, "session", true) {
+			leaveReplacedWait(sid)
+			return
+		}
 		journal(sid, "resume", "skip-launch", "the session went on in its own window while usage was checked", nil)
 		logInfo("runner %s: the session went on after the reset while usage was checked; not relaunching it", sid)
+		return
+	}
+	if woken > 0 {
+		checkOnWakeAfterItsGrace(cfg, sid, startedAt, woken)
 		return
 	}
 	if !claimed {
@@ -1083,12 +1067,21 @@ func resumeWait(sid, release string) {
 		delete(record, "waking")
 		delete(record, "wakeAttemptedAt")
 		delete(record, "earlyTriggeredAt")
-	}) {
+	}) || !scheduleOwnRunner(cfg, sid, ended, retryAt) {
 		leaveReplacedWait(sid)
 		return
 	}
-	scheduleRunner(cfg, sid, retryAt)
 	warn("runner %s: the relaunch ended without the session answering; retry %d at %s", sid, attempts, localISO(retryAt))
+}
+
+func checkOnWakeAfterItsGrace(cfg object, sid string, startedAt, wakeAt float64) {
+	at := wakeAt + wakeGraceSeconds(cfg)
+	if !scheduleOwnRunner(cfg, sid, startedAt, at) {
+		leaveReplacedWait(sid)
+		return
+	}
+	journal(sid, "resume", "skip-launch", "the session was woken in place and its wake's grace is not over yet", object{"at": at})
+	logInfo("runner %s: the session was woken in place at %s; checking on it at %s before relaunching it", sid, localISO(wakeAt), localISO(at))
 }
 
 func launchBlocked(launch launchSpec) string {

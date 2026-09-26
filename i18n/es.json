@@ -21,6 +21,7 @@
   "wait.earlyReset": "⚡ El límite %s se reinició antes de lo previsto tras %s de espera — seguimos donde lo dejaste.",
   "wait.earlyResetNotify": "Límite %s reiniciado antes de tiempo: la sesión continúa ahora.",
   "wait.cancelled": "▶ Espera %s cancelada — continuamos.",
+  "wait.continuedElsewhere": "⏹ Mientras esta ventana esperaba, la sesión siguió en otra ventana; esta se detiene aquí para que el trabajo no se haga dos veces.",
   "wait.sleeperSuffix": " (proceso en segundo plano)",
   "wait.notifyReset": "Límite %s reiniciado; el trabajo continúa.",
   "workspace.changed": "⚠ el árbol de trabajo cambió durante la espera (sus archivos, su commit o git status difieren del checkpoint).",

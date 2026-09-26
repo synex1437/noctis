@@ -21,6 +21,7 @@
   "wait.earlyReset": "⚡ La limite %s a été réinitialisée en avance après %s d'attente — on reprend là où tu t'es arrêté.",
   "wait.earlyResetNotify": "Limite %s réinitialisée en avance : la session continue maintenant.",
   "wait.cancelled": "▶ Attente %s annulée — on continue.",
+  "wait.continuedElsewhere": "⏹ Pendant que cette fenêtre attendait, la session a continué dans une autre fenêtre ; celle-ci s'arrête ici pour que le travail ne soit pas fait deux fois.",
   "wait.sleeperSuffix": " (processus en arrière-plan)",
   "wait.notifyReset": "Limite %s réinitialisée ; le travail continue.",
   "workspace.changed": "⚠ l'arborescence de travail a changé pendant l'attente (ses fichiers, son commit ou git status diffèrent du checkpoint).",

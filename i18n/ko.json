@@ -21,6 +21,7 @@
   "wait.earlyReset": "⚡ %[2]s 대기 후 %[1]s 한도가 예정보다 일찍 초기화되었습니다 — 멈춘 지점부터 이어갑니다.",
   "wait.earlyResetNotify": "%s 한도가 일찍 초기화되었습니다: 세션을 이어갑니다.",
   "wait.cancelled": "▶ %s 대기를 취소했습니다 — 계속합니다.",
+  "wait.continuedElsewhere": "⏹ 이 창이 기다리는 동안 세션이 다른 창에서 계속되었습니다. 작업이 두 번 실행되지 않도록 이 창은 여기서 멈춥니다.",
   "wait.sleeperSuffix": " (백그라운드 프로세스)",
   "wait.notifyReset": "%s 한도가 초기화되었습니다. 작업을 계속합니다.",
   "workspace.changed": "⚠ 대기 중에 작업 트리가 변경되었습니다 (파일, 커밋 또는 git status가 체크포인트와 다릅니다).",

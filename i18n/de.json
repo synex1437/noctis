@@ -21,6 +21,7 @@
   "wait.earlyReset": "⚡ %s-Limit wurde nach %s Wartezeit früher als geplant zurückgesetzt — es geht dort weiter, wo du aufgehört hast.",
   "wait.earlyResetNotify": "%s-Limit vorzeitig zurückgesetzt: die Sitzung läuft jetzt weiter.",
   "wait.cancelled": "▶ %s-Wartezeit abgebrochen — weiter geht's.",
+  "wait.continuedElsewhere": "⏹ Während dieses Fenster gewartet hat, ging die Sitzung in einem anderen Fenster weiter; dieses hier hält an, damit die Arbeit nicht doppelt läuft.",
   "wait.sleeperSuffix": " (Hintergrundprozess)",
   "wait.notifyReset": "%s-Limit zurückgesetzt; die Arbeit geht weiter.",
   "workspace.changed": "⚠ Der Arbeitsbaum hat sich während des Wartens geändert (Dateien, Commit oder git status weichen vom Checkpoint ab).",

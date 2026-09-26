@@ -204,11 +204,7 @@ func (w *waitWatch) tick() bool {
 		return true
 	}
 	if w.heartbeat {
-		updateState(func(state object) {
-			if current := getMap(getMap(state, "waits"), w.sid); current != nil {
-				current["heartbeat"] = now
-			}
-		})
+		rescheduleOwnWait(w.sid, w.startedAt, func(current object) { current["heartbeat"] = now })
 	}
 	if w.pollEvery <= 0 {
 		return false
@@ -258,8 +254,8 @@ func triggerEarlyResumes(cfg object) {
 			continue
 		}
 		claimed := false
-		updateState(func(next object) {
-			if current := getMap(getMap(next, "waits"), sid); current != nil && numberOr(current, "earlyTriggeredAt", 0) == 0 {
+		rescheduleOwnWait(sid, numberOr(record, "startedAt", -1), func(current object) {
+			if numberOr(current, "earlyTriggeredAt", 0) == 0 {
 				current["earlyTriggeredAt"] = float64(nowSec())
 				claimed = true
 			}
