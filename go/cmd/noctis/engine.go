@@ -1526,6 +1526,7 @@ type waitHold struct {
 	owned     bool
 	cancelled bool
 	stop      string
+	halt      bool
 }
 
 func holdWait(kind, sid string, cfg object, wait *waitPlan, resumeAt float64, held object, owned bool) waitHold {
@@ -1535,16 +1536,21 @@ func holdWait(kind, sid string, cfg object, wait *waitPlan, resumeAt float64, he
 		watch := newWaitWatch(cfg, sid, owned)
 		watch.startedAt = startedAt
 		reached := sleepUntilEvery(epoch, watch.tickSeconds(), func() bool {
-			if current := getMap(getMap(readState(), "waits"), sid); current != nil && !sameWait(current, startedAt, holder) {
+			state := readState()
+			if current := getMap(getMap(state, "waits"), sid); current != nil && !sameWait(current, startedAt, holder) || continuedElsewhere(state, sid, startedAt, holder) != "" {
 				return true
 			}
 			return watch.tick()
 		})
 		ended := reached || watch.early || watch.dataBack
 		var current, scheduled object
+		elsewhere := ""
 		updateState(func(next object) {
 			waits := stateMap(next, "waits")
 			current = getMap(waits, sid)
+			if elsewhere = continuedElsewhere(next, sid, startedAt, holder); elsewhere != "" {
+				return
+			}
 			mine := sameWait(current, startedAt, holder)
 			if !owned || (current != nil && !mine) || (mine && !ended) {
 				return
@@ -1557,6 +1563,11 @@ func holdWait(kind, sid string, cfg object, wait *waitPlan, resumeAt float64, he
 				entry["consumed"] = true
 			}
 		})
+		if elsewhere != "" {
+			journal(sid, kind, "continued-elsewhere", hitLabel(wait), object{"by": elsewhere})
+			logInfo("in-hook wait for %s: the session went on elsewhere (%s) while this hook held it; stopping this window", sid, elsewhere)
+			return waitHold{watch: watch, stop: T("wait.continuedElsewhere"), halt: true}
+		}
 		mine := sameWait(current, startedAt, holder)
 		if mine && !ended {
 			continue
@@ -1589,32 +1600,9 @@ func joinWait(kind, sid string, cfg object, wait *waitPlan, current object, resu
 		return waitOutcome{stop: savedNotice(cfg, wait.label, formatNumber(wait.used), formatTime(numberOr(current, "resumeAt", resumeAt)), "") + pauseWhy(wait)}
 	}
 	if hold := holdWait(kind, sid, cfg, wait, resumeAt, current, false); hold.stop != "" {
-		return waitOutcome{stop: hold.stop}
+		return waitOutcome{stop: hold.stop, halt: hold.halt}
 	}
 	return waitOutcome{notice: resumedNotice(wait, float64(nowSec()-now))}
-}
-
-func clearWait(sid string, state object) {
-	if state == nil {
-		state = readState()
-	}
-	cancelRunner(sid, state)
-	updateState(func(next object) {
-		delete(stateMap(next, "waits"), sid)
-	})
-}
-
-func clearWaitAndConsume(sid string, state object) {
-	if state == nil {
-		state = readState()
-	}
-	cancelRunner(sid, state)
-	updateState(func(next object) {
-		delete(stateMap(next, "waits"), sid)
-		if entry := getMap(getMap(next, "checkpoints"), sid); entry != nil {
-			entry["consumed"] = true
-		}
-	})
 }
 
 func notify(cfg object, title, body string) string {
@@ -1754,7 +1742,9 @@ func dropInterruptedWait(sid string, state object) {
 	startedAt := numberOr(wait, "startedAt", now)
 	slept := math.Max(0, math.Min(now, heartbeat)-startedAt)
 	intended := numberOr(wait, "resumeAt", now) - startedAt
-	clearWait(sid, state)
+	if !clearWait(sid, state) {
+		return
+	}
 	if slept > 120 && intended-slept > 120 {
 		updateState(func(next object) {
 			samples := getList(next, "interruptedWaits")
@@ -1909,7 +1899,7 @@ func rearmStrandedWait(cfg object, sid string, seen object, thorough bool) {
 			at += math.Max(0, numberOr(section(cfg, "wait"), "builtinGraceSeconds", 0))
 		}
 		if numberOr(record, "waking", 0) > 0 {
-			at += math.Max(60, numberOr(section(cfg, "wake"), "graceSeconds", 300))
+			at += wakeGraceSeconds(cfg)
 		}
 		journal(sid, "repair", "reschedule", reason, object{"resumeAt": resumeAt})
 		warn("wait for %s: %s; rescheduling", sid, reason)
@@ -1919,6 +1909,7 @@ func rearmStrandedWait(cfg object, sid string, seen object, thorough bool) {
 
 type waitOutcome struct {
 	stop    string
+	halt    bool
 	notice  string
 	context string
 }
@@ -2057,7 +2048,7 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 		watch := hold.watch
 		switch {
 		case hold.stop != "":
-			return waitOutcome{stop: hold.stop}
+			return waitOutcome{stop: hold.stop, halt: hold.halt}
 		case hold.cancelled:
 			journal(sid, kind, "wait-cancelled", hitLabel(wait), nil)
 			logInfo("in-hook wait for %s cancelled; continuing", sid)

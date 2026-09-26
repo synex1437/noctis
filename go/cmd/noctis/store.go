@@ -956,6 +956,7 @@ func emptyState() object {
 		"failureRetries":   object{},
 		"queueVerify":      object{},
 		"typedTurns":       object{},
+		"continuedBy":      object{},
 	}
 }
 
@@ -1200,6 +1201,7 @@ func pruneState(state object, now int64) {
 		"failureRetries": stateEntryTTLSeconds,
 		"modelOverrides": launchRecordTTLSeconds,
 		"typedTurns":     stateEntryTTLSeconds,
+		"continuedBy":    stateEntryTTLSeconds,
 	} {
 		for key, raw := range stateMap(state, name) {
 			entry, _ := raw.(object)

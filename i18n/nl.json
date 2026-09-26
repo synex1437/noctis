@@ -21,6 +21,7 @@
   "wait.earlyReset": "⚡ De %s-limiet is na %s wachten eerder gereset dan verwacht — we gaan verder waar je gebleven was.",
   "wait.earlyResetNotify": "%s-limiet vroeg gereset: de sessie gaat nu verder.",
   "wait.cancelled": "▶ %s-wachttijd geannuleerd — we gaan door.",
+  "wait.continuedElsewhere": "⏹ Terwijl dit venster wachtte, ging de sessie verder in een ander venster; dit venster stopt hier zodat het werk niet twee keer gebeurt.",
   "wait.sleeperSuffix": " (achtergrondproces)",
   "wait.notifyReset": "%s-limiet gereset; het werk gaat door.",
   "workspace.changed": "⚠ de werkmap is veranderd tijdens het wachten (bestanden, commit of git status wijken af van het checkpoint).",

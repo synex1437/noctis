@@ -23,6 +23,7 @@
   "wait.earlyReset": "⚡ %s limiti planlanandan önce sıfırlandı (%s beklendi) — kaldığın yerden devam ediliyor.",
   "wait.earlyResetNotify": "%s limiti erken sıfırlandı: oturum şimdi devam ediyor.",
   "wait.cancelled": "▶ %s beklemesi iptal edildi — devam ediliyor.",
+  "wait.continuedElsewhere": "⏹ Bu pencere beklerken oturum başka bir pencerede devam etti; iş iki kez yapılmasın diye bu pencere burada duruyor.",
   "wait.sleeperSuffix": " (arka plan süreci)",
   "wait.notifyReset": "%s limit sıfırlandı; iş devam ediyor.",
   "workspace.changed": "⚠ beklerken çalışma ağacı değişti (dosyalar, commit ya da git status checkpoint'tekinden farklı).",

@@ -32,7 +32,7 @@ func parkForRelaunch(t *testing.T, sid, kind, mode string) {
 	t.Setenv("NOCTIS_TEST_TRANSCRIPT", transcript)
 	wait := object{"kind": kind, "window": "five_hour", "label": "5h", "used": float64(95), "threshold": float64(92), "hit": "threshold",
 		"startedAt": now - 600, "until": now - 10, "resumeAt": now - 5, "cwd": cwd, "transcript": transcript, "launchMode": mode,
-		"inHook": true, "heartbeat": now - 600, "wakeAttemptedAt": now - 8, "earlyTriggeredAt": now - 4}
+		"inHook": true, "heartbeat": now - 600, "wakeAttemptedAt": now - wakeGraceSeconds(loadConfig()) - 8, "earlyTriggeredAt": now - 4}
 	if kind == "stopfailure" {
 		wait["window"], wait["label"], wait["overload"], wait["attempt"] = "unknown", "overloaded", true, float64(1)
 		wait["until"], wait["startedAt"] = now-600, now-600

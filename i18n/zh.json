@@ -21,6 +21,7 @@
   "wait.earlyReset": "⚡ 等待 %[2]s 后，%[1]s 限额提前重置了 — 从你停下的地方继续。",
   "wait.earlyResetNotify": "%s 限额提前重置：会话现在继续。",
   "wait.cancelled": "▶ 已取消 %s 的等待 — 继续。",
+  "wait.continuedElsewhere": "⏹ 此窗口等待期间，会话已在另一个窗口中继续；为避免工作重复执行，此窗口在此停止。",
   "wait.sleeperSuffix": "（后台进程）",
   "wait.notifyReset": "%s 限额已重置；工作继续。",
   "workspace.changed": "⚠ 等待期间工作树发生了变化（文件、提交或 git status 与检查点不同）。",
