@@ -226,7 +226,11 @@ func indexOf(list []string, value string) int {
 
 func sandboxFiles(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	return sandboxFilesIn(t, t.TempDir())
+}
+
+func sandboxFilesIn(t *testing.T, dir string) string {
+	t.Helper()
 	previous := files
 	t.Cleanup(func() { files = previous })
 	t.Setenv("NOCTIS_NO_WATCHER", "1")

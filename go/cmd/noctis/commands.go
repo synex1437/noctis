@@ -386,7 +386,8 @@ func printWaitsThatStillResume(cfg, state object, now int64) {
 		if !waitLive(wait, now) {
 			continue
 		}
-		if !relaunches || getString(getMap(wait, "scheduled"), "method") == "manual" || getMap(handedOff, sid) != nil || (hookSleeping(wait) && holderAlive(wait)) {
+		method := getString(getMap(wait, "scheduled"), "method")
+		if !relaunches || method == "manual" || method == "cloud" || getMap(handedOff, sid) != nil || (hookSleeping(wait) && holderAlive(wait)) {
 			skipped = true
 			continue
 		}

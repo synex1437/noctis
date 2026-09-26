@@ -66,6 +66,11 @@ func TestMain(m *testing.M) {
 		}
 		break
 	}
+	// The suite runs the same wherever it is started: a Claude Code session
+	// that runs it (in the cloud, or through claude -p) must not turn every
+	// test into one about that kind of session.
+	_ = os.Unsetenv("CLAUDE_CODE_REMOTE")
+	_ = os.Unsetenv("CLAUDE_CODE_ENTRYPOINT")
 	os.Exit(m.Run())
 }
 
