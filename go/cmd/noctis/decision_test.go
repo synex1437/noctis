@@ -251,6 +251,28 @@ func TestUpdateStateWritesNothingWhenNothingChanged(t *testing.T) {
 	}
 }
 
+func TestUpdateStateBacksUpTheStateItReadAndWritesWhatItEncoded(t *testing.T) {
+	sandboxFiles(t)
+	stamp := float64(nowSec())
+	// An editor saved it with a byte order mark; noctis reads it all the same.
+	previous := append([]byte("\xef\xbb\xbf"), marshalPretty(object{"notified": object{"s1": stamp}})...)
+	if err := os.WriteFile(files.state, previous, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	updated := updateState(func(state object) { stateMap(state, "notified")["s2"] = stamp })
+	written, _ := os.ReadFile(files.state)
+	if string(written) != string(marshalPretty(updated)) {
+		t.Fatalf("state.json is not the encoding of the updated state:\n%s", written)
+	}
+	if notified := getMap(readState(), "notified"); notified["s1"] != stamp || notified["s2"] != stamp {
+		t.Fatalf("the update lost an entry or did not add its own: %v", notified)
+	}
+	backup, _ := os.ReadFile(files.stateBackup)
+	if string(backup) != string(previous) {
+		t.Fatalf("the state noctis had just read was not kept as the backup: %q", backup)
+	}
+}
+
 func TestUpdateStateWritesWhenSomethingChanged(t *testing.T) {
 	sandboxFiles(t)
 	stamp := float64(nowSec())
