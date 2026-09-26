@@ -560,8 +560,12 @@ func turkishTalkLead(sentence []heldToken) (string, bool) {
 		words := heldWords(clause)
 		switch {
 		case len(words) == 0:
-		case question && turkishAskWords(words[len(words)-1]) && !turkishTalkEnd(words[:len(words)-1]):
-			work = true
+		case question && turkishAskWords(words[len(words)-1]):
+			asksTalk, asksWork := turkishAskedVerb(words[:len(words)-1])
+			if asksTalk && talk == "" && turkishAboutTheList(words) {
+				talk = heldQuote(clause)
+			}
+			work = work || asksWork && !asksTalk
 		case turkishTalkEnd(words):
 			if talk == "" && turkishAboutTheList(words) {
 				talk = heldQuote(clause)
@@ -571,6 +575,89 @@ func turkishTalkLead(sentence []heldToken) (string, bool) {
 		}
 	}
 	return talk, work
+}
+
+// turkishAskedVerb reads the verb a question asks for, before "misin":
+// "yapabilir" and "halleder" ask for work, "tahmin edebilir" for talk.
+func turkishAskedVerb(words []string) (talk, work bool) {
+	if len(words) == 0 {
+		return false, false
+	}
+	head := words[:len(words)-1]
+	for _, stem := range turkishVerbStems(words[len(words)-1]) {
+		talk = talk || turkishTalkEnd(append(append([]string{}, head...), stem))
+		work = work || turkishWorkEnds(stem)
+	}
+	return talk, work
+}
+
+// turkishVerbStems undoes the ability and aorist endings of a verb in a
+// question: "yapabilir" is "yap", "edebilir" "et", "halleder" "hallet",
+// "uygular" "uygula".
+func turkishVerbStems(word string) []string {
+	stems := []string{word}
+	add := func(stem string) {
+		if utf8.RuneCountInString(stem) < 2 {
+			return
+		}
+		stems = append(stems, stem)
+		if trimmed, found := strings.CutSuffix(stem, "y"); found && utf8.RuneCountInString(trimmed) >= 2 {
+			stems = append(stems, trimmed)
+		}
+		if trimmed, found := strings.CutSuffix(stem, "d"); found {
+			stems = append(stems, trimmed+"t")
+		}
+	}
+	for _, ending := range []string{"abilir", "ebilir", "ar", "er", "ir", "ür", "ur", "r"} {
+		if stem, found := strings.CutSuffix(word, ending); found {
+			add(stem)
+		}
+	}
+	return stems
+}
+
+var (
+	askOpeners      = lazyWordSet(`so ok okay and now then also hey well`)
+	askFillers      = lazyWordSet(`please kindly just also maybe now`)
+	askWorkVerbs    = lazyWordSet(`get take knock sort finish complete wrap`)
+	askInspectVerbs = lazyWordSet(`check verify investigate audit measure profile benchmark debug trace monitor test review compare`)
+)
+
+// politeWorkAsk tells a closing "Can you do these?" or "Bunları yapabilir
+// misin?", which asks for the listed work, from a question about it such as
+// "Can you estimate these?" or "Bunları tahmin edebilir misin?".
+func politeWorkAsk(sentence string) bool {
+	words := heldWords(heldTokens(sentence))
+	for len(words) > 1 && (words[len(words)-1] == "lütfen" || words[len(words)-1] == "please") {
+		words = words[:len(words)-1]
+	}
+	if len(words) > 1 && turkishAskWords(words[len(words)-1]) {
+		talk, work := turkishAskedVerb(words[:len(words)-1])
+		return work && !talk
+	}
+	at := 0
+	for at < len(words) && askOpeners(words[at]) {
+		at++
+	}
+	if !politeAsk(wordAt(words, at)) || wordAt(words, at+1) != "you" {
+		return false
+	}
+	for at += 2; at < len(words) && askFillers(words[at]); at++ {
+	}
+	if wordAt(words, at) == "go" && wordAt(words, at+1) == "ahead" {
+		at += 2
+		if wordAt(words, at) == "and" {
+			at++
+		}
+	}
+	verb, next := wordAt(words, at), wordAt(words, at+1)
+	switch {
+	case verb == "" || talkVerbs(verb) || askInspectVerbs(verb) || tellVerbs(verb) && (next == "me" || next == "us"):
+		return false
+	case verb == "mind":
+		return englishWorkVerb(next)
+	}
+	return englishWorkVerb(verb) || askWorkVerbs(verb) || imperativeWords(verb)
 }
 
 var (

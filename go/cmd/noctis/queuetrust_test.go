@@ -107,7 +107,7 @@ func TestRevokingTrustStopsTheStopHookAgain(t *testing.T) {
 
 func TestTheSessionsOwnChecklistNeedsNoTrust(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, false)
-	if startAutoQueue("st3", project, []string{"add input validation to the signup form", "write tests for the payments module"}, nowSec()) == "" {
+	if startAutoQueue("st3", project, promptJob{items: []string{"add input validation to the signup form", "write tests for the payments module"}}, nowSec()) == "" {
 		t.Fatal("the checklist from the prompt was not written")
 	}
 	output := stopHookOutput(t, stopInput("st3", project), cfg)
