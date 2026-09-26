@@ -68,6 +68,7 @@
   "queue.heldMessage": "⛔ Kolejka wstrzymana: komenda `%[1]s` nie powiodła się %[2]d raz(y) z rzędu, więc %[3]s nie idzie dalej, dopóki komenda nie przejdzie. Uruchomi się ponownie przy pierwszym zatrzymaniu po tym, jak wpiszesz prompt.",
   "queue.unmatched": "⚠ (after …) pominięte w %s — żaden tag, zgłoszenie ani numer pozycji nie pasuje: %s. Sprawdź pisownię.",
   "queue.unmatchedMore": "%s i jeszcze %d",
+  "queue.emptyLines": "☰ %s: pominięte puste wiersze listy kontrolnej: %d (wiersz %s); puste \"- [ ]\" nie jest zadaniem.",
   "queue.modeNotice": "☰ Tryb kolejki: %s ma %d otwartą pozycję/e — Claude przerabia je bez pytania (/%s:pause aby przerwać; zmień nazwę pliku lub ustaw queue.files, by wyłączyć).",
   "queue.autoNotice": "☰ Wykryto zadanie na %d kroków — zapisane jako lista kontrolna; Claude kończy każdy krok bez pytania (/%s:stop kończy).",
   "queue.autoLabel": "zadanie z twojego polecenia",

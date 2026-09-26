@@ -68,6 +68,7 @@
   "queue.heldMessage": "⛔ Warteschlange angehalten: `%[1]s` ist %[2]d Mal in Folge fehlgeschlagen, deshalb geht %[3]s erst weiter, wenn der Befehl durchläuft. Er läuft wieder beim ersten Stopp, nachdem du einen Prompt eingegeben hast.",
   "queue.unmatched": "⚠ (after …) in %s ignoriert — kein Tag, kein Issue und keine Punktnummer passt: %s. Prüf die Schreibweise.",
   "queue.unmatchedMore": "%s und %d weitere",
+  "queue.emptyLines": "☰ %s: %d leere Checklisten-Zeile(n) werden ignoriert (Zeile %s); ein leeres \"- [ ]\" ist keine Aufgabe.",
   "queue.modeNotice": "☰ Warteschlangenmodus: %s hat %d offene(n) Punkt(e) — Claude arbeitet sie ohne Rückfrage ab (/%s:pause zum Stoppen; benenne die Datei um oder setze queue.files, um das abzuschalten).",
   "queue.autoNotice": "☰ Auftrag mit %d Schritten erkannt — als Checkliste erfasst; Claude erledigt jeden Schritt ohne Rückfrage (/%s:stop beendet das).",
   "queue.autoLabel": "der Auftrag aus deiner Anfrage",

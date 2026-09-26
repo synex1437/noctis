@@ -68,6 +68,7 @@
   "queue.heldMessage": "⛔ Wachtrij aangehouden: `%[1]s` is %[2]d keer achter elkaar mislukt, dus %[3]s gaat pas verder als het commando slaagt. Het draait opnieuw bij de eerste stop nadat je een prompt hebt getypt.",
   "queue.unmatched": "⚠ (after …) genegeerd in %s — geen tag, issue of puntnummer komt overeen: %s. Controleer de spelling.",
   "queue.unmatchedMore": "%s en nog %d",
+  "queue.emptyLines": "☰ %s: %d lege checklistregel(s) genegeerd (regel %s); een lege \"- [ ]\" is geen taak.",
   "queue.modeNotice": "☰ Wachtrijmodus: %s heeft %d open punt(en) — Claude werkt ze af zonder te vragen (/%s:pause om te stoppen; hernoem het bestand of stel queue.files in om dit uit te zetten).",
   "queue.autoNotice": "☰ Klus van %d stappen herkend — bijgehouden als checklist; Claude maakt elke stap af zonder te vragen (/%s:stop beëindigt dit).",
   "queue.autoLabel": "de klus uit je verzoek",

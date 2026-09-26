@@ -71,6 +71,7 @@
   "queue.heldMessage": "⛔ Queue held: `%[1]s` failed %[2]d time(s) in a row, so %[3]s does not go on until the command passes. It runs again at the first stop after you type a prompt.",
   "queue.unmatched": "⚠ (after …) ignored in %s — no tag, issue or item number matches: %s. Check the spelling.",
   "queue.unmatchedMore": "%s and %d more",
+  "queue.emptyLines": "☰ %s: ignoring %d empty checklist line(s) (line %s); an empty \"- [ ]\" is not a job.",
   "queue.modeNotice": "☰ Queue mode: %s has %d open item(s) — Claude works through them without asking (/%s:pause to stop; rename the file or set queue.files to opt out).",
   "queue.autoNotice": "☰ %d-step job detected — tracked as a checklist; Claude finishes every step without asking (/%s:stop ends it).",
   "queue.autoLabel": "the job from your prompt",
