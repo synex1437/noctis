@@ -69,6 +69,7 @@
   "queue.modeNotice": "☰ Warteschlangenmodus: %s hat %d offene(n) Punkt(e) — Claude arbeitet sie ohne Rückfrage ab (/%s:pause zum Stoppen; benenne die Datei um oder setze queue.files, um das abzuschalten).",
   "queue.autoNotice": "☰ Auftrag mit %d Schritten erkannt — als Checkliste erfasst; Claude erledigt jeden Schritt ohne Rückfrage (/%s:stop beendet das).",
   "queue.autoLabel": "der Auftrag aus deiner Anfrage",
+  "queue.jobNotInPrompt": "☰ Nicht in die Checkliste aufgenommen, weil die Wörter nicht aus deiner Anfrage stammen: %s",
   "queue.startDetected": "☰ %[1]d Aufgabe(n) in %[2]s erkannt — Claude arbeitet sie der Reihe nach ab, ohne zum Nachfragen anzuhalten (/%[3]s:stop beendet das).",
   "queue.startUnreadable": "☰ noctis konnte %s nicht als Textdatei lesen; keine Warteschlange gestartet.",
   "queue.startEmpty": "☰ %s enthält keine offene Aufgabe; keine Warteschlange gestartet.",

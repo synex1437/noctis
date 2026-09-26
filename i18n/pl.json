@@ -69,6 +69,7 @@
   "queue.modeNotice": "☰ Tryb kolejki: %s ma %d otwartą pozycję/e — Claude przerabia je bez pytania (/%s:pause aby przerwać; zmień nazwę pliku lub ustaw queue.files, by wyłączyć).",
   "queue.autoNotice": "☰ Wykryto zadanie na %d kroków — zapisane jako lista kontrolna; Claude kończy każdy krok bez pytania (/%s:stop kończy).",
   "queue.autoLabel": "zadanie z twojego polecenia",
+  "queue.jobNotInPrompt": "☰ Nie dodano do listy kontrolnej, bo tych słów nie ma w twoim poleceniu: %s",
   "queue.startDetected": "☰ Wykryte zadania w %[2]s: %[1]d — Claude wykonuje je po kolei, nie zatrzymując się, by pytać (/%[3]s:stop kończy).",
   "queue.startUnreadable": "☰ noctis nie mógł odczytać %s jako pliku tekstowego; nie uruchomiono kolejki.",
   "queue.startEmpty": "☰ %s nie zawiera żadnego otwartego zadania; nie uruchomiono kolejki.",

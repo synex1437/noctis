@@ -69,6 +69,7 @@
   "queue.modeNotice": "☰ Modo cola: %s tiene %d elemento(s) abierto(s) — Claude los resuelve sin preguntar (/%s:pause para parar; renombra el archivo o ajusta queue.files para desactivarlo).",
   "queue.autoNotice": "☰ Trabajo de %d pasos detectado — registrado como lista de comprobación; Claude termina cada paso sin preguntar (/%s:stop para terminar).",
   "queue.autoLabel": "el trabajo de tu petición",
+  "queue.jobNotInPrompt": "☰ Fuera de la lista de comprobación, porque sus palabras no están en tu petición: %s",
   "queue.startDetected": "☰ %[1]d tarea(s) detectada(s) en %[2]s — Claude las hace en orden sin pararse a preguntar (/%[3]s:stop para terminar).",
   "queue.startUnreadable": "☰ noctis no pudo leer %s como archivo de texto; no se inició ninguna cola.",
   "queue.startEmpty": "☰ %s no tiene ninguna tarea abierta; no se inició ninguna cola.",

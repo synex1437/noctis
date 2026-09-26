@@ -69,6 +69,7 @@
   "queue.modeNotice": "☰ 큐 모드: %s에 열린 항목이 %d개 있습니다 — Claude가 묻지 않고 처리합니다(/%s:pause 로 중단; 파일 이름을 바꾸거나 queue.files를 설정하면 해제됩니다).",
   "queue.autoNotice": "☰ %d단계 작업을 감지했습니다 — 체크리스트로 기록했습니다. Claude가 묻지 않고 각 단계를 끝냅니다(/%s:stop 으로 종료).",
   "queue.autoLabel": "요청에서 만들어진 작업",
+  "queue.jobNotInPrompt": "☰ 요청에 없는 단어라서 체크리스트에 넣지 않았습니다: %s",
   "queue.startDetected": "☰ %[2]s에서 작업 %[1]d개를 감지했습니다 — Claude가 묻느라 멈추지 않고 차례로 진행합니다(/%[3]s:stop 으로 종료).",
   "queue.startUnreadable": "☰ noctis가 %s 파일을 텍스트로 읽지 못했습니다. 큐를 시작하지 않았습니다.",
   "queue.startEmpty": "☰ %s에 열린 작업이 없습니다. 큐를 시작하지 않았습니다.",

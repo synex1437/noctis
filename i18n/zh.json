@@ -69,6 +69,7 @@
   "queue.modeNotice": "☰ 队列模式：%s 中有 %d 个待办项 — Claude 会不询问地逐项完成（/%s:pause 可停止；重命名该文件或设置 queue.files 可退出）。",
   "queue.autoNotice": "☰ 检测到 %d 步的任务 — 已记录为清单；Claude 会不询问地完成每一步（/%s:stop 可结束）。",
   "queue.autoLabel": "来自你请求的任务",
+  "queue.jobNotInPrompt": "☰ 未加入清单，因为这些词不在你的请求中：%s",
   "queue.startDetected": "☰ 在 %[2]s 中检测到 %[1]d 项任务 — Claude 会按顺序完成，不会停下来询问（/%[3]s:stop 可结束）。",
   "queue.startUnreadable": "☰ noctis 无法把 %s 当作文本文件读取；未启动队列。",
   "queue.startEmpty": "☰ %s 中没有未完成的任务；未启动队列。",

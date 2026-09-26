@@ -228,11 +228,12 @@ func onSessionStart(input, cfg object) {
 			logInfo("queue file %s held until %q passes: no directive injected", queuePath, queueCheckCommand(cfg))
 		} else {
 			rememberOpenIssues(cfg, queuePath)
-			if isAutoQueue(queuePath) {
-				contexts = append(contexts, sessionQueueDirective(sid, queuePath, snapshot.total))
-			} else {
+			switch {
+			case !isAutoQueue(queuePath):
 				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total))
 				touchQueueTrust(queuePath, now)
+			case snapshot.total > 0:
+				contexts = append(contexts, sessionQueueDirective(sid, queuePath, snapshot.total))
 			}
 			logInfo("queue mode for %s: %s (%d open)", sid, queuePath, snapshot.total)
 		}
@@ -600,6 +601,11 @@ func onUserPromptSubmit(input, cfg object) {
 				rememberOpenIssues(cfg, path)
 				contexts = append(contexts, autoQueueDirective(path, len(items)))
 				systemMessage = joinNotices(systemMessage, T("queue.autoNotice", len(items), pluginName))
+				resetIdleGuard(readState(), sid)
+			}
+		} else if severalJobsLikely(getString(input, "prompt")) {
+			if path := startSplitQueue(sid, getString(input, "cwd"), getString(input, "prompt"), now); path != "" {
+				contexts = append(contexts, splitQueueDirective(path))
 				resetIdleGuard(readState(), sid)
 			}
 		} else {
@@ -1260,7 +1266,7 @@ func onSubagentBatch(input, cfg object) {
 func onPreToolUse(input, cfg object) {
 	toolName := getString(input, "tool_name")
 	if ownFileTools[toolName] {
-		if denyOwnFileWrite(input, cfg) {
+		if denyOwnFileWrite(input, cfg) || refuseJobsNotInPrompt(input, cfg) {
 			return
 		}
 		if toolName != "Write" {
@@ -1480,6 +1486,11 @@ func onStop(input, cfg object) {
 	snapshot := queueSnapshotOf(queuePath, content)
 	syncDoneIssues(cfg, queuePath, content, getString(input, "cwd"))
 	if snapshot.total == 0 {
+		if isAutoQueue(queuePath) && numberOr(getMap(getMap(state, "autoQueues"), sid), "items", 0) == 0 {
+			endAutoQueue(sid, true)
+			logInfo("no job listed in %s for %s; stop allowed", queuePath, sid)
+			return
+		}
 		if queueHeldBack(cfg, state, sid, queuePath) {
 			return
 		}

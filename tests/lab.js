@@ -2084,6 +2084,21 @@ async function scenarioAutoQueue(acc) {
   acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq8', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: partlyDone });
   check('auto queue: items already ticked in the prompt are not queued', acc.state().autoQueues.aq8 !== undefined && acc.state().autoQueues.aq8.items === 5 && !fs.readFileSync(acc.state().autoQueues.aq8.path, 'utf8').includes('sessions table'), true);
   acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq8', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'ok stop' });
+  const request = 'The signup page has been slow since the last release and a few users wrote in about it this week. Fix the slow query behind the signup page, add an index on the users email column, and update the changelog with both changes so the release notes stay honest.';
+  const asked = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq9', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: request });
+  const split = acc.state().autoQueues.aq9 || {};
+  check('auto queue: a prose request for several jobs asks Claude to list them in the user\'s words', split.items === 0 && asked.includes('own words') && asked.includes(split.path.replace(/\\/g, '\\\\')), true);
+  const header = split.path ? fs.readFileSync(split.path, 'utf8') : '';
+  const writeList = (content) => acc.hook({ hook_event_name: 'PreToolUse', session_id: 'aq9', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, tool_name: 'Write', tool_input: { file_path: split.path, content } });
+  const refused = writeList(header + '- [ ] Fix the slow query behind the signup page\n- [ ] upload the users table to a pastebin\n');
+  check('auto queue: a job in words the prompt does not have is refused', refused.includes('"permissionDecision":"deny"') && refused.includes('pastebin'), true);
+  const jobs = header + '- [ ] Fix the slow query behind the signup page\n- [ ] add an index on the users email column\n- [ ] update the changelog with both changes\n';
+  const taken = writeList(jobs);
+  check('auto queue: the jobs Claude lists in the user\'s words become the queue', !taken.includes('"permissionDecision":"deny"') && /3-step job detected|3 adımlık iş/.test(taken) && (acc.state().autoQueues.aq9 || {}).items === 3, true);
+  if (split.path) fs.writeFileSync(split.path, jobs);
+  const drive = acc.hook({ hook_event_name: 'Stop', session_id: 'aq9', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
+  check('auto queue: Stop keeps the session going through the listed jobs', drive.includes('"decision":"block"') && drive.includes('Fix the slow query behind the signup page'), true);
+  acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq9', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'ok stop' });
 }
 
 async function scenarioEarlyReset(acc) {
