@@ -74,6 +74,8 @@
   "queue.autoNotice": "☰ %d adımlık iş algılandı — checklist olarak izleniyor; Claude her adımı sormadan bitirir (/%s:stop durdurur).",
   "queue.autoLabel": "prompt'taki iş",
   "queue.autoDropped": "☰ noctis bunları adım olarak okumadığı için checklist'e alınmadı: %s. Dosyada, oturumu sürüklemeyen düz satırlar olarak duruyorlar.",
+  "queue.autoCut": "☰ İsteğinde %d adım var; checklist ilk %d adımı alıyor, kalan %d adım dosyasının sonunda, oturumu sürüklemeyen düz satırlar olarak duruyor; checklist bitince noctis bunları sana yeniden söyler.",
+  "queue.autoCutOpen": "☰ Hâlâ açık: isteğindeki %d adım %d maddelik checklist sınırını aştığı için checklist'te yoktu: %s. Gerekiyorsa bunları yeniden gönder.",
   "queue.jobNotInPrompt": "☰ Kelimeleri isteğinde geçmediği için checklist'e alınmadı: %s",
   "queue.startDetected": "☰ %[2]s içinde %[1]d iş algılandı — Claude durmadan ve sormadan sırayla yapar (/%[3]s:stop durdurur).",
   "queue.startUnreadable": "☰ noctis %s dosyasını metin olarak okuyamadı; kuyruk başlatılmadı.",

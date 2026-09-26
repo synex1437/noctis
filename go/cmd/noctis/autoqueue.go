@@ -246,6 +246,7 @@ func stepLike(unit, lang string) bool {
 type promptJob struct {
 	items   []string // the steps, in order
 	dropped []string // listed lines not read as steps: notes, questions, lines too short to tell
+	cut     []string // steps past the first autoQueueMaxItems, kept in the file without checkboxes
 	text    string   // the prompt without its code blocks
 	prose   string   // the words around the listed steps
 	lead    bool     // the steps are lines of their own, so the words around them may be read alone
@@ -327,7 +328,7 @@ func promptJobOf(prompt string) promptJob {
 		return job
 	}
 	if len(items) > autoQueueMaxItems {
-		items = items[:autoQueueMaxItems]
+		items, job.cut = items[:autoQueueMaxItems], append([]string{}, items[autoQueueMaxItems:]...)
 	}
 	job.items, job.dropped, job.prose = items, dedupeItems(skipped), strings.Join(prose, "\n")
 	return job
@@ -507,15 +508,45 @@ func startAutoQueue(sid, cwd string, job promptJob, now int64) string {
 	for _, item := range job.items {
 		lines = append(lines, "- [ ] "+item)
 	}
+	lines = append(lines, asideLines(autoQueueCutHeading(), job.cut)...)
 	lines = append(lines, asideLines("## Not on the checklist: listed lines not read as steps", job.dropped)...)
-	words := strings.Join(append(append([]string{}, job.items...), job.dropped...), "\n")
+	words := strings.Join(append(append(append([]string{}, job.items...), job.cut...), job.dropped...), "\n")
 	path := writeSessionQueue(sid, object{"cwd": cwd, "at": float64(now), "items": float64(len(job.items)), "words": jobWordDigests(words)}, lines)
 	if path == "" {
 		return ""
 	}
-	journal(sid, "UserPromptSubmit", "auto-queue", fmt.Sprintf("%d items", len(job.items)), nil)
+	reason := fmt.Sprintf("%d items", len(job.items))
+	if len(job.cut) > 0 {
+		reason += fmt.Sprintf("; %d more steps over the %d-item limit left out", len(job.cut), autoQueueMaxItems)
+	}
+	if len(job.dropped) > 0 {
+		reason += fmt.Sprintf("; %d listed lines not read as steps", len(job.dropped))
+	}
+	journal(sid, "UserPromptSubmit", "auto-queue", reason, nil)
 	logInfo("auto queue for %s: %d items in %s", sid, len(job.items), path)
 	return path
+}
+
+func autoQueueCutHeading() string {
+	return fmt.Sprintf("## Not on the checklist: steps over the %d-item limit", autoQueueMaxItems)
+}
+
+// leftOutSteps reads the steps a checklist file keeps under the heading for
+// the steps over the limit, which are still open when the checklist is done.
+func leftOutSteps(content string) []string {
+	steps, under := []string{}, false
+	for _, raw := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(strings.TrimRight(raw, "\r"))
+		switch {
+		case strings.HasPrefix(line, "#"):
+			under = line == autoQueueCutHeading()
+		case under && strings.HasPrefix(line, "- ") && !checkboxPrefix.MatchString(strings.TrimPrefix(line, "- ")):
+			if step := strings.TrimSpace(strings.TrimPrefix(line, "- ")); step != "" {
+				steps = append(steps, step)
+			}
+		}
+	}
+	return steps
 }
 
 // asideLines puts lines of the prompt that the checklist leaves out under a
@@ -1279,9 +1310,13 @@ func autoQueueDirective(path string, count int) string {
 // autoQueueAsides tells Claude about the listed lines the checklist leaves
 // out, which are in the file as plain lines.
 func autoQueueAsides(job promptJob) string {
-	if len(job.dropped) == 0 {
-		return ""
+	text := ""
+	if len(job.cut) > 0 {
+		text += fmt.Sprintf(` The prompt lists %d steps, more than the %d a checklist takes: the other %d are at the end of the file under "%s" as plain lines, which do not drive the session. Do not add them to the checklist; when it is done, tell the user that these %d steps are still open.`, len(job.items)+len(job.cut), autoQueueMaxItems, len(job.cut), strings.TrimPrefix(autoQueueCutHeading(), "## "), len(job.cut))
 	}
-	note, _ := namedLines(job.dropped)
-	return fmt.Sprintf(` The checklist leaves out %d listed line(s) that noctis did not read as steps (notes, questions or lines too short to tell): %s. They are in the file under a heading of their own as plain lines, which do not drive the session; if one of them is a step the user asked for, turn it into a "- [ ] " line there.`, len(job.dropped), note)
+	if len(job.dropped) > 0 {
+		note, _ := namedLines(job.dropped)
+		text += fmt.Sprintf(` The checklist leaves out %d listed line(s) that noctis did not read as steps (notes, questions or lines too short to tell): %s. They are in the file under a heading of their own as plain lines, which do not drive the session; if one of them is a step the user asked for, turn it into a "- [ ] " line there.`, len(job.dropped), note)
+	}
+	return text
 }

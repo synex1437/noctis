@@ -613,6 +613,9 @@ func onUserPromptSubmit(input, cfg object) {
 				rememberOpenIssues(cfg, path)
 				contexts = append(contexts, autoQueueDirective(path, len(job.items))+autoQueueAsides(job))
 				systemMessage = joinNotices(systemMessage, T("queue.autoNotice", len(job.items), pluginName))
+				if len(job.cut) > 0 {
+					systemMessage = joinNotices(systemMessage, T("queue.autoCut", len(job.items)+len(job.cut), len(job.items), len(job.cut)))
+				}
 				if len(job.dropped) > 0 {
 					_, notice := namedLines(job.dropped)
 					systemMessage = joinNotices(systemMessage, T("queue.autoDropped", notice))
@@ -1520,7 +1523,9 @@ func onStop(input, cfg object) {
 		}
 		driven := getMap(getMap(state, "stopGuard"), sid) != nil || isAutoQueue(queuePath)
 		updateState(func(next object) { delete(stateMap(next, "stopGuard"), sid) })
+		left := []string{}
 		if isAutoQueue(queuePath) {
+			left = leftOutSteps(content)
 			endAutoQueue(sid, true)
 		}
 		logInfo("queue empty for %s; stop allowed", sid)
@@ -1528,7 +1533,12 @@ func onStop(input, cfg object) {
 
 			journal(sid, "Stop", "allow-stop", "queue finished", nil)
 			notify(cfg, pluginName, T("queue.doneNotify", queueLabel))
-			emit(object{"systemMessage": T("queue.doneMessage", queueLabel)})
+			message := T("queue.doneMessage", queueLabel)
+			if len(left) > 0 {
+				_, named := namedLines(left)
+				message = joinNotices(message, T("queue.autoCutOpen", len(left), autoQueueMaxItems, named))
+			}
+			emit(object{"systemMessage": message})
 		}
 		return
 	}
