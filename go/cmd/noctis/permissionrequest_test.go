@@ -22,7 +22,7 @@ func permissionAllowed(output object) bool {
 
 func checklistFor(t *testing.T, sid, project string) string {
 	t.Helper()
-	path := startAutoQueue(sid, project, []string{"add input validation to the signup form", "write tests for the payments module", "update the README for the new CLI flags"}, nowSec())
+	path := startAutoQueue(sid, project, promptJob{items: []string{"add input validation to the signup form", "write tests for the payments module", "update the README for the new CLI flags"}}, nowSec())
 	if path == "" {
 		t.Fatal("the checklist from the prompt was not written")
 	}

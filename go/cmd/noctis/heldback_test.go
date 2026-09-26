@@ -91,6 +91,8 @@ func TestPromptsThatAskOnlyForAPlanOrAnEstimateGetNoChecklist(t *testing.T) {
 		"先不要实现下面的任何一项，也不要修改任何文件，只估算每项需要多长时间并列成表格。" + heldBackItems,
 		"아래 항목은 아직 구현하지 마세요. 파일도 건드리지 말고 각 항목에 걸리는 시간 견적만 표로 주세요." + heldBackItems,
 		"لا تنفذ أيًا من البنود التالية الآن ولا تلمس أي ملف؛ فقط قدّر المدة التي يستغرقها كل بند." + heldBackItems,
+		"Bunların her biri için kaba bir süre tahmini yapabilir misin? Liste aşağıda." + heldBackItemsTr,
+		"Aşağıdakileri planlayabilir misiniz? Sıralama ve riskler önemli." + heldBackItemsTr,
 	}
 	for index, prompt := range prompts {
 		sid := fmt.Sprintf("hb-plan-%d", index)

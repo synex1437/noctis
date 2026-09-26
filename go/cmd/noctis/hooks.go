@@ -609,10 +609,14 @@ func onUserPromptSubmit(input, cfg object) {
 			journal(sid, "UserPromptSubmit", "no-auto-queue", held, nil)
 			logInfo("no auto queue for %s: %s", sid, held)
 		case len(job.items) > 0:
-			if path := startAutoQueue(sid, getString(input, "cwd"), job.items, now); path != "" {
+			if path := startAutoQueue(sid, getString(input, "cwd"), job, now); path != "" {
 				rememberOpenIssues(cfg, path)
-				contexts = append(contexts, autoQueueDirective(path, len(job.items)))
+				contexts = append(contexts, autoQueueDirective(path, len(job.items))+autoQueueAsides(job))
 				systemMessage = joinNotices(systemMessage, T("queue.autoNotice", len(job.items), pluginName))
+				if len(job.dropped) > 0 {
+					_, notice := namedLines(job.dropped)
+					systemMessage = joinNotices(systemMessage, T("queue.autoDropped", notice))
+				}
 				resetIdleGuard(readState(), sid)
 			}
 		case split:

@@ -73,6 +73,7 @@
   "queue.modeNotice": "☰ Kuyruk modu: %s içinde %d açık madde var — Claude sormadan sırayla yapar (/%s:pause durdurur; dosyayı yeniden adlandır ya da queue.files ile kapat).",
   "queue.autoNotice": "☰ %d adımlık iş algılandı — checklist olarak izleniyor; Claude her adımı sormadan bitirir (/%s:stop durdurur).",
   "queue.autoLabel": "prompt'taki iş",
+  "queue.autoDropped": "☰ noctis bunları adım olarak okumadığı için checklist'e alınmadı: %s. Dosyada, oturumu sürüklemeyen düz satırlar olarak duruyorlar.",
   "queue.jobNotInPrompt": "☰ Kelimeleri isteğinde geçmediği için checklist'e alınmadı: %s",
   "queue.startDetected": "☰ %[2]s içinde %[1]d iş algılandı — Claude durmadan ve sormadan sırayla yapar (/%[3]s:stop durdurur).",
   "queue.startUnreadable": "☰ noctis %s dosyasını metin olarak okuyamadı; kuyruk başlatılmadı.",
