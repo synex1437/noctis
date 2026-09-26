@@ -6,7 +6,8 @@ was driven through it, list items were dropped by their first word, and steps pa
 lost without a word. A Claude Code on the web session now comes back from a usage limit by itself, a
 queue that stopped making progress is no longer pushed again after every give-up, and an empty
 checklist line is no longer handed to Claude as an item. Each fix came with a test that fails on
-7.3.0.
+7.3.0. Hooks also cost less: the launcher of a marketplace install starts no other program before
+noctis on Linux and one on macOS, and a write of noctis's state parses and encodes it once.
 
 ## If you are upgrading
 
@@ -76,6 +77,24 @@ a file that held nothing else. An empty line is now skipped and named once by it
 the notice and in Claude's directive; `noctis queue status` and `trust` name it too, and
 `/noctis:start` leaves it out of the job count and names it by its line in the file.
 
+## Faster hooks
+
+**The launcher starts no other program on Linux.** A marketplace install runs noctis through the
+`bin/noctis` sh launcher on macOS and Linux, which forked four times and started three programs
+(`dirname` once and `uname` twice) before noctis itself: about 6 ms of the 10 to 12 ms a hook took
+on Linux. It now reads the OS and CPU from the kernel (Linux 6.1 or later) or from bash's `OSTYPE`
+and `HOSTTYPE` (an older Linux kernel, Git Bash, Cygwin), and asks `uname` once only when neither
+answers. macOS always asks it once: its `/bin/bash` is one build for both CPUs, so its `HOSTTYPE`
+may name the other one. On Linux the launcher now adds about 1.5 ms where it added about 6: through
+it, a `UserPromptSubmit` hook takes about 7 ms (11.5 ms with 7.3.0's launcher, 5.5 ms run directly)
+and a `Stop` hook about 5.5 ms (10.5 and 4 ms).
+
+**A state write parses and encodes the state once.** Each write of `state.json` parsed the file it
+replaced a second time to decide whether to back it up, and encoded the new state twice. In a hook
+that wrote a 264 KB state three times, noctis's own work dropped from about 50 ms to about 31 ms;
+small states gain little. A `state.json` that an editor saved with a byte order mark is now backed
+up like any other.
+
 ## Known limits
 
 - In a Claude Code on the web session no status line reports usage, so noctis cannot pause before a
@@ -87,11 +106,13 @@ the notice and in Claude's directive; `noctis queue status` and `trust` name it 
 
 ## Tests
 
-Every fix came with Go tests that fail on 7.3.0: nineteen of them, beside two that hold what must
-not change (a list without a hold-back, and a job prompt with a rule on how to do it, still get
-their checklist) and two that check the new phrase lists are written as they are matched and that a
-huge prompt is still read quickly. The lab drives the built binary through each fix, and the
-auto-queue fuzz target's seeds now cover held-back prompts, lines left out and comma chains. Local
-round on the release tree, on Linux with claude 2.1.283, Go 1.24.7 and node 22: go test with Windows
-and macOS builds and vets, go test -race once, 30 seconds of each of the five fuzz targets, hygiene,
-i18n, contract, chaos, scheduler, lab, a two-day hard soak, the torrent and two monkey seeds.
+Every fix came with Go tests that fail on 7.3.0: twenty of them, beside two that hold what must not
+change (a list without a hold-back, and a job prompt with a rule on how to do it, still get their
+checklist) and two that check the new phrase lists are written as they are matched and that a huge
+prompt is still read quickly. The lab drives the built binary through each fix, and the auto-queue
+fuzz target's seeds now cover held-back prompts, lines left out and comma chains. The contract
+drives the launcher with the kernel's, bash's and `uname`'s answers set by the test and counts the
+`uname` calls, and a Go test holds what a state write backs up and writes. Local round on the
+release tree, on Linux with claude 2.1.283, Go 1.24.7 and node 22: go test with Windows and macOS
+builds and vets, go test -race once, 30 seconds of each of the five fuzz targets, hygiene, i18n,
+contract, chaos, scheduler, lab, a two-day hard soak, the torrent and two monkey seeds.
