@@ -59,7 +59,7 @@
   "session.alreadyOver": "⏸ L'usage %s est déjà à %s%% : tout nouveau travail attend jusqu'à %s et reprendra tout seul.",
   "session.pauseHint": " Pour continuer quand même : /noctis:pause 120.",
   "queue.stuckNotify": "La file n'avance plus : %d éléments ouverts, session arrêtée (%s).",
-  "queue.stuckMessage": "⛔ La file n'avance plus (%d ouverts) ; poursuite automatique arrêtée — voir errors.log.",
+  "queue.stuckMessage": "⛔ La file n'avance plus (%d ouverts) ; la poursuite automatique reste arrêtée jusqu'à ce qu'un élément soit coché, ajouté ou modifié, ou que tu écrives un prompt — voir errors.log.",
   "queue.doneNotify": "File terminée : %s n'a plus d'éléments ouverts.",
   "queue.doneMessage": "✔ File terminée — %s n'a plus d'éléments ouverts ; arrêt propre.",
   "queue.blockedNotify": "File bloquée : %d éléments ouverts dans %s attendent des dépendances non terminées.",

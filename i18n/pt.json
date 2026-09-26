@@ -59,7 +59,7 @@
   "session.alreadyOver": "⏸ O uso %s já está em %s%%: trabalho novo espera até %s e retoma sozinho.",
   "session.pauseHint": " Para continuar mesmo assim: /noctis:pause 120.",
   "queue.stuckNotify": "A fila não avança: %d itens abertos, sessão parada (%s).",
-  "queue.stuckMessage": "⛔ A fila não avança (%d abertos); continuação automática parada — veja errors.log.",
+  "queue.stuckMessage": "⛔ A fila não avança (%d abertos); a continuação automática fica parada até que um item seja marcado, adicionado ou editado, ou você escreva um prompt — veja errors.log.",
   "queue.doneNotify": "Fila concluída: %s não tem itens abertos.",
   "queue.doneMessage": "✔ Fila concluída — %s não tem itens abertos; parada limpa.",
   "queue.blockedNotify": "Fila bloqueada: %d itens abertos em %s aguardam dependências não concluídas.",

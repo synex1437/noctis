@@ -59,7 +59,7 @@
   "session.alreadyOver": "⏸ %s-Nutzung liegt bereits bei %s%%: neue Arbeit pausiert bis %s und wird von selbst fortgesetzt.",
   "session.pauseHint": " Trotzdem weiterarbeiten: /noctis:pause 120.",
   "queue.stuckNotify": "Warteschlange kommt nicht voran: %d offene Punkte, Sitzung gestoppt (%s).",
-  "queue.stuckMessage": "⛔ Warteschlange kommt nicht voran (%d offen); automatisches Weitermachen gestoppt — siehe errors.log.",
+  "queue.stuckMessage": "⛔ Warteschlange kommt nicht voran (%d offen); automatisches Weitermachen bleibt aus, bis ein Punkt abgehakt, hinzugefügt oder geändert wird oder du einen Prompt schreibst — siehe errors.log.",
   "queue.doneNotify": "Warteschlange erledigt: %s hat keine offenen Punkte mehr.",
   "queue.doneMessage": "✔ Warteschlange erledigt — %s hat keine offenen Punkte mehr; sauberer Stopp.",
   "queue.blockedNotify": "Warteschlange blockiert: %d offene Punkte in %s warten auf unerledigte Abhängigkeiten.",

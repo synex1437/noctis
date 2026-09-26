@@ -987,7 +987,10 @@ async function scenarioQueueContinuation(acc) {
   let stuck = '';
   for (let i = 0; i < 4; i += 1) stuck = acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
   check('stuck queue stops forcing and warns', !stuck.includes('"decision":"block"') && stuck.includes('Kuyruk ilerlemiyor'), true);
-  check('stuck queue: counters reset, the next cycle continues again', acc.state().stopGuard.qc1.idle === 0 && acc.state().stopGuard.qc1.forced === 0 && acc.state().stopGuard.qc1.cycles === 1 && acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false }).includes('"decision":"block"'), true);
+  check('stuck queue: counters reset, and the give-up holds while nothing changes', acc.state().stopGuard.qc1.idle === 0 && acc.state().stopGuard.qc1.forced === 0 && acc.state().stopGuard.qc1.cycles === 1 && !acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false }).includes('"decision":"block"'), true);
+  check('stuck queue: the held give-up is journaled', acc.run(['why', '--last', '1']).includes('queue gave up earlier and is unchanged'), true);
+  acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'keep going with the queue' });
+  check('stuck queue: a typed prompt lifts the give-up, and the next cycle continues', acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false }).includes('"decision":"block"'), true);
   for (let i = 0; i < 4; i += 1) stuck = acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
   check('stuck queue: the warning is not repeated for the same file', !stuck.includes('"decision":"block"') && !stuck.includes('Kuyruk ilerlemiyor'), true);
   acc.setConfig((config) => {

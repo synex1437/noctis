@@ -59,7 +59,7 @@
   "session.alreadyOver": "⏸ Limit %s jest już zużyty w %s%%: nowa praca czeka do %s i wznowi się sama.",
   "session.pauseHint": " Aby mimo to pracować: /noctis:pause 120.",
   "queue.stuckNotify": "Kolejka nie posuwa się: %d otwartych pozycji, sesja zatrzymana (%s).",
-  "queue.stuckMessage": "⛔ Kolejka nie posuwa się (%d otwartych); automatyczna kontynuacja zatrzymana — zobacz errors.log.",
+  "queue.stuckMessage": "⛔ Kolejka nie posuwa się (%d otwartych); automatyczna kontynuacja pozostaje wyłączona, dopóki jakiś punkt nie zostanie odhaczony, dodany lub zmieniony albo nie wpiszesz polecenia — zobacz errors.log.",
   "queue.doneNotify": "Kolejka ukończona: %s nie ma otwartych pozycji.",
   "queue.doneMessage": "✔ Kolejka ukończona — %s nie ma otwartych pozycji; czyste zatrzymanie.",
   "queue.blockedNotify": "Kolejka zablokowana: %d otwartych pozycji w %s czeka na nieukończone zależności.",
