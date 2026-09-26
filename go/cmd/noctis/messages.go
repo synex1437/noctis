@@ -68,6 +68,7 @@ func baseCatalog() map[string]map[string]string {
 			"scoped.revertedDefault": "🔁 %s weekly quota reset; settings.json names no model again, so Claude Code's own default applies.",
 
 			"notice.noUsage":        "%s: no usage data (is statusLine installed? noctis doctor).",
+			"notice.noUsageCloud":   "%s: usage limits cannot be tracked in a cloud session; if a limit stops the session, noctis retries it in place, waiting longer each time.",
 			"notice.configError":    "%s: config.json unreadable, using defaults.",
 			"notice.routed":         "🔀 Research routed to the %s subagent; %s kept for coding.",
 			"notice.workflowPrompt": "🧩 This request looks like a fan-out task. To run it as a dynamic workflow, ask for one in your own prompt with ultracode. Suggested size: %s. Agent models: code-writing agents → %s; read-only analysis and review agents → %s; discovery/search agents → %s; test runs and other noisy verification → %s.",
@@ -133,6 +134,8 @@ func baseCatalog() map[string]map[string]string {
 			"stopfailure.transient":    "Transient limit error; work saved, retrying at %s.",
 			"stopfailure.wall":         "Limit wall (%s); work saved, resuming at %s.",
 			"stopfailure.giveup":       "%s kept failing (%s) through %s automatic retries; noctis stopped retrying — open a terminal and run: %s",
+			"stopfailure.giveupCloud":  "%s kept failing (%s) through %s automatic retries; noctis stopped retrying — type a prompt in the session to go on.",
+			"stopfailure.wakeRetry":    "[noctis] Retry %s after the session stopped on %s (waited %s). Continue exactly where you left off; the task list and pending work are unchanged.",
 			"stopfailure.account":      "Claude Code stopped with %s; there is nothing to retry until the account is fixed.",
 			"stopfailure.modelMissing": "Model %s is not available on this plan; the default model is now %s. Pick another profile with /noctis:setup.",
 			"notification.stale":       "Limit reset; Claude Code is waiting for Enter (auto-continue will fire if planned).",
@@ -554,6 +557,7 @@ func baseCatalog() map[string]map[string]string {
 			"scoped.revertedDefault": "🔁 %s haftalık kotası sıfırlandı; settings.json yine bir model belirtmiyor, Claude Code kendi varsayılanını kullanır.",
 
 			"notice.noUsage":        "%s: kullanım verisi yok (statusLine kurulu mu? noctis doctor).",
+			"notice.noUsageCloud":   "%s: bulut oturumunda kullanım limitleri izlenemiyor; bir limit oturumu durdurursa noctis onu yerinde, her seferinde biraz daha uzun bekleyerek yeniden dener.",
 			"notice.configError":    "%s: config.json okunamadı, varsayılanlar kullanılıyor.",
 			"notice.routed":         "🔀 Araştırma %s alt-ajanına yönlendirildi; %s kodlama için saklandı.",
 			"notice.workflowPrompt": "🧩 Bu istek çok parçalı (fan-out) bir işe benziyor. Dinamik bir workflow olarak çalışmasını istiyorsan bunu kendi prompt'unda ultracode ile iste. Önerilen boyut: %s. Ajan modelleri: kod yazan ajanlar → %s; salt okunur analiz ve inceleme ajanları → %s; keşif/arama ajanları → %s; test koşuları ve diğer gürültülü doğrulamalar → %s.",
@@ -619,6 +623,8 @@ func baseCatalog() map[string]map[string]string {
 			"stopfailure.transient":    "Geçici limit hatası; iş kaydedildi, tekrar deneme: %s.",
 			"stopfailure.wall":         "Limit duvarı (%s); iş kaydedildi, devam: %s.",
 			"stopfailure.giveup":       "%[1]s, %[3]s otomatik denemeden sonra da hata veriyor (%[2]s); noctis yeniden denemeyi bıraktı — bir terminal açıp şunu çalıştırın: %[4]s",
+			"stopfailure.giveupCloud":  "%[1]s, %[3]s otomatik denemeden sonra da hata veriyor (%[2]s); noctis yeniden denemeyi bıraktı — devam etmek için oturuma bir istem yaz.",
+			"stopfailure.wakeRetry":    "[noctis] Retry %s after the session stopped on %s (waited %s). Continue exactly where you left off; the task list and pending work are unchanged.",
 			"stopfailure.account":      "Claude Code %s ile durdu; hesap düzelene kadar yeniden denenecek bir şey yok.",
 			"stopfailure.modelMissing": "%s modeli bu planda yok; varsayılan model artık %s. /noctis:setup ile başka bir profil seç.",
 			"notification.stale":       "Limit sıfırlandı; Claude Code Enter bekliyor (plan varsa otomatik devam edecek).",

@@ -1203,7 +1203,7 @@ func detachedSelf(argsList []string) int {
 
 func scheduledWithoutTask(scheduled object) bool {
 	switch getString(scheduled, "method") {
-	case "sleeper", "manual", "systemd", "launchd":
+	case "sleeper", "manual", "cloud", "systemd", "launchd":
 		return true
 	default:
 		return false
@@ -1391,7 +1391,8 @@ func runnerArgs(command, sid, account string, extra ...string) []string {
 func scheduleRunnerLocked(cfg object, sid string, atEpoch, rearms float64) object {
 	now := nowSec()
 	at := math.Max(atEpoch, float64(now+15))
-	nativeAllowed := os.Getenv("NOCTIS_NO_TASKS") == ""
+	cloud := cloudSession()
+	nativeAllowed := os.Getenv("NOCTIS_NO_TASKS") == "" && !cloud
 	backend := schedulerBackend()
 	replacingTask := nativeAllowed && backend == "task"
 	cancelRunnerKeepingTask(sid, readState(), replacingTask)
@@ -1411,6 +1412,9 @@ func scheduleRunnerLocked(cfg object, sid string, atEpoch, rearms float64) objec
 			scheduled = native
 			scheduled["watcherPid"] = float64(startResetWatcher(cfg, sid, at))
 		}
+	}
+	if scheduled == nil && cloud {
+		scheduled = object{"method": "cloud", "at": at}
 	}
 	if scheduled == nil && os.Getenv("NOCTIS_NO_SCHEDULE") != "" {
 		scheduled = object{"method": "manual", "at": at}
@@ -2145,7 +2149,7 @@ func handleFableHit(kind string, input object, cfg object, result decision) stri
 		return T("scoped.promptBlock", label, formatNumber(fableUsed), fallback, fallback)
 	}
 	checkpoint := buildCheckpoint(input, T("scoped.reason", label, formatNumber(fableUsed), fallback), result.model, cfg)
-	if !getBool(section(cfg, "fable"), "autoRelaunch", true) || getString(section(cfg, "resume"), "mode") == "none" {
+	if !getBool(section(cfg, "fable"), "autoRelaunch", true) || getString(section(cfg, "resume"), "mode") == "none" || cloudSession() {
 		return T("scoped.savedManual", label, formatNumber(fableUsed), fallback, fallback)
 	}
 	record := object{
@@ -2322,7 +2326,11 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 func planNotices(cfg, state object, usage usageView, result *decision, sid string, now int64, hostReportsLimits bool) (notices []string, marks []string) {
 	notified := getMap(state, "notified")
 	if !usage.hasAny && notified[sid] == nil && hostReportsLimits {
-		notices = append(notices, T("notice.noUsage", pluginName))
+		if cloudSession() {
+			notices = append(notices, T("notice.noUsageCloud", pluginName))
+		} else {
+			notices = append(notices, T("notice.noUsage", pluginName))
+		}
 		marks = append(marks, sid)
 	}
 	if getString(cfg, "configError") != "" && notified[sid+":config"] == nil {

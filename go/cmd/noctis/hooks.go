@@ -124,13 +124,16 @@ func selfCheckIssues(cfg object) []string {
 	host := currentHost()
 	if host.statusline {
 		settings := readJSONStrict(files.settings)
-		if !settings.ok {
+		statusLine := getString(getMap(settings.data, "statusLine"), "command")
+		switch {
+		case !settings.ok:
 			issues = append(issues, T("selfcheck.settings"))
-		} else {
-			statusLine := getString(getMap(settings.data, "statusLine"), "command")
-			if !ownStatusLine(statusLine) {
-				issues = append(issues, T("selfcheck.statusline"))
-			} else if gone := statusLineGone(statusLine); gone != "" {
+		case cloudSession():
+			// A cloud session runs no status line, so there is none to wire.
+		case !ownStatusLine(statusLine):
+			issues = append(issues, T("selfcheck.statusline"))
+		default:
+			if gone := statusLineGone(statusLine); gone != "" {
 				issues = append(issues, T("selfcheck.statuslineGone", gone))
 			}
 		}
@@ -1944,19 +1947,19 @@ func overloadEpisode(cfg object, sid string, now int64) (attempt float64, ok boo
 	return attempt, ok
 }
 
-func failureRetry(cfg object, sid string, now int64) (retry int) {
+func failureRetry(cfg object, sid string, now int64) (retry int, firstAt float64) {
 	updateState(func(state object) {
 		episodes := stateMap(state, "failureRetries")
 		episode := getMap(episodes, sid)
 		if episode == nil || float64(now)-numberOr(episode, "lastAt", 0) > retryDelaySeconds(cfg, int(numberOr(episode, "retries", 1)))+failureEpisodeSlack {
-			episode = object{"retries": float64(0)}
+			episode = object{"retries": float64(0), "firstAt": float64(now)}
 		}
 		episode["retries"] = numberOr(episode, "retries", 0) + 1
 		episode["lastAt"] = float64(now)
 		episodes[sid] = episode
-		retry = int(numberOr(episode, "retries", 1))
+		retry, firstAt = int(numberOr(episode, "retries", 1)), numberOr(episode, "firstAt", float64(now))
 	})
-	return retry
+	return retry, firstAt
 }
 
 func clearFailureRetries(state object, sid string) {
@@ -1982,7 +1985,7 @@ func handOffDir() string {
 }
 
 func handsStopFailuresOff() bool {
-	return currentHost().id == "claude" && nonInteractiveEntrypoints[os.Getenv("CLAUDE_CODE_ENTRYPOINT")]
+	return currentHost().id == "claude" && nonInteractiveEntrypoints[os.Getenv("CLAUDE_CODE_ENTRYPOINT")] && !cloudSession()
 }
 
 func stopFailureHandedOff(sid string) bool {
@@ -2066,12 +2069,16 @@ func onStopFailure(input, cfg object) {
 	}
 	result := decide(cfg, state, input, now, decideOptions{force: true, noProbe: true})
 	usage := result.usage
+	cloud := cloudSession()
+	wakeCfg := section(cfg, "wake")
+	wakeLimit := math.Max(1, numberOr(wakeCfg, "maxMinutes", 330)) * 60
 
 	hint := limitHint(errorText, scopedLabel(cfg), usage)
 	nearCap := func(win *window) bool { return win != nil && win.used >= culpritFloor }
 	weeklyCulprit := hint == "seven_day" || (hint == "" && nearCap(usage.sevenDay) && (!nearCap(usage.fiveHour) || usage.sevenDay.resetsAt > usage.fiveHour.resetsAt))
 	fiveCulprit := hint == "five_hour" || (hint == "" && nearCap(usage.fiveHour))
-	fableCulprit := scopedModelPattern(cfg).MatchString(result.model) && usage.fable != nil && (hint == "fable" || (hint == "" && usage.fable.used >= culpritFloor))
+	// A cloud session has no runner to relaunch it on the fallback model.
+	fableCulprit := !cloud && scopedModelPattern(cfg).MatchString(result.model) && usage.fable != nil && (hint == "fable" || (hint == "" && usage.fable.used >= culpritFloor))
 	waitCfg := section(cfg, "wait")
 	margin := math.Max(0, numberOr(waitCfg, "resetMarginSeconds", 0)) + math.Max(0, numberOr(waitCfg, "builtinGraceSeconds", 0))
 	record := object{"kind": "stopfailure", "threshold": nil}
@@ -2096,19 +2103,30 @@ func onStopFailure(input, cfg object) {
 		record["until"], record["resumeAt"] = float64(now), float64(now+120)
 		record["modelOverride"] = getString(section(cfg, "models"), "fallback")
 	default:
-		retry := failureRetry(cfg, sid, now)
-		if retry > stopFailureMaxAttempts {
-			manual := hostResumeCommand(currentHost().id, sid)
-			journal(sid, "StopFailure", "retry-giveup", errorType, object{"retries": float64(retry - 1)})
+		retry, firstAt := failureRetry(cfg, sid, now)
+		delay, spent := retryDelaySeconds(cfg, retry), retry > stopFailureMaxAttempts
+		if cloud {
+			// Without usage data the wall's reset is unknown, so the retries go
+			// on until wake.maxMinutes have passed since the first failure.
+			left := firstAt + wakeLimit - float64(now)
+			delay, spent = math.Min(delay, left), left < 60
+		}
+		if spent {
+			journal(sid, "StopFailure", "retry-giveup", errorType, object{"retries": float64(retry - 1), "cloud": cloud})
 			fail("%s StopFailure for %s: failed again after %d retries; leaving the session stopped", errorType, sid, retry-1)
-			notify(cfg, pluginName, T("stopfailure.giveup", shortSid(sid), errorType, formatNumber(float64(retry-1)), manual))
+			if cloud {
+				notify(cfg, pluginName, T("stopfailure.giveupCloud", shortSid(sid), errorType, formatNumber(float64(retry-1))))
+			} else {
+				notify(cfg, pluginName, T("stopfailure.giveup", shortSid(sid), errorType, formatNumber(float64(retry-1)), hostResumeCommand(currentHost().id, sid)))
+			}
 			updateState(func(next object) {
 				stateMap(next, "launchFailures")[sid] = object{"at": float64(now), "model": result.model}
 			})
 			return
 		}
 		record["window"], record["label"], record["used"] = "unknown", windowLabel("unknown"), nil
-		record["until"], record["resumeAt"] = float64(now), float64(now)+retryDelaySeconds(cfg, retry)
+		record["until"], record["resumeAt"] = float64(now), float64(now)+delay
+		record["retry"], record["error"] = float64(retry), errorType
 	}
 	resumeAt := numberOr(record, "resumeAt", 0)
 	label := getString(record, "label")
@@ -2120,9 +2138,8 @@ func onStopFailure(input, cfg object) {
 	record["checkpoint"], record["queuedPrompt"], record["startedAt"], record["attempts"] = checkpoint, "", float64(now), float64(0)
 	record["permissionMode"] = permissionModeOf(input)
 	recordTree(cfg, record, getString(input, "cwd"))
-	wakeCfg := section(cfg, "wake")
-	interactive := flagString("input") == "" && getMap(getMap(readJSON(files.usage), "sessions"), sid) != nil
-	wakeable := currentHost().wake && getBool(wakeCfg, "sameSession", true) && interactive && getString(record, "window") != "fable" && resumeAt-float64(now) <= math.Max(1, numberOr(wakeCfg, "maxMinutes", 330))*60
+	interactive := flagString("input") == "" && (cloud || getMap(getMap(readJSON(files.usage), "sessions"), sid) != nil)
+	wakeable := currentHost().wake && getBool(wakeCfg, "sameSession", true) && interactive && getString(record, "window") != "fable" && resumeAt-float64(now) <= wakeLimit
 	runnerAt := resumeAt
 	if wakeable {
 		runnerAt += wakeGraceSeconds(cfg)
@@ -2133,20 +2150,38 @@ func onStopFailure(input, cfg object) {
 		return
 	}
 	scheduleRunner(cfg, sid, runnerAt)
+	// A cloud session that is not woken in place stays stopped, since nothing
+	// else there resumes it, so no notice promises a resume time.
+	resumes := !cloud || wakeable
 	if overloaded {
 		journal(sid, "StopFailure", "overload-backoff", errorType, object{"attempt": attempt, "delaySeconds": math.Round(resumeAt - float64(now)), "wake": wakeable})
 		warn("%s StopFailure for %s: attempt %s, retry in %ss wake=%t", errorType, sid, formatNumber(attempt), formatNumber(math.Round(resumeAt-float64(now))), wakeable)
-		if attempt == 1 {
+		if attempt == 1 && resumes {
 			notify(cfg, pluginName, T("overload.notify", errorType, formatTime(resumeAt)))
 		}
 	} else {
 		journal(sid, "StopFailure", "schedule-resume", label, object{"resumeAt": resumeAt, "wake": wakeable, "window": getString(record, "window"), "hint": hint, "message": truncateText(errorText, 160)})
 		warn("rate_limit StopFailure for %s: culprit=%s resumeAt=%s wake=%t", sid, getString(record, "window"), localISO(resumeAt), wakeable)
-		if getString(record, "window") == "unknown" {
-			notify(cfg, pluginName, T("stopfailure.transient", formatTime(resumeAt)))
-		} else {
-			notify(cfg, pluginName, T("stopfailure.wall", label, formatTime(resumeAt)))
+		if resumes {
+			if getString(record, "window") == "unknown" {
+				notify(cfg, pluginName, T("stopfailure.transient", formatTime(resumeAt)))
+			} else {
+				notify(cfg, pluginName, T("stopfailure.wall", label, formatTime(resumeAt)))
+			}
 		}
+	}
+	switch {
+	case cloud && wakeable:
+		journal(sid, "StopFailure", "cloud-wait", "cloud session: waiting in the hook until "+localISO(resumeAt)+", then waking the session in place; no runner is started", object{"resumeAt": resumeAt, "window": getString(record, "window")})
+	case cloud:
+		why := "this hook cannot wake the session"
+		switch {
+		case !getBool(wakeCfg, "sameSession", true):
+			why = "wake.sameSession is off"
+		case resumeAt-float64(now) > wakeLimit:
+			why = "the limit lifts at " + localISO(resumeAt) + ", later than wake.maxMinutes lets the hook wait"
+		}
+		journal(sid, "StopFailure", "cloud-no-wake", "cloud session: not woken in place ("+why+"), and a cloud session starts no runner to resume it", object{"resumeAt": resumeAt, "window": getString(record, "window")})
 	}
 	if wakeable {
 		wakeSameSession(cfg, sid, record, resumeAt)
@@ -2202,12 +2237,18 @@ func wakeSameSession(cfg object, sid string, record object, resumeAt float64) {
 	}
 	if getString(record, "window") != "unknown" || getBool(record, "overload", false) {
 		check := decide(cfg, state, object{"session_id": sid, "cwd": getString(record, "cwd"), "transcript_path": getString(record, "transcript")}, nowSec(), decideOptions{force: true, noProbe: true})
+		held := ""
 		if check.wait != nil && check.wait.until > float64(nowSec()+120) {
+			held = "the " + check.wait.label + " limit is still up"
 			logInfo("wake %s: limit still active (%s %s%%), leaving it to the runner", sid, check.wait.label, formatNumber(check.wait.used))
-			return
-		}
-		if check.fableHit {
+		} else if check.fableHit {
+			held = scopedLabel(cfg) + " is over its pause point"
 			logInfo("wake %s: %s is over its pause point, leaving it to the runner, which relaunches on the fallback role", sid, scopedLabel(cfg))
+		}
+		if held != "" {
+			if cloudSession() {
+				journal(sid, "StopFailure", "cloud-no-wake", "cloud session: "+held+" at wake time, and a cloud session starts no runner to resume it", nil)
+			}
 			return
 		}
 	}
@@ -2228,8 +2269,11 @@ func wakeSameSession(cfg object, sid string, record object, resumeAt float64) {
 	journal(sid, "StopFailure", "wake-same-session", getString(record, "label"), object{"resumeAt": resumeAt})
 	logInfo("wake %s: waking the session in place (exit 2)", sid)
 	message := T("wait.wakeMessage", getString(record, "label"), formatTime(resumeAt), formatNumber(numberOr(record, "used", 0)))
-	if getBool(record, "overload", false) {
+	switch {
+	case getBool(record, "overload", false):
 		message = T("overload.wakeMessage", getString(record, "label"), formatNumber(numberOr(record, "attempt", 1)), durationText(resumeAt-numberOr(record, "startedAt", resumeAt)))
+	case getString(record, "window") == "unknown":
+		message = T("stopfailure.wakeRetry", formatNumber(numberOr(record, "retry", 1)), orDefault(getString(record, "error"), "rate_limit"), durationText(resumeAt-numberOr(record, "startedAt", resumeAt)))
 	}
 	if workspaceChanged(wait) {
 		journal(sid, "StopFailure", "workspace-changed", "tree differs from the checkpoint", nil)
