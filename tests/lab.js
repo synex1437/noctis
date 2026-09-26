@@ -190,7 +190,11 @@ async function scenarioBaseline(acc) {
 
 async function scenarioWarnAndBurst(acc) {
   const now = nowSec();
-  for (const used of [70, 76, 82, 87]) acc.statusline('s1', 'claude-fable-5-1', used, now + 7300, 23, now + 3 * 86400);
+  [70, 76, 82, 87].forEach((used, index, readings) => {
+    acc.timeOffset = (index - readings.length + 1) * 60;
+    acc.statusline('s1', 'claude-fable-5-1', used, now + 7300, 23, now + 3 * 86400);
+  });
+  acc.timeOffset = 0;
   const warn = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', cwd: PROJECT_DIR, prompt: 'continue editing auth.js and keep the tests green' });
   check('warn context once', warn.includes('auto-pause at 92%'), true);
   check('warn does not stop', warn.includes('"decision":"block"'), false);
@@ -1861,7 +1865,11 @@ async function scenarioWorkflows(acc) {
   acc.run(['resume', '--sid', 'wf1', '--account', acc.dir]);
   const call = callsLog().pop() || '';
   check('workflow: relaunch prompt tells Claude to relaunch the same script', call.includes('--resume wf1') && call.includes('relaunch it with the same script') && call.includes('audit-routes'), true);
-  for (const used of [12, 20, 28, 36, 44, 52, 60, 67, 74, 80, 85, 88]) acc.statusline('wf2', 'claude-fable-5-1', used, now + 7200, 10, now + 3 * 86400, 30);
+  [12, 20, 28, 36, 44, 52, 60, 67, 74, 80, 85, 88].forEach((used, index, readings) => {
+    acc.timeOffset = (index - readings.length + 1) * 60;
+    acc.statusline('wf2', 'claude-fable-5-1', used, now + 7200, 10, now + 3 * 86400, 30);
+  });
+  acc.timeOffset = 0;
   const warnDenied = acc.hook({ hook_event_name: 'PreToolUse', session_id: 'wf2', cwd: PROJECT_DIR, tool_name: 'Workflow', tool_input: { name: 'big-run' } });
   check('workflow: launch denied inside the warn band', warnDenied.includes('"permissionDecision":"deny"') && warnDenied.includes('too close to the limit'), true);
   check('workflow: fan-out prompt gets no advisory inside the warn band', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf2', cwd: PROJECT_DIR, prompt: 'Audit every route handler under src/routes for missing auth checks' }).includes('🧩'), false);
@@ -1938,10 +1946,16 @@ async function scenarioFirstRunEdges(acc) {
 
 async function scenarioCheckGate(acc) {
   const now = nowSec();
+  const rising = [50, 58, 65, 72, 78, 84, 87];
+  acc.timeOffset = -rising.length * 60;
   acc.statusline('cg1', 'claude-fable-5-1', 41, now + 7200, 23, now + 3 * 86400);
   const ok = acc.runFull(['check']);
   check('check: under thresholds -> exit 0', ok.status === 0 && ok.stdout.startsWith('ok ·'), true);
-  for (const used of [50, 58, 65, 72, 78, 84, 87]) acc.statusline('cg1', 'claude-fable-5-1', used, now + 7200, 23, now + 3 * 86400);
+  rising.forEach((used, index) => {
+    acc.timeOffset = (index - rising.length + 1) * 60;
+    acc.statusline('cg1', 'claude-fable-5-1', used, now + 7200, 23, now + 3 * 86400);
+  });
+  acc.timeOffset = 0;
   check('check: warn band -> exit 10', acc.runFull(['check']).status, 10);
   acc.statusline('cg1', 'claude-fable-5-1', 93, now + 7200, 23, now + 3 * 86400);
   const over = acc.runFull(['check', '--json']);
