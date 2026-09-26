@@ -62,7 +62,7 @@
   "session.pauseHint": " To keep working anyway: /noctis:pause 120.",
   "session.typedHint": " Prompts you type still go ahead.",
   "queue.stuckNotify": "Queue not progressing: %d open items, session stopped (%s).",
-  "queue.stuckMessage": "⛔ Queue not progressing (%d open); auto-continue stopped — see errors.log.",
+  "queue.stuckMessage": "⛔ Queue not progressing (%d open); auto-continue stays off until an item is ticked, added or edited, or you type a prompt — see errors.log.",
   "queue.doneNotify": "Queue finished: %s has no open items.",
   "queue.doneMessage": "✔ Queue finished — %s has no open items; stopping cleanly.",
   "queue.blockedNotify": "Queue blocked: %d open items in %s wait on dependencies that are not done.",

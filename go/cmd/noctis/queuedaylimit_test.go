@@ -15,6 +15,9 @@ func dailyLimitSandbox(t *testing.T) (object, string) {
 	return cfg, project
 }
 
+// stopsOf ends the session's turn stops times. A give-up holds until a prompt
+// arrives or an open item changes, so after one the user types a prompt, as
+// someone who wants the queue to go on would.
 func stopsOf(t *testing.T, cfg object, sid, project string, stops int) (int, []string) {
 	t.Helper()
 	blocked, notices := 0, []string{}
@@ -26,6 +29,9 @@ func stopsOf(t *testing.T, cfg object, sid, project string, stops int) (int, []s
 		}
 		if message := getString(output, "systemMessage"); message != "" {
 			notices = append(notices, message)
+		}
+		if getMap(getMap(readState(), "stopGuard"), sid)["gaveUpPath"] != nil {
+			hookOutput(t, onUserPromptSubmit, promptInput(sid, project, "keep going with the release"), cfg)
 		}
 	}
 	return blocked, notices

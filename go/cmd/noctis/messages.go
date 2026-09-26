@@ -92,7 +92,7 @@ func baseCatalog() map[string]map[string]string {
 			"session.typedHint":        " Prompts you type still go ahead.",
 
 			"queue.stuckNotify":         "Queue not progressing: %d open items, session stopped (%s).",
-			"queue.stuckMessage":        "⛔ Queue not progressing (%d open); auto-continue stopped — see errors.log.",
+			"queue.stuckMessage":        "⛔ Queue not progressing (%d open); auto-continue stays off until an item is ticked, added or edited, or you type a prompt — see errors.log.",
 			"queue.doneNotify":          "Queue finished: %s has no open items.",
 			"queue.doneMessage":         "✔ Queue finished — %s has no open items; stopping cleanly.",
 			"queue.blockedNotify":       "Queue blocked: %d open items in %s wait on dependencies that are not done.",
@@ -581,7 +581,7 @@ func baseCatalog() map[string]map[string]string {
 			"session.typedHint":        " Yazdığın prompt'lar yine de devam eder.",
 
 			"queue.stuckNotify":         "Kuyruk ilerlemiyor: %d açık madde, oturum durdu (%s).",
-			"queue.stuckMessage":        "⛔ Kuyruk ilerlemiyor (%d açık); otomatik devam durduruldu — errors.log'a bak.",
+			"queue.stuckMessage":        "⛔ Kuyruk ilerlemiyor (%d açık); bir madde işaretlenene, eklenene ya da düzenlenene veya sen bir istem yazana kadar otomatik devam kapalı — errors.log'a bak.",
 			"queue.doneNotify":          "Kuyruk bitti: %s içinde açık madde kalmadı.",
 			"queue.doneMessage":         "✔ Kuyruk bitti — %s içinde açık madde kalmadı; temiz duruluyor.",
 			"queue.blockedNotify":       "Kuyruk tıkalı: %[2]s içindeki %[1]d açık madde tamamlanmamış bağımlılıkları bekliyor.",

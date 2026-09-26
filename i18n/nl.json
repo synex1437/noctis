@@ -59,7 +59,7 @@
   "session.alreadyOver": "⏸ Het %s-gebruik staat al op %s%%: nieuw werk wacht tot %s en hervat vanzelf.",
   "session.pauseHint": " Toch doorwerken: /noctis:pause 120.",
   "queue.stuckNotify": "Wachtrij komt niet vooruit: %d open items, sessie gestopt (%s).",
-  "queue.stuckMessage": "⛔ Wachtrij komt niet vooruit (%d open); automatisch doorgaan gestopt — zie errors.log.",
+  "queue.stuckMessage": "⛔ Wachtrij komt niet vooruit (%d open); automatisch doorgaan blijft uit tot een item wordt afgevinkt, toegevoegd of aangepast, of je een prompt typt — zie errors.log.",
   "queue.doneNotify": "Wachtrij klaar: %s heeft geen open items meer.",
   "queue.doneMessage": "✔ Wachtrij klaar — %s heeft geen open items meer; netjes gestopt.",
   "queue.blockedNotify": "Wachtrij geblokkeerd: %d open items in %s wachten op onvoltooide afhankelijkheden.",

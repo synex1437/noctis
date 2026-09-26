@@ -59,7 +59,7 @@
   "session.alreadyOver": "⏸ %s の使用量はすでに %s%% です: 新しい作業は %s まで待機し、自動的に再開します。",
   "session.pauseHint": "それでも作業するには: /noctis:pause 120。",
   "queue.stuckNotify": "キューが進みません: 未完了 %d 件、セッション停止（%s）。",
-  "queue.stuckMessage": "⛔ キューが進みません（未完了 %d 件）。自動継続を停止しました — errors.log を確認してください。",
+  "queue.stuckMessage": "⛔ キューが進みません（未完了 %d 件）。項目がチェック・追加・編集されるか、プロンプトを入力するまで自動継続は止まったままです — errors.log を確認してください。",
   "queue.doneNotify": "キュー完了: %s に未完了項目はありません。",
   "queue.doneMessage": "✔ キュー完了 — %s に未完了項目はありません。正常に停止します。",
   "queue.blockedNotify": "キューがブロック: %[2]s の未完了 %[1]d 件は未達成の依存関係を待っています。",

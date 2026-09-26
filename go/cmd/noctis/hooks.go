@@ -1400,16 +1400,26 @@ func queueContinuationPrompt(prompt string) bool {
 	return false
 }
 
+// resetIdleGuard also lifts a give-up, so a new prompt drives a stuck queue
+// again.
 func resetIdleGuard(state object, sid string) {
 	guard := getMap(getMap(state, "stopGuard"), sid)
-	if guard == nil || numberOr(guard, "idle", 0) == 0 {
+	if guard == nil || (numberOr(guard, "idle", 0) == 0 && guard["gaveUpPath"] == nil) {
 		return
 	}
 	updateState(func(next object) {
 		if record := getMap(getMap(next, "stopGuard"), sid); record != nil {
 			record["idle"] = float64(0)
+			delete(record, "gaveUpPath")
+			delete(record, "gaveUpOpen")
 		}
 	})
+}
+
+// openItemsDigest names the open items of a queue, so a give-up holds until
+// one of them is ticked, added or edited.
+func openItemsDigest(view queueView) string {
+	return queueItemDigest(fmt.Sprintf("%d open: %s", view.total, strings.Join(view.items, "\n")))
 }
 
 func completionPromised(cfg object, transcriptPath string) bool {
@@ -1567,6 +1577,15 @@ func onStop(input, cfg object) {
 		return
 	}
 	guard := getMap(getMap(state, "stopGuard"), sid)
+	if guard != nil && getString(guard, "gaveUpPath") == queuePath {
+		if getString(guard, "gaveUpOpen") == openItemsDigest(snapshot) {
+			journal(sid, "Stop", "allow-stop", "queue gave up earlier and is unchanged", object{"open": snapshot.total})
+			logInfo("queue for %s gave up earlier and nothing changed since: %d open; stop allowed", sid, snapshot.total)
+			return
+		}
+		delete(guard, "gaveUpPath")
+		delete(guard, "gaveUpOpen")
+	}
 	if guard == nil {
 		guard = object{"forced": float64(0), "idle": float64(0), "lastOpen": nil, "at": float64(now)}
 	}
@@ -1605,7 +1624,7 @@ func onStop(input, cfg object) {
 		stuckKey := fmt.Sprintf("stuck:%s:%s", sid, queuePath)
 		alreadyTold := getMap(state, "notified")[stuckKey] != nil
 		updateState(func(next object) {
-			stateMap(next, "stopGuard")[sid] = object{"forced": float64(0), "idle": float64(0), "lastOpen": nil, "at": float64(now), "gaveUp": float64(now), "cycles": numberOr(guard, "cycles", 0) + 1}
+			stateMap(next, "stopGuard")[sid] = object{"forced": float64(0), "idle": float64(0), "lastOpen": nil, "at": float64(now), "gaveUp": float64(now), "gaveUpPath": queuePath, "gaveUpOpen": openItemsDigest(snapshot), "cycles": numberOr(guard, "cycles", 0) + 1}
 			stateMap(next, "notified")[stuckKey] = float64(now)
 		})
 		fail("queue not progressing for %s: %d open after %s idle continues (total %s); stop allowed", sid, snapshot.total, formatNumber(numberOr(guard, "idle", 0)), formatNumber(numberOr(guard, "forced", 0)))
