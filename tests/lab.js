@@ -599,6 +599,28 @@ async function scenarioStopFailure(acc) {
   acc.hook({ hook_event_name: 'StopFailure', session_id: 'ov1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, error_type: 'overloaded' });
   check('overloaded: an old episode starts fresh', acc.state().overload.ov1.attempts === 1 && acc.state().waits.ov1 !== undefined, true);
   acc.run(['cancel', 'ov1']);
+  let retrySteps;
+  acc.setConfig((config) => {
+    retrySteps = config.wait.retryMinutes;
+    config.wait.retryMinutes = [0.02];
+  });
+  const cloudStop = (sid) => acc.runFull(['hook'], { hook_event_name: 'StopFailure', session_id: sid, cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, error_type: 'rate_limit' }, { CLAUDE_CODE_REMOTE: 'true' });
+  const unwoken = cloudStop('cl0');
+  check('cloud session: with wake.sameSession off it is not woken, nothing else resumes it, and noctis why says why', unwoken.status === 0 && (((acc.state().waits.cl0 || {}).scheduled || {}).method === 'cloud') && acc.run(['why', '--last', '5']).includes('wake.sameSession is off'), true);
+  acc.run(['cancel', 'cl0']);
+  acc.setConfig((config) => {
+    config.wake.sameSession = true;
+  });
+  const cloud = cloudStop('cl1');
+  const cloudScheduled = (acc.state().waits.cl1 || {}).scheduled || {};
+  check('cloud session: a rate limit with no known reset waits in the hook and wakes the session in place', cloud.status === 2 && `${cloud.stdout}${cloud.stderr}`.includes('[noctis] Retry 1 after the session stopped on rate_limit'), true);
+  check('cloud session: no runner, reset watcher or relaunch is started for the wait', cloudScheduled.method === 'cloud' && cloudScheduled.pid === undefined, true);
+  check('cloud session: the wait in the hook is journaled', acc.run(['why', '--last', '5']).includes('cloud-wait'), true);
+  acc.run(['cancel', 'cl1']);
+  acc.setConfig((config) => {
+    config.wait.retryMinutes = retrySteps;
+    config.wake.sameSession = false;
+  });
 }
 
 async function scenarioRouter(acc) {
@@ -1048,6 +1070,16 @@ async function scenarioQueueContinuation(acc) {
   check('stop during limit is allowed and wait registered', acc.hook({ hook_event_name: 'Stop', session_id: 'qc4', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT }).includes('"decision":"block"'), false);
   check('limit wait registered from stop', acc.state().waits.qc4 && acc.state().waits.qc4.kind, 'stop');
   acc.run(['cancel']);
+  acc.statusline('qe1', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
+  fs.writeFileSync(queueFile, '# q\n- [ ] first real item\n- [ ] \n- [ ] third real item (after 2)\n');
+  acc.run(['queue', 'trust', '--file', queueFile]);
+  const emptyNamed = /TASKS\.md: (ignoring 1 empty checklist line|1 boş checklist satırı)/;
+  const emptyStop = acc.hook({ hook_event_name: 'Stop', session_id: 'qe1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
+  check('empty checklist line: not an item, and named once by its line', emptyStop.includes('"decision":"block"') && emptyStop.includes('Queue continues: 2 open') && emptyStop.includes('first real item') && !emptyStop.includes('(\\"\\")') && emptyStop.includes('line(s) at line 3 are not items') && emptyNamed.test(emptyStop), true);
+  const emptyAgain = acc.hook({ hook_event_name: 'Stop', session_id: 'qe1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
+  check('empty checklist line: the next stop goes on without naming it again', emptyAgain.includes('"decision":"block"') && !emptyAgain.includes('line(s) at line 3') && !emptyNamed.test(emptyAgain), true);
+  check('empty checklist line: noctis queue status names it', emptyNamed.test(acc.run(['queue', 'status', '--file', queueFile])), true);
+  acc.run(['queue', 'untrust', '--file', queueFile]);
   fs.unlinkSync(queueFile);
   const transcriptDir = path.join(acc.dir, 'projects', '-lab-project');
   fs.mkdirSync(transcriptDir, { recursive: true });
@@ -2116,6 +2148,24 @@ async function scenarioAutoQueue(acc) {
   const drive = acc.hook({ hook_event_name: 'Stop', session_id: 'aq9', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
   check('auto queue: Stop keeps the session going through the listed jobs', drive.includes('"decision":"block"') && drive.includes('Fix the slow query behind the signup page'), true);
   acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq9', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'ok stop' });
+  const listed4 = '\n- add a login endpoint with rate limiting to the auth service\n- rewrite the payment module so it uses the new billing client\n- migrate all tables to the new schema with a rollback script\n- remove the legacy logging from the worker and the scheduler';
+  const heldOut = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq10', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: `Do NOT implement any of the following right now and do not touch any files; just estimate how long each would take and give me a table.${listed4}` });
+  const heldStop = acc.hook({ hook_event_name: 'Stop', session_id: 'aq10', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
+  check('auto queue: a prompt that forbids the listed work gets no checklist, and noctis why says so', acc.state().autoQueues.aq10 === undefined && !heldOut.includes('multi-step job') && !heldStop.includes('"decision":"block"') && acc.run(['why', '--last', '10']).includes('no-auto-queue'), true);
+  const notes = ['The app currently runs on Express 4 behind nginx', 'It should also keep working with the old mobile client'];
+  const describedOut = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq11', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: `Please do the following for the next release, one after the other:\n- add a login endpoint with rate limiting to the auth service\n- rewrite the payment module so it uses the new billing client\n- ${notes.join('\n- ')}\n- remove the legacy logging from the worker and the scheduler` });
+  const described = acc.state().autoQueues.aq11 || {};
+  const describedFile = described.path ? fs.readFileSync(described.path, 'utf8') : '';
+  check('auto queue: descriptive list lines stay out of the checklist, named and kept in the file', described.items === 3 && notes.every((note) => describedOut.includes(note) && describedFile.includes(`- ${note}`) && !describedFile.includes(`- [ ] ${note}`)), true);
+  acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq11', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'ok stop' });
+  const steps = Array.from({ length: 45 }, (_, i) => `add unit test number ${i + 1} for the invoice parser module`);
+  const overOut = acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq12', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: `Please do all of these in order for the release:\n1. ${steps.join('\n1. ')}` });
+  const over = acc.state().autoQueues.aq12 || {};
+  const overFile = over.path ? fs.readFileSync(over.path, 'utf8') : '';
+  check('auto queue: steps over the 40-item limit are named to the person and to Claude and kept in the file', over.items === 40 && /İsteğinde 45 adım var|Your prompt lists 45 steps/.test(overOut) && overOut.includes('the other 5') && overFile.includes(`\n- ${steps[40]}\n`) && overFile.includes(`\n- ${steps[44]}\n`) && !overFile.includes(`- [ ] ${steps[40]}`), true);
+  if (over.path) fs.writeFileSync(over.path, overFile.replace(/- \[ \] /g, '- [x] '));
+  const overDone = acc.hook({ hook_event_name: 'Stop', session_id: 'aq12', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
+  check('auto queue: the finished checklist names the steps over the limit again', !overDone.includes('"decision":"block"') && overDone.includes(steps[44]) && acc.state().autoQueues.aq12 === undefined, true);
 }
 
 async function scenarioFreshContext(acc) {
