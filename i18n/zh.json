@@ -71,6 +71,8 @@
   "queue.autoNotice": "☰ 检测到 %d 步的任务 — 已记录为清单；Claude 会不询问地完成每一步（/%s:stop 可结束）。",
   "queue.autoLabel": "来自你请求的任务",
   "queue.autoDropped": "☰ 未加入检查清单，因为 noctis 没有把它们读作步骤：%s。它们以普通行的形式留在文件中，不会驱动会话。",
+  "queue.autoCut": "☰ 你的请求列出了 %d 个步骤；检查清单只收前 %d 个，其余 %d 个以普通行的形式留在文件末尾，不会驱动会话；清单完成后，noctis 会再次列出它们。",
+  "queue.autoCutOpen": "☰ 仍未完成：你的请求中有 %d 个步骤超出了 %d 项的清单上限，未列入清单：%s。如仍需要，请重新发送。",
   "queue.jobNotInPrompt": "☰ 未加入清单，因为这些词不在你的请求中：%s",
   "queue.startDetected": "☰ 在 %[2]s 中检测到 %[1]d 项任务 — Claude 会按顺序完成，不会停下来询问（/%[3]s:stop 可结束）。",
   "queue.startUnreadable": "☰ noctis 无法把 %s 当作文本文件读取；未启动队列。",

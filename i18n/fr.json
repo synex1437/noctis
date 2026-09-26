@@ -71,6 +71,8 @@
   "queue.autoNotice": "☰ Travail en %d étapes détecté — suivi comme une checklist ; Claude termine chaque étape sans demander (/%s:stop pour arrêter).",
   "queue.autoLabel": "le travail issu de ta demande",
   "queue.autoDropped": "☰ Pas dans la checklist, car noctis ne les a pas lues comme des étapes : %s. Elles restent dans le fichier comme de simples lignes, qui ne pilotent pas la session.",
+  "queue.autoCut": "☰ Ta demande compte %d étapes ; la checklist prend les %d premières, et les %d autres restent à la fin de son fichier comme de simples lignes, qui ne pilotent pas la session ; noctis les rappelle une fois la checklist terminée.",
+  "queue.autoCutOpen": "☰ Encore ouvert : %d étape(s) de ta demande dépassaient la limite de %d éléments et n'étaient pas dans la checklist : %s. Renvoie-les si elles sont encore à faire.",
   "queue.jobNotInPrompt": "☰ Écarté de la checklist, car ses mots ne viennent pas de ta demande : %s",
   "queue.startDetected": "☰ %[1]d tâche(s) détectée(s) dans %[2]s — Claude les traite dans l'ordre sans s'arrêter pour demander (/%[3]s:stop pour arrêter).",
   "queue.startUnreadable": "☰ noctis n'a pas pu lire %s comme un fichier texte ; aucune file n'a été lancée.",

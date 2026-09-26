@@ -71,6 +71,8 @@
   "queue.autoNotice": "☰ Wykryto zadanie na %d kroków — zapisane jako lista kontrolna; Claude kończy każdy krok bez pytania (/%s:stop kończy).",
   "queue.autoLabel": "zadanie z twojego polecenia",
   "queue.autoDropped": "☰ Poza listą kontrolną, bo noctis nie odczytał ich jako kroków: %s. Zostają w pliku jako zwykłe wiersze, które nie prowadzą sesji.",
+  "queue.autoCut": "☰ Twoje polecenie wymienia %d kroków; lista kontrolna bierze pierwsze %d, a reszta (%d) zostaje na końcu jej pliku jako zwykłe wiersze, które nie prowadzą sesji; noctis wymieni je ponownie, gdy lista będzie gotowa.",
+  "queue.autoCutOpen": "☰ Wciąż otwarte: %d krok(ów) z twojego polecenia przekroczyło limit %d pozycji i nie było na liście kontrolnej: %s. Wyślij je ponownie, jeśli nadal są potrzebne.",
   "queue.jobNotInPrompt": "☰ Nie dodano do listy kontrolnej, bo tych słów nie ma w twoim poleceniu: %s",
   "queue.startDetected": "☰ Wykryte zadania w %[2]s: %[1]d — Claude wykonuje je po kolei, nie zatrzymując się, by pytać (/%[3]s:stop kończy).",
   "queue.startUnreadable": "☰ noctis nie mógł odczytać %s jako pliku tekstowego; nie uruchomiono kolejki.",

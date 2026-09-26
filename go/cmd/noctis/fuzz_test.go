@@ -86,6 +86,14 @@ func FuzzAutoQueueItems(f *testing.F) {
 				t.Fatalf("dropped line %q is empty, spans lines or is also an item", line)
 			}
 		}
+		if len(job.cut) > 0 && len(job.items) != autoQueueMaxItems {
+			t.Fatalf("%d steps were left out of a checklist of only %d", len(job.cut), len(job.items))
+		}
+		for _, line := range job.cut {
+			if strings.TrimSpace(line) == "" || strings.Contains(line, "\n") || seen[line] {
+				t.Fatalf("step %q over the limit is empty, spans lines or is also an item", line)
+			}
+		}
 		for _, reason := range []string{heldBackWork(job.text, job.prose, job.lead), heldBackWork(prompt, prompt, true)} {
 			if reason != "" && !strings.Contains(reason, `"`) {
 				t.Fatalf("a held-back reason quotes nothing: %q", reason)

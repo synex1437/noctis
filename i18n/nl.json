@@ -71,6 +71,8 @@
   "queue.autoNotice": "☰ Klus van %d stappen herkend — bijgehouden als checklist; Claude maakt elke stap af zonder te vragen (/%s:stop beëindigt dit).",
   "queue.autoLabel": "de klus uit je verzoek",
   "queue.autoDropped": "☰ Niet in de checklist, omdat noctis ze niet als stappen las: %s. Ze blijven als gewone regels in het bestand staan, die de sessie niet aansturen.",
+  "queue.autoCut": "☰ Je verzoek noemt %d stappen; de checklist neemt de eerste %d, en de andere %d staan onderaan het bestand als gewone regels, die de sessie niet aansturen; noctis noemt ze opnieuw als de checklist af is.",
+  "queue.autoCutOpen": "☰ Nog open: %d stap(pen) uit je verzoek vielen boven de grens van %d punten en stonden niet op de checklist: %s. Stuur ze opnieuw als ze nog moeten gebeuren.",
   "queue.jobNotInPrompt": "☰ Buiten de checklist gehouden, omdat de woorden niet in je verzoek staan: %s",
   "queue.startDetected": "☰ Taken gevonden in %[2]s: %[1]d — Claude werkt ze op volgorde af zonder te stoppen om te vragen (/%[3]s:stop beëindigt dit).",
   "queue.startUnreadable": "☰ noctis kon %s niet als tekstbestand lezen; er is geen wachtrij gestart.",

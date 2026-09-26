@@ -71,6 +71,8 @@
   "queue.autoNotice": "☰ Auftrag mit %d Schritten erkannt — als Checkliste erfasst; Claude erledigt jeden Schritt ohne Rückfrage (/%s:stop beendet das).",
   "queue.autoLabel": "der Auftrag aus deiner Anfrage",
   "queue.autoDropped": "☰ Nicht in der Checkliste, weil noctis sie nicht als Schritte gelesen hat: %s. Sie bleiben als einfache Zeilen in der Datei, die die Sitzung nicht steuern.",
+  "queue.autoCut": "☰ Deine Anfrage nennt %d Schritte; die Checkliste übernimmt die ersten %d, die übrigen %d stehen am Ende ihrer Datei als einfache Zeilen, die die Sitzung nicht steuern; noctis nennt sie noch einmal, sobald die Checkliste erledigt ist.",
+  "queue.autoCutOpen": "☰ Noch offen: %d Schritt(e) deiner Anfrage lagen über der Grenze von %d Punkten und standen nicht in der Checkliste: %s. Schick sie noch einmal, wenn sie noch erledigt werden müssen.",
   "queue.jobNotInPrompt": "☰ Nicht in die Checkliste aufgenommen, weil die Wörter nicht aus deiner Anfrage stammen: %s",
   "queue.startDetected": "☰ %[1]d Aufgabe(n) in %[2]s erkannt — Claude arbeitet sie der Reihe nach ab, ohne zum Nachfragen anzuhalten (/%[3]s:stop beendet das).",
   "queue.startUnreadable": "☰ noctis konnte %s nicht als Textdatei lesen; keine Warteschlange gestartet.",

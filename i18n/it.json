@@ -71,6 +71,8 @@
   "queue.autoNotice": "☰ Rilevato lavoro in %d passi — registrato come checklist; Claude completa ogni passo senza chiedere (/%s:stop per terminare).",
   "queue.autoLabel": "il lavoro dalla tua richiesta",
   "queue.autoDropped": "☰ Fuori dalla checklist, perché noctis non le ha lette come passi: %s. Restano nel file come righe semplici, che non guidano la sessione.",
+  "queue.autoCut": "☰ La tua richiesta elenca %d passi; la checklist prende i primi %d, e gli altri %d restano in fondo al suo file come righe semplici, che non guidano la sessione; noctis li ricorda di nuovo quando la checklist è finita.",
+  "queue.autoCutOpen": "☰ Ancora aperti: %d passo/i della tua richiesta superavano il limite di %d voci e non erano nella checklist: %s. Rimandali se servono ancora.",
   "queue.jobNotInPrompt": "☰ Escluso dalla checklist, perché le parole non sono nella tua richiesta: %s",
   "queue.startDetected": "☰ %[1]d attività rilevate in %[2]s — Claude le svolge in ordine senza fermarsi a chiedere (/%[3]s:stop per terminare).",
   "queue.startUnreadable": "☰ noctis non è riuscito a leggere %s come file di testo; nessuna coda avviata.",

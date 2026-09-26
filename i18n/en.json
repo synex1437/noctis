@@ -74,6 +74,8 @@
   "queue.autoNotice": "☰ %d-step job detected — tracked as a checklist; Claude finishes every step without asking (/%s:stop ends it).",
   "queue.autoLabel": "the job from your prompt",
   "queue.autoDropped": "☰ Not on the checklist, since noctis did not read them as steps: %s. They stay in the file as plain lines, which do not drive the session.",
+  "queue.autoCut": "☰ Your prompt lists %d steps; the checklist takes the first %d, and the other %d are kept at the end of its file as plain lines, which do not drive the session; noctis names them again when the checklist is done.",
+  "queue.autoCutOpen": "☰ Still open: %d step(s) of your prompt were over the %d-item checklist limit and were not on it: %s. Send them again if they still need doing.",
   "queue.jobNotInPrompt": "☰ Kept out of the checklist, since its words are not in your request: %s",
   "queue.startDetected": "☰ %d job(s) detected in %s — Claude works through them in order without stopping to ask (/%s:stop ends it).",
   "queue.startUnreadable": "☰ noctis could not read %s as a text file; no queue was started.",
