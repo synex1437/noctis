@@ -69,6 +69,7 @@
   "queue.modeNotice": "☰ Mode file d'attente : %s contient %d élément(s) ouvert(s) — Claude les traite sans demander (/%s:pause pour arrêter ; renomme le fichier ou règle queue.files pour te désinscrire).",
   "queue.autoNotice": "☰ Travail en %d étapes détecté — suivi comme une checklist ; Claude termine chaque étape sans demander (/%s:stop pour arrêter).",
   "queue.autoLabel": "le travail issu de ta demande",
+  "queue.jobNotInPrompt": "☰ Écarté de la checklist, car ses mots ne viennent pas de ta demande : %s",
   "queue.startDetected": "☰ %[1]d tâche(s) détectée(s) dans %[2]s — Claude les traite dans l'ordre sans s'arrêter pour demander (/%[3]s:stop pour arrêter).",
   "queue.startUnreadable": "☰ noctis n'a pas pu lire %s comme un fichier texte ; aucune file n'a été lancée.",
   "queue.startEmpty": "☰ %s ne contient aucune tâche ouverte ; aucune file n'a été lancée.",

@@ -69,6 +69,7 @@
   "queue.modeNotice": "☰ Wachtrijmodus: %s heeft %d open punt(en) — Claude werkt ze af zonder te vragen (/%s:pause om te stoppen; hernoem het bestand of stel queue.files in om dit uit te zetten).",
   "queue.autoNotice": "☰ Klus van %d stappen herkend — bijgehouden als checklist; Claude maakt elke stap af zonder te vragen (/%s:stop beëindigt dit).",
   "queue.autoLabel": "de klus uit je verzoek",
+  "queue.jobNotInPrompt": "☰ Buiten de checklist gehouden, omdat de woorden niet in je verzoek staan: %s",
   "queue.startDetected": "☰ Taken gevonden in %[2]s: %[1]d — Claude werkt ze op volgorde af zonder te stoppen om te vragen (/%[3]s:stop beëindigt dit).",
   "queue.startUnreadable": "☰ noctis kon %s niet als tekstbestand lezen; er is geen wachtrij gestart.",
   "queue.startEmpty": "☰ %s bevat geen open taak; er is geen wachtrij gestart.",

@@ -69,6 +69,7 @@
   "queue.modeNotice": "☰ Modo fila: %s tem %d item(ns) em aberto — o Claude resolve todos sem perguntar (/%s:pause para parar; renomeie o arquivo ou ajuste queue.files para desativar).",
   "queue.autoNotice": "☰ Trabalho de %d passos detectado — registrado como checklist; o Claude conclui cada passo sem perguntar (/%s:stop encerra).",
   "queue.autoLabel": "o trabalho do seu pedido",
+  "queue.jobNotInPrompt": "☰ Deixado fora da checklist, porque as palavras não estão no seu pedido: %s",
   "queue.startDetected": "☰ %[1]d tarefa(s) detectada(s) em %[2]s — o Claude as faz em ordem sem parar para perguntar (/%[3]s:stop encerra).",
   "queue.startUnreadable": "☰ O noctis não conseguiu ler %s como arquivo de texto; nenhuma fila foi iniciada.",
   "queue.startEmpty": "☰ %s não tem nenhuma tarefa aberta; nenhuma fila foi iniciada.",

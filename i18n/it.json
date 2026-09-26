@@ -69,6 +69,7 @@
   "queue.modeNotice": "☰ Modalità coda: %s ha %d elemento/i aperto/i — Claude li porta a termine senza chiedere (/%s:pause per fermarsi; rinomina il file o imposta queue.files per disattivarla).",
   "queue.autoNotice": "☰ Rilevato lavoro in %d passi — registrato come checklist; Claude completa ogni passo senza chiedere (/%s:stop per terminare).",
   "queue.autoLabel": "il lavoro dalla tua richiesta",
+  "queue.jobNotInPrompt": "☰ Escluso dalla checklist, perché le parole non sono nella tua richiesta: %s",
   "queue.startDetected": "☰ %[1]d attività rilevate in %[2]s — Claude le svolge in ordine senza fermarsi a chiedere (/%[3]s:stop per terminare).",
   "queue.startUnreadable": "☰ noctis non è riuscito a leggere %s come file di testo; nessuna coda avviata.",
   "queue.startEmpty": "☰ %s non contiene attività aperte; nessuna coda avviata.",

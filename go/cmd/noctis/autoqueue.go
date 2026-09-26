@@ -42,6 +42,12 @@ var descriptiveStarters = lazyWordSet(`i i'm i've we we're we've our my the this
 	ja my nasz nasza mój moja to ten ta tu tutaj obecnie uwaga kontekst bo ponieważ jeśli ale i
 	я мы наш наша мой моя это этот эта тут здесь сейчас примечание контекст потому если но и`)
 
+const verbFinalImperativeWords = `yükle indir kaydet gönder planla sırala filtrele grupla ayıkla çöz gider biçimlendir paketle derle yedekle arşivle kapsa
+	sadeleştir yeniden ekleyin yazın oluşturun düzeltin güncelleyin kaldırın silin taşıyın yapın kurun çalıştırın değiştirin
+	ekle yaz oluştur düzelt güncelle kaldır sil taşı dağıt yap ayarla kur çalıştır üret dönüştür değiştir iyileştir temizle
+	belgele incele birleştir ayır çıkar bağla etkinleştir sağla destekle yükselt geliştir tasarla hazırla düzenle tamamla bitir
+	çevir yayınla araştır ölç doğrula`
+
 var imperativeWords = lazyWordSet(`add build create write fix update refactor implement remove delete rename move migrate deploy test
 	check verify make set configure install run generate convert replace change improve optimize optimise clean document
 	review merge split extract wrap integrate connect enable disable ensure handle support upgrade bump port rewrite redesign
@@ -52,11 +58,7 @@ var imperativeWords = lazyWordSet(`add build create write fix update refactor im
 	group dedupe normalize parse serialize encode decode compress encrypt hash sign authenticate authorize localize style theme
 	animate render draw plot chart package bundle compile transpile minify containerize dockerize provision rollback backup
 	restore archive prune rotate benchmark fuzz cover refine simplify reorganize reorder unify consolidate
-	yükle indir kaydet gönder planla sırala filtrele grupla ayıkla çöz gider biçimlendir paketle derle yedekle arşivle kapsa
-	sadeleştir yeniden ekleyin yazın oluşturun düzeltin güncelleyin kaldırın silin taşıyın yapın kurun çalıştırın değiştirin
-	ekle yaz oluştur düzelt güncelle kaldır sil taşı dağıt yap ayarla kur çalıştır üret dönüştür değiştir iyileştir temizle
-	belgele incele birleştir ayır çıkar bağla etkinleştir sağla destekle yükselt geliştir tasarla hazırla düzenle tamamla bitir
-	çevir yayınla araştır ölç doğrula
+	` + verbFinalImperativeWords + `
 	füge erstelle schreibe implementiere entferne aktualisiere baue teste prüfe konfiguriere installiere ersetze verbessere
 	ajoute crée écris corrige implémente supprime mets construis teste vérifie configure installe remplace améliore
 	añade agrega crea escribe corrige implementa elimina actualiza construye prueba verifica configura instala reemplaza mejora
@@ -291,7 +293,7 @@ func startAutoQueue(sid, cwd string, items []string, now int64) string {
 	for _, item := range items {
 		lines = append(lines, "- [ ] "+item)
 	}
-	path := writeSessionQueue(sid, object{"cwd": cwd, "at": float64(now), "items": float64(len(items))}, lines)
+	path := writeSessionQueue(sid, object{"cwd": cwd, "at": float64(now), "items": float64(len(items)), "words": jobWordDigests(strings.Join(items, "\n"))}, lines)
 	if path == "" {
 		return ""
 	}

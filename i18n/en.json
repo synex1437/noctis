@@ -72,6 +72,7 @@
   "queue.modeNotice": "☰ Queue mode: %s has %d open item(s) — Claude works through them without asking (/%s:pause to stop; rename the file or set queue.files to opt out).",
   "queue.autoNotice": "☰ %d-step job detected — tracked as a checklist; Claude finishes every step without asking (/%s:stop ends it).",
   "queue.autoLabel": "the job from your prompt",
+  "queue.jobNotInPrompt": "☰ Kept out of the checklist, since its words are not in your request: %s",
   "queue.startDetected": "☰ %d job(s) detected in %s — Claude works through them in order without stopping to ask (/%s:stop ends it).",
   "queue.startUnreadable": "☰ noctis could not read %s as a text file; no queue was started.",
   "queue.startEmpty": "☰ %s holds no open job; no queue was started.",
