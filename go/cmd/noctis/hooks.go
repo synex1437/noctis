@@ -200,7 +200,8 @@ func onSessionStart(input, cfg object) {
 	output := object{}
 	contexts := []string{}
 	queueNotice, queueNoticeKey, cutOffSid := "", "", ""
-	if source == "startup" || source == "clear" {
+	fresh := noteFreshStart(state, sid, getString(input, "transcript_path"))
+	if (source == "startup" || source == "clear") && !fresh {
 		if checkpointSid, checkpoint := checkpointForNewSession(state, cwd, now); checkpoint != nil {
 			handOverCheckpoint(checkpointSid, sid)
 			contexts = append(contexts, T("session.checkpoint", pluginName, formatTime(numberOr(checkpoint, "at", 0)), getString(checkpoint, "path"), hostResumeCommand(currentHost().id, checkpointSid)))
@@ -1646,7 +1647,13 @@ func onStop(input, cfg object) {
 	if !isAutoQueue(queuePath) {
 		touchQueueTrust(queuePath, now)
 	}
-	journal(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), object{"forced": numberOr(guard, "forced", 0), "today": continuedToday + 1})
+	facts := object{"forced": numberOr(guard, "forced", 0), "today": continuedToday + 1}
+	tokens, known := sessionContextTokens(sid)
+	subagent := subagentNote(cfg, tokens, known)
+	if subagent != "" {
+		facts["subagent"], facts["contextTokens"] = true, tokens
+	}
+	journal(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), facts)
 	logInfo("queue continue #%s for %s: %d open", formatNumber(numberOr(guard, "forced", 0)), sid, snapshot.total)
 	nextItem := ""
 	if len(snapshot.items) > 0 {
@@ -1677,7 +1684,7 @@ func onStop(input, cfg object) {
 	if isAutoQueue(queuePath) {
 		where = queuePath
 	}
-	reason := fmt.Sprintf(queueContinuesPrefix+": %d open in %s. Take the next eligible item%s (priority and (after …) dependencies already applied), finish it completely, mark it done in the file, then move to the following one.%s%s Do not stop or ask for confirmation; decide yourself.", snapshot.total, where, nextItem, blockedNote, queueEditRule(cfg, queuePath))
+	reason := fmt.Sprintf(queueContinuesPrefix+": %d open in %s. Take the next eligible item%s (priority and (after …) dependencies already applied), finish it completely, mark it done in the file, then move to the following one.%s%s%s Do not stop or ask for confirmation; decide yourself.", snapshot.total, where, nextItem, blockedNote, queueEditRule(cfg, queuePath), subagent)
 	if waitContext != "" {
 		reason = waitContext + "\n" + reason
 	}

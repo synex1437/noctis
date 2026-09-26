@@ -58,7 +58,7 @@ Tek yazar ilkesi: her dosyanın tek bir yazar süreci var; `state.json` için `w
 | Uzun bekleme durdurma mesajı | ~40–60 token (bir kez) |
 | Fable geçiş mesajı | ~40 token (bir kez) |
 | Duraklama noktasında yazılan prompt | ~40 token `additionalContext` (pencere ve sıfırlanma başına bir kez; kullanıcıya tek satır `systemMessage`) |
-| Devam prompt'u | ~25 token (veya kuyruğa alınan kendi prompt'unuz); güvenilen kuyrukta liste adı ve en fazla 3 sonraki madde eklenir. `--resume` bütün konuşmayı geri yükler: istem önbelleğinin ömrü dolduktan sonraki devamda ilk çağrı bütün bağlamı önbelleğe yeniden yazar |
+| Devam prompt'u | ~25 token (veya kuyruğa alınan kendi prompt'unuz); güvenilen kuyrukta liste adı ve en fazla 3 sonraki madde eklenir. `--resume` bütün konuşmayı geri yükler: istem önbelleğinin ömrü dolduktan sonraki devamda ilk çağrı bütün bağlamı önbelleğe yeniden yazar. Bu yüzden en az 60 dk duraklamış ve bağlamı en az 100 bin token olan bir Claude Code oturumu, kullanılmamış checkpoint'i varsa `--resume` yerine `--session-id` ile yeni bir oturum olarak başlar (`resume.freshAfterMinutes` / `freshAboveTokens`): istem checkpoint'i ve eski konuşma dosyasını adlandırır (~150 token), yeni oturum yalnızca gerekeni okur |
 | SessionStart işaretçisi | ~60 token, yalnızca yetim checkpoint varsa, bir kez |
 | Yönlendirme talimatı (additionalContext) | ~70 token, yalnızca araştırma isteklerinde |
 | `systemMessage` bildirimleri | 0 (yalnızca kullanıcıya gösterilir) |

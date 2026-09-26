@@ -262,6 +262,9 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 			} else {
 				info["context"] = nil
 			}
+			if tokens, ok := contextTokensOf(getMap(input, "context_window")); ok {
+				info["contextTokens"] = tokens
+			}
 			sessions[sid] = info
 		}
 		heal = float64(now)-numberOr(previous, "selfHealAt", 0) > selfHealIntervalSeconds
@@ -553,6 +556,7 @@ func relaunchPrompt(text string) string {
 
 type launchSpec struct {
 	sid            string
+	fresh          string
 	model          string
 	effort         string
 	prompt         string
@@ -560,6 +564,10 @@ type launchSpec struct {
 	mode           string
 	permissionMode string
 	configDir      string
+}
+
+func (launch launchSpec) running() string {
+	return orDefault(launch.fresh, launch.sid)
 }
 
 type launchResult struct {
@@ -853,6 +861,19 @@ func resumeWait(sid, release string) {
 		logInfo("runner %s: the session went on after the reset; not relaunching it", sid)
 		return
 	}
+	if fresh, at := earlierFreshStart(readState(), sid, startedAt); fresh != "" {
+		if sessionContinuedAfter(freshProgress(wait, fresh), at) {
+			if !takeWait(sid, wait, "session", true) {
+				leaveReplacedWait(sid)
+				return
+			}
+			journal(sid, "resume", "skip-launch", fmt.Sprintf("the fresh session %s an earlier runner started went on", fresh), nil)
+			logInfo("runner %s: the fresh session %s an earlier runner started went on; not relaunching", sid, fresh)
+			return
+		}
+		undoFreshStart(sid, fresh)
+		logInfo("runner %s: the fresh session %s an earlier runner started never answered; the session gets its records back", sid, fresh)
+	}
 	resume := section(cfg, "resume")
 	ready := ""
 	capUsage := usageView{}
@@ -940,6 +961,7 @@ func resumeWait(sid, release string) {
 		effort = appliedEffort("fallback", getMap(section(cfg, "roles"), "fallback"))
 	}
 	dirs := sessionDirs(getString(wait, "projectDir"), getString(wait, "cwd"))
+	plan := freshStartFor(cfg, readState(), wait, sid, nowSec())
 	queuePath := sessionQueueFile(cfg, sid, dirs...)
 	prompt := orDefault(getString(wait, "queuedPrompt"), getString(resume, "prompt"))
 	launchDir := dirs[0]
@@ -964,6 +986,10 @@ func resumeWait(sid, release string) {
 			if len(items) > 0 {
 				prompt += " Next: " + strings.Join(items, " | ") + "."
 			}
+			if plan.sid == "" {
+				tokens, known := getNumber(wait, "contextTokens")
+				prompt += subagentNote(cfg, tokens, known)
+			}
 		}
 		prompt += queueEditRule(cfg, queuePath)
 	}
@@ -976,6 +1002,9 @@ func resumeWait(sid, release string) {
 	}
 	if getBool(wait, "overload", false) {
 		prompt = T("overload.wakeMessage", getString(wait, "label"), formatNumber(numberOr(wait, "attempt", 1)), durationText(numberOr(wait, "resumeAt", 0)-numberOr(wait, "startedAt", numberOr(wait, "resumeAt", 0)))) + " " + prompt
+	}
+	if plan.sid != "" {
+		prompt = freshPrompt(sid, plan, getString(wait, "transcript")) + prompt
 	}
 	prompt = relaunchPrompt(prompt)
 	claimed, continued, woken, watcher := false, false, 0.0, 0
@@ -998,12 +1027,21 @@ func resumeWait(sid, release string) {
 			return
 		}
 		claimed, watcher = true, liveRunner(getMap(getMap(next, "handedOff"), sid))
-		stateMap(next, "handedOff")[sid] = object{"at": float64(nowSec()), "model": model, "mode": getString(resume, "mode"), "pid": float64(os.Getpid()), "waitStartedAt": startedAt}
+		handoff, running := object{"at": float64(nowSec()), "model": model, "mode": getString(resume, "mode"), "pid": float64(os.Getpid()), "waitStartedAt": startedAt}, sid
+		if plan.sid != "" {
+			handoff["fresh"], running = plan.sid, plan.sid
+			moveSessionRecords(next, sid, plan.sid)
+			stateMap(next, "freshStarts")[plan.sid] = object{"from": sid, "at": float64(nowSec()), "waitStartedAt": startedAt}
+		}
+		stateMap(next, "handedOff")[sid] = handoff
 		markContinued(next, sid, record, "runner")
-		stateMap(next, "resumePrompts")[sid] = object{"hash": promptDigest(prompt), "at": float64(nowSec())}
-		stateMap(next, "modelOverrides")[sid] = object{"model": model, "at": float64(nowSec())}
+		stateMap(next, "resumePrompts")[running] = object{"hash": promptDigest(prompt), "at": float64(nowSec())}
+		stateMap(next, "modelOverrides")[running] = object{"model": model, "at": float64(nowSec())}
 		if checkpoint := getMap(getMap(next, "checkpoints"), sid); checkpoint != nil {
 			checkpoint["consumed"] = true
+			if plan.sid != "" {
+				checkpoint["handedTo"] = plan.sid
+			}
 		}
 		delete(record, "scheduled")
 	})
@@ -1025,6 +1063,12 @@ func resumeWait(sid, release string) {
 		return
 	}
 	defer releaseHandoff(sid, startedAt)
+	kept := plan.sid == ""
+	defer func() {
+		if !kept {
+			undoFreshStart(sid, plan.sid)
+		}
+	}()
 	if watcher > 0 {
 		journal(sid, "resume", "take-over", fmt.Sprintf("runner %d only watches the window it opened before this pause", watcher), nil)
 		logInfo("runner %s: runner %d only watches the window it opened before this pause; taking the session over", sid, watcher)
@@ -1033,7 +1077,7 @@ func resumeWait(sid, release string) {
 	if launchMode == "none" {
 		launchMode = ""
 	}
-	launch := launchSpec{sid: sid, model: model, effort: effort, prompt: prompt, cwd: launchDir, mode: launchMode, permissionMode: getString(wait, "permissionMode"), configDir: relaunchConfigDir(wait)}
+	launch := launchSpec{sid: sid, fresh: plan.sid, model: model, effort: effort, prompt: prompt, cwd: launchDir, mode: launchMode, permissionMode: getString(wait, "permissionMode"), configDir: relaunchConfigDir(wait)}
 	if blocked := launchBlocked(launch); blocked != "" {
 		reportLaunchFailure(cfg, sid, model, launch.cwd, blocked)
 		return
@@ -1041,7 +1085,12 @@ func resumeWait(sid, release string) {
 	if ready != "" {
 		notify(cfg, pluginName, ready)
 	}
-	journal(sid, "resume", "launch", model, object{"mode": orDefault(launchMode, getString(resume, "mode"))})
+	facts := object{"mode": orDefault(launchMode, getString(resume, "mode"))}
+	if plan.sid != "" {
+		facts["fresh"], facts["contextTokens"], facts["idleMinutes"] = plan.sid, plan.tokens, math.Round(plan.idle/60)
+		logInfo("runner %s: %s since its last turn with about %s tokens of context; relaunching it as the fresh session %s with its handoff note", sid, pauseLength(plan.idle), approxCount(plan.tokens), plan.sid)
+	}
+	journal(sid, "resume", "launch", model, facts)
 	updateState(func(next object) { delete(stateMap(next, "launchFailures"), sid) })
 	launchStart := time.Now()
 	result := launchClaude(cfg, launch)
@@ -1049,7 +1098,12 @@ func resumeWait(sid, release string) {
 		reportLaunchFailure(cfg, sid, model, launch.cwd, "")
 		return
 	}
-	if !relaunchDidNothing(wait, launchStart, result) {
+	progress := wait
+	if plan.sid != "" {
+		progress = freshProgress(wait, plan.sid)
+	}
+	if !relaunchDidNothing(progress, launchStart, result) {
+		kept = true
 		return
 	}
 	attempts := int(numberOr(wait, "launchAttempts", 0)) + 1
@@ -1064,6 +1118,9 @@ func resumeWait(sid, release string) {
 	if !rescheduleOwnWait(sid, startedAt, func(record object) {
 		record["launchAttempts"], record["hit"], record["inHook"] = float64(attempts), "relaunch", false
 		record["startedAt"], record["until"], record["resumeAt"] = ended, ended, retryAt
+		if plan.sid != "" {
+			record["freshFailed"] = true
+		}
 		delete(record, "waking")
 		delete(record, "wakeAttemptedAt")
 		delete(record, "earlyTriggeredAt")

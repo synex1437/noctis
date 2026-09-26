@@ -259,7 +259,7 @@ func launchInWindowsTerminal(cfg object, launch launchSpec, claudePath string, c
 			tab.Env = env
 			if err := tab.Run(); err == nil && waitForFile(started, launchStartTimeout) {
 				logInfo("session %s opened in a Windows Terminal tab", launch.sid)
-				return waitForLaunchedSession(launch.sid, pidFile, "tab")
+				return waitForLaunchedSession(launch.running(), pidFile, "tab")
 			}
 			warn("Windows Terminal did not start the launcher; opening a console window instead")
 		}
@@ -275,7 +275,7 @@ func launchInWindowsTerminal(cfg object, launch launchSpec, claudePath string, c
 		return false
 	}
 	go func() { _ = command.Wait() }()
-	return waitForLaunchedSession(launch.sid, pidFile, "window")
+	return waitForLaunchedSession(launch.running(), pidFile, "window")
 }
 
 func waitForLaunchedSession(sid, pidFile, how string) bool {
@@ -368,7 +368,7 @@ func launchInDesktopTerminal(cfg object, launch launchSpec, claudePath string, c
 	if opener == nil || !openTerminal(opener, pidFile) {
 		return false
 	}
-	return waitForLaunchedSession(launch.sid, pidFile, "terminal")
+	return waitForLaunchedSession(launch.running(), pidFile, "terminal")
 }
 
 func openTerminal(opener *exec.Cmd, pidFile string) bool {

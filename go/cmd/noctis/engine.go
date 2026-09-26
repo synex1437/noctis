@@ -1456,6 +1456,9 @@ func prepareWait(sid string, record object, cfg object) {
 	}
 	record["configDirEnv"] = os.Getenv(claudeConfigEnv)
 	recordProjectDir(record)
+	if tokens, ok := sessionContextTokens(sid); ok {
+		record["contextTokens"] = tokens
+	}
 }
 
 func registerWait(sid string, record object, cfg object) bool {
