@@ -957,6 +957,7 @@ func emptyState() object {
 		"queueVerify":      object{},
 		"typedTurns":       object{},
 		"continuedBy":      object{},
+		"freshStarts":      object{},
 	}
 }
 
@@ -1202,6 +1203,7 @@ func pruneState(state object, now int64) {
 		"modelOverrides": launchRecordTTLSeconds,
 		"typedTurns":     stateEntryTTLSeconds,
 		"continuedBy":    stateEntryTTLSeconds,
+		"freshStarts":    stateEntryTTLSeconds,
 	} {
 		for key, raw := range stateMap(state, name) {
 			entry, _ := raw.(object)

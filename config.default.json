@@ -99,7 +99,9 @@
     "prompt": "Continue. The task was paused at a usage-limit threshold; pick up exactly where you left off and finish the pending work.",
     "remoteControl": false,
     "extraArgs": [],
-    "copilotAllowAllTools": false
+    "copilotAllowAllTools": false,
+    "freshAfterMinutes": 60,
+    "freshAboveTokens": 100000
   },
   "budget": {
     "dailyWeeklyPercent": 0,
@@ -136,6 +138,7 @@
     "maxIdleContinues": 4,
     "maxContinuesPerSession": 200,
     "maxContinuesPerDay": 600,
+    "subagentAboveTokens": 100000,
     "completionPromise": "",
     "github": {
       "closeOnDone": false,

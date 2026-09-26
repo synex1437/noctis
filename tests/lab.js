@@ -2115,6 +2115,47 @@ async function scenarioAutoQueue(acc) {
   acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'aq9', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'ok stop' });
 }
 
+async function scenarioFreshContext(acc) {
+  const now = nowSec();
+  fs.rmSync(path.join(PROJECT_DIR, 'TASKS.md'), { force: true });
+  const jobs = path.join(PROJECT_DIR, 'fresh-jobs.md');
+  fs.writeFileSync(jobs, '- add a login page\n- add a logout button\n- add a password reset link\n');
+  const bigContext = { context_window_size: 200000, used_percentage: 71, current_usage: { input_tokens: 1200, output_tokens: 900, cache_creation_input_tokens: 3000, cache_read_input_tokens: 138000 } };
+  const reading = (five, fiveReset) => acc.run(['statusline'], { ...acc.statuslineInput('fc1', 'claude-opus-5', five, fiveReset, 10, now + 3 * 86400), context_window: bigContext });
+  reading(20, now + 7200);
+  acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'fc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: `/noctis:start ${jobs}` });
+  check('fresh context: /noctis:start runs the job file', (acc.state().autoQueues.fc1 || {}).items, 3);
+  const stop = acc.hook({ hook_event_name: 'Stop', session_id: 'fc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
+  check('fresh context: with 142k tokens of context the next item goes to a fresh subagent', stop.includes('"decision":"block"') && stop.includes('add a login page') && stop.includes('fresh general-purpose subagent') && stop.includes('142k tokens'), true);
+  reading(95, now + 2 * 86400);
+  acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'fc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
+  check('fresh context: the pause keeps how big the context was', (acc.state().waits.fc1 || {}).contextTokens, 142200);
+  acc.editState((state) => {
+    state.waits.fc1.resumeAt = now - 5;
+    state.waits.fc1.until = now - 10;
+  });
+  const old = new Date(Date.now() - 2 * 3600000);
+  fs.utimesSync(TRANSCRIPT, old, old);
+  reading(5, now + 7200);
+  resetCalls();
+  acc.run(['resume', '--sid', 'fc1', '--account', acc.dir]);
+  const call = (await anyCall()).pop() || '';
+  const fresh = (call.match(/--session-id ([0-9a-f-]{36})/) || [])[1] || '';
+  if (!fresh) process.stdout.write(`  fresh context: launch was ${call}\n`);
+  check('fresh context: after two hours with 142k tokens the relaunch starts a fresh session instead of --resume', fresh !== '' && !call.includes('--resume fc1'), true);
+  check('fresh context: the fresh session is told to read the paused session\'s checkpoint first', call.includes('handoff note') && call.includes('fc1.md') && call.includes('taking over from session fc1'), true);
+  const state = acc.state();
+  check('fresh context: the checklist moves to the fresh session', state.autoQueues[fresh] !== undefined && state.autoQueues.fc1 === undefined && (state.freshStarts[fresh] || {}).from === 'fc1', true);
+  check('fresh context: the pause is over once the fresh session ran', state.waits.fc1 === undefined, true);
+  const freshStop = acc.hook({ hook_event_name: 'Stop', session_id: fresh, cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
+  check('fresh context: the fresh session goes on with the checklist', freshStop.includes('"decision":"block"') && freshStop.includes('add a login page'), true);
+  check('fresh context: the paused session no longer drives it', acc.hook({ hook_event_name: 'Stop', session_id: 'fc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false }), '');
+  acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: fresh, cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: '/noctis:stop' });
+  check('fresh context: /noctis:stop in the fresh session ends the checklist', acc.state().autoQueues[fresh], undefined);
+  fs.rmSync(jobs, { force: true });
+  writeTranscript();
+}
+
 async function scenarioEarlyReset(acc) {
   const now = nowSec();
   acc.setConfig((config) => {
@@ -3013,6 +3054,7 @@ async function main() {
     ['double runner: one wait, one launch', () => scenarioDoubleRunner(accA)],
     ['hosts: codex, antigravity, droid, copilot', () => scenarioHosts(accA)],
     ['auto queue from long prompts', () => scenarioAutoQueue(accA)],
+    ['fresh context: subagents for a big context, a fresh session after a long pause', () => scenarioFreshContext(accA)],
     ['bug-report bundle', () => scenarioBundle(accA)],
     ['silent failures: wiring, unwritable wait, recycled pid, doctor gate', () => scenarioSilentFailures(accA)],
     ['channel: what the plugin hands Claude, and how often', () => scenarioChannelBudget(accA)],
