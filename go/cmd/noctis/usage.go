@@ -945,11 +945,16 @@ func lockOwnerPid(owner string) (int, bool) {
 }
 
 func holderStale(owner string, age time.Duration) bool {
-	if pid, parsed := lockOwnerPid(owner); parsed && pid != os.Getpid() {
-		if !processAlive(pid) {
-			return age > lockDeadOwnerMs*time.Millisecond
-		}
+	pid, parsed := lockOwnerPid(owner)
+	switch {
+	case parsed && pid != os.Getpid() && !processAlive(pid):
+		return age > lockDeadOwnerMs*time.Millisecond
+	case parsed && pid != os.Getpid():
 		return age > lockLiveHolderMs*time.Millisecond
+	case !parsed && owner != "":
+		// A holder writes its pid as it takes a lock, so a lock that names no process was left by
+		// none that is still running: it goes as soon as one whose holder died.
+		return age > lockDeadOwnerMs*time.Millisecond
 	}
 	return age > lockStaleMs*time.Millisecond
 }
