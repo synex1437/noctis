@@ -6,6 +6,10 @@ import (
 	"unicode/utf8"
 )
 
+func autoQueueItems(prompt string) []string {
+	return promptJobOf(prompt).items
+}
+
 func TestAutoQueueItems(t *testing.T) {
 	pad := "Here is some context about the project so that the prompt is long enough for the detector to consider it: " + strings.Repeat("the codebase is a Node service with a Postgres database and a React front end. ", 2)
 	cases := []struct {

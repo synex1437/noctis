@@ -50,6 +50,11 @@ func FuzzAutoQueueItems(f *testing.F) {
 	f.Add(strings.Repeat("Add the thing and then fix the other thing. ", 20))
 	f.Add("```\ncode fence\n```\nAdd a test for it and then deploy it and finally write the notes down.")
 	f.Add("[x] done\n[ ] not done\n[] weird\nTODO: something")
+	f.Add("Do not implement any of the following yet; just estimate each.\n- add a thing to it\n- fix the other thing\n- write the notes down")
+	f.Add("Bunların hiçbirini henüz uygulama, sadece planla.\n- bir şey ekle ona\n- diğer şeyi düzelt\n- notları yaz")
+	f.Add("Şu işleri yap:\n- Bu fonksiyonu yeniden yaz\n- The app runs on Express\n- O eski dosyayı sil\n- Mevcut testleri güncelle\nBunları yapabilir misin?")
+	f.Add("Önce tabloyu oluştur, sonra testleri yaz, ardından sınırı ekle, son olarak README'yi güncelle.")
+	f.Add("First create the table, then write the tests, after that add the limit, and finally update the README. Can you do these?")
 	f.Fuzz(func(t *testing.T, prompt string) {
 		items := autoQueueItems(prompt)
 		if len(items) > autoQueueMaxItems {
@@ -73,6 +78,25 @@ func FuzzAutoQueueItems(f *testing.F) {
 
 			if words := strings.Fields(item); len(words) > 0 && !strings.Contains(prompt, words[0]) {
 				t.Fatalf("item %q is not from the prompt", item)
+			}
+		}
+		job := promptJobOf(prompt)
+		for _, line := range job.dropped {
+			if strings.TrimSpace(line) == "" || strings.Contains(line, "\n") || seen[line] {
+				t.Fatalf("dropped line %q is empty, spans lines or is also an item", line)
+			}
+		}
+		if len(job.cut) > 0 && len(job.items) != autoQueueMaxItems {
+			t.Fatalf("%d steps were left out of a checklist of only %d", len(job.cut), len(job.items))
+		}
+		for _, line := range job.cut {
+			if strings.TrimSpace(line) == "" || strings.Contains(line, "\n") || seen[line] {
+				t.Fatalf("step %q over the limit is empty, spans lines or is also an item", line)
+			}
+		}
+		for _, reason := range []string{heldBackWork(job.text, job.prose, job.lead), heldBackWork(prompt, prompt, true)} {
+			if reason != "" && !strings.Contains(reason, `"`) {
+				t.Fatalf("a held-back reason quotes nothing: %q", reason)
 			}
 		}
 	})

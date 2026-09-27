@@ -1,19 +1,43 @@
 #!/bin/sh
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+# The kernel (Linux 6.1 or later) or bash's OSTYPE and HOSTTYPE (Linux, Git Bash, Cygwin) name
+# this OS and CPU without starting another program. uname answers otherwise, on macOS too: its
+# /bin/bash is one build for two CPUs, so its HOSTTYPE is not trusted.
+case $0 in
+  */*) bin=${0%/*} ;;
+  *) bin=. ;;
+esac
+kernel=/proc/sys/kernel
+os= arch=
+if [ -r "$kernel/ostype" ] && [ -r "$kernel/arch" ]; then
+  read -r os <"$kernel/ostype"
+  read -r arch <"$kernel/arch"
+else
+  case ${OSTYPE-} in
+    linux*|msys|cygwin)
+      case ${HOSTTYPE-} in
+        x86_64|aarch64) os=$OSTYPE arch=$HOSTTYPE ;;
+      esac
+      ;;
+  esac
+fi
+if [ -z "$os" ] || [ -z "$arch" ]; then
+  system=$(uname -sm)
+  os=${system%% *} arch=${system##* }
+fi
 ext=
-case "$(uname -s)" in
+case $os in
   Darwin) os=darwin ;;
-  MINGW*|MSYS*|CYGWIN*) os=windows ext=.exe ;;
+  MINGW*|MSYS*|CYGWIN*|msys|cygwin) os=windows ext=.exe ;;
   *) os=linux ;;
 esac
-case "$(uname -m)" in
+case $arch in
   x86_64|amd64) arch=amd64 ;;
   arm64|aarch64) arch=arm64 ;;
-  *) echo "noctis: no build for this CPU ($(uname -m)); builds exist for amd64 and arm64" >&2; exit 1 ;;
+  *) echo "noctis: no build for this CPU ($arch); builds exist for amd64 and arm64" >&2; exit 1 ;;
 esac
-binary="$root/bin/$os-$arch/noctis$ext"
-if [ ! -f "$binary" ] && [ "$os" = windows ] && [ -f "$root/bin/noctis.exe" ]; then
-  binary="$root/bin/noctis.exe"
+binary=$bin/$os-$arch/noctis$ext
+if [ ! -f "$binary" ] && [ "$os" = windows ] && [ -f "$bin/noctis.exe" ]; then
+  binary=$bin/noctis.exe
 fi
 if [ ! -f "$binary" ]; then
   echo "noctis: no binary for $os-$arch at $binary" >&2
