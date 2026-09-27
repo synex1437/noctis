@@ -130,3 +130,35 @@ func TestTheRepositoryShipsThisPlatformsBinaryWhereInstallsLookForIt(t *testing.
 		t.Fatalf("bin/SHA256SUMS has no line for %s, so an install from this tree would refuse its binary", name)
 	}
 }
+
+func TestACopyUpdatedOverOneMadeBefore750KeepsNoPerCPUMacOSBinary(t *testing.T) {
+	sandboxFiles(t)
+	from, to := t.TempDir(), t.TempDir()
+	engine := platformBinary(from)
+	if err := os.MkdirAll(filepath.Dir(engine), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(engine, []byte("7.5 engine"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, retired := range retiredPlatformFolders {
+		old := filepath.Join(to, "bin", retired, "noctis")
+		if err := os.MkdirAll(filepath.Dir(old), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(old, []byte("7.4 engine"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := copyPluginTree(from, to); err != nil {
+		t.Fatal(err)
+	}
+	for _, retired := range retiredPlatformFolders {
+		if statSafe(filepath.Join(to, "bin", retired)) != nil {
+			t.Fatalf("the copy still has bin/%s after an install over it", retired)
+		}
+	}
+	if copied, err := os.ReadFile(platformBinary(to)); err != nil || string(copied) != "7.5 engine" {
+		t.Fatalf("the copy's binary is %q (%v), not the one installed", copied, err)
+	}
+}
