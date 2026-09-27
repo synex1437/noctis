@@ -1109,8 +1109,8 @@ func emptyState() object {
 }
 
 func usableStateJSON(content []byte) bool {
-	var raw any
-	if err := json.Unmarshal(content, &raw); err != nil {
+	raw, err := decodeJSON(content)
+	if err != nil {
 		return false
 	}
 	_, isObject := raw.(map[string]any)
@@ -1797,8 +1797,8 @@ func jsonUnmarshal(content []byte, target any) error {
 }
 
 func jsonUnmarshalObject(content []byte, target *object) error {
-	var raw any
-	if err := json.Unmarshal(content, &raw); err != nil {
+	raw, err := decodeJSON(content)
+	if err != nil {
 		return err
 	}
 	data, _ := raw.(object)
