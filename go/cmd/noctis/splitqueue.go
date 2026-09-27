@@ -47,7 +47,7 @@ func jobClause(clause string) bool {
 }
 
 func severalJobsLikely(prompt string) bool {
-	text := strings.TrimSpace(codeFence.ReplaceAllString(prompt, " "))
+	text := strings.TrimSpace(withoutCodeBlocks(prompt))
 	if size := len([]rune(text)); size < autoQueueMinChars || size > splitQueueMaxChars || endsQuestion(text) || hasBugReportMarker(text) {
 		return false
 	}
