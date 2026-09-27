@@ -261,7 +261,7 @@ func TestUpdateStateBacksUpTheStateItReadAndWritesWhatItEncoded(t *testing.T) {
 	}
 	updated := updateState(func(state object) { stateMap(state, "notified")["s2"] = stamp })
 	written, _ := os.ReadFile(files.state)
-	if string(written) != string(marshalPretty(updated)) {
+	if string(written) != string(marshalState(updated)) {
 		t.Fatalf("state.json is not the encoding of the updated state:\n%s", written)
 	}
 	if notified := getMap(readState(), "notified"); notified["s1"] != stamp || notified["s2"] != stamp {

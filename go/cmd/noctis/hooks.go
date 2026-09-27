@@ -1446,7 +1446,7 @@ func onPermissionRequest(input, cfg object) {
 		return
 	}
 	sid := sessionKey(input)
-	if tool == "Read" && checkpointHandedTo(peekState(), sid, requested) {
+	if tool == "Read" && checkpointHandedTo(sid, requested) {
 		allowFileRequest(sid, tool, requested, "allow-checkpoint-note", "the resume note handed to")
 		return
 	}

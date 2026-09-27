@@ -1433,7 +1433,7 @@ func TestOnlyAnErrorCopilotCannotRecoverFromIsRetried(t *testing.T) {
 			t.Fatalf("Copilot ignores what errorOccurred prints, yet the hook printed %v", output)
 		}
 		state := readState()
-		if wait, episode, checkpoint := getMap(getMap(state, "waits"), "cp-live"), getMap(getMap(state, "overload"), "cp-live"), getMap(getMap(state, "checkpoints"), "cp-live"); wait != nil || episode != nil || checkpoint != nil {
+		if wait, episode, checkpoint := getMap(getMap(state, "waits"), "cp-live"), getMap(getMap(state, "overload"), "cp-live"), checkpointRecord("cp-live"); wait != nil || episode != nil || checkpoint != nil {
 			t.Fatalf("an error Copilot goes on from (%v) set up a relaunch of the live session: wait %v, overload episode %v, checkpoint %v", fields, wait, episode, checkpoint)
 		}
 	}
@@ -1475,7 +1475,7 @@ func TestACopilotSessionStartHandsOverTheCheckpointOnce(t *testing.T) {
 	if context := getString(start, "additionalContext"); !strings.Contains(context, checkpoint) || !strings.Contains(context, "Queue mode (TASKS.md: 2 open)") {
 		t.Fatalf("Copilot's sessionStart names no event and the new session was not handed the checkpoint and the queue: %v", start)
 	}
-	if !getBool(getMap(getMap(readState(), "checkpoints"), "cp-old"), "consumed", false) {
+	if !getBool(checkpointRecord("cp-old"), "consumed", false) {
 		t.Fatal("the checkpoint Copilot's sessionStart delivered is still offered to the next session")
 	}
 	later := hostHook(t, "copilot", copilotPayload("cp-later", project, object{"source": "new"}))

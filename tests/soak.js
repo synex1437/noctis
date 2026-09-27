@@ -266,7 +266,7 @@ function queueResume(acc, session, expect = {}, reason = '') {
   const entry = { acc, sid: session.sid, resumeAt: Number(wait.resumeAt), kind: wait.kind, ...expect };
   if (session.workflow) {
     entry.expectWorkflow = session.workflow;
-    const checkpoint = state.checkpoints && state.checkpoints[session.sid];
+    const checkpoint = acc.checkpoint(session.sid);
     let text = '';
     try {
       text = fs.readFileSync(checkpoint.path, 'utf8');

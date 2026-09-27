@@ -472,13 +472,14 @@ func runCheckpointCommand() {
 	state := readState()
 	bestSid, latest := latestCheckpointFor(state, cwd, now)
 	if sid != "" {
-		key, unique := resolveSid(sid, getMap(state, "checkpoints"))
+		all := allCheckpoints(state)
+		key, unique := resolveSid(sid, all)
 		if !unique {
 			os.Exit(2)
 		}
 		sid = key
 		bestSid, latest = "", nil
-		if entry := toObject(getMap(state, "checkpoints")[sid]); checkpointUsable(entry, "", now) {
+		if entry := toObject(all[sid]); checkpointUsable(entry, "", now) {
 			bestSid, latest = sid, entry
 		}
 	}
@@ -500,7 +501,7 @@ func runCheckpointCommand() {
 
 func countWithheldCheckpoints(state object, cwd, sid string, now int64) int {
 	withheld := 0
-	for key, raw := range getMap(state, "checkpoints") {
+	for key, raw := range allCheckpoints(state) {
 		if sid != "" && key != sid {
 			continue
 		}
@@ -823,7 +824,7 @@ func stateWriteResult(payload object) object {
 			result = object{"ok": false, "reason": "conflict", "stamp": stamp}
 			return
 		}
-		if err := writeJSONAtomic(files.state, document); err != nil {
+		if err := writeEncodedAtomic(files.state, marshalState(document)); err != nil {
 			result = object{"ok": false, "reason": err.Error()}
 			return
 		}
