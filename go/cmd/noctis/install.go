@@ -90,6 +90,10 @@ func hooksModules(root string) []string {
 	return modules
 }
 
+// retiredPlatformFolders are folders of bin/ that an install of an earlier version placed and no
+// version places any more: macOS had one binary per CPU before 7.5.0 put both in bin/darwin.
+var retiredPlatformFolders = []string{"darwin-amd64", "darwin-arm64"}
+
 func copyPluginTree(from, to string) error {
 	wanted, dirs := installedPaths()
 	for _, relative := range append(wanted, hooksModules(from)...) {
@@ -108,6 +112,13 @@ func copyPluginTree(from, to string) error {
 		}
 		if err := copyTree(source, filepath.Join(to, dir)); err != nil {
 			return err
+		}
+	}
+	// Nothing runs a binary left there once the hooks point at the new one, so a copy updated over
+	// one made before 7.5.0 would keep the old macOS binaries until an uninstall.
+	for _, retired := range retiredPlatformFolders {
+		if err := os.RemoveAll(filepath.Join(to, "bin", retired)); err != nil {
+			warn("install: old binary folder left behind: %v", err)
 		}
 	}
 	return nil
