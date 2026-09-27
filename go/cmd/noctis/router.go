@@ -15,26 +15,31 @@ type wordMatcher struct {
 	pattern *lazyRe
 }
 
+// newWordMatcher and newOwnWorkPattern assemble their patterns on first use, not as the process
+// starts: most hooks never match them, and the assembly was a third of the start-up work.
 func newWordMatcher(turkishStems, englishWords []string) wordMatcher {
-	alternatives := make([]string, 0, len(turkishStems)+len(englishWords))
-	for _, stem := range turkishStems {
-		alternatives = append(alternatives, stem+`\p{L}*`)
-	}
-	alternatives = append(alternatives, englishWords...)
-	pattern := lazyRegexp(`(?i)(?:^|[^\p{L}\p{N}_])(` + strings.Join(alternatives, "|") + `)(?:[^\p{L}\p{N}_]|$)`)
-	return wordMatcher{pattern: pattern}
+	return wordMatcher{pattern: lazyRegexpOf(func() string {
+		alternatives := make([]string, 0, len(turkishStems)+len(englishWords))
+		for _, stem := range turkishStems {
+			alternatives = append(alternatives, stem+`\p{L}*`)
+		}
+		alternatives = append(alternatives, englishWords...)
+		return `(?i)(?:^|[^\p{L}\p{N}_])(` + strings.Join(alternatives, "|") + `)(?:[^\p{L}\p{N}_]|$)`
+	})}
 }
 
 func newOwnWorkPattern(pointers, turkishNouns, englishNouns, possessed []string) *lazyRe {
-	nouns := make([]string, 0, len(turkishNouns)+len(englishNouns))
-	for _, stem := range turkishNouns {
-		nouns = append(nouns, stem+`\p{L}*`)
-	}
-	noun := `(?:` + strings.Join(append(nouns, englishNouns...), "|") + `)`
-	pointer := `(?:` + strings.Join(pointers, "|") + `)(?:[^\p{L}\p{N}_]+[\p{L}\p{N}_'’]+){0,2}[^\p{L}\p{N}_]+` + noun
-	pronoun := noun + `[^\p{L}\p{N}_]+(?:this|these)\s*(?:[?.!,;:]|$)`
-	owned := `(?:` + strings.Join(possessed, "|") + `)\p{L}*`
-	return lazyRegexp(`(?i)(?:^|[^\p{L}\p{N}_])(?:` + pointer + `|` + pronoun + `|` + owned + `)(?:[^\p{L}\p{N}_]|$)`)
+	return lazyRegexpOf(func() string {
+		nouns := make([]string, 0, len(turkishNouns)+len(englishNouns))
+		for _, stem := range turkishNouns {
+			nouns = append(nouns, stem+`\p{L}*`)
+		}
+		noun := `(?:` + strings.Join(append(nouns, englishNouns...), "|") + `)`
+		pointer := `(?:` + strings.Join(pointers, "|") + `)(?:[^\p{L}\p{N}_]+[\p{L}\p{N}_'’]+){0,2}[^\p{L}\p{N}_]+` + noun
+		pronoun := noun + `[^\p{L}\p{N}_]+(?:this|these)\s*(?:[?.!,;:]|$)`
+		owned := `(?:` + strings.Join(possessed, "|") + `)\p{L}*`
+		return `(?i)(?:^|[^\p{L}\p{N}_])(?:` + pointer + `|` + pronoun + `|` + owned + `)(?:[^\p{L}\p{N}_]|$)`
+	})
 }
 
 func pointsAtOwnWork(text string) bool {
