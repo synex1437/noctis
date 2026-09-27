@@ -220,12 +220,16 @@ const storeGo = fs.readFileSync(path.join(ROOT, 'go', 'cmd', 'noctis', 'store.go
 const inGo = /pluginVersion\s+=\s+"([^"]+)"/.exec(storeGo);
 if (!inGo || inGo[1] !== pluginVersion) problems.push(`store.go says ${inGo && inGo[1]}, plugin.json says ${pluginVersion}`);
 
-const fuzzSource = fs.readFileSync(path.join(ROOT, 'go', 'cmd', 'noctis', 'fuzz_test.go'), 'utf8');
 const ci = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
-const targets = [...fuzzSource.matchAll(/^func (Fuzz\w+)\(/gm)].map((found) => found[1]);
-if (!targets.length) problems.push('fuzz_test.go declares no fuzz targets');
+const goPackage = path.join(ROOT, 'go', 'cmd', 'noctis');
+const targets = fs.readdirSync(goPackage).filter((file) => file.endsWith('_test.go'))
+  .flatMap((file) => [...fs.readFileSync(path.join(goPackage, file), 'utf8').matchAll(/^func (Fuzz\w+)\(/gm)].map((found) => found[1]));
+if (!targets.length) problems.push('the Go tests declare no fuzz targets');
+// ci.yml fuzzes every target go test -list finds; a workflow that names its targets instead has to
+// name each one.
+const discovers = /go test -list '\^Fuzz'/.test(ci);
 for (const target of targets) {
-  if (!new RegExp(`\\b${target}\\b`).test(ci)) problems.push(`ci.yml never runs the fuzz target ${target}`);
+  if (!discovers && !new RegExp(`\\b${target}\\b`).test(ci)) problems.push(`ci.yml never runs the fuzz target ${target}`);
 }
 
 const workflowDir = path.join(ROOT, '.github', 'workflows');

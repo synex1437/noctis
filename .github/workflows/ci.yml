@@ -68,10 +68,8 @@ jobs:
         with:
           go-version: '1.24.7'
       # go test -list finds the targets; the two parts take them alternately, each target with the
-      # whole runner for 30 s, so neither part outlasts a lab group. The loop needs no edit for a new
-      # target, but tests/hygiene.js wants each target in fuzz_test.go named in this file, hence
-      # 7.5.0's FuzzJSONFastDecode and FuzzJSONFastEncode here. The five listed below must still be
-      # found.
+      # whole runner for 30 s, so neither part outlasts a lab group. A new target needs no edit here;
+      # the ones listed below must still be found.
       - name: Fuzz this part's targets (short)
         working-directory: go
         run: |

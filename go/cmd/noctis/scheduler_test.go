@@ -157,7 +157,7 @@ func TestSystemdWakeFlagIsOptional(t *testing.T) {
 }
 
 func TestSystemdRetriesWithoutWakeWhenRefused(t *testing.T) {
-
+	sandboxFiles(t)
 	attempts := 0
 	recorded := withFakeScheduler(t, func(cmd *exec.Cmd) ([]byte, error) {
 		if strings.Contains(strings.Join(cmd.Args, " "), "WakeSystem=true") {
@@ -182,6 +182,7 @@ func TestSystemdRetriesWithoutWakeWhenRefused(t *testing.T) {
 }
 
 func TestSystemdFailureIsReportedNotSwallowed(t *testing.T) {
+	sandboxFiles(t)
 	withFakeScheduler(t, func(cmd *exec.Cmd) ([]byte, error) {
 		if strings.Contains(cmd.Path, "systemd-run") {
 			return nil, exec.ErrNotFound
@@ -194,7 +195,7 @@ func TestSystemdFailureIsReportedNotSwallowed(t *testing.T) {
 }
 
 func TestSystemdStopsTheOldUnitBeforeScheduling(t *testing.T) {
-
+	sandboxFiles(t)
 	recorded := withFakeScheduler(t, nil)
 	scheduled, ok := scheduleSystemd("s1", float64(time.Now().Add(time.Hour).Unix()), []string{"resume"}, false)
 	if !ok || len(*recorded) < 2 {
