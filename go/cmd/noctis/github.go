@@ -171,7 +171,9 @@ func runQueueTrust(cfg object, cwd, action string) {
 		trustQueueFile(target, true)
 		rememberOpenIssues(cfg, target)
 		fmt.Println(T("queue.trustGranted", target))
-		printUnmatchedReferences(target, queueSnapshot(target))
+		view := queueSnapshot(target)
+		printUnmatchedReferences(target, view)
+		printEmptyLines(target, view)
 	case "untrust":
 		trustQueueFile(target, false)
 		fmt.Println(T("queue.trustRevoked", target))
@@ -196,6 +198,13 @@ func runQueueTrust(cfg object, cwd, action string) {
 			fmt.Println(T("queue.trustAsk", filepath.Base(target), view.total, pluginName))
 		}
 		printUnmatchedReferences(target, view)
+		printEmptyLines(target, view)
+	}
+}
+
+func printEmptyLines(target string, view queueView) {
+	if len(view.empty) > 0 {
+		fmt.Println(T("queue.emptyLines", filepath.Base(target), len(view.empty), emptyLineList(view)))
 	}
 }
 

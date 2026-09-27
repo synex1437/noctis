@@ -53,7 +53,7 @@ func TestAQueueThatNeedsNoTrustIsNotToldAboutTheTrust(t *testing.T) {
 	}
 	section(cfg, "queue")["requireTrust"] = true
 	own := t.TempDir()
-	if startAutoQueue("oc5", own, []string{"add input validation to the signup form", "write tests for the payments module"}, nowSec()) == "" {
+	if startAutoQueue("oc5", own, promptJob{items: []string{"add input validation to the signup form", "write tests for the payments module"}}, nowSec()) == "" {
 		t.Fatal("the checklist from the prompt was not written")
 	}
 	if reason := getString(stopHookOutput(t, stopInput("oc5", own), cfg), "reason"); !strings.Contains(reason, "add input validation to the signup form") || strings.Contains(reason, "trusts the file") {

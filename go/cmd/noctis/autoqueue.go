@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -30,17 +31,32 @@ const (
 	autoQueueMinWords     = 4
 )
 
-var descriptiveStarters = lazyWordSet(`i i'm i've we we're we've our my the this that these those there here it it's its currently
-	note context background fyi for as because since when if so but and however today yesterday
-	ben biz bizim benim bu şu o burada burda not bağlam mevcut halihazırda hâlihazırda çünkü eğer ama fakat ancak ve bugün dün
-	ich wir unser unsere mein meine der die das es hier dort aktuell derzeit momentan hinweis kontext weil da wenn aber und
-	je j'ai nous notre nos mon ma le la les ce cette il elle ici actuellement contexte parce car si mais et
-	yo nosotros nuestro nuestra mi el los las este esta esto hay aquí actualmente nota contexto porque pero y
-	eu nós nosso nossa meu minha a os este isto há atualmente
-	io noi nostro nostra mio mia lo gli questo questa c'è qui attualmente contesto perché
-	ik wij ons onze mijn het dit dat er momenteel opmerking omdat als maar en
-	ja my nasz nasza mój moja to ten ta tu tutaj obecnie uwaga kontekst bo ponieważ jeśli ale i
-	я мы наш наша мой моя это этот эта тут здесь сейчас примечание контекст потому если но и`)
+// descriptiveStarters holds, per language, the first words of a list line
+// that describes rather than asks: "The app runs on …", "Bu modül …". A
+// line is read with the words of the prompt's own language, so the Dutch
+// "en" does not throw out the Turkish "En iyi skoru …" and the Polish "to"
+// does not throw out "To keep things simple, …".
+var descriptiveStarters = map[string]func(string) bool{
+	"en": lazyWordSet(`i i'm i've we we're we've our my the this that these those there here it it's its currently
+		note context background fyi for as because since when if so but and however today yesterday`),
+	"tr": lazyWordSet(`ben biz bizim benim bu şu o burada burda not bağlam mevcut halihazırda hâlihazırda çünkü eğer ama fakat ancak ve bugün dün`),
+	"de": lazyWordSet(`ich wir unser unsere mein meine der die das es hier dort aktuell derzeit momentan hinweis kontext weil da wenn als aber und`),
+	"fr": lazyWordSet(`je j'ai nous notre nos mon ma le la les ce cette il elle ici actuellement contexte note parce car si mais et en`),
+	"es": lazyWordSet(`yo nosotros nuestro nuestra mi tu el la los las este esta esto es hay aquí actualmente nota contexto porque si pero y en`),
+	"pt": lazyWordSet(`eu nós nosso nossa meu minha o a os as este esta isto há atualmente nota contexto porque`),
+	"it": lazyWordSet(`io noi nostro nostra mio mia il lo la le i gli questo questa c'è qui attualmente nota contesto perché ma`),
+	"nl": lazyWordSet(`ik wij we ons onze mijn het die dit dat er hier momenteel opmerking omdat als maar en`),
+	"pl": lazyWordSet(`ja my nasz nasza mój moja to ten ta tu tutaj obecnie uwaga kontekst bo ponieważ jeśli ale i`),
+	"ru": lazyWordSet(`я мы наш наша мой моя это этот эта тут здесь сейчас примечание контекст потому если но и`),
+}
+
+func descriptiveStarter(lang, word string) bool {
+	starters, ok := descriptiveStarters[lang]
+	if !ok {
+		starters = descriptiveStarters["en"]
+	}
+	return starters(word)
+}
 
 const verbFinalImperativeWords = `yükle indir kaydet gönder planla sırala filtrele grupla ayıkla çöz gider biçimlendir paketle derle yedekle arşivle kapsa
 	sadeleştir yeniden ekleyin yazın oluşturun düzeltin güncelleyin kaldırın silin taşıyın yapın kurun çalıştırın değiştirin
@@ -66,27 +82,35 @@ var imperativeWords = lazyWordSet(`add build create write fix update refactor im
 	aggiungi crea scrivi correggi implementa rimuovi aggiorna costruisci testa verifica configura installa sostituisci migliora`)
 
 var leadIns = lazyWordSet(`please lütfen bitte veuillez merci por favor per favore alsjeblieft proszę пожалуйста
-	then next finally lastly afterwards after that also and now
-	sonra ardından daha son olarak en ayrıca ve şimdi
-	dann danach schließlich zuletzt außerdem und
-	ensuite puis enfin aussi et
-	luego después finalmente también y
-	depois finalmente também e
-	poi dopo infine anche
-	daarna vervolgens ook en
-	potem następnie także i
-	затем потом наконец также и`)
+	first firstly then next finally lastly afterwards after that also and now
+	önce ilk sonra ardından daha son olarak en ayrıca ve şimdi
+	zuerst dann danach schließlich zuletzt außerdem und
+	d'abord ensuite puis enfin aussi et
+	primero luego después finalmente también y
+	primeiro depois finalmente também e
+	prima poi dopo infine anche
+	eerst daarna vervolgens ook en
+	najpierw potem następnie także i
+	сначала затем потом наконец также и`)
 
 func imperativeLike(unit string) bool {
 	fields := wordSplit.Split(strings.TrimSpace(unit), -1)
-	if len(fields) == 0 {
-		return false
+	if leadsWithImperative(fields) {
+		return true
 	}
-	clean := func(word string) string {
-		return strings.ToLower(strings.Trim(word, ",.:;!()\"'“”‘’«»"))
-	}
+	last := stepWord(fields[len(fields)-1])
+	return imperativeWords(last) || imperativeWords(strings.TrimSuffix(strings.TrimSuffix(last, "in"), "iniz"))
+}
+
+func stepWord(word string) string {
+	return strings.ToLower(strings.Trim(word, ",.:;!()\"'“”‘’«»"))
+}
+
+// leadsWithImperative tells words whose first one, after lead-ins such as
+// "please" or "then", is a work verb.
+func leadsWithImperative(fields []string) bool {
 	for index := 0; index < len(fields) && index < 4; index++ {
-		word := clean(fields[index])
+		word := stepWord(fields[index])
 		if imperativeWords(word) {
 			return true
 		}
@@ -94,8 +118,67 @@ func imperativeLike(unit string) bool {
 			break
 		}
 	}
-	last := clean(fields[len(fields)-1])
-	return imperativeWords(last) || imperativeWords(strings.TrimSuffix(strings.TrimSuffix(last, "in"), "iniz"))
+	return false
+}
+
+// finalVerbs holds the verbs that close a step in the languages that put the
+// verb last: Turkish imperatives ("Bu fonksiyonu yeniden yaz") and the German
+// and Dutch infinitives of a to-do list ("Die Konfiguration auslagern").
+var finalVerbs = map[string]func(string) bool{
+	"tr": lazyWordSet(verbFinalImperativeWords + ` et al aç kapat başlat durdur geçir dene koy bul ertele sabitle kilitle artır azalt`),
+	"de": lazyWordSet(`hinzufügen ergänzen erstellen anlegen schreiben implementieren umsetzen entfernen löschen aktualisieren bauen
+		testen prüfen überprüfen konfigurieren installieren ersetzen verbessern reparieren beheben korrigieren umbenennen verschieben
+		migrieren einbauen anpassen ändern dokumentieren vereinheitlichen auslagern aufteilen zusammenführen optimieren bereinigen
+		aufräumen einrichten speichern übersetzen veröffentlichen erweitern einführen abschließen fertigstellen überarbeiten
+		vereinfachen absichern validieren umstellen erledigen`),
+	"nl": lazyWordSet(`toevoegen maken aanmaken schrijven implementeren verwijderen bijwerken updaten bouwen testen controleren
+		configureren installeren vervangen verbeteren repareren oplossen corrigeren hernoemen verplaatsen migreren aanpassen
+		wijzigen refactoren documenteren opschonen opruimen opsplitsen samenvoegen optimaliseren instellen opslaan vertalen
+		publiceren uitbreiden invoeren afronden herschrijven vereenvoudigen`),
+}
+
+var turkishPoliteEndings = []string{"yiniz", "yınız", "yunuz", "yünüz", "iniz", "ınız", "unuz", "ünüz", "yin", "yın", "yun", "yün", "in", "ın", "un", "ün"}
+
+// endsInVerb tells a step that ends in its verb, as Turkish, German and Dutch
+// steps do, from a line that only starts like a description.
+func endsInVerb(unit, lang string) bool {
+	fields := wordSplit.Split(strings.TrimSpace(unit), -1)
+	raw := strings.Trim(fields[len(fields)-1], ",.:;!()\"'“”‘’«»")
+	last := strings.ToLower(raw)
+	initial, _ := utf8.DecodeRuneInString(raw)
+	for _, verbLast := range []string{"tr", "de", "nl"} {
+		verbs := finalVerbs[verbLast]
+		switch {
+		case lang != "" && lang != verbLast:
+		case verbLast == "de" && unicode.IsUpper(initial):
+			// A German word written with a capital is a noun: "beim Testen".
+		case verbs(last), verbLast == "tr" && turkishPoliteImperative(last, verbs):
+			return true
+		}
+	}
+	return false
+}
+
+// turkishPoliteImperative reads "ekleyin", "düzeltiniz" or "edin" as the verb
+// it asks for.
+func turkishPoliteImperative(word string, verbs func(string) bool) bool {
+	for _, ending := range turkishPoliteEndings {
+		stem, found := strings.CutSuffix(word, ending)
+		if !found || utf8.RuneCountInString(stem) < 2 {
+			continue
+		}
+		if verbs(stem) || strings.HasSuffix(stem, "d") && verbs(strings.TrimSuffix(stem, "d")+"t") {
+			return true
+		}
+	}
+	return false
+}
+
+// mainClauseImperative tells "If the cache is stale, delete it" or "For the
+// login page, add rate limiting": a step whose first clause sets the scene.
+func mainClauseImperative(unit string) bool {
+	_, rest, found := strings.Cut(unit, ", ")
+	return found && leadsWithImperative(wordSplit.Split(strings.TrimSpace(rest), -1))
 }
 
 var sequenceMarkers = []string{
@@ -148,7 +231,7 @@ func endsQuestion(text string) bool {
 	return strings.HasSuffix(trimmed, "?") || strings.HasSuffix(trimmed, "？")
 }
 
-func stepLike(unit string) bool {
+func stepLike(unit, lang string) bool {
 	unit = strings.TrimSpace(unit)
 	if unit == "" || endsQuestion(unit) || strings.HasSuffix(unit, ":") || logLikeLine.MatchString(unit) {
 		return false
@@ -156,17 +239,42 @@ func stepLike(unit string) bool {
 	if len(wordSplit.Split(unit, -1)) < autoQueueMinWords {
 		return false
 	}
-	return !descriptiveStarters(firstWord(unit))
+	return !descriptiveStarter(lang, firstWord(unit)) || endsInVerb(unit, lang) || mainClauseImperative(unit)
 }
 
-func autoQueueItems(prompt string) []string {
+// promptJob is what a prompt asks for when it reads like a multi-step job.
+type promptJob struct {
+	items   []string // the steps, in order
+	dropped []string // listed lines not read as steps: notes, questions, lines too short to tell
+	cut     []string // steps past the first autoQueueMaxItems, kept in the file without checkboxes
+	text    string   // the prompt without its code blocks
+	prose   string   // the words around the listed steps
+	lead    bool     // the steps are lines of their own, so the words around them may be read alone
+}
+
+func promptJobOf(prompt string) promptJob {
 	text := strings.TrimSpace(codeFence.ReplaceAllString(prompt, " "))
-	if len([]rune(text)) < autoQueueMinChars || endsQuestion(text) || hasBugReportMarker(text) {
-		return nil
+	job := promptJob{text: text}
+	if len([]rune(text)) < autoQueueMinChars || hasBugReportMarker(text) {
+		return job
 	}
-	listed, lines := []string{}, []string{}
+	body, closing := text, ""
+	lang := detectLanguage(text)
+	listed, skipped, lines := []string{}, []string{}, []string{}
+	if endsQuestion(text) {
+		start := closingAsk(text)
+		if start < 0 {
+			return job
+		}
+		body, closing = strings.TrimSpace(text[:start]), strings.TrimSpace(text[start:])
+		if match := listItemLine.FindStringSubmatch(closing); match != nil {
+			if item := cleanItem(match[1]); item != "" {
+				skipped = append(skipped, item)
+			}
+		}
+	}
 	logLines, questions := 0, 0
-	for _, raw := range strings.Split(text, "\n") {
+	for _, raw := range strings.Split(body, "\n") {
 		line := strings.TrimSpace(strings.TrimRight(raw, "\r"))
 		if line == "" {
 			continue
@@ -178,50 +286,157 @@ func autoQueueItems(prompt string) []string {
 			logLines++
 		}
 		if match := listItemLine.FindStringSubmatch(line); match != nil {
-			if item := cleanItem(match[1]); item != "" && stepLike(item) {
+			switch item := cleanItem(match[1]); {
+			case item == "":
+			case stepLike(item, lang):
 				listed = append(listed, item)
+			case !strings.HasSuffix(item, ":"):
+				skipped = append(skipped, item)
 			}
 			continue
 		}
 		lines = append(lines, line)
 	}
 	if logLines >= 2 || questions > len(listed) {
-		return nil
+		return job
 	}
-	items := listed
+	items, prose := listed, lines
 	if len(items) < autoQueueMinItems {
-		items = items[:0]
+		items, prose, skipped = items[:0], []string{}, nil
 		for _, line := range lines {
-			if stepLike(line) && imperativeLike(line) {
+			if stepLike(line, lang) && imperativeLike(line) {
 				if item := cleanItem(line); item != "" {
 					items = append(items, item)
+					continue
 				}
 			}
+			prose = append(prose, line)
 		}
 		if len(items) < autoQueueMinLines || len(items)*2 < len(lines) {
 			items = items[:0]
 		}
 	}
-	if len(items) == 0 && len(lines) == 1 && hasSequenceMarker(text) {
-		for _, unit := range sentenceSplit.Split(text, -1) {
-			if stepLike(unit) && imperativeLike(unit) {
-				if item := cleanItem(unit); item != "" {
-					items = append(items, item)
-				}
-			}
-		}
-		if len(items) < autoQueueMinSentences {
-			items = items[:0]
-		}
+	job.lead = len(items) > 0
+	if len(items) == 0 && len(lines) == 1 && hasSequenceMarker(body) {
+		items, prose = sentenceSteps(body, lang), []string{body}
+	}
+	if closing != "" {
+		prose = append(prose, closing)
 	}
 	items = dedupeItems(items)
 	if len(items) < autoQueueMinItems {
-		return nil
+		return job
 	}
 	if len(items) > autoQueueMaxItems {
-		items = items[:autoQueueMaxItems]
+		items, job.cut = items[:autoQueueMaxItems], append([]string{}, items[autoQueueMaxItems:]...)
+	}
+	job.items, job.dropped, job.prose = items, dedupeItems(skipped), strings.Join(prose, "\n")
+	return job
+}
+
+// closingAsk finds a closing request for the listed work written as a polite
+// question, "Can you do these?" or "Bunları yapabilir misin?", and returns
+// where it starts; -1 when the prompt ends in any other question.
+func closingAsk(text string) int {
+	body := strings.TrimRight(text, "\"'”’)»* \t\r\n")
+	_, size := utf8.DecodeLastRuneInString(body)
+	head := body[:len(body)-size]
+	start := strings.LastIndexFunc(head, func(r rune) bool { return strings.ContainsRune(".!?;\n。！？；", r) })
+	if start < 0 {
+		return -1
+	}
+	_, width := utf8.DecodeRuneInString(head[start:])
+	if !politeWorkAsk(body[start+width:]) {
+		return -1
+	}
+	return start + width
+}
+
+// sentenceSteps reads one paragraph of steps tied by sequence words: a step a
+// sentence, or, when the sentences hold too few steps, a step a part of a
+// comma chain ("önce X oluştur, sonra Y yaz, ardından Z ekle").
+func sentenceSteps(paragraph, lang string) []string {
+	units := sentenceSplit.Split(paragraph, -1)
+	items := stepsOf(units, lang)
+	if len(items) < autoQueueMinSentences {
+		chained := []string{}
+		for _, unit := range units {
+			chained = append(chained, chainedSteps(unit, lang)...)
+		}
+		items = stepsOf(chained, lang)
+	}
+	if len(items) < autoQueueMinSentences {
+		return nil
 	}
 	return items
+}
+
+func stepsOf(units []string, lang string) []string {
+	items := []string{}
+	for _, unit := range units {
+		if stepLike(unit, lang) && imperativeLike(unit) {
+			if item := cleanItem(unit); item != "" {
+				items = append(items, item)
+			}
+		}
+	}
+	return items
+}
+
+var chainConjunctions = []string{"and ", "ve ", "und ", "et ", "y ", "e ", "en ", "i ", "и ", "а "}
+
+// chainedSteps splits a sentence at each comma a sequence word follows, as
+// long as every part reads as a step of its own; otherwise the sentence stays
+// whole.
+func chainedSteps(sentence, lang string) []string {
+	parts, start := []string{}, 0
+	for from := 0; ; {
+		comma := strings.Index(sentence[from:], ", ")
+		if comma < 0 {
+			break
+		}
+		at := from + comma
+		if skip := chainMarker(sentence[at+2:]); skip >= 0 {
+			parts = append(parts, strings.TrimSpace(sentence[start:at]))
+			start = at + 2 + skip
+		}
+		from = at + 2
+	}
+	if len(parts) == 0 {
+		return []string{sentence}
+	}
+	parts = append(parts, strings.TrimSpace(sentence[start:]))
+	for _, part := range parts {
+		if !stepLike(part, lang) || !imperativeLike(part) {
+			return []string{sentence}
+		}
+	}
+	return parts
+}
+
+// chainMarker tells whether text starts with a sequence word, perhaps after
+// a conjunction ("and finally"), and returns how many bytes of conjunction
+// come before it; -1 when it does not.
+func chainMarker(text string) int {
+	lower := strings.ToLower(text)
+	starts := func(offset int) bool {
+		candidate := " " + lower[offset:]
+		for _, marker := range sequenceMarkers {
+			if strings.HasPrefix(candidate, marker) || strings.HasPrefix(candidate, strings.TrimRight(marker, " ,")+" ") {
+				return true
+			}
+		}
+		return false
+	}
+	if starts(0) {
+		return 0
+	}
+	for _, conjunction := range chainConjunctions {
+		if strings.HasPrefix(lower, conjunction) && len(lower) == len(text) && starts(len(conjunction)) {
+			return len(conjunction)
+		}
+	}
+	return -1
 }
 
 func dedupeItems(items []string) []string {
@@ -288,18 +503,78 @@ func autoQueueDir() string {
 	return filepath.Join(files.guardDir, "queues")
 }
 
-func startAutoQueue(sid, cwd string, items []string, now int64) string {
+func startAutoQueue(sid, cwd string, job promptJob, now int64) string {
 	lines := []string{"# " + pluginName + " — job from the prompt at " + localISO(float64(now)), ""}
-	for _, item := range items {
+	for _, item := range job.items {
 		lines = append(lines, "- [ ] "+item)
 	}
-	path := writeSessionQueue(sid, object{"cwd": cwd, "at": float64(now), "items": float64(len(items)), "words": jobWordDigests(strings.Join(items, "\n"))}, lines)
+	lines = append(lines, asideLines(autoQueueCutHeading(), job.cut)...)
+	lines = append(lines, asideLines("## Not on the checklist: listed lines not read as steps", job.dropped)...)
+	words := strings.Join(append(append(append([]string{}, job.items...), job.cut...), job.dropped...), "\n")
+	path := writeSessionQueue(sid, object{"cwd": cwd, "at": float64(now), "items": float64(len(job.items)), "words": jobWordDigests(words)}, lines)
 	if path == "" {
 		return ""
 	}
-	journal(sid, "UserPromptSubmit", "auto-queue", fmt.Sprintf("%d items", len(items)), nil)
-	logInfo("auto queue for %s: %d items in %s", sid, len(items), path)
+	reason := fmt.Sprintf("%d items", len(job.items))
+	if len(job.cut) > 0 {
+		reason += fmt.Sprintf("; %d more steps over the %d-item limit left out", len(job.cut), autoQueueMaxItems)
+	}
+	if len(job.dropped) > 0 {
+		reason += fmt.Sprintf("; %d listed lines not read as steps", len(job.dropped))
+	}
+	journal(sid, "UserPromptSubmit", "auto-queue", reason, nil)
+	logInfo("auto queue for %s: %d items in %s", sid, len(job.items), path)
 	return path
+}
+
+func autoQueueCutHeading() string {
+	return fmt.Sprintf("## Not on the checklist: steps over the %d-item limit", autoQueueMaxItems)
+}
+
+// leftOutSteps reads the steps a checklist file keeps under the heading for
+// the steps over the limit, which are still open when the checklist is done.
+func leftOutSteps(content string) []string {
+	steps, under := []string{}, false
+	for _, raw := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(strings.TrimRight(raw, "\r"))
+		switch {
+		case strings.HasPrefix(line, "#"):
+			under = line == autoQueueCutHeading()
+		case under && strings.HasPrefix(line, "- ") && !checkboxPrefix.MatchString(strings.TrimPrefix(line, "- ")):
+			if step := strings.TrimSpace(strings.TrimPrefix(line, "- ")); step != "" {
+				steps = append(steps, step)
+			}
+		}
+	}
+	return steps
+}
+
+// asideLines puts lines of the prompt that the checklist leaves out under a
+// heading of their own, as plain bullets, which do not drive the session.
+func asideLines(heading string, texts []string) []string {
+	if len(texts) == 0 {
+		return nil
+	}
+	lines := []string{"", heading, ""}
+	for _, text := range texts {
+		lines = append(lines, "- "+text)
+	}
+	return lines
+}
+
+// namedLines quotes the first few lines of a list for a notice, and says how
+// many more there are.
+func namedLines(texts []string) (note, notice string) {
+	shown := []string{}
+	for _, text := range texts[:min(len(texts), queueUnmatchedNamed)] {
+		shown = append(shown, `"`+truncateText(text, 80)+`"`)
+	}
+	note = strings.Join(shown, "; ")
+	notice = note
+	if more := len(texts) - len(shown); more > 0 {
+		note, notice = fmt.Sprintf("%s and %d more", note, more), T("queue.unmatchedMore", note, more)
+	}
+	return note, notice
 }
 
 func writeSessionQueue(sid string, record object, lines []string) string {
@@ -1030,4 +1305,18 @@ func looseShellSegments(command string) [][]shellWord {
 
 func autoQueueDirective(path string, count int) string {
 	return fmt.Sprintf(`[noctis] This request is a multi-step job (%d items). It was written as a checklist to %s. Work through it in order, mark each item "- [x]" in that file the moment it is done, and do not stop, summarize or ask for confirmation between items; the session continues until every item is ticked.`, count, path)
+}
+
+// autoQueueAsides tells Claude about the listed lines the checklist leaves
+// out, which are in the file as plain lines.
+func autoQueueAsides(job promptJob) string {
+	text := ""
+	if len(job.cut) > 0 {
+		text += fmt.Sprintf(` The prompt lists %d steps, more than the %d a checklist takes: the other %d are at the end of the file under "%s" as plain lines, which do not drive the session. Do not add them to the checklist; when it is done, tell the user that these %d steps are still open.`, len(job.items)+len(job.cut), autoQueueMaxItems, len(job.cut), strings.TrimPrefix(autoQueueCutHeading(), "## "), len(job.cut))
+	}
+	if len(job.dropped) > 0 {
+		note, _ := namedLines(job.dropped)
+		text += fmt.Sprintf(` The checklist leaves out %d listed line(s) that noctis did not read as steps (notes, questions or lines too short to tell): %s. They are in the file under a heading of their own as plain lines, which do not drive the session; if one of them is a step the user asked for, turn it into a "- [ ] " line there.`, len(job.dropped), note)
+	}
+	return text
 }

@@ -399,6 +399,7 @@ class Account {
     delete inherited.LC_ALL;
     delete inherited.LC_MESSAGES;
     delete inherited.CLAUDE_CODE_ENTRYPOINT;
+    delete inherited.CLAUDE_CODE_REMOTE;
     const env = {
       ...inherited,
       PATH: `${this.lab.binDir}${path.delimiter}${process.env.PATH}`,

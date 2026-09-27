@@ -97,15 +97,23 @@ func onStartPrompt(input, cfg object, sid, notice string) {
 		return
 	}
 	entries := fileQueueEntries(string(data))
-	open := 0
+	open, blank := 0, queueView{}
 	for _, entry := range entries {
-		if !entry.checked {
+		switch {
+		case entry.checked:
+		case entry.text == "":
+			blank.empty = append(blank.empty, entry.first+1)
+		default:
 			open++
 		}
 	}
+	emptyNotice := ""
+	if len(blank.empty) > 0 {
+		emptyNotice = T("queue.emptyLines", label, len(blank.empty), emptyLineList(blank))
+	}
 	switch {
 	case open == 0:
-		refuse(T("queue.startEmpty", label))
+		refuse(joinNotices(T("queue.startEmpty", label), emptyNotice))
 		return
 	case len(entries) > startedQueueMaxJobs:
 		refuse(T("queue.startTooBig", label, startedQueueMaxJobs))
@@ -132,7 +140,7 @@ func onStartPrompt(input, cfg object, sid, notice string) {
 	journal(sid, "UserPromptSubmit", "start-queue", fmt.Sprintf("%d jobs from %s", open, source), nil)
 	logInfo("queue for %s started from %s: %d open jobs in %s", sid, source, open, checklist)
 	emit(object{
-		"systemMessage":      joinNotices(notice, T("queue.startDetected", open, label, pluginName)),
+		"systemMessage":      joinNotices(notice, T("queue.startDetected", open, label, pluginName), emptyNotice),
 		"hookSpecificOutput": object{"hookEventName": "UserPromptSubmit", "additionalContext": startedQueueDirective(source, checklist, open)},
 	})
 }

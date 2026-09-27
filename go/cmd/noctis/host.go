@@ -83,6 +83,21 @@ func currentHost() hostSpec {
 	return hostOf(activeHost)
 }
 
+// cloudSession is true in a Claude Code cloud session (Claude Code on the
+// web). Its container has no scheduler that outlives the session and no
+// status line that reports usage, so a wait there is held in the hook and
+// the session is woken in place; nothing is spawned to relaunch it.
+func cloudSession() bool {
+	if currentHost().id != "claude" {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CLAUDE_CODE_REMOTE"))) {
+	case "true", "1":
+		return true
+	}
+	return false
+}
+
 func hostHome(id string) string {
 	spec := hostOf(id)
 	if spec.homeEnv != "" {

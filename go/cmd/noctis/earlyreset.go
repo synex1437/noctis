@@ -226,7 +226,7 @@ func (w *waitWatch) tick() bool {
 }
 
 func startResetWatcher(cfg object, sid string, at float64) int {
-	if earlyResetPollSeconds(cfg) <= 0 || !currentHost().limits || os.Getenv("NOCTIS_NO_WATCHER") != "" {
+	if earlyResetPollSeconds(cfg) <= 0 || !currentHost().limits || os.Getenv("NOCTIS_NO_WATCHER") != "" || cloudSession() {
 		return 0
 	}
 	return detachedSelf(runnerArgs("sleeper", sid, files.configDir, "--at", formatNumber(at), "--watch"))
@@ -237,7 +237,7 @@ func repairOrphanWaits() {
 }
 
 func triggerEarlyResumes(cfg object) {
-	if os.Getenv("NOCTIS_NO_EARLY_TRIGGER") != "" {
+	if os.Getenv("NOCTIS_NO_EARLY_TRIGGER") != "" || cloudSession() {
 		return
 	}
 	state := readState()
