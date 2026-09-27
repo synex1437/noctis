@@ -234,6 +234,7 @@ async function scenarioInHookWait(acc) {
   await sleep(300);
   check('watchdog cancelled', isAlive(watchdogPid), false);
   check('checkpoint consumed', (acc.checkpoint('s1') || {}).consumed, true);
+  check('used checkpoint kept out of state.json', acc.state().checkpoints.s1 === undefined, true);
 }
 
 async function scenarioWorkspaceGuard(acc) {

@@ -63,7 +63,7 @@ const (
 	blindAfterSeconds       = 60
 	fetchTimeout            = 5 * time.Second
 	appServerExitGrace      = time.Second
-	pluginVersion           = "7.3.2"
+	pluginVersion           = "7.4.0"
 	codingActivityWindow    = 45 * 60
 	codingTailBytes         = 64 * 1024
 	longTextSummaryChars    = 1200
