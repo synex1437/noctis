@@ -76,6 +76,7 @@ function runEngine(argv, input, extraEnv = {}) {
     env: acc.env(extraEnv),
     timeout: 25000,
   });
+  acc.settleRefresh(argv);
   return result;
 }
 

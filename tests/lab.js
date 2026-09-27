@@ -518,6 +518,52 @@ async function scenarioStaleFallbackAndNearEdge(acc) {
   acc.statusline('s5', 'claude-opus-5', 20, now + 7200, 10, now + 3 * 86400);
 }
 
+async function scenarioRefreshAside(acc) {
+  const now = nowSec();
+  const usageFile = path.join(acc.guardDir, 'usage.json');
+  const fableFile = path.join(acc.guardDir, 'fable.json');
+  const lockFile = path.join(acc.guardDir, 'fable.lock');
+  mock.limits = [
+    { kind: 'session', percent: 31, resets_at: new Date((now + 7200) * 1000).toISOString() },
+    { kind: 'weekly_all', percent: 21, resets_at: new Date((now + 3 * 86400) * 1000).toISOString() },
+  ];
+  // The status line has been quiet for an hour, so the hook turns to fable.json, whose reading is
+  // 11 minutes old and far from every edge: due, but not stale.
+  const usage = readJson(usageFile);
+  usage.updatedAt = now - 3600;
+  writeJson(usageFile, usage);
+  writeJson(fableFile, { fetchedAt: now - 660, five_hour: { used: 30, resetsAt: now + 7200 }, seven_day: { used: 20, resetsAt: now + 3 * 86400 } });
+  const [binary, prefix] = acc.engine();
+  const timedHook = (sid) => {
+    const started = Date.now();
+    const result = spawnSync(binary, [...prefix, 'hook'], { encoding: 'utf8', input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', session_id: sid, cwd: PROJECT_DIR, prompt: 'go on with the refactor' }), env: acc.env(), timeout: 60000 });
+    return { ms: Date.now() - started, status: result.status };
+  };
+  lab.setOutage('slow', 4000);
+  try {
+    let hitsBefore = mock.hits;
+    const due = timedHook('ra1');
+    process.stdout.write(`  refresh aside: due reading, 4 s endpoint: hook ${due.ms} ms\n`);
+    check('refresh aside: a due fetch against a 4 s endpoint does not hold the hook', due.status === 0 && due.ms < 1300, true);
+    check('refresh aside: the fetch is still in flight when the hook returns', fs.existsSync(lockFile), true);
+    const second = timedHook('ra2');
+    check('refresh aside: a hook that finds the fetch in flight does not wait for it either', second.status === 0 && second.ms < 1300, true);
+    check('refresh aside: its answer lands for the next hook', acc.settleRefresh() && (readJson(fableFile) || {}).fetchedAt > now - 660, true);
+    check('refresh aside: two hooks, one request', mock.hits - hitsBefore, 1);
+    fs.rmSync(fableFile, { force: true });
+    hitsBefore = mock.hits;
+    const blind = timedHook('ra3');
+    process.stdout.write(`  refresh aside: no reading, 4 s endpoint: hook ${blind.ms} ms\n`);
+    check('refresh aside: with no reading at all the hook waits for the fetch, but only 1.5 s', blind.status === 0 && blind.ms >= 1400 && blind.ms < 3500, true);
+    check('refresh aside: the answer it stopped waiting for still lands', acc.settleRefresh() && (readJson(fableFile) || {}).fetchedAt >= now, true);
+    check('refresh aside: one request for the blind hook', mock.hits - hitsBefore, 1);
+  } finally {
+    lab.setOutage('');
+    acc.settleRefresh();
+    acc.statusline('ra', 'claude-opus-5', 31, now + 7200, 21, now + 3 * 86400);
+  }
+}
+
 async function scenarioStopFailure(acc) {
   const now = nowSec();
   mock.limits = [
@@ -3075,6 +3121,7 @@ async function main() {
     ['weekly long wait', () => scenarioWeeklyLongWait(accA)],
     ['fable flow + handoff', () => scenarioFableFlow(accA)],
     ['stale fallback + near-edge', () => scenarioStaleFallbackAndNearEdge(accA)],
+    ['refresh aside: a slow usage endpoint never holds a hook', () => scenarioRefreshAside(accA)],
     ['stop failure', () => scenarioStopFailure(accA)],
     ['router', () => scenarioRouter(accA)],
     ['isolation + concurrency', () => scenarioIsolationAndConcurrency(accA, accB)],

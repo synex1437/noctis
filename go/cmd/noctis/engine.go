@@ -1203,10 +1203,22 @@ func taskName(sid string) string {
 }
 
 func detachedSelf(argsList []string) int {
+	child := startDetached(argsList)
+	if child == nil {
+		return 0
+	}
+	pid := child.Pid
+	_ = child.Release()
+	return pid
+}
+
+// startDetached starts noctis again with argsList, in its own session and with no terminal or
+// pipe of this process, so it outlives this one and never holds up whoever waits on its output.
+func startDetached(argsList []string) *os.Process {
 	executable, err := os.Executable()
 	if err != nil {
 		fail("detached spawn failed: %v", err)
-		return 0
+		return nil
 	}
 	child := exec.Command(executable, argsList...)
 	child.Dir = files.guardDir
@@ -1215,11 +1227,9 @@ func detachedSelf(argsList []string) int {
 	configureDetached(child)
 	if err := child.Start(); err != nil {
 		fail("detached spawn failed: %v", err)
-		return 0
+		return nil
 	}
-	pid := child.Process.Pid
-	_ = child.Process.Release()
-	return pid
+	return child.Process
 }
 
 func scheduledWithoutTask(scheduled object) bool {
@@ -2273,8 +2283,15 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 		case fableCandidate:
 			reason = "fable-session"
 		}
+		// Near an edge, or when the caller makes a one-time choice (force), the answer decides
+		// whether work goes on, so the hook waits for it, up to refreshWait. Elsewhere it hands
+		// the fetch off and decides on the reading it has.
+		wait := time.Duration(0)
+		if options.force || edge || fableEdge {
+			wait = refreshWait
+		}
 		before := numberOr(readJSON(files.fable), "fetchedAt", 0)
-		after := refreshFable(cfg, now, reason, maxAge, options.force)
+		after := refreshFableWaiting(cfg, now, reason, maxAge, options.force, wait)
 		if numberOr(after, "fetchedAt", 0) != before {
 			usage = currentUsage(now)
 		} else {
@@ -2295,7 +2312,7 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 				break
 			}
 			sleepUntil(float64(nowSec())+interval, nil)
-			probe := refreshFable(cfg, nowSec(), "blind-probe", 0, !rateLimited)
+			probe := refreshFableNow(cfg, nowSec(), "blind-probe", 0, !rateLimited)
 
 			if fetched := numberOr(probe, "fetchedAt", 0); fetched > probedFrom {
 				usage = currentUsage(nowSec())

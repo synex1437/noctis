@@ -322,8 +322,8 @@ class Lab {
     }
   }
 
-  setOutage(mode) {
-    writeJson(path.join(this.mockDir, 'outage.json'), { mode });
+  setOutage(mode, ms) {
+    writeJson(path.join(this.mockDir, 'outage.json'), ms ? { mode, ms } : { mode });
   }
 
   setSkew(seconds) {
@@ -460,11 +460,31 @@ class Account {
     const [binary, prefix] = this.engine();
     const result = spawnSync(binary, [...prefix, ...args], { encoding: 'utf8', input: input ? JSON.stringify(input) : undefined, env: this.env(extraEnv), timeout: 120000 });
     if (result.error) throw result.error;
+    this.settleRefresh(args);
     return result.stdout.trim();
   }
 
   hook(input, extraEnv = {}) {
     return this.run(['hook'], input, extraEnv);
+  }
+
+  // A hook hands a due usage fetch to a detached `noctis refresh` that holds fable.lock until its
+  // answer is written. The lab waits for it, so each step sees the reading the previous one asked
+  // for; the hook itself does not.
+  settleRefresh(args = [], limitMs = 12000) {
+    const account = args.indexOf('--account');
+    const lockFile = path.join(account >= 0 ? path.join(args[account + 1], PLUGIN_NAME) : this.guardDir, 'fable.lock');
+    for (const until = Date.now() + limitMs; Date.now() < until; sleepSync(5)) {
+      let owner;
+      try {
+        owner = fs.readFileSync(lockFile, 'utf8');
+      } catch {
+        return true;
+      }
+      const pid = Number((owner.match(/\d+/) || [])[0]);
+      if (!pid || !isAlive(pid)) return true;
+    }
+    return false;
   }
 
   runPromise(args, input, extraEnv = {}) {
@@ -485,6 +505,7 @@ class Account {
     const [binary, prefix] = this.engine();
     const result = spawnSync(binary, [...prefix, ...args], { encoding: 'utf8', input: input ? JSON.stringify(input) : undefined, env: this.env(extraEnv), timeout: 120000 });
     if (result.error) throw result.error;
+    this.settleRefresh(args);
     return { status: result.status, stdout: result.stdout.trim(), stderr: result.stderr.trim() };
   }
 
@@ -503,7 +524,10 @@ class Account {
         stdout += chunk;
       });
       child.on('error', reject);
-      child.on('close', () => resolve(stdout.trim()));
+      child.on('close', () => {
+        this.settleRefresh();
+        resolve(stdout.trim());
+      });
     });
   }
 
