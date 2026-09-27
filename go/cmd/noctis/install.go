@@ -42,12 +42,22 @@ func healTargetBinary() string {
 	return executable
 }
 
+// platformFolder is the folder of bin/ that holds the binary built for this platform: macOS has one
+// universal binary for both CPUs, every other system one binary per CPU. It follows what this binary
+// was built for, not isDarwin, which tests switch to act out macOS.
+func platformFolder() string {
+	if runtime.GOOS == "darwin" {
+		return "darwin"
+	}
+	return runtime.GOOS + "-" + runtime.GOARCH
+}
+
 func platformBinary(sourceRoot string) string {
-	return filepath.Join(sourceRoot, "bin", runtime.GOOS+"-"+runtime.GOARCH, binaryFileName())
+	return filepath.Join(sourceRoot, "bin", platformFolder(), binaryFileName())
 }
 
 func installedPaths() (files []string, dirs []string) {
-	platform := filepath.Join("bin", runtime.GOOS+"-"+runtime.GOARCH, binaryFileName())
+	platform := filepath.Join("bin", platformFolder(), binaryFileName())
 	return []string{
 			platform,
 			filepath.Join("bin", "SHA256SUMS"),

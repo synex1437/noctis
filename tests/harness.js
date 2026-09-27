@@ -9,9 +9,15 @@ const { spawn, spawnSync, fork } = require('child_process');
 const PLUGIN_NAME = 'noctis';
 const SOURCE_ROOT = path.resolve(__dirname, '..');
 
+// The folder of bin/ with this platform's binary: macOS has one universal binary for both CPUs,
+// every other system one binary per CPU.
+function platformDir() {
+  if (process.platform === 'darwin') return 'darwin';
+  return `${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch === 'x64' ? 'amd64' : process.arch}`;
+}
+
 function sourceBinary() {
-  const platform = `${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch === 'x64' ? 'amd64' : process.arch}`;
-  return path.join(SOURCE_ROOT, 'bin', platform, process.platform === 'win32' ? 'noctis.exe' : 'noctis');
+  return path.join(SOURCE_ROOT, 'bin', platformDir(), process.platform === 'win32' ? 'noctis.exe' : 'noctis');
 }
 const IS_WINDOWS = process.platform === 'win32';
 
@@ -143,7 +149,7 @@ class Lab {
 
   snapshotSource() {
     this.sourceRoot = path.join(this.root, 'source');
-    const platform = `${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch === 'x64' ? 'amd64' : process.arch}`;
+    const platform = platformDir();
     const binary = process.platform === 'win32' ? 'noctis.exe' : 'noctis';
     const wanted = [
       path.join('bin', platform, binary),

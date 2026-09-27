@@ -1,7 +1,8 @@
 #!/bin/sh
-# The kernel (Linux 6.1 or later) or bash's OSTYPE and HOSTTYPE (Linux, Git Bash, Cygwin) name
-# this OS and CPU without starting another program. uname answers otherwise, on macOS too: its
-# /bin/bash is one build for two CPUs, so its HOSTTYPE is not trusted.
+# The kernel (Linux 6.1 or later), the shell's OSTYPE (macOS) or bash's OSTYPE and HOSTTYPE (Linux,
+# Git Bash, Cygwin) name this OS and CPU without starting another program; uname answers otherwise.
+# On macOS the CPU does not matter: bin/darwin/noctis is one universal binary, and macOS runs the
+# build in it for this CPU.
 case $0 in
   */*) bin=${0%/*} ;;
   *) bin=. ;;
@@ -13,6 +14,7 @@ if [ -r "$kernel/ostype" ] && [ -r "$kernel/arch" ]; then
   read -r arch <"$kernel/arch"
 else
   case ${OSTYPE-} in
+    darwin*) os=Darwin arch=universal ;;
     linux*|msys|cygwin)
       case ${HOSTTYPE-} in
         x86_64|aarch64) os=$OSTYPE arch=$HOSTTYPE ;;
@@ -30,17 +32,18 @@ case $os in
   MINGW*|MSYS*|CYGWIN*|msys|cygwin) os=windows ext=.exe ;;
   *) os=linux ;;
 esac
-case $arch in
-  x86_64|amd64) arch=amd64 ;;
-  arm64|aarch64) arch=arm64 ;;
+case $os:$arch in
+  darwin:*) platform=darwin ;;
+  *:x86_64|*:amd64) platform=$os-amd64 ;;
+  *:arm64|*:aarch64) platform=$os-arm64 ;;
   *) echo "noctis: no build for this CPU ($arch); builds exist for amd64 and arm64" >&2; exit 1 ;;
 esac
-binary=$bin/$os-$arch/noctis$ext
+binary=$bin/$platform/noctis$ext
 if [ ! -f "$binary" ] && [ "$os" = windows ] && [ -f "$bin/noctis.exe" ]; then
   binary=$bin/noctis.exe
 fi
 if [ ! -f "$binary" ]; then
-  echo "noctis: no binary for $os-$arch at $binary" >&2
+  echo "noctis: no binary for $platform at $binary" >&2
   exit 1
 fi
 [ -x "$binary" ] || chmod +x "$binary" 2>/dev/null

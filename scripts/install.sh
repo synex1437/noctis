@@ -7,8 +7,16 @@ fail() {
 root=$(cd "$(dirname "$0")/.." && pwd)
 system=$(uname -s)
 case "$system" in
-  Linux) os=linux ;;
-  Darwin) os=darwin ;;
+  Linux)
+    machine=$(uname -m)
+    case "$machine" in
+      x86_64|amd64) platform=linux-amd64 ;;
+      arm64|aarch64) platform=linux-arm64 ;;
+      *) fail "the $machine CPU is not supported (binaries are built for x86_64 and arm64)" ;;
+    esac
+    ;;
+  # One universal binary holds the x86_64 and arm64 builds, and macOS runs the one for this CPU.
+  Darwin) platform=darwin ;;
   MINGW*|MSYS*|CYGWIN*|*_NT*)
     hint='.\scripts\install.ps1'
     for arg in "$@"; do
@@ -17,13 +25,7 @@ case "$system" in
     fail "install.sh is for macOS and Linux; on Windows, run $hint in PowerShell instead" ;;
   *) fail "$system is not supported (binaries are built for macOS, Linux and Windows)" ;;
 esac
-machine=$(uname -m)
-case "$machine" in
-  x86_64|amd64) arch=amd64 ;;
-  arm64|aarch64) arch=arm64 ;;
-  *) fail "the $machine CPU is not supported (binaries are built for x86_64 and arm64)" ;;
-esac
-binary="$root/bin/$os-$arch/noctis"
-[ -f "$binary" ] || fail "no binary for $os-$arch at $binary"
+binary="$root/bin/$platform/noctis"
+[ -f "$binary" ] || fail "no binary for $platform at $binary"
 [ -x "$binary" ] || chmod +x "$binary"
 exec "$binary" install --source "$root" "$@"

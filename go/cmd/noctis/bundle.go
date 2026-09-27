@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -262,7 +261,7 @@ func shortSum(sum string) string {
 }
 
 func verifyShippedBinary(pluginRoot string, content []byte) error {
-	relative := runtime.GOOS + "-" + runtime.GOARCH + "/" + binaryFileName()
+	relative := platformFolder() + "/" + binaryFileName()
 	expected := shippedChecksum(pluginRoot, relative)
 	if expected == "" {
 
