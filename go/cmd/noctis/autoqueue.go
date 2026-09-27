@@ -252,8 +252,17 @@ type promptJob struct {
 	lead    bool     // the steps are lines of their own, so the words around them may be read alone
 }
 
+// withoutCodeBlocks drops a prompt's fenced code blocks. Most prompts have no fence, and those are
+// handed back as they are, without building the pattern.
+func withoutCodeBlocks(prompt string) string {
+	if !strings.Contains(prompt, "```") {
+		return prompt
+	}
+	return codeFence.ReplaceAllString(prompt, " ")
+}
+
 func promptJobOf(prompt string) promptJob {
-	text := strings.TrimSpace(codeFence.ReplaceAllString(prompt, " "))
+	text := strings.TrimSpace(withoutCodeBlocks(prompt))
 	job := promptJob{text: text}
 	if len([]rune(text)) < autoQueueMinChars || hasBugReportMarker(text) {
 		return job
