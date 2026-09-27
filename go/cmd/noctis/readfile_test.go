@@ -142,9 +142,11 @@ func TestReadingAndWritingTheStateFileDoNotRefuseEachOther(t *testing.T) {
 		}()
 	}
 
+	// The writes go on until the readers have read 30 times: twenty writes of this document can be
+	// over before a reader wakes from its first sleep, and then the two never overlapped.
 	writes := 0
 	var refused error
-	for ; writes < 20; writes++ {
+	for deadline := time.Now().Add(10 * time.Second); writes < 20 || (reads.Load() < 30 && time.Now().Before(deadline)); writes++ {
 		if err := writeJSONAtomic(files.state, document); err != nil {
 			refused = err
 			break
@@ -154,12 +156,12 @@ func TestReadingAndWritingTheStateFileDoNotRefuseEachOther(t *testing.T) {
 	readers.Wait()
 
 	if refused != nil {
-		t.Fatalf("write %d of 20 failed while the file was being read: %v", writes+1, refused)
+		t.Fatalf("write %d failed while the file was being read: %v", writes+1, refused)
 	}
 	if got := readRefusals.Load(); got != 0 {
 		t.Fatalf("%d reads were refused while the file was being written", got)
 	}
-	if reads.Load() < 5 {
-		t.Fatalf("only %d reads ran against %d writes: the two never overlapped, so nothing was proven", reads.Load(), writes)
+	if reads.Load() < 30 {
+		t.Fatalf("only %d reads ran against %d writes in 10 s: the two never overlapped enough to prove anything", reads.Load(), writes)
 	}
 }
