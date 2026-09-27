@@ -233,15 +233,24 @@ func startResetWatcher(cfg object, sid string, at float64) int {
 	return detachedSelf(runnerArgs("sleeper", sid, files.configDir, "--at", formatNumber(at), "--watch"))
 }
 
+// repairOrphanWaits runs on every status line refresh and session start, so it looks at the kept
+// parse of state.json, and takes a copy of its own only to clear a dead hand-off from it.
 func repairOrphanWaits() {
-	rescheduleStrandedWaits(readState())
+	state := peekState()
+	if stale := staleHandoffs(state); len(stale) > 0 {
+		state = readState()
+		dropHandoffs(state, stale)
+	}
+	rearmStrandedWaits(state)
 }
 
+// triggerEarlyResumes runs on every status line refresh and only looks at the state: it changes a
+// wait through rescheduleOwnWait, which reads the state again.
 func triggerEarlyResumes(cfg object) {
 	if os.Getenv("NOCTIS_NO_EARLY_TRIGGER") != "" || cloudSession() {
 		return
 	}
-	state := readState()
+	state := peekState()
 	for sid, raw := range getMap(state, "waits") {
 		record := toObject(raw)
 		if record == nil || hookSleeping(record) || numberOr(record, "earlyTriggeredAt", 0) > 0 {

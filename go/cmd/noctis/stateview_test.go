@@ -126,6 +126,36 @@ func TestAStateWriteNeedsNoParseToBeReadBack(t *testing.T) {
 	}
 }
 
+// The status line clears a dead hand-off on every refresh, from the state it only looks at
+// otherwise: the clearing has to happen on a copy, or the kept parse it was lent changes with it.
+func TestAStatusLineRepairClearsADeadHandOffFromACopyOfItsOwn(t *testing.T) {
+	sandboxFiles(t)
+	now := float64(nowSec())
+	// Written as a hand-off is left behind when its relaunch process dies after the last write:
+	// updateState would prune it on the way in.
+	if err := writeJSONAtomic(files.state, object{"handedOff": object{
+		"gone": object{"at": now - handoffGraceSeconds - 60, "pid": float64(deadPid(t)), "model": "claude-opus-5"},
+		"live": object{"at": now, "pid": float64(os.Getpid()), "model": "claude-opus-5"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	lent := peekState()
+	if getMap(getMap(lent, "handedOff"), "gone") == nil {
+		t.Fatal("the dead hand-off did not reach state.json")
+	}
+	repairOrphanWaits()
+	if getMap(getMap(lent, "handedOff"), "gone") == nil {
+		t.Fatal("the repair cleared the dead hand-off from the state peekState had lent")
+	}
+	stored := getMap(peekState(), "handedOff")
+	if stored["gone"] != nil || stored["live"] == nil {
+		t.Fatalf("after the repair state.json holds the hand-offs %v; want the live one only", stored)
+	}
+	if journaledCount("gone", "handoff-gone") != 1 {
+		t.Fatal("the dead hand-off was cleared without a journal entry")
+	}
+}
+
 func TestAWriteThatCouldNotBeEncodedKeepsNothing(t *testing.T) {
 	sandboxFiles(t)
 	// A value that cannot be encoded writes nothing, so an empty usage.json (a write cut short, a

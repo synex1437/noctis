@@ -1811,6 +1811,11 @@ func dropInterruptedWait(sid string, state object) {
 }
 
 func clearDeadHandoffs(state object) {
+	dropHandoffs(state, staleHandoffs(state))
+}
+
+// staleHandoffs names the hand-offs in state whose relaunch process is gone.
+func staleHandoffs(state object) []string {
 	stale := []string{}
 	for sid, raw := range getMap(state, "handedOff") {
 		record := toObject(raw)
@@ -1828,6 +1833,12 @@ func clearDeadHandoffs(state object) {
 		}
 		stale = append(stale, sid)
 	}
+	return stale
+}
+
+// dropHandoffs clears the stale hand-offs from state.json and from state, which must be the
+// caller's own.
+func dropHandoffs(state object, stale []string) {
 	if len(stale) == 0 {
 		return
 	}
@@ -1847,11 +1858,6 @@ const (
 	runnerOverdueSeconds = 600
 	strandedRearmLimit   = 3
 )
-
-func rescheduleStrandedWaits(state object) {
-	clearDeadHandoffs(state)
-	rearmStrandedWaits(state)
-}
 
 func rearmStrandedWaits(state object) {
 	thorough := strings.EqualFold(activeEvent, "SessionStart")
@@ -2417,8 +2423,7 @@ func recordBudgetDay(usage usageView, now int64) {
 		return
 	}
 	day := localDay(now)
-	state := readState()
-	current := getMap(state, "budgetDay")
+	current := getMap(peekState(), "budgetDay")
 	if getString(current, "day") == day && numberOr(current, "weekResetsAt", -1) == usage.sevenDay.resetsAt {
 		return
 	}
