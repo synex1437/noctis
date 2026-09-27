@@ -1721,7 +1721,7 @@ func TestTheRepairPassActsOnlyOnWhatIsStillStored(t *testing.T) {
 		stateMap(state, "handedOff")["handed"] = object{"at": now, "model": "claude-opus-5", "mode": "window", "pid": float64(os.Getpid())}
 	})
 	before := storedWaitsJSON()
-	rescheduleStrandedWaits(seen)
+	rearmStrandedWaits(seen)
 	after := storedWaitsJSON()
 	if len(after) != len(before) {
 		t.Fatalf("the repair pass brought back a wait cleared since it looked: stored %v, was %v", after, before)
