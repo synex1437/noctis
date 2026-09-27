@@ -115,19 +115,30 @@ func (lab *refreshLab) reading(fetchedAt int64, used float64) {
 	mustWriteJSON(files.fable, object{"fetchedAt": float64(fetchedAt), "five_hour": object{"used": used, "resetsAt": reset}, "seven_day": object{"used": used, "resetsAt": reset + 86400}})
 }
 
-// handedOffBound is well under refreshWait, so a hook that waited for the fetch fails it, and far
-// above what starting the hook and its refresher costs on a slow CI runner.
-const handedOffBound = refreshWait - 300*time.Millisecond
+// idle times a hook whose reading is fresh and far from every edge, so it neither fetches nor
+// waits: what running a hook costs here. The race detector, or tests in more processes than the
+// runner has CPUs, stretch that to most of a second, so the tests bound what a hook takes beyond it.
+func (lab *refreshLab) idle() time.Duration {
+	lab.t.Helper()
+	lab.reading(nowSec(), 30)
+	return lab.prompt("idle")
+}
+
+// handedOffSlack is what a hook that hands its fetch off may take beyond an idle one: well under
+// refreshWait, so a hook that waited for the fetch fails it, and far above what starting its
+// refresher costs.
+const handedOffSlack = refreshWait - 500*time.Millisecond
 
 func TestAHookWhoseReadingIsDueHandsTheFetchOffAndDoesNotWaitForTheEndpoint(t *testing.T) {
 	lab := newRefreshLab(t, true)
+	idle := lab.idle()
 	fetchedAt := nowSec() - 11*60
 	lab.reading(fetchedAt, 30)
 
 	took := lab.prompt("due")
 
-	if took > handedOffBound {
-		t.Errorf("the reading is 11 minutes old and far from every edge, yet the hook took %s: it waited for the endpoint", took)
+	if took > idle+handedOffSlack {
+		t.Errorf("the reading is 11 minutes old and far from every edge, yet the hook took %s where one that fetches nothing took %s: it waited for the endpoint", took, idle)
 	}
 	if _, err := os.Stat(files.fableLock); err != nil {
 		t.Errorf("right after the hook, no refresher holds fable.lock (%v): the fetch was dropped, or its lock is free while it runs", err)
@@ -150,11 +161,15 @@ func TestAHookWhoseReadingIsDueHandsTheFetchOffAndDoesNotWaitForTheEndpoint(t *t
 
 func TestAHookWithNoReadingWaitsForTheFetchOnlyUpToItsBound(t *testing.T) {
 	lab := newRefreshLab(t, true)
+	idle := lab.idle()
+	if err := os.Remove(files.fable); err != nil {
+		t.Fatal(err)
+	}
 
 	took := lab.prompt("blind")
 
-	if took < refreshWait-100*time.Millisecond || took > refreshWait+time.Second {
-		t.Errorf("with no reading at all and an endpoint that does not answer, the hook took %s, want about %s", took, refreshWait)
+	if took < refreshWait-100*time.Millisecond || took > idle+refreshWait+time.Second {
+		t.Errorf("with no reading at all and an endpoint that does not answer, the hook took %s, want about %s more than the %s of one that fetches nothing", took, refreshWait, idle)
 	}
 	lab.release()
 	if !lab.settle(8 * time.Second) {
@@ -204,11 +219,12 @@ func TestAHookNearAnEdgeDecidesOnTheAnswerItWaitedFor(t *testing.T) {
 
 func TestHooksThatFindAFetchInFlightStartNoSecondOne(t *testing.T) {
 	lab := newRefreshLab(t, true)
+	idle := lab.idle()
 	lab.reading(nowSec()-11*60, 30)
 
 	for _, sid := range []string{"one", "two", "three"} {
-		if took := lab.prompt(sid); took > handedOffBound {
-			t.Errorf("hook %s took %s while a fetch was in flight", sid, took)
+		if took := lab.prompt(sid); took > idle+handedOffSlack {
+			t.Errorf("hook %s took %s while a fetch was in flight, where one that fetches nothing took %s", sid, took, idle)
 		}
 	}
 
@@ -283,18 +299,24 @@ func TestAWaitForAFetchInFlightEndsAtOnceWhenNoFetchStandsBehindTheLock(t *testi
 		t.Error("a hook waited on an empty fable.lock two seconds old, which is no hand-over in progress")
 	}
 
-	if err := os.WriteFile(files.fableLock, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
+	// The holder gets the path, not files, which the sandbox puts back when the test ends, and the
+	// test waits for it: a removed file orders nothing between the two goroutines.
+	lock := files.fableLock
+	if err := os.WriteFile(lock, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	letGo := make(chan struct{})
 	go func() {
+		defer close(letGo)
 		time.Sleep(150 * time.Millisecond)
-		_ = os.Remove(files.fableLock)
+		_ = os.Remove(lock)
 	}()
 	started := time.Now()
-	if !awaitLockRelease(files.fableLock, 2*time.Second) {
+	if !awaitLockRelease(lock, 2*time.Second) {
 		t.Error("the wait for a fetch in flight did not see its holder let fable.lock go")
 	}
 	if waited := time.Since(started); waited < 100*time.Millisecond {
 		t.Errorf("the wait for a fetch in flight ended after %s, before its holder let fable.lock go", waited)
 	}
+	<-letGo
 }
