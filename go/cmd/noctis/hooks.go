@@ -1766,7 +1766,7 @@ func onStop(input, cfg object) {
 
 var shellTools = map[string]bool{"Bash": true, "PowerShell": true}
 
-var platformBinDir = lazyRegexp(`^[a-z0-9]+-[a-z0-9]+/$`)
+var platformBinDir = lazyRegexp(`^(?:darwin|[a-z0-9]+-[a-z0-9]+)/$`)
 
 type shellWord struct {
 	text   string

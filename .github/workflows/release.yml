@@ -47,18 +47,20 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24.7'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # The same build the repo documents: Linux and Windows get one binary per CPU, macOS one
+      # universal binary (bin/darwin/noctis) holding its x86_64 and arm64 builds unchanged.
       - name: Build all platforms from source
-        run: |
-          for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
-            GOOS=${target%/*} GOARCH=${target#*/}; ext=""; [ "$GOOS" = windows ] && ext=".exe"
-            (cd go && CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -buildvcs=false -ldflags="-s -w" -o ../bin/$GOOS-$GOARCH/noctis$ext ./cmd/noctis)
-          done
-          cp bin/windows-amd64/noctis.exe bin/noctis.exe
+        run: node scripts/build.js
       # Signing is wired but dormant: with no secrets set this prints one line and changes nothing,
       # so the workflow behaves exactly as it does today. When a certificate exists, filling in the
       # repository secrets is the only change needed — and note the ORDER, because codesign rewrites
-      # the binary: build → sign → notarise → checksum. The checksum step below compares against the
-      # committed SHA256SUMS, so those must be regenerated after signing, not before.
+      # the binary: build → sign → notarise → checksum. codesign signs both builds inside the
+      # universal bin/darwin/noctis, replacing the ad hoc signature Go's linker gives the arm64 one.
+      # The checksum step below compares against the committed SHA256SUMS, so those must be
+      # regenerated after signing, not before.
       - name: Sign macOS binaries (skipped without a certificate)
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
@@ -87,9 +89,6 @@ jobs:
       # shell one-liner this replaces could not reproduce the committed manifest at all: its glob
       # missed the bare `bin/noctis` launcher and it emitted a different order, so `diff` failed on
       # every release. One generator, or the check is theatre.
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - name: Checksums must match the ones in the repo
         run: |
           node -e "require('./tests/harness.js').refreshChecksums()"
@@ -97,8 +96,13 @@ jobs:
       - name: Stage release assets under unique names
         run: |
           mkdir -p dist
-          for p in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+          for p in linux-amd64 linux-arm64; do
             cp "bin/$p/noctis" "dist/noctis-$p"
+          done
+          # macOS has one universal binary. It also goes out under the per-CPU names releases
+          # before 7.5.0 used, so a link or script that downloads one of those keeps working.
+          for p in darwin-universal darwin-amd64 darwin-arm64; do
+            cp bin/darwin/noctis "dist/noctis-$p"
           done
           for p in windows-amd64 windows-arm64; do
             cp "bin/$p/noctis.exe" "dist/noctis-$p.exe"

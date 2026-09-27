@@ -19,16 +19,12 @@ jobs:
           for target in FuzzNormalizeHookInput FuzzAutoQueueItems FuzzDetectLanguage FuzzParseUsagePayload FuzzQueueSnapshot; do
             go test ./cmd/noctis -run '^$' -fuzz "^$target\$" -fuzztime 30s
           done
-      - name: Build all platforms
-        run: |
-          for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
-            GOOS=${target%/*} GOARCH=${target#*/}; ext=""; [ "$GOOS" = windows ] && ext=".exe"
-            (cd go && CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -buildvcs=false -ldflags="-s -w" -o ../bin/$GOOS-$GOARCH/noctis$ext ./cmd/noctis)
-          done
-          cp bin/windows-amd64/noctis.exe bin/noctis.exe
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # Linux and Windows get one binary per CPU, macOS one universal binary (bin/darwin/noctis).
+      - name: Build all platforms
+        run: node scripts/build.js
       - name: Committed binaries must match the source
         run: |
           node -e "require('./tests/harness.js').refreshChecksums()"

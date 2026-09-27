@@ -1733,13 +1733,14 @@ async function scenarioCloneInstaller() {
   fs.mkdirSync(path.dirname(script), { recursive: true });
   fs.copyFileSync(path.join(SOURCE_ROOT, 'scripts', 'install.sh'), script);
   fs.chmodSync(script, 0o755);
-  for (const platform of ['linux-amd64', 'linux-arm64', 'darwin-amd64', 'darwin-arm64']) {
+  for (const platform of ['linux-amd64', 'linux-arm64', 'darwin']) {
     fs.mkdirSync(path.join(root, 'bin', platform), { recursive: true });
     fs.writeFileSync(path.join(root, 'bin', platform, 'noctis'), `#!/bin/sh\necho "ran ${platform} $*"\n`, { mode: 0o755 });
   }
   const fakeBin = path.join(root, 'fake-bin');
   fs.mkdirSync(fakeBin, { recursive: true });
-  fs.writeFileSync(path.join(fakeBin, 'uname'), '#!/bin/sh\nif [ "$1" = "-m" ]; then echo "$NOCTIS_LAB_UNAME_M"; else echo "$NOCTIS_LAB_UNAME_S"; fi\n', { mode: 0o755 });
+  const unameLog = path.join(root, 'uname.log');
+  fs.writeFileSync(path.join(fakeBin, 'uname'), `#!/bin/sh\necho "$*" >> '${unameLog}'\nif [ "$1" = "-m" ]; then echo "$NOCTIS_LAB_UNAME_M"; else echo "$NOCTIS_LAB_UNAME_S"; fi\n`, { mode: 0o755 });
   const install = (system, machine, args = ['--host', 'codex']) => spawnSync(script, args, {
     encoding: 'utf8',
     env: { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, NOCTIS_LAB_UNAME_S: system, NOCTIS_LAB_UNAME_M: machine },
@@ -1755,10 +1756,14 @@ async function scenarioCloneInstaller() {
     check(`clone installer: Linux ${machine} names the CPU instead of running the amd64 binary`, refusal(install('Linux', machine), machine, 'not supported'), refused);
   }
   check('clone installer: FreeBSD names the OS', refusal(install('FreeBSD', 'amd64'), 'FreeBSD', 'not supported'), refused);
-  for (const [system, machine, platform] of [['Linux', 'x86_64', 'linux-amd64'], ['Linux', 'aarch64', 'linux-arm64'], ['Darwin', 'x86_64', 'darwin-amd64'], ['Darwin', 'arm64', 'darwin-arm64']]) {
+  for (const [system, machine, platform] of [['Linux', 'x86_64', 'linux-amd64'], ['Linux', 'aarch64', 'linux-arm64'], ['Darwin', 'x86_64', 'darwin'], ['Darwin', 'arm64', 'darwin']]) {
     const result = install(system, machine);
     check(`clone installer: ${system} ${machine} runs bin/${platform}`, `${result.status} ${result.stdout.trim()}`, `0 ran ${platform} install --source ${root} --host codex`);
   }
+  // macOS has one universal binary, so the installer does not ask for the CPU there.
+  fs.rmSync(unameLog, { force: true });
+  install('Darwin', 'arm64');
+  check('clone installer: on macOS uname is asked for the system only', fs.readFileSync(unameLog, 'utf8'), '-s\n');
   fs.rmSync(root, { recursive: true, force: true });
 }
 
