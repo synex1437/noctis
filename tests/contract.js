@@ -171,8 +171,10 @@ function checkLauncher() {
     const inherited = { ...process.env };
     delete inherited.OSTYPE;
     delete inherited.HOSTTYPE;
+    delete inherited.GOMAXPROCS;
+    delete inherited.NOCTIS_OWN_GOMAXPROCS;
     // An empty OSTYPE and HOSTTYPE in the environment keep bash (sh on macOS) from setting its own.
-    const run = ({ kernelSays = [], shellSays = ['', ''], unameSays = ['', ''], extra = {}, cwd = root, script = path.join(bin, 'noctis') } = {}) => {
+    const run = ({ kernelSays = [], shellSays = ['', ''], unameSays = ['', ''], extra = {}, cwd = root, script = path.join(bin, 'noctis'), command = 'version' } = {}) => {
       fs.rmSync(kernel, { recursive: true, force: true });
       const [ostype, arch] = kernelSays;
       if (ostype !== undefined) {
@@ -181,7 +183,7 @@ function checkLauncher() {
         if (arch !== undefined) fs.writeFileSync(path.join(kernel, 'arch'), `${arch}\n`);
       }
       fs.rmSync(unameLog, { force: true });
-      const result = spawnSync('sh', [script, 'version'], {
+      const result = spawnSync('sh', [script, command], {
         cwd,
         encoding: 'utf8',
         env: { ...inherited, PATH: `${fake}${path.delimiter}${process.env.PATH}`, OSTYPE: shellSays[0], HOSTTYPE: shellSays[1], FAKE_S: unameSays[0], FAKE_M: unameSays[1], ...extra },
@@ -236,6 +238,17 @@ function checkLauncher() {
     check('launcher: a relative path with an exported CDPATH still finds the binaries', runs(cdpath, 'linux-amd64/noctis', 0), cdpath.shown);
     const bare = run({ kernelSays: ['Linux', 'x86_64'], cwd: bin, script: 'noctis' });
     check('launcher: run by its bare name from its own folder, it finds the binaries next to it', runs(bare, 'linux-amd64/noctis', 0), bare.shown);
+    // A hook and a status line refresh get GOMAXPROCS=1 with the marker that has noctis take both
+    // out again; other commands and a GOMAXPROCS already set are left alone.
+    fs.writeFileSync(path.join(bin, 'linux-amd64', 'noctis'), '#!/bin/sh\necho "$1 GOMAXPROCS=${GOMAXPROCS-unset} marker=${NOCTIS_OWN_GOMAXPROCS-unset}"\n', { mode: 0o755 });
+    const limits = (command, extra) => {
+      const result = run({ kernelSays: ['Linux', 'x86_64'], command, extra });
+      return `exit ${result.status}: ${(result.stdout || '').trim()}${(result.stderr || '').trim()}`;
+    };
+    check('launcher: a hook runs with GOMAXPROCS=1 and the marker that has noctis take it out', limits('hook'), 'exit 0: hook GOMAXPROCS=1 marker=1');
+    check('launcher: a status line refresh too', limits('statusline'), 'exit 0: statusline GOMAXPROCS=1 marker=1');
+    check("launcher: another command keeps the Go runtime's own GOMAXPROCS", limits('status'), 'exit 0: status GOMAXPROCS=unset marker=unset');
+    check('launcher: a GOMAXPROCS already set reaches a hook as it is, with no marker', limits('hook', { GOMAXPROCS: '3' }), 'exit 0: hook GOMAXPROCS=3 marker=unset');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

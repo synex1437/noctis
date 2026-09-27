@@ -145,6 +145,7 @@ Claude Code hook events wired in `hooks/hooks.json`: `SessionStart` (on `startup
 | `DISPLAY` / `WAYLAND_DISPLAY` | Linux: a desktop terminal is tried for a relaunch only when one is set |
 | `GODEBUG` | Go's own switches. The usage request, the webhook and the daily update check (`update.check`) run with Go 1.24.7's TLS defaults: they offer the post-quantum key exchange X25519MLKEM768, which makes the first message to the server about 1.2 KB larger, and refuse a server certificate with a negative serial number or an RSA key under 1024 bits. `tlsmlkem=0` leaves the post-quantum key exchange out, which brings that message back to about its old size; `x509negativeserial=1` and `rsa1024min=0` accept those certificates again. Several at once: `GODEBUG=tlsmlkem=0,rsa1024min=0` |
 | `NOCTIS_ANTIGRAVITY_HOOKS` | Antigravity hook-file path — test use |
+| `GOMAXPROCS` / `NOCTIS_OWN_GOMAXPROCS` | The `bin/noctis` launcher of a macOS or Linux install runs `hook` and `statusline` with `GOMAXPROCS=1`, so the Go runtime of a process that is over in milliseconds starts no threads for the other CPUs, and sets `NOCTIS_OWN_GOMAXPROCS=1` beside it. noctis takes both out of its environment as it starts, so nothing it runs inherits the limit. A `GOMAXPROCS` you set is left as it is, and handed on |
 
 ## Other AI coding tools
 
