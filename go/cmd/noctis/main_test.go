@@ -53,6 +53,9 @@ func TestMain(m *testing.M) {
 		_ = os.Unsetenv("NOCTIS_TEST_MAIN_ARGS")
 		os.Args = append([]string{os.Args[0]}, argv...)
 		main()
+		if dump := os.Getenv(environAfterMain); dump != "" {
+			_ = os.WriteFile(dump, []byte(strings.Join(os.Environ(), "\n")), 0o644)
+		}
 		os.Exit(0)
 	}
 	for _, argument := range os.Args[1:] {

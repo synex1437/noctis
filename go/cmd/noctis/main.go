@@ -102,6 +102,7 @@ func offeredCommands() string {
 }
 
 func main() {
+	dropLauncherGOMAXPROCS()
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			os.Exit(crashed(recovered))
@@ -157,6 +158,20 @@ func main() {
 		}
 	}
 	run()
+}
+
+// launcherGOMAXPROCS is set by bin/noctis when it gives this process GOMAXPROCS=1: a hook is over
+// in milliseconds, and a single P spares it the threads the Go runtime otherwise starts for idle
+// CPUs as it boots. The runtime has read GOMAXPROCS before main runs, so main takes both variables
+// out at once, and nothing noctis starts (Claude Code, git, a chained status line, a detached
+// noctis) inherits a limit meant for this process. A GOMAXPROCS the user set is left alone.
+const launcherGOMAXPROCS = "NOCTIS_OWN_GOMAXPROCS"
+
+func dropLauncherGOMAXPROCS() {
+	if os.Getenv(launcherGOMAXPROCS) != "" {
+		_ = os.Unsetenv("GOMAXPROCS")
+		_ = os.Unsetenv(launcherGOMAXPROCS)
+	}
 }
 
 // shortLived commands run for milliseconds on every hook event or status line refresh, so they
