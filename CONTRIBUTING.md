@@ -16,7 +16,8 @@ Go 1.24.7+ compiles it: the `go` line in `go/go.mod` names that version, so the 
 Most suites are black-box: Node drives the real binary with stand-ins for `claude`, `codex`, `agy`, `droid`, `copilot` and `gh`, a fake usage API and compressed time; `go test` covers the decision core directly. What each suite asks and what the latest run measured: [docs/TESTING.md](docs/TESTING.md).
 
 ```sh
-(cd go && go test ./...)                   # unit tests, fuzz seed corpora, dead-code guards
+node tests/gotest.js                       # Go unit tests, fuzz seed corpora, dead-code guards, ~20 s on 4 CPUs
+                                           #   (--run REGEXP, --race, -v as in go test; --shards N)
 node tests/contract.js                     # runs every hook the way the host declares it, seconds
 node tests/chaos.js                        # network/disk/migration failures, ~15 s
                                            #   (add NOCTIS_CHAOS_FULL_DISK=/path/to/a/small/mount
@@ -31,6 +32,8 @@ node tests/soak.js --days 3 --hard 1       # chaos soak: corrupted files, outage
 node tests/soak.js --days 7                # normal multi-day soak
 node tests/coverage.js                     # statement coverage of the lab plus go test (linux/amd64 only)
 ```
+
+`tests/gotest.js` builds the Go test binary once and spreads its tests over parallel processes, four per CPU (at most 16), balanced by the seconds in `tests/gotest-durations.json`; each process has its own temporary folder. `(cd go && go test ./...)` runs the same tests one after another, in about four minutes. The processes run side by side, so a test must not listen on a fixed port or write outside its own temporary folders (`t.TempDir()`). After adding a slow test, or changing how long one takes, run `node tests/gotest.js --record` and commit the file: it is rewritten only when every test passed, and a test it does not list counts as 0.1 s until then.
 
 The soak invariant is the contract: no model call above 100 %, no leaked locks or temp files, no session without a resume path, no `fatal`. A change that needs a new rule needs a lab check for it.
 
