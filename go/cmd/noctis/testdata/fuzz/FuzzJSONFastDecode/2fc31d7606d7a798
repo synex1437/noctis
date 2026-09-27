@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"text\":\"\\ud83d\\ude00 \\ud83d \\u00e9\\u2028\\\"\\\\\\/\\b\\f\\n\\r\\t\",\"broken\":\"caf\xe9\xff\",\"sep\":\"\u2028\"}")

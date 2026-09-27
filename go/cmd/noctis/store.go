@@ -465,8 +465,8 @@ func readJSONShared(file string) strictRead {
 	if cached, seen := parsedEntry(file); seen && bytes.Equal(cached.raw, content) {
 		return strictRead{exists: true, ok: true, data: cached.data, raw: content}
 	}
-	var raw any
-	if err := json.Unmarshal(bytes.TrimPrefix(content, utf8BOM), &raw); err != nil {
+	raw, err := decodeJSON(bytes.TrimPrefix(content, utf8BOM))
+	if err != nil {
 		dropParsed(file)
 		return strictRead{exists: true, ok: false, err: err.Error()}
 	}
@@ -508,10 +508,10 @@ func keepWritten(file string, encoded []byte, value object) {
 func jsonCopy(value any) (any, bool) {
 	switch typed := value.(type) {
 	case nil, bool, float64:
-		return typed, true
+		return value, true
 	case string:
 		if utf8.ValidString(typed) {
-			return typed, true
+			return value, true
 		}
 	case object:
 		if typed == nil {
@@ -522,11 +522,14 @@ func jsonCopy(value any) (any, bool) {
 			if !utf8.ValidString(key) {
 				return nil, false
 			}
-			copied, ok := jsonCopy(item)
-			if !ok {
-				return nil, false
+			if !jsonLeaf(item) {
+				copied, ok := jsonCopy(item)
+				if !ok {
+					return nil, false
+				}
+				item = copied
 			}
-			clone[key] = copied
+			clone[key] = item
 		}
 		return clone, true
 	case []any:
@@ -535,25 +538,42 @@ func jsonCopy(value any) (any, bool) {
 		}
 		clone := make([]any, len(typed))
 		for index, item := range typed {
-			copied, ok := jsonCopy(item)
-			if !ok {
-				return nil, false
+			if !jsonLeaf(item) {
+				copied, ok := jsonCopy(item)
+				if !ok {
+					return nil, false
+				}
+				item = copied
 			}
-			clone[index] = copied
+			clone[index] = item
 		}
 		return clone, true
 	}
 	// Anything else (an int, a []string, text that is not UTF-8) comes back as the encoder and the
 	// parser make it.
-	encoded, err := json.Marshal(value)
+	encoded, ok := encodeJSON(value, true, false)
+	if !ok {
+		var err error
+		if encoded, err = json.Marshal(value); err != nil {
+			return nil, false
+		}
+	}
+	parsed, err := decodeJSON(encoded)
 	if err != nil {
 		return nil, false
 	}
-	var parsed any
-	if json.Unmarshal(encoded, &parsed) != nil {
-		return nil, false
-	}
 	return parsed, true
+}
+
+// jsonLeaf reports whether jsonCopy keeps value as it is: a literal, a number or UTF-8 text.
+func jsonLeaf(value any) bool {
+	switch typed := value.(type) {
+	case nil, bool, float64:
+		return true
+	case string:
+		return utf8.ValidString(typed)
+	}
+	return false
 }
 
 func parsedEntry(file string) (parsedFile, bool) {
@@ -590,7 +610,13 @@ func readJSON(file string) object {
 	return read.data
 }
 
+// marshalPretty, marshalState and marshalCompact write what a json.Encoder with HTML escaping off
+// writes, without its closing newline: encodeJSON's bytes when it vouches for them, encoding/json's
+// otherwise.
 func marshalPretty(value any) []byte {
+	if encoded, ok := encodeJSON(value, false, true); ok {
+		return encoded
+	}
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
@@ -606,6 +632,9 @@ func marshalPretty(value any) []byte {
 // them far more often than people do, and without it they are a fifth smaller and quicker to
 // write and to parse. nil when value cannot be encoded.
 func marshalState(value any) []byte {
+	if encoded, ok := encodeJSON(value, false, false); ok {
+		return encoded
+	}
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
@@ -617,6 +646,9 @@ func marshalState(value any) []byte {
 }
 
 func marshalCompact(value any) []byte {
+	if encoded, ok := encodeJSON(value, false, false); ok {
+		return encoded
+	}
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
@@ -851,11 +883,11 @@ func readStdinJSON() object {
 		warn("stdin read failed: %v", err)
 		return stdinCache
 	}
-	if strings.TrimSpace(string(content)) == "" {
+	if len(bytes.TrimSpace(content)) == 0 {
 		return stdinCache
 	}
-	var raw any
-	if err := json.Unmarshal(content, &raw); err != nil {
+	raw, err := decodeJSON(content)
+	if err != nil {
 		warn("stdin parse failed: %v", err)
 		return stdinCache
 	}
