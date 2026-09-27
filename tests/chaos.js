@@ -114,10 +114,10 @@ function networkFailures(lab, account) {
   const after429 = Number(fableFile(account).backoffUntil);
   check('a 429 backs off for longer than a 500', after429 > after500, `429 → ${after429}, 500 → ${after500}`);
 
-  const before = lab.mockHits().length;
+  const before = lab.mockHits();
   hookOnce(account, lab, 'chaos-backoff-429b');
-  check('no fetch while backed off', lab.mockHits().length === before,
-    `${lab.mockHits().length - before} extra request(s)`);
+  check('no fetch while backed off', lab.mockHits() === before,
+    `${lab.mockHits() - before} extra request(s)`);
 
   setOutage(lab, '');
 }

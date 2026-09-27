@@ -276,7 +276,11 @@ func onSessionStart(input, cfg object) {
 
 		if staleSeconds := usageStaleSeconds(cfg); !usage.hasAny || float64(now)-usage.updatedAt > staleSeconds || windowStale(usage, staleSeconds) {
 
-			if refreshed := refreshFable(cfg, now, "session-start", -1, false); numberOr(refreshed, "fetchedAt", 0) > 0 {
+			wait := time.Duration(0)
+			if nearEdge(cfg, usage) {
+				wait = refreshWait
+			}
+			if refreshed := refreshFableWaiting(cfg, now, "session-start", -1, false, wait); numberOr(refreshed, "fetchedAt", 0) > 0 {
 				usage = currentUsage(now)
 			}
 		}
@@ -728,12 +732,12 @@ func subagentFallback(cfg object, model string) (string, usageView) {
 	}
 	now := nowSec()
 	usage := currentUsage(now)
-	maxAge := -1.0
+	maxAge, wait := -1.0, time.Duration(0)
 	if limit, guarded := scopedThresholdEnabled(cfg); guarded && usage.fable != nil && usage.fable.used >= limit-nearEdgeBand {
-		maxAge = nearEdgePollNormal
+		maxAge, wait = nearEdgePollNormal, refreshWait
 	}
 	before := numberOr(readJSON(files.fable), "fetchedAt", 0)
-	if after := refreshFable(cfg, now, "fable-subagent", maxAge, false); numberOr(after, "fetchedAt", 0) != before {
+	if after := refreshFableWaiting(cfg, now, "fable-subagent", maxAge, false, wait); numberOr(after, "fetchedAt", 0) != before {
 		usage = currentUsage(now)
 	}
 	return scopedSafeModel(cfg, readState(), usage, model, now), usage

@@ -11,12 +11,16 @@ const hitsFile = path.join(dir, 'hits.log');
 const portFile = path.join(dir, 'port');
 const skewFile = path.join(dir, 'skew.json');
 
-function outage() {
+function outageFile() {
   try {
-    return JSON.parse(fs.readFileSync(path.join(dir, 'outage.json'), 'utf8')).mode || '';
+    return JSON.parse(fs.readFileSync(path.join(dir, 'outage.json'), 'utf8')) || {};
   } catch {
-    return '';
+    return {};
   }
+}
+
+function outage() {
+  return outageFile().mode || '';
 }
 
 const server = http.createServer((request, response) => {
@@ -45,6 +49,15 @@ const server = http.createServer((request, response) => {
   }
   fs.appendFileSync(hitsFile, `${JSON.stringify(request.headers)}\n`);
   const mode = outage();
+  if (mode === 'slow') {
+    // The usual answer, only late (outage.json's ms, 3 s by default).
+    setTimeout(() => answer(request, response, ''), Number(outageFile().ms) || 3000);
+    return;
+  }
+  answer(request, response, mode);
+});
+
+function answer(request, response, mode) {
   if (mode === 'error') {
     response.writeHead(500);
     response.end('{}');
@@ -144,7 +157,7 @@ const server = http.createServer((request, response) => {
   }
   response.writeHead(200, { 'Content-Type': 'application/json', Date: new Date(Date.now() + skew * 1000).toUTCString() });
   response.end(JSON.stringify({ five_hour: null, seven_day: null, limits }));
-});
+}
 
 process.on('disconnect', () => process.exit(0));
 

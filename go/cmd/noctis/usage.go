@@ -716,37 +716,78 @@ func clockOffsetFrom(result fetchResult, previous float64) float64 {
 	return offset
 }
 
+// refreshFable brings fable.json up to date when its reading is older than maxAge (the poll
+// interval when maxAge is negative) and no backoff holds (ignoreBackoff skips that check). In a
+// process the host waits on, the fetch goes to a detached refresher (refreshAside); anywhere
+// else it runs here.
 func refreshFable(cfg object, now int64, reason string, maxAge float64, ignoreBackoff bool) object {
+	return refreshFableWaiting(cfg, now, reason, maxAge, ignoreBackoff, 0)
+}
+
+// refreshFableWaiting is refreshFable for a caller that makes a one-time choice on the answer:
+// a hook waits up to wait for the fetch it hands off.
+func refreshFableWaiting(cfg object, now int64, reason string, maxAge float64, ignoreBackoff bool, wait time.Duration) object {
+	cached, due := fableRefreshDue(cfg, now, maxAge, ignoreBackoff)
+	if !due {
+		return cached
+	}
+	if hostWaitsOn[command] {
+		if answer, handed := refreshAside(cfg, cached, now, reason, wait); handed {
+			return answer
+		}
+	}
+	return refreshFableHere(cfg, cached, now, reason)
+}
+
+// refreshFableNow fetches in this process even in a hook, for a caller that has chosen to hold
+// the work until it knows (the blind probe).
+func refreshFableNow(cfg object, now int64, reason string, maxAge float64, ignoreBackoff bool) object {
+	cached, due := fableRefreshDue(cfg, now, maxAge, ignoreBackoff)
+	if !due {
+		return cached
+	}
+	return refreshFableHere(cfg, cached, now, reason)
+}
+
+func fableRefreshDue(cfg object, now int64, maxAge float64, ignoreBackoff bool) (object, bool) {
 	cached := readJSON(files.fable)
 	if cached == nil {
 		cached = object{}
 	}
 	fableCfg := section(cfg, "fable")
-	source := getString(fableCfg, "source")
-	if source != "oauth" && source != "codex" {
-		return cached
+	if source := getString(fableCfg, "source"); source != "oauth" && source != "codex" {
+		return cached, false
 	}
 	pollSeconds := maxAge
 	if pollSeconds < 0 {
 		pollSeconds = math.Max(5, numberOr(fableCfg, "pollMinutes", 10)*60)
 	}
-	fetchedAt := numberOr(cached, "fetchedAt", 0)
-	if fetchedAt > 0 && float64(now)-fetchedAt < pollSeconds {
-		return cached
+	if fetchedAt := numberOr(cached, "fetchedAt", 0); fetchedAt > 0 && float64(now)-fetchedAt < pollSeconds {
+		return cached, false
 	}
 	if !ignoreBackoff && numberOr(cached, "backoffUntil", 0) > float64(now) {
-		return cached
+		return cached, false
 	}
+	return cached, true
+}
+
+func refreshFableHere(cfg, cached object, now int64, reason string) object {
 	release, acquired := tryFileLock(files.fableLock)
 	if !acquired {
 		logInfo("fable refresh skipped (%s): another process is fetching", reason)
 		return cached
 	}
 	defer release()
-	if latest := readJSON(files.fable); latest != nil && numberOr(latest, "fetchedAt", 0) > fetchedAt {
+	if latest := readJSON(files.fable); latest != nil && numberOr(latest, "fetchedAt", 0) > numberOr(cached, "fetchedAt", 0) {
 		return latest
 	}
-	if source == "codex" {
+	return fetchFable(cfg, cached, now, reason)
+}
+
+// fetchFable asks the usage source and writes its answer, or the failure and its backoff, to
+// fable.json. The caller holds fable.lock.
+func fetchFable(cfg, cached object, now int64, reason string) object {
+	if getString(section(cfg, "fable"), "source") == "codex" {
 		return refreshCodexUsage(cached, now, reason)
 	}
 	token := oauthToken()
@@ -922,22 +963,32 @@ func lockAbandoned(lockFile string) bool {
 }
 
 func tryFileLock(lockFile string) (func(), bool) {
+	handle, acquired := openFileLock(lockFile)
+	if !acquired {
+		return func() {}, false
+	}
+	return func() { releaseLock(handle, lockFile) }, true
+}
+
+// openFileLock creates lockFile in this process's name, taking over one its holder abandoned,
+// and returns it held.
+func openFileLock(lockFile string) (*os.File, bool) {
 	ensureDir(filepath.Dir(lockFile))
 	for attempt := 0; attempt < 2; attempt++ {
 		handle, err := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 		if err == nil {
 			holdLock(handle)
 			_, _ = handle.WriteString(strconv.Itoa(os.Getpid()))
-			return func() { releaseLock(handle, lockFile) }, true
+			return handle, true
 		}
 		if !lockAbandoned(lockFile) {
-			return func() {}, false
+			return nil, false
 		}
 		if err := removeStaleLock(lockFile); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return func() {}, false
+			return nil, false
 		}
 	}
-	return func() {}, false
+	return nil, false
 }
 
 func percentText(parsed object, key string) string {

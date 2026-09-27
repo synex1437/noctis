@@ -143,6 +143,7 @@ function runManifestEntry(entry, account, lab, input, extraEnv = {}) {
     env: account.env(extraEnv),
     timeout: 60000,
   });
+  account.settleRefresh(entry.args);
   return { command, ...result };
 }
 
