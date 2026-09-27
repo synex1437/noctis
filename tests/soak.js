@@ -76,6 +76,8 @@ const stats = {
   anomalies: [],
   maxAllowedFive: 0,
   maxAllowedWeek: 0,
+  typedCalls: 0,
+  maxTypedFive: 0,
   latencies: [],
   timings: [],
 };
@@ -180,20 +182,52 @@ function expectedSubagentLimit(acc, out, mainPaused) {
   return nearLimit(acc) && /reached early at the current burn rate/.test(out.hookSpecificOutput.permissionDecisionReason);
 }
 
+// The last few guard decisions for a session, so a breach in a CI log says how the call got through.
+function recentDecisions(acc, sid, count = 8) {
+  let rows = [];
+  try {
+    rows = fs.readFileSync(path.join(acc.guardDir, 'decisions.jsonl'), 'utf8').split('\n').filter(Boolean).map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    });
+  } catch {
+    return [];
+  }
+  return rows.filter((row) => row && row.sid === sid).slice(-count).map((row) => [row.event, row.action, row.hit, row.five !== undefined ? `five=${row.five}` : row.used !== undefined ? `used=${row.used}` : '', row.reason].filter(Boolean).join(' '));
+}
+
+// A prompt the user typed goes ahead past the pause point with a warning, and its turn runs on
+// until the ceiling: those calls are the user's choice, so they answer to the ceiling alone.
+function typedTurnFor(acc, sid) {
+  return Boolean((acc.state().typedTurns || {})[sid]);
+}
+
+function recordBreach(acc, session, cost, typed) {
+  const truth = acc.truth;
+  stats.breaches.push({ day: Math.floor((T - realStart) / DAY) + 1, account: acc.name, sid: session.sid, five: truth.five.used, week: truth.week.used, cost, typed, trail: recentDecisions(acc, session.sid) });
+}
+
 function applyCall(acc, session, cost) {
   const truth = acc.truth;
   const before = { five: truth.five.used, week: truth.week.used };
-  if (truth.five.used + cost > 100 || truth.week.used + cost * 0.11 > 100) {
-    stats.breaches.push({ day: Math.floor((T - realStart) / DAY) + 1, account: acc.name, sid: session.sid, five: truth.five.used, week: truth.week.used, cost });
+  if (session.typedTurn) {
+    if (before.five >= 100 || before.week >= 100) recordBreach(acc, session, cost, true);
+    stats.typedCalls += 1;
+    stats.maxTypedFive = Math.max(stats.maxTypedFive, before.five);
+  } else {
+    if (truth.five.used + cost > 100 || truth.week.used + cost * 0.11 > 100) recordBreach(acc, session, cost, false);
+    if (before.five > THRESHOLDS.five + MAX_OVERSHOOT) {
+      stats.anomalies.push(`call allowed at five=${before.five.toFixed(1)} % (threshold ${THRESHOLDS.five}) ${acc.name}/${session.sid}`);
+    }
+    if (before.week > THRESHOLDS.week + MAX_OVERSHOOT) {
+      stats.anomalies.push(`call allowed at week=${before.week.toFixed(1)} % (threshold ${THRESHOLDS.week}) ${acc.name}/${session.sid}`);
+    }
+    stats.maxAllowedFive = Math.max(stats.maxAllowedFive, before.five);
+    stats.maxAllowedWeek = Math.max(stats.maxAllowedWeek, before.week);
   }
-  if (before.five > THRESHOLDS.five + MAX_OVERSHOOT) {
-    stats.anomalies.push(`call allowed at five=${before.five.toFixed(1)} % (threshold ${THRESHOLDS.five}) ${acc.name}/${session.sid}`);
-  }
-  if (before.week > THRESHOLDS.week + MAX_OVERSHOOT) {
-    stats.anomalies.push(`call allowed at week=${before.week.toFixed(1)} % (threshold ${THRESHOLDS.week}) ${acc.name}/${session.sid}`);
-  }
-  stats.maxAllowedFive = Math.max(stats.maxAllowedFive, before.five);
-  stats.maxAllowedWeek = Math.max(stats.maxAllowedWeek, before.week);
   truth.five.used = Math.min(100, truth.five.used + cost);
   truth.week.used = Math.min(100, truth.week.used + cost * 0.11);
   if (/fable/i.test(session.model)) truth.fable.used = Math.min(100, truth.fable.used + cost * 0.25);
@@ -324,6 +358,7 @@ async function runTurn(acc, session) {
     stats.anomalies.push(`unexpected block ${acc.name}/${session.sid}: ${out.reason}`);
     return 'stopped';
   }
+  session.typedTurn = typedTurnFor(acc, session.sid);
   if (out.systemMessage && /yeniden fable/.test(out.systemMessage)) stats.reverts += 1;
   const routed = Boolean(out.hookSpecificOutput && /Non-code research/.test(out.hookSpecificOutput.additionalContext || ''));
   if (routed) {
@@ -790,6 +825,7 @@ async function marathonTurn(acc, session, turn, accounts) {
     stats.anomalies.push(`unexpected block ${acc.name}/${session.sid}: ${out.reason}`);
     return 'stopped';
   }
+  session.typedTurn = typedTurnFor(acc, session.sid);
   if (out.systemMessage && /yeniden fable/.test(out.systemMessage)) stats.reverts += 1;
   if (out.hookSpecificOutput && /Non-code research/.test(out.hookSpecificOutput.additionalContext || '')) stats.routes += 1;
   applyCall(acc, session, callCost());
@@ -1001,6 +1037,7 @@ async function main() {
     compactions: stats.compactions,
     transient429: stats.transient429,
     maxUsageWhenAllowed: { five: Number(stats.maxAllowedFive.toFixed(1)), week: Number(stats.maxAllowedWeek.toFixed(1)) },
+    typedTurnCalls: { calls: stats.typedCalls, maxFive: Number(stats.maxTypedFive.toFixed(1)) },
     hookLatencyMs: { p50: percentile(stats.latencies, 0.5), p95: percentile(stats.latencies, 0.95), max: Math.max(...stats.latencies) },
     guardLatencyMs: { p95, budget: 400 },
     stopFailureLatencyMs: {
