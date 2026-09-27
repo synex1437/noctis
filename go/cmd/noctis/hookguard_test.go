@@ -105,6 +105,7 @@ func TestAnAgentSessionsMainThreadMeetsTheSpawnAndWorkflowGates(t *testing.T) {
 
 func TestAnAgentSessionsMainThreadFollowsTheResearchRoute(t *testing.T) {
 	cfg, project := agentSessionSandbox(t, 10)
+	section(cfg, "router")["enabled"] = true
 	route := func(sid string) {
 		updateState(func(state object) {
 			stateMap(state, "routes")[sid] = object{"at": float64(nowSec()), "denies": float64(0), "signal": "web-words"}

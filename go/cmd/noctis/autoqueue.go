@@ -577,9 +577,13 @@ func namedLines(texts []string) (note, notice string) {
 	return note, notice
 }
 
+func sessionQueuePath(sid string) string {
+	return filepath.Join(autoQueueDir(), safeName(sid)+".md")
+}
+
 func writeSessionQueue(sid string, record object, lines []string) string {
 	ensureDir(autoQueueDir())
-	path := filepath.Join(autoQueueDir(), safeName(sid)+".md")
+	path := sessionQueuePath(sid)
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
 		warn("auto queue could not be written: %v", err)
 		return ""
@@ -818,7 +822,7 @@ func denyQueueTrustByModel(input object) {
 	}
 	cfg := loadConfig()
 	sid := sessionKey(input)
-	applySessionLocale(cfg, readState(), sid)
+	applySessionLocale(cfg, peekState(), sid)
 	journal(sid, "PreToolUse", target.journal, truncateText(command, 200), nil)
 	logInfo("denied %s run by the model in %s", target.logName, sid)
 	emit(object{

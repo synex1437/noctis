@@ -139,6 +139,7 @@ func sleepUntilEvery(epoch, tickSeconds float64, onTick func() bool) bool {
 }
 
 func sleepUntilPaced(epoch float64, pace func(remaining float64) float64, onTick func() bool) bool {
+	restoreCollector()
 	for {
 		remaining := epoch - float64(nowSec())
 		if remaining <= 0 {

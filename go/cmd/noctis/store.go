@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -109,7 +110,6 @@ var (
 	knownPermModes   = map[string]bool{"default": true, "manual": true, "acceptEdits": true, "plan": true, "auto": true, "dontAsk": true}
 	refusedPermModes = map[string]bool{"bypassPermissions": true}
 	localHosts       = map[string]bool{"127.0.0.1": true, "localhost": true, "::1": true, "[::1]": true}
-	safeNamePattern  = lazyRegexp(`[^A-Za-z0-9_.-]`)
 	compactPrefixPat = lazyRegexp(`(?i)^this session is being continued`)
 	testedClaudeMin  = "2.1.251"
 	testedClaudeMax  = "2.1.999"
@@ -441,6 +441,19 @@ func readFileRetrying(file string) ([]byte, error) {
 }
 
 func readJSONStrict(file string) strictRead {
+	read := readJSONShared(file)
+	if read.exists {
+		read.data = copyObject(read.data)
+	}
+	return read
+}
+
+// readJSONShared is readJSONStrict without the copy: its data is the parse kept for the next read
+// of the same bytes, lent to the caller, who must not change it.
+func readJSONShared(file string) strictRead {
+	if sharedParseCheck != nil {
+		checkKeptParses()
+	}
 	content, err := readFileRetrying(file)
 	if err != nil {
 		dropParsed(file)
@@ -450,7 +463,7 @@ func readJSONStrict(file string) strictRead {
 		return strictRead{exists: true, ok: false, unopened: true, err: err.Error()}
 	}
 	if cached, seen := parsedEntry(file); seen && bytes.Equal(cached.raw, content) {
-		return strictRead{exists: true, ok: true, data: copyObject(cached.data), raw: content}
+		return strictRead{exists: true, ok: true, data: cached.data, raw: content}
 	}
 	var raw any
 	if err := json.Unmarshal(bytes.TrimPrefix(content, utf8BOM), &raw); err != nil {
@@ -458,8 +471,89 @@ func readJSONStrict(file string) strictRead {
 		return strictRead{exists: true, ok: false, err: err.Error()}
 	}
 	data, _ := raw.(object)
-	keepParsed(file, parsedFile{raw: content, data: copyObject(data)})
+	keepParsed(file, parsedFile{raw: content, data: data})
 	return strictRead{exists: true, ok: true, data: data, raw: content}
+}
+
+// sharedParseCheck, set by the tests, sees every kept parse before any read, so code that changed
+// a map it was only lent fails the test that ran it.
+var sharedParseCheck func(file string, parsed parsedFile)
+
+func checkKeptParses() {
+	parseCacheLock.Lock()
+	kept := make(map[string]parsedFile, len(parseCache))
+	for file, parsed := range parseCache {
+		kept[file] = parsed
+	}
+	parseCacheLock.Unlock()
+	for file, parsed := range kept {
+		sharedParseCheck(file, parsed)
+	}
+}
+
+// keepWritten keeps value as the parse of the bytes just written for it, so the next read of the
+// file needs no parse. The copy it keeps holds what parsing those bytes gives back: numbers as
+// float64, text as the encoder wrote it. A value that could not be encoded wrote nothing, so there
+// is nothing to keep: kept, its nil bytes would pass for an empty file.
+func keepWritten(file string, encoded []byte, value object) {
+	if encoded == nil {
+		return
+	}
+	if copied, ok := jsonCopy(value); ok {
+		data, _ := copied.(object)
+		keepParsed(file, parsedFile{raw: encoded, data: data})
+	}
+}
+
+func jsonCopy(value any) (any, bool) {
+	switch typed := value.(type) {
+	case nil, bool, float64:
+		return typed, true
+	case string:
+		if utf8.ValidString(typed) {
+			return typed, true
+		}
+	case object:
+		if typed == nil {
+			return nil, true
+		}
+		clone := make(object, len(typed))
+		for key, item := range typed {
+			if !utf8.ValidString(key) {
+				return nil, false
+			}
+			copied, ok := jsonCopy(item)
+			if !ok {
+				return nil, false
+			}
+			clone[key] = copied
+		}
+		return clone, true
+	case []any:
+		if typed == nil {
+			return nil, true
+		}
+		clone := make([]any, len(typed))
+		for index, item := range typed {
+			copied, ok := jsonCopy(item)
+			if !ok {
+				return nil, false
+			}
+			clone[index] = copied
+		}
+		return clone, true
+	}
+	// Anything else (an int, a []string, text that is not UTF-8) comes back as the encoder and the
+	// parser make it.
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, false
+	}
+	var parsed any
+	if json.Unmarshal(encoded, &parsed) != nil {
+		return nil, false
+	}
+	return parsed, true
 }
 
 func parsedEntry(file string) (parsedFile, bool) {
@@ -981,8 +1075,10 @@ func stateProblem(result strictRead) string {
 	return "not a JSON object"
 }
 
+// readStoredState lends the kept parse of state.json: readStateWithBytes copies it, peekState does
+// not.
 func readStoredState() (object, []byte) {
-	primary := readJSONStrict(files.state)
+	primary := readJSONShared(files.state)
 	if primary.ok && !primary.exists {
 		return object{}, nil
 	}
@@ -992,7 +1088,7 @@ func readStoredState() (object, []byte) {
 
 	for attempt := 0; attempt < 4 && !(primary.ok && primary.data != nil); attempt++ {
 		time.Sleep(25 * time.Millisecond)
-		primary = readJSONStrict(files.state)
+		primary = readJSONShared(files.state)
 	}
 	if primary.ok && primary.data != nil {
 		return primary.data, primary.raw
@@ -1033,6 +1129,21 @@ func readStateWithBytes() (object, []byte) {
 	if stored == nil {
 		return nil, nil
 	}
+	return stateOf(stored, true), raw
+}
+
+// peekState is readState for code that only looks: the maps in it are the kept parse of
+// state.json, lent, so nothing it returns may be changed, and it must not reach code that changes
+// the state it is given (clearDeadHandoffs does).
+func peekState() object {
+	stored, _ := readStoredState()
+	if stored == nil {
+		return emptyState()
+	}
+	return stateOf(stored, false)
+}
+
+func stateOf(stored object, copied bool) object {
 	state := emptyState()
 	for key, template := range state {
 		value, present := stored[key]
@@ -1040,16 +1151,17 @@ func readStateWithBytes() (object, []byte) {
 			continue
 		}
 		if _, templateIsMap := template.(object); templateIsMap {
-			if valueMap, ok := value.(object); ok {
-				state[key] = valueMap
-			} else {
+			if _, ok := value.(object); !ok {
 				state[key] = object{}
+				continue
 			}
-			continue
+		}
+		if copied {
+			value = copyValue(value)
 		}
 		state[key] = value
 	}
-	return state, raw
+	return state
 }
 
 func stateMap(state object, key string) object {
@@ -1380,6 +1492,7 @@ func updateState(mutator func(state object)) object {
 			}
 		}
 		mustWriteEncoded(files.state, encoded)
+		keepWritten(files.state, encoded, state)
 		result = state
 	})
 	drainPrunedRunners()
@@ -1422,7 +1535,7 @@ func hashKey(text string) string {
 }
 
 func safeName(text string) string {
-	value := safeNamePattern.ReplaceAllString(text, "_")
+	value := strings.Map(safeNameChar, text)
 	if strings.Trim(value, ".") == "" {
 		value = strings.Repeat("_", len(value))
 	}
@@ -1430,6 +1543,16 @@ func safeName(text string) string {
 		value = value[:72] + "-" + hashKey(text)
 	}
 	return value
+}
+
+// safeNameChar keeps A-Z, a-z, 0-9, '_', '.' and '-' and makes any other character, or any byte
+// that is not UTF-8, a '_'.
+func safeNameChar(char rune) rune {
+	switch {
+	case 'a' <= char && char <= 'z', 'A' <= char && char <= 'Z', '0' <= char && char <= '9', char == '_', char == '.', char == '-':
+		return char
+	}
+	return '_'
 }
 
 func sessionKey(input object) string {

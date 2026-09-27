@@ -1015,6 +1015,9 @@ func baseTable() map[string]map[string]string {
 	return baseCache
 }
 
+// baseLocales names the catalogs baseCatalog builds, so knownLocale answers without building them.
+var baseLocales = map[string]bool{"en": true, "tr": true}
+
 func knownLocale(code string) bool {
 	if code == "" {
 		return false
@@ -1022,7 +1025,7 @@ func knownLocale(code string) bool {
 	if _, ok := extraCatalogBuilders[code]; ok {
 		return true
 	}
-	return baseTable()[code] != nil
+	return baseLocales[code]
 }
 
 func catalogFor(code string) map[string]string {
@@ -1063,8 +1066,31 @@ func setLocale(cfg object) {
 	locale = detectLocale(cfg)
 }
 
+var (
+	localeLock    sync.Mutex
+	localePending func()
+)
+
+// settleLocaleLater has the locale finished by settle the first time text is looked up, so a hook
+// that prints nothing never reads what settle needs. nil drops a pending settle.
+func settleLocaleLater(settle func()) {
+	localeLock.Lock()
+	defer localeLock.Unlock()
+	localePending = settle
+}
+
+func localeNow() string {
+	localeLock.Lock()
+	defer localeLock.Unlock()
+	if settle := localePending; settle != nil {
+		localePending = nil
+		settle()
+	}
+	return locale
+}
+
 func T(key string, values ...any) string {
-	text, ok := catalogFor(locale)[key]
+	text, ok := catalogFor(localeNow())[key]
 	if !ok {
 		text, ok = catalogFor("en")[key]
 	}
@@ -1078,7 +1104,7 @@ func T(key string, values ...any) string {
 }
 
 func dayName(weekday int) string {
-	names := dayNamesByLocale[locale]
+	names := dayNamesByLocale[localeNow()]
 	if names == nil {
 		names = dayNamesByLocale["en"]
 	}
@@ -1086,7 +1112,7 @@ func dayName(weekday int) string {
 }
 
 func durationUnit(index int) string {
-	units, ok := durationUnits[locale]
+	units, ok := durationUnits[localeNow()]
 	if !ok {
 		units = durationUnits["en"]
 	}
