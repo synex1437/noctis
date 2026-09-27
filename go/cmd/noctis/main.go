@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -147,7 +148,42 @@ func main() {
 		fmt.Fprintln(os.Stderr, describeHostIDs())
 		os.Exit(2)
 	}
+	if shortLived[command] {
+		startupConfig = cfg
+		if os.Getenv("GOGC") == "" {
+			debug.SetGCPercent(shortLivedGCPercent)
+			collectorTuned = true
+		}
+	}
 	run()
+}
+
+// shortLived commands run for milliseconds on every hook event or status line refresh, so they
+// collect garbage less often (GOGC 400 unless GOGC is set); their heap stays a few megabytes. One
+// that settles in to wait puts the default back (restoreCollector).
+var shortLived = map[string]bool{"hook": true, "statusline": true}
+
+const shortLivedGCPercent = 400
+
+var collectorTuned bool
+
+func restoreCollector() {
+	if collectorTuned {
+		collectorTuned = false
+		debug.SetGCPercent(100)
+	}
+}
+
+// startupConfig is the config main loaded for this run, handed to the command once so it is not
+// read and merged again.
+var startupConfig object
+
+func loadedConfig() object {
+	if cfg := startupConfig; cfg != nil {
+		startupConfig = nil
+		return cfg
+	}
+	return loadConfig()
 }
 
 func crashed(recovered any) int {

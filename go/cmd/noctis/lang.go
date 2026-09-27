@@ -155,8 +155,7 @@ func rememberSessionLanguage(sid, text string) string {
 	if lang == "" || sid == "" {
 		return ""
 	}
-	state := readState()
-	if getString(getMap(getMap(state, "sessionLocale"), sid), "lang") != lang {
+	if getString(getMap(getMap(peekState(), "sessionLocale"), sid), "lang") != lang {
 		updateState(func(next object) {
 			stateMap(next, "sessionLocale")[sid] = object{"lang": lang, "at": float64(nowSec())}
 		})
@@ -168,11 +167,17 @@ func sessionLanguage(state object, sid string) string {
 	return getString(getMap(getMap(state, "sessionLocale"), sid), "lang")
 }
 
-func applySessionLocale(cfg object, state object, sid string) {
+// sessionLocaleWanted says whether the language of the session's prompts picks the locale: not
+// when config.json or NOCTIS_LANG names one.
+func sessionLocaleWanted(cfg object) bool {
 	if strings.ToLower(strings.TrimSpace(getString(cfg, "locale"))) != "auto" && getString(cfg, "locale") != "" {
-		return
+		return false
 	}
-	if os.Getenv("NOCTIS_LANG") != "" {
+	return os.Getenv("NOCTIS_LANG") == ""
+}
+
+func applySessionLocale(cfg object, state object, sid string) {
+	if !sessionLocaleWanted(cfg) {
 		return
 	}
 	if lang := sessionLanguage(state, sid); lang != "" && knownLocale(lang) {

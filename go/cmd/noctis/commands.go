@@ -1336,7 +1336,7 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:24px 0 8px;color:var(-
 .bar{display:block;height:100%%;background:var(--bar);border-radius:0 4px 4px 0}
 .value{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
 table{border-collapse:collapse;width:100%%;font-variant-numeric:tabular-nums}th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--track)}th:first-child,td:first-child{text-align:left}th{color:var(--muted);font-weight:600}
-</style></head><body><h1>noctis</h1><p class="sub">%s</p>%s</body></html>`, locale, html.EscapeString(T("report.header", formatNumber(data.days), data.transcripts, files.configDir)), body.String())
+</style></head><body><h1>noctis</h1><p class="sub">%s</p>%s</body></html>`, localeNow(), html.EscapeString(T("report.header", formatNumber(data.days), data.transcripts, files.configDir)), body.String())
 }
 
 func runReport() {
