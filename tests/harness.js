@@ -528,6 +528,15 @@ class Account {
     return readJson(this.stateFile) || {};
   }
 
+  // The record of sid's checkpoint wherever noctis keeps it: in state.json while it is still to be
+  // used, in used-checkpoints.json once it was. Of two, the newer.
+  checkpoint(sid) {
+    const open = (this.state().checkpoints || {})[sid];
+    const used = (readJson(path.join(this.guardDir, 'used-checkpoints.json')) || {})[sid];
+    if (!open || !used) return open || used;
+    return Number(open.at || 0) >= Number(used.at || 0) ? open : used;
+  }
+
   stateAnswer(out) {
     const line = String(out || '').split('\n').filter(Boolean).pop();
     try {

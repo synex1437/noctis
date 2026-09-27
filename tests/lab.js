@@ -233,7 +233,7 @@ async function scenarioInHookWait(acc) {
   check('wait cleared after hook', acc.state().waits.s1 === undefined, true);
   await sleep(300);
   check('watchdog cancelled', isAlive(watchdogPid), false);
-  check('checkpoint consumed', acc.state().checkpoints.s1.consumed, true);
+  check('checkpoint consumed', (acc.checkpoint('s1') || {}).consumed, true);
 }
 
 async function scenarioWorkspaceGuard(acc) {
@@ -312,7 +312,7 @@ async function scenarioWorkspaceGuard(acc) {
   check('git snapshot: one hidden ref per checkpoint', refs.length, 1);
   const [ref, hash] = (refs[0] || ' ').split(' ');
   check('git snapshot: captures the uncommitted change without touching the tree', git('show', `${hash}:a.txt`).stdout === 'snapshot me\n' && git('status', '--short').stdout.trim() === 'M a.txt', true);
-  const checkpointText = fs.readFileSync(acc.state().checkpoints.gs1.path, 'utf8');
+  const checkpointText = fs.readFileSync(acc.checkpoint('gs1').path, 'utf8');
   check('git snapshot: checkpoint tells how to restore', checkpointText.includes(ref) && checkpointText.includes(`git stash apply ${hash}`), true);
   acc.run(['cancel', 'gs1']);
   acc.editState((aged) => {
@@ -757,7 +757,7 @@ async function scenarioFoundation(acc) {
   });
   const startup = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'boot3', cwd: PROJECT_DIR });
   check('orphan checkpoint injected as context', startup.includes('additionalContext') && startup.includes('devam notu'), true);
-  check('orphan checkpoint consumed', acc.state().checkpoints.orphan.consumed, true);
+  check('orphan checkpoint consumed', (acc.checkpoint('orphan') || {}).consumed, true);
 }
 
 async function scenarioCompactAndClear(acc) {
@@ -778,7 +778,7 @@ async function scenarioCompactAndClear(acc) {
   ].join('\n'));
   acc.statusline('cmp', 'claude-opus-5', 93, now + 2 * 86400, 10, now + 3 * 86400, 30);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'cmp', cwd: PROJECT_DIR, transcript_path: compactTranscript });
-  const checkpoint = fs.readFileSync(acc.state().checkpoints.cmp.path, 'utf8');
+  const checkpoint = fs.readFileSync(acc.checkpoint('cmp').path, 'utf8');
   check('checkpoint keeps real last request after compaction', checkpoint.includes('## Son istek\nImplement the payment webhook handler'), true);
   check('checkpoint carries compact summary section', checkpoint.includes('## Bağlam özeti (sıkıştırma)'), true);
   acc.run(['cancel', 'cmp']);
@@ -862,7 +862,7 @@ async function scenarioQueueMode(acc) {
   check('task events tracked', Object.values(acc.state().tasks.q1.items).filter((task) => task.status === 'open').length, 1);
   acc.statusline('q1', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'q1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
-  const checkpoint = fs.readFileSync(acc.state().checkpoints.q1.path, 'utf8');
+  const checkpoint = fs.readFileSync(acc.checkpoint('q1').path, 'utf8');
   check('checkpoint lists queue items', checkpoint.includes('## Sıradaki işler (TASKS.md: 4 açık)') && checkpoint.includes('- [ ] Retry failed uploads with backoff') && checkpoint.includes('rollout notes'), true);
   check('checkpoint lists open tracked tasks', checkpoint.includes('## Açık görevler (Claude Code)') && checkpoint.includes('Retry failed uploads') && !checkpoint.includes('- Guide draft'), true);
   resetCalls();
@@ -979,7 +979,7 @@ async function scenarioSmartDecisions(accA) {
   fs.writeFileSync(path.join(PROJECT_DIR, 'dirty.js'), 'x');
   accA.statusline('sd4', 'claude-opus-5', 93, now + 2 * 86400, 10, now + 3 * 86400);
   accA.hook({ hook_event_name: 'PostToolBatch', session_id: 'sd4', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
-  const checkpoint = fs.readFileSync(accA.state().checkpoints.sd4.path, 'utf8');
+  const checkpoint = fs.readFileSync(accA.checkpoint('sd4').path, 'utf8');
   check('checkpoint includes git status', checkpoint.includes('## Git durumu') && checkpoint.includes('dirty.js'), true);
   accA.run(['cancel']);
   fs.rmSync(path.join(PROJECT_DIR, '.git'), { recursive: true, force: true });
@@ -1757,7 +1757,7 @@ async function scenarioQueuePriorities(acc) {
   check('queue: blocked items are counted and mentioned', firstReason.includes('2 item(s) wait on unfinished dependencies'), true);
   acc.statusline('qp1', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400, 30);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'qp1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
-  const checkpoint = fs.readFileSync(acc.state().checkpoints.qp1.path, 'utf8');
+  const checkpoint = fs.readFileSync(acc.checkpoint('qp1').path, 'utf8');
   check('queue: checkpoint lists eligible items in priority order', checkpoint.indexOf('(P0) fix login bug') < checkpoint.indexOf('(P3) write docs') && checkpoint.indexOf('(P3) write docs') < checkpoint.indexOf('(P9) cleanup') && !checkpoint.includes('migrate users'), true);
   acc.run(['cancel', 'qp1']);
   acc.statusline('qp1', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
@@ -1792,7 +1792,7 @@ async function scenarioQueuePriorities(acc) {
   check('queue: a multi-line item is one item and P1 comes first', sloppy.includes('("bare box without a bullet (P1)")'), true);
   acc.statusline('qp2', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400, 30);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'qp2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
-  const sloppyCheckpoint = fs.readFileSync(acc.state().checkpoints.qp2.path, 'utf8');
+  const sloppyCheckpoint = fs.readFileSync(acc.checkpoint('qp2').path, 'utf8');
   check('queue: continuation lines joined into the item text', sloppyCheckpoint.includes('fix the login redirect that breaks when the session cookie is missing and the user comes from the mobile app'), true);
   acc.run(['cancel', 'qp2']);
   acc.statusline('qp2', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
@@ -1880,7 +1880,7 @@ async function scenarioWorkflows(acc) {
   check('workflow: launch allowed under the thresholds and recorded', launch === '' && acc.state().workflows.wf1.length === 1 && acc.state().workflows.wf1[0].name === 'audit-routes', true);
   acc.statusline('wf1', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400, 30);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'wf1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
-  const checkpoint = fs.readFileSync(acc.state().checkpoints.wf1.path, 'utf8');
+  const checkpoint = fs.readFileSync(acc.checkpoint('wf1').path, 'utf8');
   check('workflow: checkpoint names the run and says relaunch, never restart', checkpoint.includes('audit-routes') && checkpoint.includes('asla sıfırdan başlatma'), true);
   const denied = acc.hook({ hook_event_name: 'PreToolUse', session_id: 'wf1', cwd: PROJECT_DIR, tool_name: 'Workflow', tool_input: { name: 'audit-routes' } });
   check('workflow: launch denied at the pause threshold', denied.includes('"permissionDecision":"deny"') && denied.includes('pause threshold'), true);
@@ -3005,7 +3005,7 @@ async function scenarioHousekeeping(acc) {
   const large = Date.now() - started;
   check('large transcript checkpoint stop', out.includes('"continue":false'), true);
   results.push({ name: `large transcript checkpoint ${large}ms over ${baseline}ms baseline`, ok: large - baseline < 1500, actual: large - baseline, expected: '<1500ms over baseline' });
-  const checkpoint = fs.readFileSync(acc.state().checkpoints.s9.path, 'utf8');
+  const checkpoint = fs.readFileSync(acc.checkpoint('s9').path, 'utf8');
   check('checkpoint has todos', checkpoint.includes('- [ ] tests'), true);
   acc.run(['cancel']);
   writeTranscript();

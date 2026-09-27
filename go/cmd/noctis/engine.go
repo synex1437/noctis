@@ -1098,8 +1098,15 @@ func handOverCheckpoint(sid, receiver string) {
 	})
 }
 
-func checkpointHandedTo(state object, receiver, path string) bool {
-	for _, raw := range getMap(state, "checkpoints") {
+// checkpointHandedTo says whether the note at path was handed to receiver. Every note noctis
+// writes is in checkpoints/, so for any other file it looks at no record. A checkpoint handed on
+// is a used one, so after the state write that handed it on it is in used-checkpoints.json; a
+// newer checkpoint its session wrote to the same note since was not handed on.
+func checkpointHandedTo(receiver, path string) bool {
+	if filepath.Dir(path) != filepath.Clean(files.checkpoints) {
+		return false
+	}
+	for _, raw := range allCheckpoints(peekState()) {
 		if entry := toObject(raw); entry != nil && getString(entry, "handedTo") == receiver && getString(entry, "path") == path {
 			return true
 		}

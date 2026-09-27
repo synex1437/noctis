@@ -200,7 +200,7 @@ func writeBundle(cfg object) (string, error) {
 	if content, err := os.ReadFile(files.state); err == nil {
 		add("state.json", bundleState(content))
 	}
-	for _, file := range []struct{ name, path string }{{"usage.json", files.usage}, {"fable.json", files.fable}} {
+	for _, file := range []struct{ name, path string }{{"usage.json", files.usage}, {"fable.json", files.fable}, {"used-checkpoints.json", usedCheckpointsFile()}} {
 		if content, err := os.ReadFile(file.path); err == nil {
 			add(file.name, content)
 		}

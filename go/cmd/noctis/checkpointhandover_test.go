@@ -14,7 +14,7 @@ func handedCheckpointTo(t *testing.T, cfg object, project, sid, checkpoint strin
 }
 
 func checkpointSpent(sid string) bool {
-	return getBool(getMap(getMap(readState(), "checkpoints"), sid), "consumed", false)
+	return getBool(checkpointRecord(sid), "consumed", false)
 }
 
 func TestANewSessionIsNotHandedTheCheckpointOfASessionThatWillStillBeResumed(t *testing.T) {
