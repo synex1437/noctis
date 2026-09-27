@@ -906,12 +906,7 @@ func runSelftest() {
 			report(false, T("selftest.taskFailed", orDefault(scheduled.err, scheduled.stderr)))
 		} else {
 			fmt.Println(T("selftest.taskWaiting"))
-			sleepUntil(float64(nowSec()+60), nil)
-			fired := false
-			for i := 0; i < 12 && !fired; i++ {
-				sleepUntil(float64(nowSec()+5), nil)
-				fired = statSafe(marker) != nil
-			}
+			fired := awaitMarker(marker, 120*time.Second, 250*time.Millisecond)
 			removeScheduledTask("Noctis-selftest-" + token)
 			if fired {
 				_ = os.Remove(marker)
@@ -928,8 +923,7 @@ func runSelftest() {
 		report(true, T("selftest.wake", wakeText))
 	} else if !isWindows {
 		pid := detachedSelf([]string{"selftest-mark", "--token", token, "--account", files.configDir})
-		sleepUntil(float64(nowSec()+3), nil)
-		fired := statSafe(marker) != nil
+		fired := awaitMarker(marker, 3*time.Second, 20*time.Millisecond)
 		if fired {
 			_ = os.Remove(marker)
 		}
@@ -942,6 +936,18 @@ func runSelftest() {
 	}
 	fmt.Println(T("doctor.issuesFound", doctorIssues))
 	os.Exit(1)
+}
+
+// awaitMarker reports whether marker appears within limit, looking every poll.
+func awaitMarker(marker string, limit, poll time.Duration) bool {
+	for deadline := time.Now().Add(limit); ; time.Sleep(poll) {
+		if statSafe(marker) != nil {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+	}
 }
 
 type tokenBucket struct {
