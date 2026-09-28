@@ -464,7 +464,10 @@ class Account {
 
   run(args, input, extraEnv = {}) {
     const [binary, prefix] = this.engine();
+    const started = process.hrtime.bigint();
     const result = spawnSync(binary, [...prefix, ...args], { encoding: 'utf8', input: input ? JSON.stringify(input) : undefined, env: this.env(extraEnv), timeout: 120000 });
+    // What the host waits on: this process alone, not the lab's wait for its refresher below.
+    this.lastRunMs = Number(process.hrtime.bigint() - started) / 1e6;
     if (result.error) throw result.error;
     this.settleRefresh(args);
     return result.stdout.trim();

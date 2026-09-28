@@ -122,7 +122,7 @@ func TestPollingTheUsageEndpointDoesNotRetain(t *testing.T) {
 	t.Cleanup(server.Close)
 	t.Setenv("NOCTIS_USAGE_URL", server.URL)
 	growth(t, "fetchOauthUsage", 20, 400, func() {
-		result := fetchOauthUsage("token")
+		result := fetchOauthUsage("token", fetchTimeout)
 		if result.status != 200 {
 			t.Fatalf("the probe server answered %d (%s)", result.status, result.err)
 		}
