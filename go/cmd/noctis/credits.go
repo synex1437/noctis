@@ -73,7 +73,8 @@ func guardPaused(cfg, state object, now int64) bool {
 	}
 	usage := currentUsage(now)
 	if nearCeiling(cfg, usage) {
-		refreshFable(cfg, now, "paused-ceiling", edgePollSeconds(cfg, usage), false)
+		// Whether the pause still holds is decided on this answer, so a hook waits for it.
+		refreshFableWaiting(cfg, now, "paused-ceiling", edgePollSeconds(cfg, usage), false, refreshWait)
 		usage = currentUsage(now)
 	}
 	if ceilingHit(cfg, usage) != nil {
