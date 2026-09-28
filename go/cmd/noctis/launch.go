@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	"os"
 	"os/exec"
@@ -26,6 +28,23 @@ var (
 func launchFiles(sid string) (spec, started, pidFile string) {
 	base := filepath.Join(files.launches, safeName(sid)+"."+strconv.Itoa(os.Getpid()))
 	return base + ".json", base + ".started", base + ".pid"
+}
+
+// consoleLaunchFiles are the files of the console window that stands in for a Windows Terminal tab
+// that did not start: apart from the tab's, so a tab that starts after all can neither read the
+// console's spec nor write the pid the runner follows.
+func consoleLaunchFiles(sid string) (spec, started, pidFile string) {
+	spec, started, pidFile = launchFiles(sid)
+	for _, file := range []*string{&spec, &started, &pidFile} {
+		extension := filepath.Ext(*file)
+		*file = strings.TrimSuffix(*file, extension) + ".console" + extension
+	}
+	return spec, started, pidFile
+}
+
+// takenSpec is where launch.ps1 moves the spec before it reads it (see launchInWindowsTerminal).
+func takenSpec(spec string) string {
+	return strings.TrimSuffix(spec, ".json") + ".taken.json"
 }
 
 func readPidFile(path string) int {
@@ -239,25 +258,31 @@ func launchInWindowsTerminal(cfg object, launch launchSpec, claudePath string, c
 		return false
 	}
 	ensureDir(files.launches)
-	spec, started, pidFile := launchFiles(launch.sid)
-	_ = os.Remove(started)
-	_ = os.Remove(pidFile)
 	quoted := []string{}
 	for _, arg := range claudeArgs {
 		quoted = append(quoted, windowsQuote(arg))
 	}
 	title := pluginName + " · " + filepath.Base(launch.cwd)
-	mustWriteJSON(spec, object{"claude": claudePath, "cwd": launch.cwd, "configDir": launch.configDir, "sessionId": launch.sid, "effort": effort, "arguments": strings.Join(quoted, " "), "title": title})
+	details := object{"claude": claudePath, "cwd": launch.cwd, "configDir": launch.configDir, "sessionId": launch.sid, "effort": effort, "arguments": strings.Join(quoted, " "), "title": title}
+	written := []string{}
 	defer func() {
-		for _, file := range []string{spec, started, pidFile} {
+		for _, file := range written {
 			_ = os.Remove(file)
 		}
 	}()
-	scriptArgs := []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", files.launchScript, "-Spec", spec}
+	writeSpec := func(spec, started, pidFile string) []string {
+		for _, file := range []string{started, pidFile, takenSpec(spec)} {
+			_ = os.Remove(file)
+		}
+		mustWriteJSON(spec, details)
+		written = append(written, spec, takenSpec(spec), started, pidFile)
+		return []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", files.launchScript, "-Spec", spec}
+	}
 	preference := terminalPreference(cfg)
 	if preference != "console" {
 		if wt := locateExecutable("wt"); wt != "" {
-
+			spec, started, pidFile := launchFiles(launch.sid)
+			scriptArgs := writeSpec(spec, started, pidFile)
 			wtEscape := func(value string) string { return strings.ReplaceAll(value, ";", `\;`) }
 			tab := exec.Command(wt, append([]string{"-w", "0", "new-tab", "-d", wtEscape(launch.cwd), "--title", wtEscape(title), "powershell.exe"}, append(scriptArgs, "-Attached")...)...)
 			tab.Env = env
@@ -265,10 +290,22 @@ func launchInWindowsTerminal(cfg object, launch launchSpec, claudePath string, c
 				logInfo("session %s opened in a Windows Terminal tab", launch.sid)
 				return waitForLaunchedSession(launch.running(), pidFile, "tab")
 			}
+			// The tab may still start. Its launcher takes the spec before anything else, so removing
+			// the spec either leaves a late tab nothing to launch or shows that the tab took it and is
+			// starting after all: only one of the two gets the file.
+			err := os.Remove(spec)
+			if errors.Is(err, fs.ErrNotExist) {
+				logInfo("session %s opened in a Windows Terminal tab that was slow to start", launch.sid)
+				return waitForLaunchedSession(launch.running(), pidFile, "tab")
+			}
+			if err != nil {
+				warn("the launch file of the Windows Terminal tab for %s stays (%v); a tab that starts late could open the session again", launch.sid, err)
+			}
 			warn("Windows Terminal did not start the launcher; opening a console window instead")
 		}
 	}
-	command := exec.Command("powershell.exe", scriptArgs...)
+	spec, started, pidFile := consoleLaunchFiles(launch.sid)
+	command := exec.Command("powershell.exe", writeSpec(spec, started, pidFile)...)
 	command.Env = env
 	if logFile, err := os.OpenFile(files.resumeLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
 		defer logFile.Close()
