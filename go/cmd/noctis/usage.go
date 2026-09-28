@@ -251,8 +251,34 @@ func readUsageRepaired(guardDir string) object {
 	if primary.ok && (primary.data != nil || !primary.exists) {
 		return primary.data
 	}
+	// usage.json is restored from the backup, or removed, only under usage.lock and only if it is
+	// still unusable when read again there: the status line may just have written a new one. A file
+	// that could not be opened is left alone, and so is one whose lock is held; the backup's data
+	// stands in for it.
+	locked := false
+	if !primary.unopened {
+		var release func()
+		if release, locked = tryFileLock(filepath.Join(guardDir, "usage.lock")); locked {
+			defer release()
+			if primary = readJSONStrict(file); primary.ok && (primary.data != nil || !primary.exists) {
+				return primary.data
+			}
+		}
+	}
 	backupFile := file + ".bak"
 	backup := readJSONStrict(backupFile)
+	if !locked || primary.unopened {
+		why := "usage.lock could not be taken"
+		if primary.unopened {
+			why = "it could not be opened"
+		}
+		if backup.ok && backup.exists && backup.data != nil {
+			warn("usage.json unusable (%s); recovered from backup for this read, and left alone as %s", primary.err, why)
+			return backup.data
+		}
+		warn("usage.json unusable (%s) and no backup was usable; left alone as %s", primary.err, why)
+		return nil
+	}
 	if backup.ok && backup.exists && backup.data != nil {
 		if err := writeJSONAtomic(file, backup.data); err == nil {
 			warn("usage.json was corrupt (%s); restored from the backup", primary.err)

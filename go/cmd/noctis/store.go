@@ -1129,8 +1129,17 @@ func stateProblem(result strictRead) string {
 }
 
 // readStoredState lends the kept parse of state.json: readStateWithBytes copies it, peekState does
-// not.
+// not. It is for a reader that does not hold state.lock.
 func readStoredState() (object, []byte) {
+	return readStoredStateHolding(false)
+}
+
+// readStoredStateHolding restores a state.json that stays unusable from the backup, or clears it,
+// only under state.lock, since a writer holding the lock may just have written a fresh state.
+// holding says the caller holds it (updateState does); any other reader takes it only if it is free
+// at once, and reads the file again first. A reader that cannot take it gets the backup's data and
+// leaves the file to the lock's holder, which writes it.
+func readStoredStateHolding(holding bool) (object, []byte) {
 	primary := readJSONShared(files.state)
 	if primary.ok && !primary.exists {
 		return object{}, nil
@@ -1146,11 +1155,22 @@ func readStoredState() (object, []byte) {
 	if primary.ok && primary.data != nil {
 		return primary.data, primary.raw
 	}
+	locked := holding
+	if !holding && !primary.unopened {
+		var release func()
+		if release, locked = tryFileLock(files.stateLock); locked {
+			defer release()
+			if primary = readJSONShared(files.state); primary.ok && primary.data != nil {
+				return primary.data, primary.raw
+			}
+		}
+	}
 
 	backup := readJSONStrict(files.stateBackup)
 	if !primary.unopened && backup.ok && backup.data != nil && backup.exists {
-
-		if err := writeEncodedAtomic(files.state, marshalState(backup.data)); err != nil {
+		if !locked {
+			warn("state.json unusable (%s); recovered from backup for this read, and left alone as state.lock could not be taken", stateProblem(primary))
+		} else if err := writeEncodedAtomic(files.state, marshalState(backup.data)); err != nil {
 			warn("state.json unusable (%s); recovered from backup but could not rewrite it: %v", stateProblem(primary), err)
 		} else {
 			warn("state.json unusable (%s); restored from the backup", stateProblem(primary))
@@ -1161,7 +1181,9 @@ func readStoredState() (object, []byte) {
 		fail("state.json could not be opened (%s); leaving it alone", stateProblem(primary))
 		return nil, nil
 	}
-	if err := os.Remove(files.state); err == nil {
+	if !locked {
+		fail("state.json unusable and no usable backup (%s); starting empty for this read, and left alone as state.lock could not be taken", stateProblem(primary))
+	} else if err := os.Remove(files.state); err == nil {
 		fail("state.json unusable and no usable backup (%s); cleared, starting empty", stateProblem(primary))
 	} else {
 		fail("state.json unusable and no usable backup (%s); starting empty", stateProblem(primary))
@@ -1170,15 +1192,15 @@ func readStoredState() (object, []byte) {
 }
 
 func readState() object {
-	state, _ := readStateWithBytes()
+	state, _ := readStateWithBytes(false)
 	if state == nil {
 		return emptyState()
 	}
 	return state
 }
 
-func readStateWithBytes() (object, []byte) {
-	stored, raw := readStoredState()
+func readStateWithBytes(holding bool) (object, []byte) {
+	stored, raw := readStoredStateHolding(holding)
 	if stored == nil {
 		return nil, nil
 	}
@@ -1632,7 +1654,7 @@ func keepUsedCheckpoints(used object, now int64, inUse map[string]bool) (float64
 func updateState(mutator func(state object)) object {
 	var result object
 	withFileLock(files.stateLock, func() {
-		state, before := readStateWithBytes()
+		state, before := readStateWithBytes(true)
 		if state == nil {
 			fail("state.json could not be read; not written")
 			result = emptyState()

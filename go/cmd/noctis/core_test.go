@@ -256,6 +256,7 @@ func TestReadStoredStateRecovery(t *testing.T) {
 	files.guardDir = dir
 	files.state = filepath.Join(dir, "state.json")
 	files.stateBackup = filepath.Join(dir, "state.json.bak")
+	files.stateLock = filepath.Join(dir, "state.lock")
 	files.log, files.errors = filepath.Join(dir, "guard.log"), filepath.Join(dir, "errors.log")
 	good := object{"waits": object{"s1": object{"resumeAt": float64(123)}}}
 	if err := writeJSONAtomic(files.stateBackup, good); err != nil {
