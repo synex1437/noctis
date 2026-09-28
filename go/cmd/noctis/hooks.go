@@ -1451,6 +1451,19 @@ func openItemsDigest(view queueView) string {
 	return queueItemDigest(fmt.Sprintf("%d open: %s", view.total, strings.Join(view.items, "\n")))
 }
 
+// openEntriesDigest names every open item of a queue in full, blocked ones
+// included.
+func openEntriesDigest(content string) string {
+	entries, _ := parseQueueEntries(content)
+	open := []string{}
+	for _, entry := range entries {
+		if !entry.checked && entry.text != "" {
+			open = append(open, entry.text)
+		}
+	}
+	return queueItemDigest(strings.Join(open, "\n"))
+}
+
 func completionPromised(cfg object, transcriptPath string) bool {
 	promise := strings.TrimSpace(getString(section(cfg, "queue"), "completionPromise"))
 	if promise == "" || transcriptPath == "" {
@@ -1586,8 +1599,19 @@ func onStop(input, cfg object) {
 	}
 	if len(snapshot.items) == 0 && snapshot.blocked > 0 {
 
-		updateState(func(next object) { delete(stateMap(next, "stopGuard"), sid) })
+		// Every open item is blocked here: the user hears of these items once, as of a queue that
+		// stopped progressing.
+		blockedKey := fmt.Sprintf("blocked:%s:%s:%s", sid, queuePath, openEntriesDigest(content))
+		alreadyTold := getMap(state, "notified")[blockedKey] != nil
+		updateState(func(next object) {
+			delete(stateMap(next, "stopGuard"), sid)
+			stateMap(next, "notified")[blockedKey] = float64(now)
+		})
 		journal(sid, "Stop", "allow-stop", "queue blocked", object{"open": snapshot.total, "blocked": snapshot.blocked})
+		if alreadyTold {
+			logInfo("queue still blocked for %s: %d open items all wait on unfinished dependencies; stop allowed", sid, snapshot.blocked)
+			return
+		}
 		fail("queue blocked for %s: %d open items all wait on unfinished dependencies; stop allowed", sid, snapshot.blocked)
 		if observing {
 			return
