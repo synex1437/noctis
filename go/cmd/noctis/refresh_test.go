@@ -193,6 +193,50 @@ func TestAHookWithNoReadingDecidesOnTheAnswerWhenTheEndpointIsQuick(t *testing.T
 	}
 }
 
+func TestAHookThatWaitsForTheAnswerAsksTheEndpointItselfAndStartsNoRefresher(t *testing.T) {
+	lab := newRefreshLab(t, false)
+
+	lab.prompt("asks")
+
+	log, _ := os.ReadFile(files.log)
+	if !strings.Contains(string(log), " hook] fable refresh ok") {
+		t.Errorf("with no reading and an endpoint that answers at once, the answer was not fetched by the hook itself:\n%s", log)
+	}
+	if strings.Contains(string(log), " refresh] ") {
+		t.Errorf("the hook got its answer in time, yet a refresher ran:\n%s", log)
+	}
+	if got := lab.hits.Load(); got != 1 {
+		t.Errorf("the endpoint was asked %d time(s), want once", got)
+	}
+}
+
+func TestAHookWhoseOwnAskRunsOutWritesNoFailureAndARefresherAsksAgain(t *testing.T) {
+	lab := newRefreshLab(t, true)
+	lab.idle()
+	if err := os.Remove(files.fable); err != nil {
+		t.Fatal(err)
+	}
+
+	lab.prompt("runs-out")
+
+	if fable := readJSON(files.fable); fable != nil {
+		t.Errorf("the endpoint had only the hook's bound to answer and did not, yet fable.json holds %v: a slow endpoint was taken for a failed one", fable)
+	}
+	if _, err := os.Stat(files.fableLock); err != nil {
+		t.Errorf("right after the hook, no refresher holds fable.lock (%v): the fetch was dropped", err)
+	}
+	lab.release()
+	if !lab.settle(8 * time.Second) {
+		t.Fatal("the refresher never let fable.lock go")
+	}
+	if used := numberOr(getMap(readJSON(files.fable), "five_hour"), "used", 0); used != 37 {
+		t.Errorf("after the refresher, fable.json holds a 5-hour reading of %v %%, want the endpoint's 37", used)
+	}
+	if got := lab.hits.Load(); got != 2 {
+		t.Errorf("the endpoint was asked %d time(s), want twice: once by the hook, once by its refresher", got)
+	}
+}
+
 func TestAHookNearAnEdgeDecidesOnTheAnswerItWaitedFor(t *testing.T) {
 	lab := newRefreshLab(t, true)
 	// 86 % is inside the band below the default 92 % pause point, where a reading older than two
