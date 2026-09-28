@@ -295,6 +295,7 @@
   "install.enginePath": "   hooks.json のエンジンパス: %s",
   "install.chained": "   既存の statusLine を連結しました: %s",
   "install.settings": "   settings.json を更新しました%s: statusLine、env.CLAUDE_CODE_EFFORT_LEVEL=%s、model=%s",
+  "install.settingsNoEffort": "   settings.json を更新しました%s: statusLine、model=%s。コードのロールには effort レベルがないため、setup は何も書き込みません（env.CLAUDE_CODE_EFFORT_LEVEL: %s）",
   "install.permissions": "   permissions.defaultMode=%s（セットアップ前: %s。noctis setup --permissions %s で元に戻せます）",
   "install.permissionsUnset": "   permissions.defaultMode=%s（セットアップ前は未設定でした。元に戻すには settings.json から削除してください）",
   "install.permissionsSame": "   permissions.defaultMode=%s（セットアップ前と同じです）",

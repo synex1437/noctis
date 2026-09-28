@@ -298,6 +298,7 @@
   "install.enginePath": "   hooks.json motor yolu: %s",
   "install.chained": "   mevcut statusLine zincire alındı: %s",
   "install.settings": "   settings.json güncellendi%s: statusLine, env.CLAUDE_CODE_EFFORT_LEVEL=%s, model=%s",
+  "install.settingsNoEffort": "   settings.json güncellendi%s: statusLine, model=%s; kod rolünün effort seviyesi yok, bu yüzden setup seviye yazmadı (env.CLAUDE_CODE_EFFORT_LEVEL: %s)",
   "install.permissions": "   permissions.defaultMode=%s (setup öncesinde: %s; noctis setup --permissions %s bunu geri getirir)",
   "install.permissionsUnset": "   permissions.defaultMode=%s (setup öncesinde ayarlı değildi; geri dönmek için settings.json içinden silin)",
   "install.permissionsSame": "   permissions.defaultMode=%s (setup öncesindeki gibi)",

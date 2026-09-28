@@ -87,7 +87,7 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	if currentHost().id == "claude" {
 		lines = append(lines, leanStatusLines(cfg)...)
 	}
-	modelLine := T("status.model", orDefault(settingsModel(), T("status.modelNone")), getString(models, "primary"), getString(models, "fallback"), getString(models, "effort"))
+	modelLine := T("status.model", orDefault(settingsModel(), T("status.modelNone")), getString(models, "primary"), getString(models, "fallback"), orDefault(getString(models, "effort"), T("status.modelNone")))
 	if switched := getMap(state, "modelSwitched"); switched != nil {
 		modelLine += T("status.switched", formatTime(numberOr(switched, "at", 0)))
 	}
@@ -569,10 +569,11 @@ func doctorLines(cfg object) []string {
 	effort := getString(getMap(settings.data, "env"), "CLAUDE_CODE_EFFORT_LEVEL")
 	wantEffort := getString(section(cfg, "models"), "effort")
 	effortText := T("doctor.effort", orDefault(effort, T("doctor.none")))
-	if effort != wantEffort {
+	effortOK := effort == wantEffort || wantEffort == ""
+	if !effortOK {
 		effortText = T("doctor.effortMismatch", orDefault(effort, T("doctor.none")), orDefault(wantEffort, T("doctor.none")))
 	}
-	lines = append(lines, fixLine(effort == wantEffort, effortText, "doctor.fixEffort", orDefault(wantEffort, T("doctor.none")))...)
+	lines = append(lines, fixLine(effortOK, effortText, "doctor.fixEffort", orDefault(wantEffort, T("doctor.none")))...)
 	lines = append(lines, fixLine(getString(settings.data, "model") != "", T("doctor.model", orDefault(getString(settings.data, "model"), T("doctor.none"))), "doctor.fixSetup")...)
 	if profile := retunedProfile(section(cfg, "roles")); profile != "" {
 		lines = append(lines, checkLine(false, retunedNotice(profile)))

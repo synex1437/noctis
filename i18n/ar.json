@@ -295,6 +295,7 @@
   "install.enginePath": "   مسار المحرك في hooks.json: %s",
   "install.chained": "   وُصل سطر الحالة الموجود بسلسلة: %s",
   "install.settings": "   حُدِّث settings.json%s: statusLine، env.CLAUDE_CODE_EFFORT_LEVEL=%s، model=%s",
+  "install.settingsNoEffort": "   حُدِّث settings.json%s: statusLine، model=%s؛ لا مستوى effort لدور البرمجة، لذا لا يكتب setup أي مستوى (env.CLAUDE_CODE_EFFORT_LEVEL: %s)",
   "install.permissions": "   permissions.defaultMode=%s (قبل الإعداد: %s؛ ‎noctis setup --permissions %s‎ يعيده)",
   "install.permissionsUnset": "   permissions.defaultMode=%s (لم يكن مضبوطًا قبل الإعداد؛ للعودة احذفه من settings.json)",
   "install.permissionsSame": "   permissions.defaultMode=%s (كما كان قبل الإعداد)",

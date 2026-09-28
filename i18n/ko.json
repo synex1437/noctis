@@ -295,6 +295,7 @@
   "install.enginePath": "   hooks.json의 엔진 경로: %s",
   "install.chained": "   기존 statusLine을 이어 붙였습니다: %s",
   "install.settings": "   settings.json 업데이트됨%s: statusLine, env.CLAUDE_CODE_EFFORT_LEVEL=%s, model=%s",
+  "install.settingsNoEffort": "   settings.json 업데이트됨%s: statusLine, model=%s; 코드 역할에 effort 단계가 없어 setup은 아무 단계도 기록하지 않습니다 (env.CLAUDE_CODE_EFFORT_LEVEL: %s)",
   "install.permissions": "   permissions.defaultMode=%s(설치 전: %s. 되돌리려면 noctis setup --permissions %s)",
   "install.permissionsUnset": "   permissions.defaultMode=%s(설치 전에는 설정되어 있지 않았습니다. 되돌리려면 settings.json 에서 지우세요)",
   "install.permissionsSame": "   permissions.defaultMode=%s(설치 전과 같습니다)",

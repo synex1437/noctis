@@ -299,7 +299,7 @@ func applyRoles(configFile string, config object, roles object) {
 	models := section(config, "models")
 	if code := getMap(roles, "code"); code != nil {
 		models["primary"] = orDefault(getString(code, "model"), getString(models, "primary"))
-		models["effort"] = orDefault(getString(code, "effort"), getString(models, "effort"))
+		models["effort"] = appliedEffort("code", code)
 	}
 	if fallback := getMap(roles, "fallback"); fallback != nil {
 		models["fallback"] = orDefault(getString(fallback, "model"), getString(models, "fallback"))

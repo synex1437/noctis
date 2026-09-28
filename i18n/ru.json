@@ -295,6 +295,7 @@
   "install.enginePath": "   путь движка в hooks.json: %s",
   "install.chained": "   существующий statusLine включён в цепочку: %s",
   "install.settings": "   settings.json обновлён%s: statusLine, env.CLAUDE_CODE_EFFORT_LEVEL=%s, model=%s",
+  "install.settingsNoEffort": "   settings.json обновлён%s: statusLine, model=%s; у роли кода нет уровня effort, поэтому setup его не записывает (env.CLAUDE_CODE_EFFORT_LEVEL: %s)",
   "install.permissions": "   permissions.defaultMode=%s (до настройки: %s; noctis setup --permissions %s вернёт его)",
   "install.permissionsUnset": "   permissions.defaultMode=%s (до настройки не был задан; чтобы вернуть как было, удали его из settings.json)",
   "install.permissionsSame": "   permissions.defaultMode=%s (как до настройки)",

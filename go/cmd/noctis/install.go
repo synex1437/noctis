@@ -612,16 +612,26 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		chained = previous
 	}
 	data["statusLine"] = statusLineOver(getMap(data, "statusLine"), binary)
-	effort := orDefault(getString(section(config, "models"), "effort"), getString(section(defaults, "models"), "effort"))
+	effort, chosen := section(config, "models")["effort"].(string)
+	if !chosen {
+		effort = getString(section(defaults, "models"), "effort")
+	}
 	env := getMap(data, "env")
 	if env == nil {
 		env = object{}
 	}
 	effortRecord := getMap(config, "managedEffort")
-	config["managedEffort"] = object{"previous": valueSetupFound(env, "CLAUDE_CODE_EFFORT_LEVEL", effortRecord["previous"], effortRecord != nil), "set": effort}
-	env["CLAUDE_CODE_EFFORT_LEVEL"] = effort
+	if effort != "" {
+		config["managedEffort"] = object{"previous": valueSetupFound(env, "CLAUDE_CODE_EFFORT_LEVEL", effortRecord["previous"], effortRecord != nil), "set": effort}
+		env["CLAUDE_CODE_EFFORT_LEVEL"] = effort
+	} else {
+		takeBackEffort(env, effortRecord)
+		delete(config, "managedEffort")
+	}
 	leanNote := wireLeanSwitch(config, env)
-	data["env"] = env
+	if _, had := data["env"]; had || len(env) > 0 {
+		data["env"] = env
+	}
 	current := getString(data, "model")
 	managed := getMap(config, "managedModel")
 	ours := managed != nil && current != "" && current == getString(managed, "set")
@@ -697,9 +707,26 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	if backup != "" {
 		backupText = T("install.backup", filepath.Base(backup))
 	}
-	fmt.Println(T("install.settings", backupText, effort, getString(data, "model")))
+	if effort != "" {
+		fmt.Println(T("install.settings", backupText, effort, getString(data, "model")))
+	} else {
+		fmt.Println(T("install.settingsNoEffort", backupText, getString(data, "model"), orDefault(getString(env, "CLAUDE_CODE_EFFORT_LEVEL"), T("doctor.none"))))
+	}
 	fmt.Println(leanNote)
 	return nil
+}
+
+// takeBackEffort puts back the effort level found before the first setup when env still holds the one
+// setup wrote; a level changed since then is the user's and stays.
+func takeBackEffort(env, record object) {
+	switch {
+	case record == nil, getString(env, "CLAUDE_CODE_EFFORT_LEVEL") != getString(record, "set"):
+
+	case getString(record, "previous") != "":
+		env["CLAUDE_CODE_EFFORT_LEVEL"] = getString(record, "previous")
+	default:
+		delete(env, "CLAUDE_CODE_EFFORT_LEVEL")
+	}
 }
 
 func permissionChangeNote(mode string, before any) string {
@@ -933,15 +960,7 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 		}
 	}
 	if env := getMap(data, "env"); env != nil {
-		managedEffort := getMap(guardConfig, "managedEffort")
-		switch {
-		case managedEffort == nil, getString(env, "CLAUDE_CODE_EFFORT_LEVEL") != getString(managedEffort, "set"):
-
-		case getString(managedEffort, "previous") != "":
-			env["CLAUDE_CODE_EFFORT_LEVEL"] = getString(managedEffort, "previous")
-		default:
-			delete(env, "CLAUDE_CODE_EFFORT_LEVEL")
-		}
+		takeBackEffort(env, getMap(guardConfig, "managedEffort"))
 	}
 	if env := getMap(data, "env"); env != nil {
 		takeBackLeanSwitch(guardConfig, env)

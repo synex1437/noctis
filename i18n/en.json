@@ -298,6 +298,7 @@
   "install.enginePath": "   hooks.json engine path: %s",
   "install.chained": "   existing statusLine chained: %s",
   "install.settings": "   settings.json updated%s: statusLine, env.CLAUDE_CODE_EFFORT_LEVEL=%s, model=%s",
+  "install.settingsNoEffort": "   settings.json updated%s: statusLine, model=%s; the code role has no effort level, so setup writes none (env.CLAUDE_CODE_EFFORT_LEVEL: %s)",
   "install.permissions": "   permissions.defaultMode=%s (before setup: %s; noctis setup --permissions %s puts it back)",
   "install.permissionsUnset": "   permissions.defaultMode=%s (not set before setup; delete it from settings.json to go back)",
   "install.permissionsSame": "   permissions.defaultMode=%s (as it was before setup)",

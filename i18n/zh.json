@@ -295,6 +295,7 @@
   "install.enginePath": "   hooks.json 中的引擎路径：%s",
   "install.chained": "   已串接现有的 statusLine：%s",
   "install.settings": "   settings.json 已更新%s：statusLine、env.CLAUDE_CODE_EFFORT_LEVEL=%s、model=%s",
+  "install.settingsNoEffort": "   settings.json 已更新%s：statusLine、model=%s；写代码角色没有 effort 级别，因此 setup 不写入任何级别（env.CLAUDE_CODE_EFFORT_LEVEL：%s）",
   "install.permissions": "   permissions.defaultMode=%s（安装前：%s；noctis setup --permissions %s 可恢复）",
   "install.permissionsUnset": "   permissions.defaultMode=%s（安装前未设置；如需恢复，请从 settings.json 中删除它）",
   "install.permissionsSame": "   permissions.defaultMode=%s（与安装前相同）",

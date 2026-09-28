@@ -622,6 +622,9 @@ func launchClaude(cfg object, launch launchSpec) launchResult {
 	}
 	permissionMode := supportedPermissionMode(cfg, claudePath, launch.permissionMode)
 	effort := orDefault(launch.effort, getString(section(cfg, "models"), "effort"))
+	if !modelTakesEffort(launch.model) {
+		effort = ""
+	}
 	claudeArgs := hostLaunchArgs("claude", cfg, launch, effort, permissionMode)
 	env := relaunchEnv(launch, effort)
 	logInfo("launching claude (%s) model=%s mode=%s cwd=%s", mode, launch.model, permissionMode, launch.cwd)

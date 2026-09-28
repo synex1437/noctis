@@ -246,11 +246,14 @@ func withoutEnv(env []string, names ...string) []string {
 }
 
 func relaunchEnv(launch launchSpec, effort string) []string {
-	env := withoutEnv(os.Environ(), append([]string{claudeConfigEnv}, claudeSessionMarkers...)...)
+	env := withoutEnv(os.Environ(), append([]string{claudeConfigEnv, "CLAUDE_CODE_EFFORT_LEVEL"}, claudeSessionMarkers...)...)
 	if launch.configDir != "" {
 		env = append(env, claudeConfigEnv+"="+launch.configDir)
 	}
-	return append(env, "CLAUDE_CODE_EFFORT_LEVEL="+effort, handoffEnv+"="+launch.sid)
+	if effort != "" {
+		env = append(env, "CLAUDE_CODE_EFFORT_LEVEL="+effort)
+	}
+	return append(env, handoffEnv+"="+launch.sid)
 }
 
 func hostRelaunchEnv(host hostSpec, launch launchSpec) []string {
@@ -367,6 +370,10 @@ func unixLaunchScript(launch launchSpec, claudePath string, claudeArgs []string,
 	if launch.configDir != "" {
 		configLine = "export " + claudeConfigEnv + "=" + shellQuote(launch.configDir)
 	}
+	effortLine := "unset CLAUDE_CODE_EFFORT_LEVEL"
+	if effort != "" {
+		effortLine = "export CLAUDE_CODE_EFFORT_LEVEL=" + shellQuote(effort)
+	}
 	lines := []string{
 		"#!/bin/sh",
 		"unset " + strings.Join(claudeSessionMarkers, " "),
@@ -380,7 +387,7 @@ func unixLaunchScript(launch launchSpec, claudePath string, claudeArgs []string,
 		lines = append(lines, "export "+pair[0]+"="+shellQuote(pair[1]))
 	}
 	lines = append(lines,
-		"export CLAUDE_CODE_EFFORT_LEVEL="+shellQuote(effort),
+		effortLine,
 		"export "+handoffEnv+"="+shellQuote(launch.sid),
 		"cd "+shellQuote(launch.cwd)+" || exit 1",
 		"printf '%s' \"$$\" > "+shellQuote(pidFile),

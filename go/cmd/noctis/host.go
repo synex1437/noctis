@@ -749,7 +749,11 @@ func hostLaunchArgs(host string, cfg object, launch launchSpec, effort, permissi
 	if launch.fresh != "" {
 		session = []string{"--session-id", launch.fresh}
 	}
-	claudeArgs := append(append(session, "--model", launch.model, "--effort", effort, "--permission-mode", permissionMode), extra...)
+	claudeArgs := append(session, "--model", launch.model)
+	if effort != "" {
+		claudeArgs = append(claudeArgs, "--effort", effort)
+	}
+	claudeArgs = append(append(claudeArgs, "--permission-mode", permissionMode), extra...)
 	if getBool(resume, "remoteControl", false) {
 		claudeArgs = append(claudeArgs, "--remote-control")
 	}
