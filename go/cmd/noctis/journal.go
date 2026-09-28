@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -78,10 +79,12 @@ func whyLines(count int) []whyLine {
 	return merged
 }
 
+const whyMaxLast = 1e6
+
 func runWhy() {
 	count := 20
-	if value, ok := toNumber(flagString("last")); ok && value >= 1 {
-		count = int(value)
+	if value, ok := toNumber(flagString("last")); ok && value >= 1 && !math.IsInf(value, 1) {
+		count = int(math.Min(value, whyMaxLast))
 	}
 	lines := whyLines(count)
 	if len(lines) == 0 {

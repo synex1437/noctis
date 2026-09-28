@@ -30,7 +30,7 @@ func tailFileLines(file string, count int) []string {
 			lines = append(lines, line)
 		}
 	}
-	if len(lines) > count {
+	if count >= 0 && len(lines) > count {
 		lines = lines[len(lines)-count:]
 	}
 	return lines
