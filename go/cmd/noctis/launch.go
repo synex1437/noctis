@@ -278,13 +278,28 @@ func launchInWindowsTerminal(cfg object, launch launchSpec, claudePath string, c
 	return waitForLaunchedSession(launch.running(), pidFile, "window")
 }
 
-func waitForLaunchedSession(sid, pidFile, how string) bool {
-	if !waitForFile(pidFile, launchPidTimeout) {
-		warn("session %s: the launcher never reported a claude process; assuming it did not start", sid)
-		return false
+// launchedPid waits until the launcher has written its pid to pidFile and returns it, or 0 when it
+// has not within timeout. The launcher's shell creates the file before it writes the pid into it,
+// so a file that is there but holds no pid yet is waited on like a missing one: read as it stood,
+// it took a window that was starting for one that never would, and the session was launched a
+// second time headless.
+func launchedPid(pidFile string, timeout time.Duration) int {
+	deadline := time.Now().Add(timeout)
+	for {
+		if pid := readPidFile(pidFile); pid > 0 {
+			return pid
+		}
+		if time.Now().After(deadline) {
+			return 0
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	pid := readPidFile(pidFile)
+}
+
+func waitForLaunchedSession(sid, pidFile, how string) bool {
+	pid := launchedPid(pidFile, launchPidTimeout)
 	if pid <= 0 {
+		warn("session %s: the launcher never reported a claude process; assuming it did not start", sid)
 		return false
 	}
 	recordLaunch(sid, pid, how)
