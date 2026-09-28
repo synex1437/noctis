@@ -173,10 +173,15 @@ func looksLikeSessionProcess(pid int) bool {
 	return looksLikeSessionName(name)
 }
 
+// ownHelperProcess tells whether name, as processName gives it, is this program. On macOS that is the
+// full path `ps -o comm=` prints, which may hold spaces (~/Library/Application Support/…), so a path is
+// named by its last element as a whole; only a bare name is cut at its first space.
 func ownHelperProcess(name string) bool {
 	base := strings.ToLower(strings.TrimSpace(name))
-	if fields := strings.Fields(base); len(fields) > 0 {
-		base = fields[0]
+	if !strings.ContainsAny(base, "/"+string(filepath.Separator)) {
+		if fields := strings.Fields(base); len(fields) > 0 {
+			base = fields[0]
+		}
 	}
 	base = strings.TrimSuffix(filepath.Base(base), ".exe")
 	if base == pluginName {
