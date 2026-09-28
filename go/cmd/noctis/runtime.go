@@ -212,7 +212,7 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 		}
 		next["history"] = history
 		limits := getMap(input, "rate_limits")
-		offered, stored := 0, 0
+		offered, stored, outdated := 0, 0, 0
 		unusable := []string{}
 		for _, key := range []string{"five_hour", "seven_day"} {
 			win := getMap(limits, key)
@@ -230,8 +230,15 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 				unusable = append(unusable, fmt.Sprintf("%s used=%v resets_at=%v", key, rawUsed, win["resets_at"]))
 				continue
 			}
+			previousWin := getMap(previous, key)
+			if resetsAt <= float64(now) && numberOr(previousWin, "resetsAt", 0) > float64(now) {
+				// An idle session still shows a window that has reset since: the one stored is newer,
+				// and its samples stay in the history.
+				outdated++
+				continue
+			}
 			origin, reportedAt := reporter, float64(now)
-			if previousWin := getMap(previous, key); multiSessionMax && previousWin != nil && getString(previousWin, "sid") != "" && getString(previousWin, "sid") != reporter && numberOr(previousWin, "resetsAt", -1) == resetsAt && numberOr(previousWin, "used", 0) > used {
+			if multiSessionMax && previousWin != nil && getString(previousWin, "sid") != "" && getString(previousWin, "sid") != reporter && numberOr(previousWin, "resetsAt", -1) == resetsAt && numberOr(previousWin, "used", 0) > used {
 				used = numberOr(previousWin, "used", 0)
 				origin = getString(previousWin, "sid")
 				reportedAt = numberOr(previousWin, "at", 0)
@@ -243,7 +250,7 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 		if stored > 0 {
 			next["updatedAt"] = float64(now)
 		}
-		if unread := offered - stored; unread > 0 && float64(now)-numberOr(getMap(readState(), "notified"), "statuslineShape", 0) > 86400 {
+		if unread := offered - stored - outdated; unread > 0 && float64(now)-numberOr(getMap(readState(), "notified"), "statuslineShape", 0) > 86400 {
 			updateState(func(state object) { stateMap(state, "notified")["statuslineShape"] = float64(now) })
 			detail := ""
 			if len(unusable) > 0 {

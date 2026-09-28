@@ -286,7 +286,7 @@ func currentUsageIn(now int64, guardDir string) usageView {
 		useOauth := false
 		switch {
 		case fromStatus != nil && fromOauth != nil:
-			if oauthReadingWins(fromStatus, fromOauth, statusAt, fetchedAt) {
+			if oauthReadingWins(fromStatus, fromOauth, statusAt, fetchedAt, float64(now)+offset) {
 				raw, at, useOauth = fromOauth, fetchedAt, true
 			} else {
 				raw, at = fromStatus, statusAt
@@ -332,9 +332,15 @@ func currentUsageIn(now int64, guardDir string) usageView {
 	}
 }
 
-func oauthReadingWins(fromStatus, fromOauth object, usageAt, fetchedAt float64) bool {
+// oauthReadingWins chooses between the status line's and the usage endpoint's reading of one
+// window: the one whose window has not reset by liveAfter, then the higher of two readings of the
+// same window, then the newer.
+func oauthReadingWins(fromStatus, fromOauth object, usageAt, fetchedAt, liveAfter float64) bool {
 	statusUsed, statusReset, statusOk := storedWindow(fromStatus)
 	oauthUsed, oauthReset, oauthOk := storedWindow(fromOauth)
+	if statusLive, oauthLive := statusOk && statusReset > liveAfter, oauthOk && oauthReset > liveAfter; statusLive != oauthLive {
+		return oauthLive
+	}
 	if statusOk && oauthOk && math.Abs(statusReset-oauthReset) <= sameWindowSeconds && statusUsed != oauthUsed {
 		return oauthUsed > statusUsed
 	}
