@@ -45,6 +45,12 @@ function check(name, actual, expected) {
   if (!ok) process.stdout.write(`  FAIL ${name}: got ${JSON.stringify(actual)} expected ${JSON.stringify(expected)}\n`);
 }
 
+// The engine's errors.log, or '' while it has logged nothing: a run of a few scenarios may not have.
+function guardErrors(acc) {
+  const file = path.join(acc.guardDir, 'errors.log');
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+}
+
 function writeTranscript(extraBytes = 0) {
   lab.writeTranscript(extraBytes);
 }
@@ -988,11 +994,11 @@ async function scenarioUptime(acc) {
     dead.lastHookAt = now - 4000;
     delete dead.notified.hooksDead;
   });
-  const errorsBefore = fs.readFileSync(path.join(acc.guardDir, 'errors.log'), 'utf8').split('\n').filter((line) => line.includes('hooks appear inactive')).length;
+  const errorsBefore = guardErrors(acc).split('\n').filter((line) => line.includes('hooks appear inactive')).length;
   const line = acc.statusline('seen', 'claude-opus-5', 20, now + 7200, 10, now + 3 * 86400);
   check('dead hooks flagged in status bar', line.includes('⚠ hook yok'), true);
   acc.statusline('seen', 'claude-opus-5', 20, now + 7200, 10, now + 3 * 86400);
-  const errorsAfter = fs.readFileSync(path.join(acc.guardDir, 'errors.log'), 'utf8').split('\n').filter((line) => line.includes('hooks appear inactive')).length;
+  const errorsAfter = guardErrors(acc).split('\n').filter((line) => line.includes('hooks appear inactive')).length;
   check('dead-hook error logged once', errorsAfter - errorsBefore, 1);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'seen', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('hook pulse clears the alert', acc.statusline('seen', 'claude-opus-5', 20, now + 7200, 10, now + 3 * 86400).includes('⚠ hook yok'), false);
@@ -1299,6 +1305,13 @@ async function scenarioMultiSessionAndScoped(acc) {
   acc.setConfig((config) => {
     config.usage.multiSessionMax = true;
   });
+  // The maximum is taken among this scenario's sessions: a higher weekly reading that another session
+  // stored in an earlier scenario for the same reset second would rightly be kept instead.
+  const usageFile = path.join(acc.guardDir, 'usage.json');
+  const stored = readJson(usageFile) || {};
+  delete stored.five_hour;
+  delete stored.seven_day;
+  writeJson(usageFile, stored);
   const reset = now + 5000;
   acc.statusline('ms-a', 'claude-fable-5-1', 80, reset, 20, now + 3 * 86400);
   acc.statusline('ms-b', 'claude-fable-5-1', 60, reset, 12, now + 3 * 86400);
@@ -1559,7 +1572,7 @@ async function scenarioMarketplaceBootstrap(acc) {
   const untouchedBytes = fs.readFileSync(shipped);
   const untouchedMtime = fs.statSync(shipped).mtimeMs;
   const tampered = spawnSync(shipped, ['ensure'], { encoding: 'utf8', env });
-  const tamperedLog = `${tampered.stdout}${tampered.stderr}${fs.existsSync(path.join(acc.guardDir, 'errors.log')) ? fs.readFileSync(path.join(acc.guardDir, 'errors.log'), 'utf8') : ''}`;
+  const tamperedLog = `${tampered.stdout}${tampered.stderr}${guardErrors(acc)}`;
   check('ensure refuses a binary that fails the SHA256SUMS check', fs.readFileSync(shipped).equals(untouchedBytes) && fs.statSync(shipped).mtimeMs === untouchedMtime && /SHA256SUMS/.test(tamperedLog), true);
   const crypto = require('crypto');
   fs.writeFileSync(sums, `${crypto.createHash('sha256').update(fs.readFileSync(platformBinary)).digest('hex')}  ${platform}/${path.basename(acc.engine()[0])}\n`);
@@ -2957,7 +2970,7 @@ async function scenarioSilentFailures(acc) {
   fs.rmSync(lockFile, { force: true });
   check('a wait that cannot be stored does not pause the session', refused.includes('could not save the pause') || refused.includes('duraklatma kaydedilemedi'), true);
   check('and no half-written wait is left behind', acc.state().waits.sf2, undefined);
-  const errors = fs.readFileSync(path.join(acc.guardDir, 'errors.log'), 'utf8');
+  const errors = guardErrors(acc);
   check('the refusal is in errors.log, not a silent unlocked write', /is held by another process/.test(errors), true);
   check('nothing ever claims to proceed unlocked', /proceeding unlocked/.test(errors), false);
 
@@ -3101,7 +3114,7 @@ async function scenarioHousekeeping(acc) {
   fs.unlinkSync(acc.configFile);
   acc.install();
   check('reinstall recreates config', readJson(acc.configFile).thresholds.session5h, 92);
-  const errors = fs.readFileSync(path.join(acc.guardDir, 'errors.log'), 'utf8').split('\n').filter(Boolean);
+  const errors = guardErrors(acc).split('\n').filter(Boolean);
   check('errors.log only warn/error', errors.every((line) => /\[(WARN|ERROR)/.test(line)), true);
   const doctor = acc.run(['doctor']);
   check('doctor runs', doctor.includes('plugin konumu'), true);
