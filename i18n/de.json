@@ -330,6 +330,7 @@
   "host.exeMissing": "!! %s ist nicht im PATH; installiere zuerst %s, die Hooks greifen, sobald es läuft",
   "host.done": "✔ %s-Setup abgeschlossen: Engine unter %s",
   "host.noLimits": "   Hinweis: %s gibt Nutzungsprozente nicht an Skripte weiter, der Limitschutz bleibt hier aus; Warteschlangenmodus, Checkpoints und Fehler-Backoff funktionieren",
+  "host.noLimitsOrErrors": "   Hinweis: %s gibt Nutzungsprozente nicht an Skripte weiter, der Limitschutz bleibt hier aus; einen Fehler-Hook hat es auch nicht, daher wird ein fehlgeschlagener Turn weder wiederholt noch ein Checkpoint geschrieben — der Warteschlangenmodus funktioniert",
   "host.uninstalled": "✔ %s-Hooks entfernt",
   "host.next.codex": "Weiter: öffne Codex, führe /hooks aus und vertraue den noctis-Hooks einmal (Codex überspringt nicht vertraute Hooks). Limits werden über `codex app-server` gelesen; Sitzungen laufen mit `codex exec resume` weiter.",
   "host.next.antigravity": "Weiter: starte agy neu; /hooks listet die Hooks des Plugins und /statusline zeigt seine Zeile (Kontingent + Reset). Sitzungen laufen mit `agy --conversation <id> -p` weiter.",

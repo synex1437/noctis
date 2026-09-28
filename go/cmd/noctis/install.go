@@ -1430,8 +1430,13 @@ func installHost(host, configDir, sourceRoot string, defaults object) error {
 	}
 	fmt.Println(T("host.done", spec.display, forwardSlashes(binary)))
 	fmt.Println(T("host.next." + host))
-	if !spec.limits {
+	switch {
+	case spec.limits:
+	case spec.stopFailure:
 		fmt.Println(T("host.noLimits", spec.display))
+	default:
+		// Without an error hook a failed turn is neither retried nor checkpointed.
+		fmt.Println(T("host.noLimitsOrErrors", spec.display))
 	}
 	return nil
 }

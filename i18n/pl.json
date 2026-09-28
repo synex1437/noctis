@@ -330,6 +330,7 @@
   "host.exeMissing": "!! %s nie jest w PATH; zainstaluj najpierw %s, hooki zadziałają, gdy tylko ruszy",
   "host.done": "✔ konfiguracja %s zakończona: silnik w %s",
   "host.noLimits": "   uwaga: %s nie udostępnia skryptom procentów zużycia, więc ochrona limitów pozostaje tu wyłączona; tryb kolejki, punkty kontrolne i backoff po błędach działają",
+  "host.noLimitsOrErrors": "   uwaga: %s nie udostępnia skryptom procentów zużycia, więc ochrona limitów pozostaje tu wyłączona; nie ma też hooka błędów, więc nieudana tura nie jest ponawiana i nie powstaje punkt kontrolny — tryb kolejki działa",
   "host.uninstalled": "✔ hooki %s usunięte",
   "host.next.codex": "Dalej: otwórz Codex, uruchom /hooks i raz zaufaj hookom noctis (Codex pomija niezaufane hooki). Limity czytane są przez `codex app-server`; sesje wznawiają się przez `codex exec resume`.",
   "host.next.antigravity": "Dalej: zrestartuj agy; /hooks pokazuje hooki wtyczki, a /statusline jej wiersz (limit + reset). Sesje wznawiają się przez `agy --conversation <id> -p`.",

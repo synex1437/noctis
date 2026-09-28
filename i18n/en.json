@@ -333,6 +333,7 @@
   "host.exeMissing": "!! %s is not on PATH; install %s first, the hooks start working as soon as it runs",
   "host.done": "✔ %s setup complete: engine at %s",
   "host.noLimits": "   note: %s does not expose usage percentages to scripts, so the limit guard stays off here; queue mode, checkpoints and error backoff work",
+  "host.noLimitsOrErrors": "   note: %s does not expose usage percentages to scripts, so the limit guard stays off here; it has no error hook either, so a failed turn is not retried and no checkpoint is written — queue mode works",
   "host.uninstalled": "✔ %s hooks removed",
   "host.next.codex": "Next: open Codex, run /hooks and trust the noctis hooks once (Codex skips untrusted hooks). Limits are read through `codex app-server`; sessions resume with `codex exec resume`.",
   "host.next.antigravity": "Next: restart agy; /hooks lists the plugin's hooks and /statusline shows its line (quota + reset). Sessions resume with `agy --conversation <id> -p`.",

@@ -330,6 +330,7 @@
   "host.exeMissing": "!! %s staat niet in PATH; installeer eerst %s, de hooks werken zodra het draait",
   "host.done": "✔ setup van %s klaar: engine op %s",
   "host.noLimits": "   let op: %s geeft gebruikspercentages niet door aan scripts, dus de limietbescherming blijft hier uit; wachtrijmodus, checkpoints en fout-backoff werken wel",
+  "host.noLimitsOrErrors": "   let op: %s geeft gebruikspercentages niet door aan scripts, dus de limietbescherming blijft hier uit; een fout-hook heeft het ook niet, dus een mislukte beurt wordt niet opnieuw geprobeerd en er wordt geen checkpoint geschreven — de wachtrijmodus werkt wel",
   "host.uninstalled": "✔ hooks van %s verwijderd",
   "host.next.codex": "Daarna: open Codex, voer /hooks uit en vertrouw de noctis-hooks eenmalig (Codex slaat niet-vertrouwde hooks over). Limieten worden via `codex app-server` gelezen; sessies hervatten met `codex exec resume`.",
   "host.next.antigravity": "Daarna: herstart agy; /hooks toont de hooks van de plugin en /statusline laat zijn regel zien (quotum + reset). Sessies hervatten met `agy --conversation <id> -p`.",

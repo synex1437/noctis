@@ -330,6 +330,7 @@
   "host.exeMissing": "!! %s 不在 PATH 中；请先安装 %s，它一旦运行钩子就会生效",
   "host.done": "✔ %s 安装完成：引擎位于 %s",
   "host.noLimits": "   注意：%s 不向脚本公开用量百分比，因此这里的限额保护保持关闭；队列模式、检查点和错误退避仍然可用",
+  "host.noLimitsOrErrors": "   注意：%s 不向脚本公开用量百分比，因此这里的限额保护保持关闭；它也没有错误钩子，所以失败的轮次不会重试，也不会写入检查点 — 队列模式仍然可用",
   "host.uninstalled": "✔ 已移除 %s 的钩子",
   "host.next.codex": "接下来：打开 Codex，运行 /hooks 并信任 noctis 的钩子一次（Codex 会跳过未信任的钩子）。限额通过 `codex app-server` 读取；会话用 `codex exec resume` 恢复。",
   "host.next.antigravity": "接下来：重启 agy；/hooks 会列出插件的钩子，/statusline 会显示它的状态行（额度 + 重置）。会话用 `agy --conversation <id> -p` 恢复。",

@@ -330,6 +330,7 @@
   "host.exeMissing": "!! %s no está en el PATH; instala %s primero, los hooks funcionarán en cuanto se ejecute",
   "host.done": "✔ configuración de %s completada: motor en %s",
   "host.noLimits": "   nota: %s no expone porcentajes de uso a los scripts, así que aquí la protección de límites queda desactivada; el modo cola, los puntos de control y el backoff por errores sí funcionan",
+  "host.noLimitsOrErrors": "   nota: %s no expone porcentajes de uso a los scripts, así que aquí la protección de límites queda desactivada; tampoco tiene hook de errores, así que un turno fallido no se reintenta ni se escribe un punto de control — el modo cola sí funciona",
   "host.uninstalled": "✔ hooks de %s eliminados",
   "host.next.codex": "Siguiente: abre Codex, ejecuta /hooks y confía una vez en los hooks de noctis (Codex omite los hooks no confiables). Los límites se leen mediante `codex app-server`; las sesiones se reanudan con `codex exec resume`.",
   "host.next.antigravity": "Siguiente: reinicia agy; /hooks lista los hooks del plugin y /statusline muestra su línea (cuota + reinicio). Las sesiones se reanudan con `agy --conversation <id> -p`.",

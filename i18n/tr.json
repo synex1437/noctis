@@ -333,6 +333,7 @@
   "host.exeMissing": "!! %s PATH'te değil; önce %s kur, hook'lar çalıştığı anda devreye girer",
   "host.done": "✔ %s kurulumu tamam: motor %s",
   "host.noLimits": "   not: %s kullanım yüzdesini betiklere vermiyor; limit koruması burada kapalı, kuyruk modu, checkpoint ve hata geri çekilmesi çalışır",
+  "host.noLimitsOrErrors": "   not: %s kullanım yüzdesini betiklere vermiyor; limit koruması burada kapalı; hata hook'u da yok, bu yüzden başarısız bir tur yeniden denenmez ve checkpoint yazılmaz — kuyruk modu çalışır",
   "host.uninstalled": "✔ %s hook'ları kaldırıldı",
   "host.next.codex": "Sonraki adım: Codex'i aç, /hooks çalıştırıp noctis hook'larına bir kez güven (Codex güvenilmeyen hook'ları atlar). Limitler `codex app-server` üzerinden okunur; oturumlar `codex exec resume` ile sürer.",
   "host.next.antigravity": "Sonraki adım: agy'yi yeniden başlat; /hooks eklentinin hook'larını, /statusline satırını (kota + sıfırlanma) gösterir. Oturumlar `agy --conversation <id> -p` ile sürer.",
