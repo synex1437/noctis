@@ -711,6 +711,11 @@ func clockOffsetFrom(result fetchResult, previous float64) float64 {
 	}
 	midpoint := time.Unix(result.sentAt, 0).Add(result.roundTrip / 2)
 	offset := math.Round(serverTime.Sub(midpoint).Seconds())
+	if math.Abs(offset-previous) <= 2 {
+		// Date and the send time are whole seconds, so two readings of one clock differ by up to
+		// two: the offset stays as it was, and the reset times with it.
+		return previous
+	}
 	if math.Abs(offset) < clockSkewMinSeconds || math.Abs(offset) > clockSkewMaxSeconds {
 		return 0
 	}

@@ -2569,11 +2569,20 @@ func dailyBudgetStatus(cfg, state object, usage usageView, now int64) (float64, 
 		return 0, 0, false
 	}
 	day := getMap(state, "budgetDay")
-	if getString(day, "day") != localDay(now) || numberOr(day, "weekResetsAt", -1) != usage.sevenDay.resetsAt {
+	if getString(day, "day") != localDay(now) || !sameBudgetWeek(day, usage.sevenDay.resetsAt) {
 		return 0, cap, false
 	}
 	usedToday := usage.sevenDay.used - numberOr(day, "startUsed", usage.sevenDay.used)
 	return usedToday, cap, usedToday >= cap
+}
+
+// sameBudgetWeek tells whether the day's record was taken in the week that resets at resetsAt.
+// The status line and the usage endpoint give one weekly reset up to sameWindowSeconds apart, and
+// the clock offset applied to both is measured to the second, so the reset read moves by seconds
+// within a week; a new week moves it by days.
+func sameBudgetWeek(day object, resetsAt float64) bool {
+	recorded, ok := getNumber(day, "weekResetsAt")
+	return ok && math.Abs(recorded-resetsAt) <= sameWindowSeconds
 }
 
 func recordBudgetDay(usage usageView, now int64) {
@@ -2582,11 +2591,12 @@ func recordBudgetDay(usage usageView, now int64) {
 	}
 	day := localDay(now)
 	current := getMap(peekState(), "budgetDay")
-	if getString(current, "day") == day && numberOr(current, "weekResetsAt", -1) == usage.sevenDay.resetsAt {
+	sameWeek := sameBudgetWeek(current, usage.sevenDay.resetsAt)
+	if getString(current, "day") == day && sameWeek {
 		return
 	}
 	startUsed := usage.sevenDay.used
-	if numberOr(current, "weekResetsAt", -1) != usage.sevenDay.resetsAt && getString(current, "day") == day {
+	if !sameWeek && getString(current, "day") == day {
 		startUsed = 0
 	}
 	updateState(func(next object) {

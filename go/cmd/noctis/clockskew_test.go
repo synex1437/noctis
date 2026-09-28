@@ -3,6 +3,9 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -87,6 +90,21 @@ func TestClockOffsetKeepsWhatItKnewWhenThereIsNothingToMeasure(t *testing.T) {
 	}
 	if offset := clockOffsetFrom(fetchResult{date: time.Now().UTC().Format(http.TimeFormat)}, 45); offset != 45 {
 		t.Fatalf("a result carrying no request timestamps must not overwrite a known skew: got %v", offset)
+	}
+}
+
+func TestClockOffsetKeepsItsValueThroughTheSecondsOfItsOwnMeasurement(t *testing.T) {
+	dir := sandboxFiles(t)
+	for _, measured := range []time.Duration{46 * time.Second, 44 * time.Second, 47 * time.Second, 43 * time.Second} {
+		if offset := clockOffsetFrom(sample(measured, 200*time.Millisecond), 45); offset != 45 {
+			t.Fatalf("a clock %v behind the server, known as 45 s, now reads %v s", measured, offset)
+		}
+	}
+	if log, _ := os.ReadFile(filepath.Join(dir, "guard.log")); strings.Contains(string(log), "clock skew detected") {
+		t.Fatalf("the same skew, measured to the second, was logged as newly detected:\n%s", log)
+	}
+	if offset := clockOffsetFrom(sample(50*time.Second, 200*time.Millisecond), 45); offset != 50 {
+		t.Fatalf("a clock that moved 5 s further from the server still reads %v s", offset)
 	}
 }
 
