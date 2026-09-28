@@ -2292,6 +2292,9 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 	if getString(scheduled, "method") == "sleeper" {
 		suffix = T("wait.sleeperSuffix")
 	}
+	if cloudSession() {
+		journal(sid, kind, "cloud-no-wake", "cloud session: the pause lasts until "+localISO(resumeAt)+", longer than this hook may wait, and a cloud session starts no runner to resume it", object{"resumeAt": resumeAt, "window": wait.window})
+	}
 	return waitOutcome{stop: savedStop(cfg, kind, wait, resumeAt, suffix)}
 }
 
@@ -2312,7 +2315,8 @@ func savedStop(cfg object, kind string, wait *waitPlan, resumeAt float64, suffix
 }
 
 func savedNotice(cfg object, label, used, at, suffix string) string {
-	if getString(section(cfg, "resume"), "mode") == "none" {
+	// A cloud session starts no runner, so nothing resumes a pause that no hook holds there.
+	if getString(section(cfg, "resume"), "mode") == "none" || cloudSession() {
 		return T("wait.savedManual", label, used, at)
 	}
 	return T("wait.saved", label, used, at, suffix)
