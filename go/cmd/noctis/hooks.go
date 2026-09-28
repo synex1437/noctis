@@ -1573,7 +1573,14 @@ func onStop(input, cfg object) {
 		return
 	}
 	if wait := getMap(getMap(state, "waits"), sid); wait != nil && !getBool(wait, "inHook", false) && !resumedByThisSession(state, sid, wait) {
-		return
+		// The turn a same-session wake woke has run to this stop: the wake took, and its wait is
+		// retired as the runner retires it, so this stop and the next ones go on to the queue.
+		if numberOr(wait, "wakeAttemptedAt", 0) <= 0 || !takeWait(sid, wait, "wake", true) {
+			return
+		}
+		journal(sid, "Stop", "wake-took", getString(wait, "label"), nil)
+		logInfo("stop of %s after its same-session wake: the wake took, wait retired", sid)
+		state = readState()
 	}
 	clearOverload(state, sid)
 	clearFailureRetries(state, sid)
