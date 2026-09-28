@@ -164,7 +164,10 @@ func TestAWindowThatPausesAgainIsRelaunchedWhileItsFirstRunnerStillWatchesIt(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeScript(t, filepath.Join(bin, "claude"), "#!/bin/sh\nprintf '%s %s\\n' \"$$\" \"$*\" >> \"$NOCTIS_TEST_CALLS\"\n"+promptLine+"\nexec "+shellQuote(standInNamed(t, sleep, "claude"))+" 3600\n")
+	// The runner records a window by its launcher's pid, before claude runs in it. The stand-in takes
+	// half a second to record its call, as claude takes a moment to start, so that every run meets a
+	// window on record whose claude has not run yet.
+	writeScript(t, filepath.Join(bin, "claude"), "#!/bin/sh\nsleep 0.5\nprintf '%s %s\\n' \"$$\" \"$*\" >> \"$NOCTIS_TEST_CALLS\"\n"+promptLine+"\nexec "+shellQuote(standInNamed(t, sleep, "claude"))+" 3600\n")
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	terminal := "(while [ -f " + shellQuote(gate) + " ] && [ ! -f " + shellQuote(open) + " ]; do sleep 0.1; done; sh {script}) >/dev/null 2>&1 &"
 	mustWriteJSON(files.config, object{"resume": object{"mode": "window", "terminal": terminal, "prompt": "carry on"}, "alarm": object{"enabled": false}})
@@ -204,6 +207,19 @@ func TestAWindowThatPausesAgainIsRelaunchedWhileItsFirstRunnerStillWatchesIt(t *
 		<-firstGone
 	})
 	logTail := func() string { return strings.Join(tailFileLines(files.log, 15), "\n") }
+	waitForCalls := func(count int) {
+		t.Helper()
+		for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+			content, _ := os.ReadFile(calls)
+			recorded := strings.Count(string(content), "\n")
+			if recorded >= count {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("claude recorded %d call(s) in 30 s, not %d:\n%s", recorded, count, logTail())
+			}
+		}
+	}
 
 	firstWindow, launchedAt := 0, 0.0
 	for deadline := time.Now().Add(30 * time.Second); firstWindow == 0 && time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
@@ -217,6 +233,9 @@ func TestAWindowThatPausesAgainIsRelaunchedWhileItsFirstRunnerStillWatchesIt(t *
 	if firstWindow == 0 {
 		t.Fatalf("the first runner never opened its window:\n%s", logTail())
 	}
+	// Claude runs in the first window before it pauses again. Its launcher is no session, and the
+	// relaunch rightly leaves it open.
+	waitForCalls(1)
 
 	writeScript(t, gate, "")
 	for float64(nowSec()) <= launchedAt {
@@ -281,6 +300,7 @@ func TestAWindowThatPausesAgainIsRelaunchedWhileItsFirstRunnerStillWatchesIt(t *
 	if secondWindow == 0 {
 		t.Fatalf("the new window was never recorded:\n%s", logTail())
 	}
+	waitForCalls(2)
 	content, _ := os.ReadFile(calls)
 	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
 	if len(lines) != 2 || launchesOf(calls, sid) != 2 || strings.Contains(string(content), " -p ") {
