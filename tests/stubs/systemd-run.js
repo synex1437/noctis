@@ -63,6 +63,20 @@ if (resolved.status !== 0) die('systemd-run: date could not resolve ' + calendar
 const fireAt = Number(resolved.stdout.trim());
 if (!Number.isFinite(fireAt) || fireAt <= 0) die('systemd-run: unusable fire time from ' + calendar);
 
+// The manager expands the arguments, not the executable, before it starts the command: an
+// argument that is exactly $NAME becomes the variable's value split at whitespace, ${NAME} its
+// value and $$ one $.
+const managerEnv = { ...process.env, ...environment };
+const started = [command[0]];
+for (const arg of command.slice(1)) {
+  const whole = /^\$([A-Za-z_][A-Za-z0-9_]*)$/.exec(arg);
+  if (whole) {
+    started.push(...(managerEnv[whole[1]] || '').split(/\s+/).filter(Boolean));
+    continue;
+  }
+  started.push(arg.replace(/\$(\$|\{([^}]+)\})/g, (all, what, name) => (what === '$' ? '$' : managerEnv[name] || '')));
+}
+
 const priorEntries = fs.readFileSync(log, 'utf8').split('\n').filter(Boolean).length;
 record({
   kind: 'schedule', unit, calendar, fireAt, properties, serviceProperties, environment, command,
@@ -78,7 +92,7 @@ const timer = spawn(process.execPath, [__dirname + '/fire.js'], {
     NOCTIS_STUB_JOB_ENV: JSON.stringify(environment),
     NOCTIS_STUB_UNIT: unit,
     NOCTIS_STUB_FIRE_AT: String(fireAt),
-    NOCTIS_STUB_COMMAND: JSON.stringify(command),
+    NOCTIS_STUB_COMMAND: JSON.stringify(started),
     NOCTIS_STUB_AFTER: String(priorEntries),
   },
 });

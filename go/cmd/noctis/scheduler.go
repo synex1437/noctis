@@ -323,7 +323,15 @@ func systemdRunArgs(unit, executable string, commandArgs []string, at float64, w
 	if wake {
 		arguments = append(arguments, "--timer-property=WakeSystem=true")
 	}
-	return append(append(arguments, executable), commandArgs...)
+	// The manager expands ${NAME}, a lone $NAME and $$ in the arguments before it starts the
+	// command (by default under systemd-run since systemd 254, always before), so each $ goes as $$:
+	// a config folder with one in it reaches the runner as it is. The executable is not expanded;
+	// systemd-run looks it up as given.
+	arguments = append(arguments, executable)
+	for _, arg := range commandArgs {
+		arguments = append(arguments, strings.ReplaceAll(arg, "$", "$$"))
+	}
+	return arguments
 }
 
 func scheduleSystemd(sid string, at float64, commandArgs []string, wake bool) (object, bool) {
