@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -78,6 +80,32 @@ func TestTheDocsShowTheStatusLineTheWayItPrintsInTheirLanguage(t *testing.T) {
 			if docsFactsPercentFirst.MatchString(match[1]) {
 				t.Errorf("docs/%s writes a percentage the Turkish way: %s", filepath.Base(image), match[1])
 			}
+		}
+	}
+}
+
+func TestTheGuidesCountTheFilesACloneInstallCopies(t *testing.T) {
+	copied := t.TempDir()
+	if err := copyPluginTree(repoRoot(), copied); err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	filepath.WalkDir(copied, func(path string, entry fs.DirEntry, err error) error {
+		if err == nil && entry.Type().IsRegular() {
+			count++
+		}
+		return nil
+	})
+	// The copy holds the same number of files on every system. placeBinary then puts the binary at
+	// bin/noctis.exe on Windows, a file the copy does not hold; elsewhere it replaces the bin/noctis
+	// launcher, which is counted already.
+	windows := count + 1
+	for doc, want := range map[string]string{
+		"docs/GUIDE.md":    fmt.Sprintf("That copy is %d files (%d on Windows)", count, windows),
+		"docs/GUIDE.tr.md": fmt.Sprintf("Bu kopya %d dosyadır (Windows'ta %d)", count, windows),
+	} {
+		if !strings.Contains(docsFactsFile(t, doc), want) {
+			t.Errorf("%s does not say %q", doc, want)
 		}
 	}
 }
