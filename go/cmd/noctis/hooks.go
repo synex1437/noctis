@@ -2125,7 +2125,7 @@ func onStopFailure(input, cfg object) {
 	errorType := firstString(input, "error_type", "error")
 	errorText := joinNotices(getString(input, "error_message"), getString(input, "last_assistant_message"), getString(input, "error_details"))
 	if errorType == "model_not_found" {
-		healUnavailableModel(cfg, sid)
+		healUnavailableModel(cfg, sid, errorText)
 		return
 	}
 	if errorType == "billing_error" || errorType == "account_on_hold" || errorType == "authentication_failed" {
@@ -2269,9 +2269,47 @@ func onStopFailure(input, cfg object) {
 	}
 }
 
-func healUnavailableModel(cfg object, sid string) {
+// unavailableModelPattern finds the model a model_not_found names: "model: <id>" in the error's
+// details, or "the selected model (<id>)" in Claude Code's message.
+var unavailableModelPattern = lazyRegexp(`(?i)\bmodel(?::\s*|\s*\(\s*)([a-z0-9][a-z0-9._:/@\[\]-]*)`)
+
+// settingsModelFailed tells whether the model that failed is the one settings.json selects: the
+// same id, or an alias ("opus", "fable[1m]") of that model's family.
+func settingsModelFailed(setting, failed string) bool {
+	plain := func(model string) string {
+		base, _, _ := strings.Cut(strings.ToLower(strings.TrimSpace(model)), "[")
+		return strings.TrimRight(base, ".,;:")
+	}
+	setting, failed = plain(setting), plain(failed)
+	switch {
+	case setting == "" || failed == "":
+		return false
+	case setting == failed:
+		return true
+	case !strings.Contains(setting, "-"):
+		return modelFamily(setting) != "" && modelFamily(setting) == modelFamily(failed)
+	}
+	return false
+}
+
+func healUnavailableModel(cfg object, sid, errorText string) {
 	models := section(cfg, "models")
 	current := settingsModel()
+	// The model that failed is the one the error names, else the one the session is known to run
+	// on, else the one settings.json selects. A session can run on a model settings.json does not
+	// select (/model, --model, a relaunch's fallback), and the default there then stays as it is.
+	failed := current
+	if match := unavailableModelPattern.FindStringSubmatch(errorText); match != nil {
+		failed = match[1]
+	} else if state, usage := readState(), readJSON(files.usage); getMap(getMap(state, "modelOverrides"), sid) != nil || getMap(getMap(usage, "sessions"), sid) != nil {
+		failed = resolveSessionModel(cfg, state, usage, sid)
+	}
+	if !settingsModelFailed(current, failed) {
+		journal(sid, "StopFailure", "model-unavailable", orDefault(failed, "(unknown)"), object{"next": "(unchanged)", "settings": orDefault(current, "(default)")})
+		fail("model_not_found for %s: %q is not available on this plan; settings.model %q is not that model and stays", sid, failed, current)
+		notify(cfg, pluginName, T("stopfailure.modelKept", orDefault(failed, "?")))
+		return
+	}
 	fallback := getString(models, "fallback")
 	next := fallback
 	if current == "" || current == fallback || fallback == "" {

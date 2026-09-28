@@ -108,6 +108,7 @@
   "stopfailure.wakeRetry": "[noctis] Retry %s after the session stopped on %s (waited %s). Continue exactly where you left off; the task list and pending work are unchanged.",
   "stopfailure.account": "Claude Code %s ile durdu; hesap düzelene kadar yeniden denenecek bir şey yok.",
   "stopfailure.modelMissing": "%s modeli bu planda yok; varsayılan model artık %s. /noctis:setup ile başka bir profil seç.",
+  "stopfailure.modelKept": "%s modeli bu planda yok. settings.json bu modeli seçmediği için noctis dosyayı olduğu gibi bıraktı; bu oturumu /model ile başka bir modele geçir.",
   "notification.stale": "Limit sıfırlandı; Claude Code Enter bekliyor (plan varsa otomatik devam edecek).",
   "notification.disabled": "Claude Code dahili beklemeyi bıraktı; planlanan saatte devam edilecek.",
   "launch.noClaude": "%s otomatik yeniden başlatılamadı: %s komutu bulunamadı — kurun ya da PATH içine ekleyin, sonra %s klasöründe şunu çalıştırın: %s",

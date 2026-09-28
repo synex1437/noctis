@@ -105,6 +105,7 @@
   "stopfailure.wakeRetry": "[noctis] Retry %s after the session stopped on %s (waited %s). Continue exactly where you left off; the task list and pending work are unchanged.",
   "stopfailure.account": "Claude Code is gestopt met %s; er valt niets opnieuw te proberen tot het account in orde is.",
   "stopfailure.modelMissing": "Model %s is niet beschikbaar in dit abonnement; het standaardmodel is nu %s. Kies een ander profiel met /noctis:setup.",
+  "stopfailure.modelKept": "Model %s is niet beschikbaar in dit abonnement. settings.json selecteert het niet, dus noctis liet het bestand ongewijzigd; zet deze sessie met /model op een ander model.",
   "notification.stale": "Limiet gereset; Claude Code wacht op Enter (automatisch doorgaan volgt als gepland).",
   "notification.disabled": "Claude Code liet zijn ingebouwde wachten los; hervatten op het geplande tijdstip.",
   "launch.noClaude": "Automatisch herstarten van %s is mislukt: commando %s niet gevonden — installeer het of zet het in PATH en voer dan in %s uit: %s",

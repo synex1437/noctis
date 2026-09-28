@@ -2027,6 +2027,7 @@ async function scenarioFirstRunEdges(acc) {
   writeJson(settingsFile, { ...readJson(settingsFile), model: 'fable' });
   acc.hook({ hook_event_name: 'StopFailure', session_id: 'fr1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, error_type: 'model_not_found' });
   check('model_not_found: default model steps down to the fallback', readJson(settingsFile).model, 'opus');
+  acc.statusline('fr1', 'claude-opus-5', 30, now + 7200, 10, now + 3 * 86400, 10);
   acc.hook({ hook_event_name: 'StopFailure', session_id: 'fr1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, error_type: 'model_not_found' });
   check('model_not_found: then to no explicit model at all', readJson(settingsFile).model, undefined);
   check('model_not_found: journaled and no wait registered', acc.run(['why', '--last', '1']).includes('model-unavailable') && acc.state().waits.fr1 === undefined, true);

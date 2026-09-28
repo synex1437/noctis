@@ -105,6 +105,7 @@
   "stopfailure.wakeRetry": "[noctis] Retry %s after the session stopped on %s (waited %s). Continue exactly where you left off; the task list and pending work are unchanged.",
   "stopfailure.account": "توقف Claude Code بسبب %s؛ لا شيء يمكن إعادة محاولته حتى يُحل وضع الحساب.",
   "stopfailure.modelMissing": "النموذج %s غير متاح في هذه الخطة؛ النموذج الافتراضي الآن هو %s. اختر ملفًا آخر عبر ‎/noctis:setup‎.",
+  "stopfailure.modelKept": "النموذج %s غير متاح في هذه الخطة. لا يختاره settings.json، لذا ترك noctis الملف كما هو؛ انقل هذه الجلسة إلى نموذج آخر عبر ‎/model‎.",
   "notification.stale": "أُعيد ضبط الحد؛ Claude Code ينتظر Enter (ستعمل المتابعة التلقائية إن كانت مخططة).",
   "notification.disabled": "تخلّى Claude Code عن انتظاره المدمج؛ الاستئناف في الوقت المخطط.",
   "launch.noClaude": "فشل إعادة تشغيل %s تلقائيًا: الأمر %s غير موجود — ثبّته أو أضفه إلى PATH، ثم نفّذ في %s: %s",

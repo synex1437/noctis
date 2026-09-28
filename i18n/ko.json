@@ -105,6 +105,7 @@
   "stopfailure.wakeRetry": "[noctis] Retry %s after the session stopped on %s (waited %s). Continue exactly where you left off; the task list and pending work are unchanged.",
   "stopfailure.account": "Claude Code가 %s 때문에 멈췄습니다. 계정 문제가 해결될 때까지 재시도할 것이 없습니다.",
   "stopfailure.modelMissing": "이 요금제에서는 %s 모델을 사용할 수 없습니다. 기본 모델이 %s로 바뀌었습니다. /noctis:setup 으로 다른 프로필을 선택하세요.",
+  "stopfailure.modelKept": "이 요금제에서는 %s 모델을 사용할 수 없습니다. settings.json이 이 모델을 선택하지 않으므로 noctis는 파일을 그대로 두었습니다. /model 로 이 세션을 다른 모델로 바꾸세요.",
   "notification.stale": "한도가 초기화되었습니다. Claude Code가 Enter를 기다립니다 (계획되어 있으면 자동 계속이 동작합니다).",
   "notification.disabled": "Claude Code가 내장 대기를 포기했습니다. 예정 시각에 재개합니다.",
   "launch.noClaude": "%s 자동 재시작에 실패했습니다: %s 명령을 찾을 수 없습니다 — 설치하거나 PATH에 추가한 뒤 %s에서 실행하세요: %s",
