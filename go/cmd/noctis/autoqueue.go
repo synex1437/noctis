@@ -890,74 +890,59 @@ func denyQueueTrustByModel(input object) {
 }
 
 func deniedNoctisCommand(command string, powershell bool) *protectedCommand {
-	plain := strings.ReplaceAll(strings.ToLower(shellQuotes.Replace(command)), `\`, "")
-	if !strings.Contains(plain, pluginName) {
+	dialect := bashDialect
+	if powershell {
+		dialect = powershellDialect
+	}
+	reading := readShellCommand(command, dialect, false)
+	plain := strings.ReplaceAll(strings.ToLower(shellQuotes.Replace(reading.text)), `\`, "")
+	glob := false
+	for _, segment := range reading.segments {
+		for _, word := range segment {
+			glob = glob || word.pattern != ""
+		}
+	}
+	if !glob && !strings.Contains(plain, pluginName) {
 		return nil
 	}
 	live := []protectedCommand{}
 	for _, target := range protectedNoctis {
-		if strings.Contains(plain, target.words[len(target.words)-1]) {
+		if glob || strings.Contains(plain, target.words[len(target.words)-1]) {
 			live = append(live, target)
 		}
 	}
 	if len(live) == 0 {
 		return nil
 	}
-	text := command
-	if reduced := withoutHeredocData(command); reduced != command && !runsCodeAnotherWay(reduced, shellTokens(reduced), powershell, true) {
-		text = reduced
-	}
-	if target := namesProtected(text, live, 0); target != nil {
+	if target := namesProtected(reading.segments, live); target != nil {
 		return target
 	}
-	words := shellTokens(text)
-	if !runsCodeAnotherWay(text, words, powershell, false) {
+	words := shellTokens(reading.text)
+	if !runsCodeAnotherWay(reading.text, words, powershell, false) {
 		return nil
 	}
 	return protectedFollowsNoctis(words, live)
 }
 
-func namesProtected(command string, live []protectedCommand, depth int) *protectedCommand {
-	if depth > 3 {
-		return nil
-	}
-	for _, words := range looseShellSegments(command) {
-		shell := false
+// namesProtected finds a segment that runs the noctis binary directly with a
+// protected subcommand. The reader has already applied the shell's quoting,
+// escapes, expansions and here-documents, so each word is what the program
+// would receive; a word built at run time stays unknown and is not matched.
+func namesProtected(segments [][]shellArgument, live []protectedCommand) *protectedCommand {
+	for _, words := range segments {
 		for index, word := range words {
-			plain, path := wordPrograms(word.text)
-			if plain == pluginName || path == pluginName {
-				rest := []string{}
-				for _, next := range words[index+1:] {
-					rest = append(rest, plainWord(next.text))
-				}
-				positional := parseArgs(rest).positional
-				for i := range live {
-					if hasWordPrefix(positional, live[i].words) {
-						return &live[i]
-					}
+			if !namesNoctis(word) {
+				continue
+			}
+			positional := parseArgs(argumentWords(words[index+1:])).positional
+			for i := range live {
+				if startsWithWords(positional, live[i].words) {
+					return &live[i]
 				}
 			}
-			if shell && word.quoted {
-				if target := namesProtected(word.text, live, depth+1); target != nil {
-					return target
-				}
-			}
-			shell = shell || nestedShells[plain] || nestedShells[path]
 		}
 	}
 	return nil
-}
-
-func hasWordPrefix(words, prefix []string) bool {
-	if len(words) < len(prefix) {
-		return false
-	}
-	for i, want := range prefix {
-		if words[i] != want {
-			return false
-		}
-	}
-	return true
 }
 
 func plainWord(word string) string {
@@ -1237,132 +1222,6 @@ func afterWord(words []shellToken, want string) ([]shellToken, bool) {
 		}
 	}
 	return nil, false
-}
-
-type heredoc struct {
-	word, reader string
-	quoted, tabs bool
-}
-
-func withoutHeredocData(command string) string {
-	lines := strings.SplitAfter(command, "\n")
-	var kept strings.Builder
-	for i := 0; i < len(lines); i++ {
-		kept.WriteString(lines[i])
-		for _, doc := range heredocsOpenedIn(lines[i]) {
-			end := i + 1
-			for end < len(lines) && !doc.endsAt(lines[end]) {
-				end++
-			}
-			if end == len(lines) {
-				break
-			}
-			body := strings.Join(lines[i+1:end+1], "")
-			if !heredocReaders[doc.reader] || !doc.quoted && (strings.Contains(body, "$(") || strings.Contains(body, "`")) {
-				kept.WriteString(body)
-			}
-			i = end
-		}
-	}
-	return kept.String()
-}
-
-func (doc heredoc) endsAt(line string) bool {
-	line = strings.TrimRight(line, "\r\n")
-	if doc.tabs {
-		line = strings.TrimLeft(line, "\t")
-	}
-	return line == doc.word
-}
-
-func heredocsOpenedIn(line string) []heredoc {
-	found := []heredoc{}
-	for i := 0; i+1 < len(line); i++ {
-		if line[i] != '<' || line[i+1] != '<' || i > 0 && line[i-1] == '<' || i+2 < len(line) && line[i+2] == '<' {
-			continue
-		}
-		doc := heredoc{reader: segmentProgram(line[:i])}
-		j := i + 2
-		if j < len(line) && line[j] == '-' {
-			doc.tabs = true
-			j++
-		}
-		for j < len(line) && (line[j] == ' ' || line[j] == '\t') {
-			j++
-		}
-		var word strings.Builder
-		for ; j < len(line) && !strings.ContainsRune(" \t\r\n;&|()<>", rune(line[j])); j++ {
-			switch c := line[j]; c {
-			case '\'', '"':
-				end := strings.IndexByte(line[j+1:], c)
-				if end < 0 {
-					end = len(line) - j - 1
-				}
-				word.WriteString(line[j+1 : j+1+end])
-				doc.quoted = true
-				j += end + 1
-			case '\\':
-				doc.quoted = true
-			default:
-				word.WriteByte(c)
-			}
-		}
-		if doc.word = word.String(); doc.word != "" {
-			found = append(found, doc)
-		}
-		i = j - 1
-	}
-	return found
-}
-
-func segmentProgram(before string) string {
-	fields := strings.Fields(before[strings.LastIndexAny(before, ";&|(){}`")+1:])
-	if len(fields) == 0 {
-		return ""
-	}
-	plain, _ := wordPrograms(fields[0])
-	return plain
-}
-
-func looseShellSegments(command string) [][]shellWord {
-	segments, words := [][]shellWord{}, []shellWord{}
-	var text strings.Builder
-	open, quoted := false, false
-	endWord := func() {
-		if open {
-			words = append(words, shellWord{text: text.String(), quoted: quoted})
-		}
-		text.Reset()
-		open, quoted = false, false
-	}
-	for i := 0; i < len(command); i++ {
-		switch c := command[i]; {
-		case c == '\'' || c == '"':
-			end := i + 1
-			for ; end < len(command) && command[end] != c; end++ {
-				if c == '"' && command[end] == '\\' && end+1 < len(command) && strings.IndexByte(`"\`, command[end+1]) >= 0 {
-					end++
-				}
-				text.WriteByte(command[end])
-			}
-			open, quoted, i = true, true, end
-		case c == ' ' || c == '\t':
-			endWord()
-		case strings.IndexByte("\n\r;&|(){}`", c) >= 0:
-			endWord()
-			if len(words) > 0 {
-				segments, words = append(segments, words), []shellWord{}
-			}
-		default:
-			text.WriteByte(c)
-			open = true
-		}
-	}
-	endWord()
-	if len(words) > 0 {
-		segments = append(segments, words)
-	}
-	return segments
 }
 
 func autoQueueDirective(path string, count int) string {

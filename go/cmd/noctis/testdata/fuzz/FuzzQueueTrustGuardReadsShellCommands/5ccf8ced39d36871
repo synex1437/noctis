@@ -1,0 +1,3 @@
+go test fuzz v1
+string("AAAAAAAA 00(00000000000000 --% 00000000000")
+bool(true)
