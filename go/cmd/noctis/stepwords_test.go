@@ -69,6 +69,56 @@ func TestAListItemIsReadWithTheStartersOfThePromptsLanguage(t *testing.T) {
 	expectItems(t, "dutch", "Werk de volgende punten voor de volgende release af, in deze volgorde en zonder tussendoor te vragen:"+bullets(append(dutch, "Er zijn nog vragen over de nieuwe API")), dutch)
 }
 
+func TestMoreWaysOfWritingAListedStepKeepItOnTheChecklist(t *testing.T) {
+	turkish := []string{
+		"Giriş sayfasına kullanıcı başına istek sınırlaması ekle",
+		"Kullanıcı tablosu için geri alınabilir bir göç betiği yaz",
+		"README dosyasındaki kurulum adımlarını güncelle",
+		"Ama önce mevcut testlerin hepsinin geçtiğini kontrol et lütfen",
+		"Ancak göç betiğini çalıştırmadan önce yedek almayı unutma",
+		"Ve sürüm notlarını güncellemeyi de unutmayın",
+		"Bu uç noktanın yanıt süresini de ölç, lütfen",
+	}
+	turkishNotes := []string{
+		"Ama bu modülün hâlâ eski bir API kullandığını unutma",
+	}
+	q9ExpectSteps(t, "turkish", "Aşağıdaki işleri sırayla yap:", turkish, turkishNotes)
+
+	english := []string{
+		"Add a CSV export to the monthly report page",
+		"Fix the flaky upload test on CI",
+		"Remove the legacy logging from the worker",
+		"For the login page add rate limiting per IP address",
+		"For each of the services add a health check endpoint",
+		"I want you to add a retry with backoff to the upload client",
+		"It needs a dark mode toggle in the settings screen",
+		"We need to move the date helpers into one file",
+		"I would like you to write a short upgrade guide for the new flags",
+		"But first check that all the existing tests pass",
+		"As a follow-up bump the version in package.json",
+	}
+	englishNotes := []string{
+		"It should also keep working with the old mobile client",
+		"For some reason the cache keys change after every deploy",
+		"For now the build still uses the old compiler",
+		"As the app grows the cache gets slower",
+		"I want to understand why the nightly import is slow",
+		"But the tests are flaky on CI anyway",
+	}
+	q9ExpectSteps(t, "english", "Please work through this list for the release:", english, englishNotes)
+}
+
+// q9ExpectSteps lists steps and then notes under a lead line and expects the
+// steps as the checklist and the notes, only they, left off it.
+func q9ExpectSteps(t *testing.T, name, lead string, steps, notes []string) {
+	t.Helper()
+	prompt := lead + bullets(append(append([]string{}, steps...), notes...))
+	expectItems(t, name, prompt, steps)
+	if dropped := promptJobOf(prompt).dropped; strings.Join(dropped, "|") != strings.Join(notes, "|") {
+		t.Errorf("%s: the lines left off the checklist are %q, want %q", name, dropped, notes)
+	}
+}
+
 func TestADescriptiveListItemStaysOutOfTheChecklistAndIsNamed(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, false)
 	steps := []string{

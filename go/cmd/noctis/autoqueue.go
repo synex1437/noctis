@@ -140,9 +140,13 @@ var finalVerbs = map[string]func(string) bool{
 var turkishPoliteEndings = []string{"yiniz", "yınız", "yunuz", "yünüz", "iniz", "ınız", "unuz", "ünüz", "yin", "yın", "yun", "yün", "in", "ın", "un", "ün"}
 
 // endsInVerb tells a step that ends in its verb, as Turkish, German and Dutch
-// steps do, from a line that only starts like a description.
+// steps do, from a line that only starts like a description. A polite word
+// after the verb is passed over: "… kontrol et lütfen".
 func endsInVerb(unit, lang string) bool {
 	fields := wordSplit.Split(strings.TrimSpace(unit), -1)
+	for len(fields) > 1 && trailingPoliteWords(stepWord(fields[len(fields)-1])) {
+		fields = fields[:len(fields)-1]
+	}
 	raw := strings.Trim(fields[len(fields)-1], ",.:;!()\"'“”‘’«»")
 	last := strings.ToLower(raw)
 	initial, _ := utf8.DecodeRuneInString(raw)
@@ -152,7 +156,7 @@ func endsInVerb(unit, lang string) bool {
 		case lang != "" && lang != verbLast:
 		case verbLast == "de" && unicode.IsUpper(initial):
 			// A German word written with a capital is a noun: "beim Testen".
-		case verbs(last), verbLast == "tr" && turkishPoliteImperative(last, verbs):
+		case verbs(last), verbLast == "tr" && (turkishPoliteImperative(last, verbs) || turkishReminder(fields, verbs)):
 			return true
 		}
 	}
@@ -168,6 +172,33 @@ func turkishPoliteImperative(word string, verbs func(string) bool) bool {
 			continue
 		}
 		if verbs(stem) || strings.HasSuffix(stem, "d") && verbs(strings.TrimSuffix(stem, "d")+"t") {
+			return true
+		}
+	}
+	return false
+}
+
+// trailingPoliteWords may close a step after its verb.
+var trailingPoliteWords = lazyWordSet(`please pls plz lütfen bitte alsjeblieft`)
+
+// turkishReminder reads "yedek almayı unutma" or "güncellemeyi de
+// unutmayın", "don't forget to take a backup", as the step it names when
+// that is a work verb, and not "… eski olduğunu unutma", a fact to keep in
+// mind.
+func turkishReminder(fields []string, verbs func(string) bool) bool {
+	last := stepWord(fields[len(fields)-1])
+	if last != "unutma" && !turkishPoliteImperative(last, func(stem string) bool { return stem == "unutma" }) {
+		return false
+	}
+	index := len(fields) - 2
+	if index > 0 && (stepWord(fields[index]) == "de" || stepWord(fields[index]) == "da") {
+		index--
+	}
+	if index < 0 {
+		return false
+	}
+	for _, ending := range []string{"mayı", "meyi"} {
+		if stem, found := strings.CutSuffix(stepWord(fields[index]), ending); found && verbs(stem) {
 			return true
 		}
 	}
@@ -239,7 +270,74 @@ func stepLike(unit, lang string) bool {
 	if len(wordSplit.Split(unit, -1)) < autoQueueMinWords {
 		return false
 	}
-	return !descriptiveStarter(lang, firstWord(unit)) || endsInVerb(unit, lang) || mainClauseImperative(unit)
+	return !descriptiveStarter(lang, firstWord(unit)) || endsInVerb(unit, lang) || mainClauseImperative(unit) || englishLeadInStep(unit, lang)
+}
+
+var (
+	// requestLeadIn and needLeadIn open an English step with words the
+	// starters read as a description: "I want you to add …", "We need to
+	// move …", "I would like you to write …"; "It needs a dark mode toggle".
+	requestLeadIn = lazyRegexp(`^(?:i|we)(?:'d|’d|\s+would)?(?:\s+(?:really|also|just|still))?\s+(?:want|need|like)(?:\s+you)?\s+to\s+(\S.*)$`)
+	needLeadIn    = lazyRegexp(`^(?:it|this|that)(?:\s+(?:also|still|really))?\s+(?:needs|requires)\s+(\S.*)$`)
+	// joinStarters join a step to the one before it: "But first check …".
+	joinStarters = lazyWordSet(`and but so however`)
+	// sceneDeterminers may open the scene of "For the login page add …";
+	// sceneStops end it: a subject, a verb of its own, a clause or a phrase.
+	sceneDeterminers = lazyWordSet(`the a an this that these those each every all both any our my your its their`)
+	sceneStops       = lazyWordSet(`i we you he she it they me us them who which whose where when while
+		is are was were be been being has have had do does did will would can could should must may might
+		to of on in at by with from into about than`)
+)
+
+// englishLeadInStep tells an English step that opens with a word the
+// starters read as a description: a request ("I want you to add a retry"),
+// a need of the thing itself ("It needs a dark mode toggle"), a joining
+// word ("But first check …") or a scene set without a comma ("For the login
+// page add rate limiting", "As a follow-up bump the version").
+func englishLeadInStep(unit, lang string) bool {
+	if _, own := descriptiveStarters[lang]; own && lang != "en" {
+		return false
+	}
+	lower := strings.ToLower(strings.TrimSpace(unit))
+	if match := requestLeadIn.FindStringSubmatch(lower); match != nil {
+		return leadsWithImperative(wordSplit.Split(match[1], -1))
+	}
+	if match := needLeadIn.FindStringSubmatch(lower); match != nil {
+		rest := wordSplit.Split(match[1], -1)
+		return stepWord(rest[0]) != "to" || leadsWithImperative(rest[1:])
+	}
+	fields := wordSplit.Split(lower, -1)
+	if joinStarters(stepWord(fields[0])) {
+		return leadsWithImperative(fields[1:])
+	}
+	return sceneImperative(fields)
+}
+
+// sceneImperative tells "For the login page add rate limiting": after "for"
+// or "as", perhaps a determiner ("each of the"), and one to three words of a
+// scene, a work verb that no noun follower shows to be a noun.
+func sceneImperative(fields []string) bool {
+	if first := stepWord(fields[0]); first != "for" && first != "as" {
+		return false
+	}
+	index := 1
+	if sceneDeterminers(stepWord(wordAt(fields, index))) {
+		index++
+		if stepWord(wordAt(fields, index)) == "of" && sceneDeterminers(stepWord(wordAt(fields, index+1))) {
+			index += 2
+		}
+	}
+	for words := 0; index < len(fields) && words <= 3; index++ {
+		word := stepWord(fields[index])
+		if words > 0 && imperativeWords(word) {
+			return index+1 == len(fields) || !nounFollowers(stepWord(fields[index+1]))
+		}
+		if sceneStops(word) || sceneDeterminers(word) {
+			return false
+		}
+		words++
+	}
+	return false
 }
 
 // reportFieldLabels hold the labels a report writes before the fields of a
