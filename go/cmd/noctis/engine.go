@@ -2184,6 +2184,20 @@ func waitsInHook(waitCfg object, learnedCap, remaining, reserve float64) bool {
 	return remaining <= limit
 }
 
+// wakeSleepLimit is how long a same-session wake may sleep in the StopFailure hook, and what sets
+// that: wake.maxMinutes, cut as an in-hook wait is (waitsInHook) to a hook time cap noctis learned
+// and to the hook's own timeout, less the slack the hook needs to wake the session.
+func wakeSleepLimit(wakeCfg object, learnedCap float64) (float64, string) {
+	limit, by := math.Max(1, numberOr(wakeCfg, "maxMinutes", 330))*60, "wake.maxMinutes"
+	if capped := math.Max(60, learnedCap-60); learnedCap > 0 && capped < limit {
+		limit, by = capped, "the hook time cap noctis learned"
+	}
+	if budget, known := hookBudget(activeHost, "StopFailure"); known && budget-hookBudgetSlackSeconds < limit {
+		limit, by = budget-hookBudgetSlackSeconds, "the StopFailure hook's timeout"
+	}
+	return limit, by
+}
+
 func enforceWait(kind string, input object, cfg object, result decision) waitOutcome {
 	now := nowSec()
 	sid := sessionKey(input)

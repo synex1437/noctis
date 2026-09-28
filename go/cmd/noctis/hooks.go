@@ -2257,7 +2257,9 @@ func onStopFailure(input, cfg object) {
 	record["permissionMode"] = permissionModeOf(input)
 	recordTree(cfg, record, getString(input, "cwd"))
 	interactive := flagString("input") == "" && (cloud || getMap(getMap(readJSON(files.usage), "sessions"), sid) != nil)
-	wakeable := currentHost().wake && getBool(wakeCfg, "sameSession", true) && interactive && getString(record, "window") != "fable" && resumeAt-float64(now) <= wakeLimit
+	// The wake sleeps in this hook, so it must wake the session before the hook is killed.
+	wakeSleep, wakeCut := wakeSleepLimit(wakeCfg, numberOr(state, "hookCapSeconds", 0))
+	wakeable := currentHost().wake && getBool(wakeCfg, "sameSession", true) && interactive && getString(record, "window") != "fable" && resumeAt-float64(now) <= wakeSleep
 	runnerAt := resumeAt
 	if wakeable {
 		runnerAt += wakeGraceSeconds(cfg)
@@ -2296,8 +2298,8 @@ func onStopFailure(input, cfg object) {
 		switch {
 		case !getBool(wakeCfg, "sameSession", true):
 			why = "wake.sameSession is off"
-		case resumeAt-float64(now) > wakeLimit:
-			why = "the limit lifts at " + localISO(resumeAt) + ", later than wake.maxMinutes lets the hook wait"
+		case resumeAt-float64(now) > wakeSleep:
+			why = "the limit lifts at " + localISO(resumeAt) + ", later than " + wakeCut + " lets the hook wait"
 		}
 		journal(sid, "StopFailure", "cloud-no-wake", "cloud session: not woken in place ("+why+"), and a cloud session starts no runner to resume it", object{"resumeAt": resumeAt, "window": getString(record, "window")})
 	}
