@@ -476,9 +476,12 @@ type fetchResult struct {
 	sentAt     int64
 	roundTrip  time.Duration
 	err        string
+	timedOut   bool
 }
 
-func fetchOauthUsage(token string) fetchResult {
+// fetchOauthUsage asks the usage endpoint, giving it limit to answer in full. A result that
+// timedOut got no complete answer in that time.
+func fetchOauthUsage(token string, limit time.Duration) fetchResult {
 	endpoint := usageEndpoint()
 	request, err := http.NewRequest(http.MethodGet, endpoint.String(), nil)
 	if err != nil {
@@ -488,7 +491,7 @@ func fetchOauthUsage(token string) fetchResult {
 	request.Header.Set("anthropic-beta", "oauth-2025-04-20")
 	request.Header.Set("User-Agent", pluginName+"/"+pluginVersion)
 	request.Header.Set("Accept", "application/json")
-	client := &http.Client{Timeout: fetchTimeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Timeout: limit, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	sentAt := nowSec()
 	started := time.Now()
 	response, err := client.Do(request)
@@ -498,15 +501,20 @@ func fetchOauthUsage(token string) fetchResult {
 		if strings.Contains(message, "Timeout") || strings.Contains(message, "deadline") {
 			message = "timeout"
 		}
-		return fetchResult{err: message}
+		return fetchResult{err: message, timedOut: isTimeout(err)}
 	}
 	defer response.Body.Close()
 	body, readErr := io.ReadAll(io.LimitReader(response.Body, responseBodyLimit))
 
 	if readErr != nil && !errors.Is(readErr, io.EOF) {
-		return fetchResult{err: "truncated-response " + readErr.Error()}
+		return fetchResult{err: "truncated-response " + readErr.Error(), timedOut: isTimeout(readErr)}
 	}
 	return fetchResult{status: response.StatusCode, body: body, date: response.Header.Get("Date"), retryAfter: response.Header.Get("Retry-After"), sentAt: sentAt, roundTrip: roundTrip}
+}
+
+func isTimeout(err error) bool {
+	var timeout interface{ Timeout() bool }
+	return errors.As(err, &timeout) && timeout.Timeout()
 }
 
 func retryAfterSeconds(result fetchResult) int64 {
@@ -790,6 +798,14 @@ func fetchFable(cfg, cached object, now int64, reason string) object {
 	if getString(section(cfg, "fable"), "source") == "codex" {
 		return refreshCodexUsage(cached, now, reason)
 	}
+	answer, _ := fetchOauthFable(cfg, cached, now, reason, fetchTimeout)
+	return answer
+}
+
+// fetchOauthFable is fetchFable for the OAuth endpoint, which gets limit to answer. One that has
+// not answered within a limit short of fetchTimeout has not failed yet: nothing is written and
+// the answer is false, so a fetch that waits the full time can ask again.
+func fetchOauthFable(cfg, cached object, now int64, reason string, limit time.Duration) (object, bool) {
 	token := oauthToken()
 	if token == "" {
 		next := cloneObject(cached)
@@ -797,9 +813,12 @@ func fetchFable(cfg, cached object, now int64, reason string) object {
 		next["backoffUntil"] = float64(now + 1800)
 		mustWriteJSON(files.fable, next)
 		logInfo("fable refresh skipped (%s): no usable OAuth token in %s", reason, files.credentials)
-		return next
+		return next, true
 	}
-	response := fetchOauthUsage(token)
+	response := fetchOauthUsage(token, limit)
+	if response.timedOut && limit < fetchTimeout {
+		return cached, false
+	}
 	if response.status != 200 {
 		backoff := int64(120)
 		switch response.status {
@@ -817,7 +836,7 @@ func fetchFable(cfg, cached object, now int64, reason string) object {
 		next["backoffUntil"] = float64(now + backoff)
 		mustWriteJSON(files.fable, next)
 		warn("fable refresh failed (%s): %s", reason, message)
-		return next
+		return next, true
 	}
 	var raw any
 	if err := json.Unmarshal(response.body, &raw); err != nil {
@@ -826,7 +845,7 @@ func fetchFable(cfg, cached object, now int64, reason string) object {
 		next["backoffUntil"] = float64(now + 120)
 		mustWriteJSON(files.fable, next)
 		warn("fable refresh returned invalid JSON (%s)", reason)
-		return next
+		return next, true
 	}
 	payload, _ := raw.(object)
 	if !knownUsageShape(payload) {
@@ -837,7 +856,7 @@ func fetchFable(cfg, cached object, now int64, reason string) object {
 		if getString(cached, "error") != "unexpected-shape" {
 			warn("fable refresh (%s): the usage endpoint answered in a shape noctis does not know; the last reading is kept and the next try is in 10 minutes", reason)
 		}
-		return next
+		return next, true
 	}
 	parsed := parseUsagePayload(payload, scopedModelPattern(cfg))
 	history := getMap(cached, "history")
@@ -866,7 +885,7 @@ func fetchFable(cfg, cached object, now int64, reason string) object {
 	}
 	mustWriteJSON(files.fable, next)
 	logInfo("fable refresh ok (%s): fable=%s 5h=%s 7d=%s", reason, percentText(parsed, "fable"), percentText(parsed, "five_hour"), percentText(parsed, "seven_day"))
-	return next
+	return next, true
 }
 
 var firstNumber = lazyRegexp(`\d+`)
