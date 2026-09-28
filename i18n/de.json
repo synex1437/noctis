@@ -438,6 +438,7 @@
   "webhook.failed": "Webhook: nicht zugestellt — %s",
   "webhook.none": "alarm.webhook.url ist in %s nicht gesetzt",
   "webhook.refused": "alarm.webhook.url ist nicht nutzbar: sie muss https sein (http nur für localhost)",
+  "webhook.unparsable": "alarm.webhook.url ist nicht nutzbar: sie lässt sich nicht lesen (erwartet https://host/pfad)",
   "webhook.circuitOpen": "die letzten Zustellungen sind fehlgeschlagen, daher pausieren Webhooks bis %s (noctis webhook ohne --title und --body sendet jetzt einen Test)",
   "webhook.testBody": "Testnachricht: Wenn du das siehst, erreicht dich noctis hier.",
   "help.cmd.version": "die Version ausgeben",

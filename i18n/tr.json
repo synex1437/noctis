@@ -441,6 +441,7 @@
   "webhook.failed": "webhook: iletilmedi — %s",
   "webhook.none": "alarm.webhook.url şurada ayarlı değil: %s",
   "webhook.refused": "alarm.webhook.url kullanılamıyor: https olmalı (http yalnızca localhost için)",
+  "webhook.unparsable": "alarm.webhook.url kullanılamıyor: ayrıştırılamıyor (beklenen biçim: https://host/yol)",
   "webhook.circuitOpen": "son iletimler başarısız oldu, webhook'lar şu zamana kadar duruyor: %s (--title ve --body olmadan noctis webhook şimdi bir test gönderir)",
   "webhook.testBody": "Test mesajı: bunu görüyorsan noctis sana buradan ulaşabiliyor.",
   "help.cmd.version": "sürümü yazar",

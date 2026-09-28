@@ -438,6 +438,7 @@
   "webhook.failed": "webhook : non livré — %s",
   "webhook.none": "alarm.webhook.url n'est pas défini dans %s",
   "webhook.refused": "alarm.webhook.url est inutilisable : elle doit être en https (http seulement pour localhost)",
+  "webhook.unparsable": "alarm.webhook.url est inutilisable : elle ne peut pas être analysée (attendu https://hôte/chemin)",
   "webhook.circuitOpen": "les dernières livraisons ont échoué, les webhooks sont donc en pause jusqu'à %s (noctis webhook sans --title ni --body envoie un test maintenant)",
   "webhook.testBody": "Message de test : si tu vois ceci, noctis peut te joindre ici.",
   "help.cmd.version": "afficher la version",

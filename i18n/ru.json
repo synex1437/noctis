@@ -438,6 +438,7 @@
   "webhook.failed": "вебхук: не доставлено — %s",
   "webhook.none": "alarm.webhook.url не задан в %s",
   "webhook.refused": "alarm.webhook.url нельзя использовать: нужен https (http только для localhost)",
+  "webhook.unparsable": "alarm.webhook.url нельзя использовать: адрес не удаётся разобрать (ожидается https://host/path)",
   "webhook.circuitOpen": "последние доставки не удались, поэтому вебхуки на паузе до %s (noctis webhook без --title и --body отправит тест сейчас)",
   "webhook.testBody": "Тестовое сообщение: если ты его видишь, noctis может достучаться до тебя здесь.",
   "help.cmd.version": "вывести версию",

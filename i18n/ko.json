@@ -438,6 +438,7 @@
   "webhook.failed": "웹훅: 전달되지 않음 — %s",
   "webhook.none": "%s 에 alarm.webhook.url이 설정되어 있지 않습니다",
   "webhook.refused": "alarm.webhook.url을 쓸 수 없습니다: https여야 합니다 (http는 localhost만)",
+  "webhook.unparsable": "alarm.webhook.url을 쓸 수 없습니다: 주소로 해석할 수 없습니다 (https://host/path 형식이어야 합니다)",
   "webhook.circuitOpen": "최근 전달이 실패해 %s 까지 웹훅을 멈춥니다 (--title과 --body 없이 noctis webhook을 실행하면 지금 테스트를 보냅니다)",
   "webhook.testBody": "테스트 메시지: 이것이 보이면 noctis가 여기로 알림을 보낼 수 있습니다.",
   "help.cmd.version": "버전을 출력합니다",

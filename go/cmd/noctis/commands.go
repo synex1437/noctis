@@ -675,6 +675,7 @@ func errorsDoctorLines() []string {
 	if info := statSafe(files.errors); recent == len(entries) && info != nil && info.Size() > tailLineWindowBytes {
 		count += "+"
 	}
+	latest = redactBundleText(latest)
 	if runes := []rune(latest); len(runes) > 160 {
 		latest = string(runes[:160])
 	}

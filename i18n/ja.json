@@ -438,6 +438,7 @@
   "webhook.failed": "Webhook: 届きませんでした — %s",
   "webhook.none": "%s に alarm.webhook.url が設定されていません",
   "webhook.refused": "alarm.webhook.url は使えません: https にしてください（http は localhost のみ）",
+  "webhook.unparsable": "alarm.webhook.url は使えません: アドレスとして解釈できません（https://host/path の形にしてください）",
   "webhook.circuitOpen": "直近の配信が失敗したため、%s まで Webhook を止めています（--title と --body なしの noctis webhook なら今すぐテストを送ります）",
   "webhook.testBody": "テストメッセージ: これが見えていれば、noctis はここに通知を届けられます。",
   "help.cmd.version": "バージョンを表示する",

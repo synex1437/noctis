@@ -16,13 +16,19 @@ import (
 	"unicode/utf8"
 )
 
-const bundleTailBytes = 512 * 1024
+const (
+	bundleTailBytes    = 512 * 1024
+	bundleWebhookHosts = `hooks\.slack\.com|discord(?:app)?\.com/api/webhooks|api\.telegram\.org|ntfy\.sh`
+)
 
 var (
 	bundleTokenPattern = lazyRegexp(`(?i)(sk-ant-[A-Za-z0-9_-]+|sk-[a-z]+-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|xox[abprs]-[A-Za-z0-9-]{8,}|AKIA[0-9A-Z]{12,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+|(?:api[_-]?key|access[_-]?token|oauth[_-]?token|secret|password|bearer|token|key)["'=: ]+[A-Za-z0-9._~+/-]{8,}|glpat-[A-Za-z0-9_-]{8,}|npm_[A-Za-z0-9]{8,}|AIza[A-Za-z0-9_-]{8,}|https?://[^\s"'/]+:[^\s"'/]+@)`)
 
-	bundleWebhookPattern = lazyRegexp(`https?://[^\s"']*(hooks\.slack\.com|discord\.com/api/webhooks|api\.telegram\.org|ntfy\.sh|[?&](token|key|secret|auth)=)[^\s"']*`)
+	bundleWebhookPattern = lazyRegexp(`(?i)(?:[a-z][a-z0-9+.-]*:/*[^\s"']*(?:` + bundleWebhookHosts + `|[?&](?:token|key|secret|auth)=)|[^\s"']*(?:` + bundleWebhookHosts + `)/)[^\s"']*`)
 	bundleSecretKeys     = map[string]bool{"url": true, "webhook": true, "webhookurl": true, "token": true, "chatid": true, "secret": true, "key": true, "apikey": true, "password": true, "chaincommand": true}
+
+	// Older versions logged an alarm.webhook.url that did not parse as it was, secret and all.
+	bundleLoggedWebhookPattern = lazyRegexp(`(alarm\.webhook\.url invalid: )[^\r\n]*`)
 )
 
 func redactBundleText(text string) string {
@@ -31,6 +37,7 @@ func redactBundleText(text string) string {
 		text = strings.ReplaceAll(text, secret, "<redacted>")
 	}
 	text = bundleTokenPattern.ReplaceAllString(text, "<redacted-token>")
+	text = bundleLoggedWebhookPattern.ReplaceAllString(text, "${1}<redacted-webhook>")
 	text = bundleWebhookPattern.ReplaceAllString(text, "<redacted-webhook>")
 	return text
 }

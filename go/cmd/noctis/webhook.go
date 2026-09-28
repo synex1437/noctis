@@ -38,17 +38,17 @@ func webhookSettings(cfg object) webhookConfig {
 	return config
 }
 
-func webhookAllowed(target string) (*url.URL, bool) {
+func webhookAllowed(target string) (*url.URL, string) {
 	parsed, err := url.Parse(target)
 	if err != nil || parsed.Host == "" {
-		warn("alarm.webhook.url invalid: %s", target)
-		return nil, false
+		warn("alarm.webhook.url cannot be parsed (the address is not logged: it may hold a secret)")
+		return nil, T("webhook.unparsable")
 	}
 	if parsed.Scheme != "https" && !(parsed.Scheme == "http" && localHosts[parsed.Hostname()]) {
 		warn("alarm.webhook.url must be https (http only for localhost)")
-		return nil, false
+		return nil, T("webhook.refused")
 	}
-	return parsed, true
+	return parsed, ""
 }
 
 func isASCII(text string) bool {
@@ -124,9 +124,9 @@ func deliverWebhook(cfg object, title, body string, ignoreBreaker bool) (bool, s
 	if config.target == "" {
 		return false, T("webhook.none", files.config)
 	}
-	endpoint, ok := webhookAllowed(config.target)
-	if !ok {
-		return false, T("webhook.refused")
+	endpoint, refusal := webhookAllowed(config.target)
+	if endpoint == nil {
+		return false, refusal
 	}
 	now := nowSec()
 	if state := readState(); !ignoreBreaker && breakerOpen(state, now) {

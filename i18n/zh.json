@@ -438,6 +438,7 @@
   "webhook.failed": "webhook：未送达 — %s",
   "webhook.none": "%s 中没有设置 alarm.webhook.url",
   "webhook.refused": "alarm.webhook.url 无法使用：必须是 https（http 仅限 localhost）",
+  "webhook.unparsable": "alarm.webhook.url 无法使用：无法解析（应为 https://host/path）",
   "webhook.circuitOpen": "最近几次投递都失败了，webhook 暂停到 %s（不带 --title 和 --body 运行 noctis webhook 会立即发送测试）",
   "webhook.testBody": "测试消息：如果你看到这条，说明 noctis 能在这里通知到你。",
   "help.cmd.version": "输出版本号",

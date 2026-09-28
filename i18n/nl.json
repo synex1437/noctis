@@ -438,6 +438,7 @@
   "webhook.failed": "webhook: niet afgeleverd — %s",
   "webhook.none": "alarm.webhook.url staat niet in %s",
   "webhook.refused": "alarm.webhook.url is niet bruikbaar: die moet https zijn (http alleen voor localhost)",
+  "webhook.unparsable": "alarm.webhook.url is niet bruikbaar: die is niet te ontleden (verwacht https://host/pad)",
   "webhook.circuitOpen": "de laatste afleveringen mislukten, dus webhooks pauzeren tot %s (noctis webhook zonder --title en --body stuurt nu een test)",
   "webhook.testBody": "Testbericht: als je dit ziet, kan noctis je hier bereiken.",
   "help.cmd.version": "de versie tonen",
