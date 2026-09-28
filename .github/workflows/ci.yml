@@ -2,8 +2,64 @@ name: ci
 on:
   push:
   pull_request:
+# Every job starts at once and none waits for another. The lab groups run the binaries committed in
+# bin/, as a user's install does; the binaries job proves those match the source, so a stale binary
+# still fails the run.
 jobs:
-  build:
+  binaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.7'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build all platforms
+        run: node scripts/build.js
+      - name: Committed binaries must match the source
+        run: |
+          git diff --exit-code -- bin/
+          untracked=$(git ls-files --others --exclude-standard -- bin/)
+          if [ -n "$untracked" ]; then echo "::error::the build wrote files that are not committed:"; echo "$untracked"; exit 1; fi
+
+  unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.7'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: gofmt
+        if: runner.os == 'Linux'
+        working-directory: go
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "::error::gofmt would change:"; echo "$unformatted"; exit 1; fi
+      - name: Vet
+        working-directory: go
+        run: go vet ./...
+      - name: Unit tests (sharded)
+        run: node tests/gotest.js
+      # Here rather than in a lab group: it runs scripts/i18n.js check, which needs gofmt.
+      - name: Source hygiene
+        run: node tests/hygiene.js
+
+  fuzz:
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -11,74 +67,75 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24.7'
-      - name: Vet and unit tests
-        run: cd go && test -z "$(gofmt -l ./cmd/noctis)" && go vet ./... && go test ./...
-      - name: Fuzz (short)
+      # go test -list finds the targets; the two parts take them alternately, each target with the
+      # whole runner for 30 s, so neither part outlasts a lab group. A new target needs no edit here;
+      # the ones listed below must still be found.
+      - name: Fuzz this part's targets (short)
+        working-directory: go
         run: |
-          cd go
-          for target in FuzzNormalizeHookInput FuzzAutoQueueItems FuzzDetectLanguage FuzzParseUsagePayload FuzzQueueSnapshot; do
-            go test ./cmd/noctis -run '^$' -fuzz "^$target\$" -fuzztime 30s
+          found=""
+          for package in $(go list ./...); do
+            listed=$(go test -list '^Fuzz' "$package")
+            for target in $(printf '%s\n' "$listed" | grep '^Fuzz' || true); do
+              found="$found $package:$target"
+            done
           done
-      - name: Build all platforms
-        run: |
-          for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
-            GOOS=${target%/*} GOARCH=${target#*/}; ext=""; [ "$GOOS" = windows ] && ext=".exe"
-            (cd go && CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -buildvcs=false -ldflags="-s -w" -o ../bin/$GOOS-$GOARCH/noctis$ext ./cmd/noctis)
+          echo "found:$found"
+          for target in FuzzNormalizeHookInput FuzzAutoQueueItems FuzzDetectLanguage FuzzParseUsagePayload FuzzQueueSnapshot FuzzJSONFastDecode FuzzJSONFastEncode; do
+            case "$found " in
+              *":$target "*) ;;
+              *) echo "::error::go test -list no longer finds $target"; exit 1 ;;
+            esac
           done
-          cp bin/windows-amd64/noctis.exe bin/noctis.exe
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Committed binaries must match the source
-        run: |
-          node -e "require('./tests/harness.js').refreshChecksums()"
-          git diff --exit-code -- bin/
-      - uses: actions/upload-artifact@v4
-        with:
-          name: binaries
-          path: bin
+          turn=0
+          for entry in $found; do
+            turn=$((turn % 2 + 1))
+            [ "$turn" = "${{ matrix.part }}" ] || continue
+            package=${entry%%:*}
+            target=${entry#*:}
+            echo "::group::$target ($package)"
+            go test "$package" -run '^$' -fuzz "^$target\$" -fuzztime 30s
+            echo "::endgroup::"
+          done
+
   lab:
-    needs: build
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        # Two halves of about the same length on each platform: by run 106's step times, lab 4:31 and
+        # stress 3:37 on windows, 4:12 and 4:21 on macos, 3:54 and 3:03 on ubuntu. No suite reads
+        # another's state; each group passes on its own. No suite here runs Go.
+        group: [lab, stress]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.24.7'
-      - uses: actions/download-artifact@v4
-        with:
-          name: binaries
-          path: bin
-      - name: Make binaries executable
-        if: runner.os != 'Windows'
-        run: chmod +x bin/*/noctis bin/noctis
-      - name: Vet and unit tests on this platform
-        shell: bash
-        run: cd go && go vet ./... && go test ./...
-      - name: Source hygiene
-        run: node tests/hygiene.js
-      - name: Host contract (runs the hooks exactly as the host declares them)
-        run: node tests/contract.js
-      - name: Chaos (network, disk, old state files)
-        run: node tests/chaos.js
       - name: Scheduler (the OS timer a real user on this platform would get)
+        if: matrix.group == 'lab'
         run: node tests/scheduler.js
       - name: Lab
+        if: matrix.group == 'lab'
         run: node tests/lab.js
+      - name: Host contract (runs the hooks exactly as the host declares them)
+        if: matrix.group == 'stress'
+        run: node tests/contract.js
+      - name: Chaos (network, disk, old state files)
+        if: matrix.group == 'stress'
+        run: node tests/chaos.js
       - name: Soak (hard, 2 days)
+        if: matrix.group == 'stress'
         run: node tests/soak.js --days 2 --seed 11 --hard 1
       - name: Torrent (thousands of jobs; does the guard leak, what does it cost)
-        if: runner.os != 'Windows'
+        if: matrix.group == 'stress' && runner.os != 'Windows'
         run: node tests/torrent.js --jobs 600 --accounts 3 --seed 11
-      - name: Monkey (the chaos user)
-        run: |
-          node tests/monkey.js --seed 7 --rounds 200
-          node tests/monkey.js --seed 23 --rounds 200
+      # One step per seed: on Windows a step runs in pwsh, where only the last command's exit code counts.
+      - name: Monkey (the chaos user), seed 7
+        if: matrix.group == 'stress'
+        run: node tests/monkey.js --seed 7 --rounds 200
+      - name: Monkey (the chaos user), seed 23
+        if: matrix.group == 'stress'
+        run: node tests/monkey.js --seed 23 --rounds 200

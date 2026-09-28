@@ -233,7 +233,8 @@ async function scenarioInHookWait(acc) {
   check('wait cleared after hook', acc.state().waits.s1 === undefined, true);
   await sleep(300);
   check('watchdog cancelled', isAlive(watchdogPid), false);
-  check('checkpoint consumed', acc.state().checkpoints.s1.consumed, true);
+  check('checkpoint consumed', (acc.checkpoint('s1') || {}).consumed, true);
+  check('used checkpoint kept out of state.json', acc.state().checkpoints.s1 === undefined, true);
 }
 
 async function scenarioWorkspaceGuard(acc) {
@@ -312,7 +313,7 @@ async function scenarioWorkspaceGuard(acc) {
   check('git snapshot: one hidden ref per checkpoint', refs.length, 1);
   const [ref, hash] = (refs[0] || ' ').split(' ');
   check('git snapshot: captures the uncommitted change without touching the tree', git('show', `${hash}:a.txt`).stdout === 'snapshot me\n' && git('status', '--short').stdout.trim() === 'M a.txt', true);
-  const checkpointText = fs.readFileSync(acc.state().checkpoints.gs1.path, 'utf8');
+  const checkpointText = fs.readFileSync(acc.checkpoint('gs1').path, 'utf8');
   check('git snapshot: checkpoint tells how to restore', checkpointText.includes(ref) && checkpointText.includes(`git stash apply ${hash}`), true);
   acc.run(['cancel', 'gs1']);
   acc.editState((aged) => {
@@ -515,6 +516,52 @@ async function scenarioStaleFallbackAndNearEdge(acc) {
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 's5', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('near-edge refresh within poll interval', mock.hits, hitsBefore + 1);
   acc.statusline('s5', 'claude-opus-5', 20, now + 7200, 10, now + 3 * 86400);
+}
+
+async function scenarioRefreshAside(acc) {
+  const now = nowSec();
+  const usageFile = path.join(acc.guardDir, 'usage.json');
+  const fableFile = path.join(acc.guardDir, 'fable.json');
+  const lockFile = path.join(acc.guardDir, 'fable.lock');
+  mock.limits = [
+    { kind: 'session', percent: 31, resets_at: new Date((now + 7200) * 1000).toISOString() },
+    { kind: 'weekly_all', percent: 21, resets_at: new Date((now + 3 * 86400) * 1000).toISOString() },
+  ];
+  // The status line has been quiet for an hour, so the hook turns to fable.json, whose reading is
+  // 11 minutes old and far from every edge: due, but not stale.
+  const usage = readJson(usageFile);
+  usage.updatedAt = now - 3600;
+  writeJson(usageFile, usage);
+  writeJson(fableFile, { fetchedAt: now - 660, five_hour: { used: 30, resetsAt: now + 7200 }, seven_day: { used: 20, resetsAt: now + 3 * 86400 } });
+  const [binary, prefix] = acc.engine();
+  const timedHook = (sid) => {
+    const started = Date.now();
+    const result = spawnSync(binary, [...prefix, 'hook'], { encoding: 'utf8', input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', session_id: sid, cwd: PROJECT_DIR, prompt: 'go on with the refactor' }), env: acc.env(), timeout: 60000 });
+    return { ms: Date.now() - started, status: result.status };
+  };
+  lab.setOutage('slow', 4000);
+  try {
+    let hitsBefore = mock.hits;
+    const due = timedHook('ra1');
+    process.stdout.write(`  refresh aside: due reading, 4 s endpoint: hook ${due.ms} ms\n`);
+    check('refresh aside: a due fetch against a 4 s endpoint does not hold the hook', due.status === 0 && due.ms < 1300, true);
+    check('refresh aside: the fetch is still in flight when the hook returns', fs.existsSync(lockFile), true);
+    const second = timedHook('ra2');
+    check('refresh aside: a hook that finds the fetch in flight does not wait for it either', second.status === 0 && second.ms < 1300, true);
+    check('refresh aside: its answer lands for the next hook', acc.settleRefresh() && (readJson(fableFile) || {}).fetchedAt > now - 660, true);
+    check('refresh aside: two hooks, one request', mock.hits - hitsBefore, 1);
+    fs.rmSync(fableFile, { force: true });
+    hitsBefore = mock.hits;
+    const blind = timedHook('ra3');
+    process.stdout.write(`  refresh aside: no reading, 4 s endpoint: hook ${blind.ms} ms\n`);
+    check('refresh aside: with no reading at all the hook waits for the fetch, but only 1.5 s', blind.status === 0 && blind.ms >= 1400 && blind.ms < 3500, true);
+    check('refresh aside: the answer it stopped waiting for still lands', acc.settleRefresh() && (readJson(fableFile) || {}).fetchedAt >= now, true);
+    check('refresh aside: one request for the blind hook', mock.hits - hitsBefore, 1);
+  } finally {
+    lab.setOutage('');
+    acc.settleRefresh();
+    acc.statusline('ra', 'claude-opus-5', 31, now + 7200, 21, now + 3 * 86400);
+  }
 }
 
 async function scenarioStopFailure(acc) {
@@ -757,7 +804,7 @@ async function scenarioFoundation(acc) {
   });
   const startup = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'boot3', cwd: PROJECT_DIR });
   check('orphan checkpoint injected as context', startup.includes('additionalContext') && startup.includes('devam notu'), true);
-  check('orphan checkpoint consumed', acc.state().checkpoints.orphan.consumed, true);
+  check('orphan checkpoint consumed', (acc.checkpoint('orphan') || {}).consumed, true);
 }
 
 async function scenarioCompactAndClear(acc) {
@@ -778,7 +825,7 @@ async function scenarioCompactAndClear(acc) {
   ].join('\n'));
   acc.statusline('cmp', 'claude-opus-5', 93, now + 2 * 86400, 10, now + 3 * 86400, 30);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'cmp', cwd: PROJECT_DIR, transcript_path: compactTranscript });
-  const checkpoint = fs.readFileSync(acc.state().checkpoints.cmp.path, 'utf8');
+  const checkpoint = fs.readFileSync(acc.checkpoint('cmp').path, 'utf8');
   check('checkpoint keeps real last request after compaction', checkpoint.includes('## Son istek\nImplement the payment webhook handler'), true);
   check('checkpoint carries compact summary section', checkpoint.includes('## Bağlam özeti (sıkıştırma)'), true);
   acc.run(['cancel', 'cmp']);
@@ -862,7 +909,7 @@ async function scenarioQueueMode(acc) {
   check('task events tracked', Object.values(acc.state().tasks.q1.items).filter((task) => task.status === 'open').length, 1);
   acc.statusline('q1', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'q1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
-  const checkpoint = fs.readFileSync(acc.state().checkpoints.q1.path, 'utf8');
+  const checkpoint = fs.readFileSync(acc.checkpoint('q1').path, 'utf8');
   check('checkpoint lists queue items', checkpoint.includes('## Sıradaki işler (TASKS.md: 4 açık)') && checkpoint.includes('- [ ] Retry failed uploads with backoff') && checkpoint.includes('rollout notes'), true);
   check('checkpoint lists open tracked tasks', checkpoint.includes('## Açık görevler (Claude Code)') && checkpoint.includes('Retry failed uploads') && !checkpoint.includes('- Guide draft'), true);
   resetCalls();
@@ -979,7 +1026,7 @@ async function scenarioSmartDecisions(accA) {
   fs.writeFileSync(path.join(PROJECT_DIR, 'dirty.js'), 'x');
   accA.statusline('sd4', 'claude-opus-5', 93, now + 2 * 86400, 10, now + 3 * 86400);
   accA.hook({ hook_event_name: 'PostToolBatch', session_id: 'sd4', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
-  const checkpoint = fs.readFileSync(accA.state().checkpoints.sd4.path, 'utf8');
+  const checkpoint = fs.readFileSync(accA.checkpoint('sd4').path, 'utf8');
   check('checkpoint includes git status', checkpoint.includes('## Git durumu') && checkpoint.includes('dirty.js'), true);
   accA.run(['cancel']);
   fs.rmSync(path.join(PROJECT_DIR, '.git'), { recursive: true, force: true });
@@ -1686,13 +1733,14 @@ async function scenarioCloneInstaller() {
   fs.mkdirSync(path.dirname(script), { recursive: true });
   fs.copyFileSync(path.join(SOURCE_ROOT, 'scripts', 'install.sh'), script);
   fs.chmodSync(script, 0o755);
-  for (const platform of ['linux-amd64', 'linux-arm64', 'darwin-amd64', 'darwin-arm64']) {
+  for (const platform of ['linux-amd64', 'linux-arm64', 'darwin']) {
     fs.mkdirSync(path.join(root, 'bin', platform), { recursive: true });
     fs.writeFileSync(path.join(root, 'bin', platform, 'noctis'), `#!/bin/sh\necho "ran ${platform} $*"\n`, { mode: 0o755 });
   }
   const fakeBin = path.join(root, 'fake-bin');
   fs.mkdirSync(fakeBin, { recursive: true });
-  fs.writeFileSync(path.join(fakeBin, 'uname'), '#!/bin/sh\nif [ "$1" = "-m" ]; then echo "$NOCTIS_LAB_UNAME_M"; else echo "$NOCTIS_LAB_UNAME_S"; fi\n', { mode: 0o755 });
+  const unameLog = path.join(root, 'uname.log');
+  fs.writeFileSync(path.join(fakeBin, 'uname'), `#!/bin/sh\necho "$*" >> '${unameLog}'\nif [ "$1" = "-m" ]; then echo "$NOCTIS_LAB_UNAME_M"; else echo "$NOCTIS_LAB_UNAME_S"; fi\n`, { mode: 0o755 });
   const install = (system, machine, args = ['--host', 'codex']) => spawnSync(script, args, {
     encoding: 'utf8',
     env: { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, NOCTIS_LAB_UNAME_S: system, NOCTIS_LAB_UNAME_M: machine },
@@ -1708,10 +1756,14 @@ async function scenarioCloneInstaller() {
     check(`clone installer: Linux ${machine} names the CPU instead of running the amd64 binary`, refusal(install('Linux', machine), machine, 'not supported'), refused);
   }
   check('clone installer: FreeBSD names the OS', refusal(install('FreeBSD', 'amd64'), 'FreeBSD', 'not supported'), refused);
-  for (const [system, machine, platform] of [['Linux', 'x86_64', 'linux-amd64'], ['Linux', 'aarch64', 'linux-arm64'], ['Darwin', 'x86_64', 'darwin-amd64'], ['Darwin', 'arm64', 'darwin-arm64']]) {
+  for (const [system, machine, platform] of [['Linux', 'x86_64', 'linux-amd64'], ['Linux', 'aarch64', 'linux-arm64'], ['Darwin', 'x86_64', 'darwin'], ['Darwin', 'arm64', 'darwin']]) {
     const result = install(system, machine);
     check(`clone installer: ${system} ${machine} runs bin/${platform}`, `${result.status} ${result.stdout.trim()}`, `0 ran ${platform} install --source ${root} --host codex`);
   }
+  // macOS has one universal binary, so the installer does not ask for the CPU there.
+  fs.rmSync(unameLog, { force: true });
+  install('Darwin', 'arm64');
+  check('clone installer: on macOS uname is asked for the system only', fs.readFileSync(unameLog, 'utf8'), '-s\n');
   fs.rmSync(root, { recursive: true, force: true });
 }
 
@@ -1757,7 +1809,7 @@ async function scenarioQueuePriorities(acc) {
   check('queue: blocked items are counted and mentioned', firstReason.includes('2 item(s) wait on unfinished dependencies'), true);
   acc.statusline('qp1', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400, 30);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'qp1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
-  const checkpoint = fs.readFileSync(acc.state().checkpoints.qp1.path, 'utf8');
+  const checkpoint = fs.readFileSync(acc.checkpoint('qp1').path, 'utf8');
   check('queue: checkpoint lists eligible items in priority order', checkpoint.indexOf('(P0) fix login bug') < checkpoint.indexOf('(P3) write docs') && checkpoint.indexOf('(P3) write docs') < checkpoint.indexOf('(P9) cleanup') && !checkpoint.includes('migrate users'), true);
   acc.run(['cancel', 'qp1']);
   acc.statusline('qp1', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
@@ -1792,7 +1844,7 @@ async function scenarioQueuePriorities(acc) {
   check('queue: a multi-line item is one item and P1 comes first', sloppy.includes('("bare box without a bullet (P1)")'), true);
   acc.statusline('qp2', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400, 30);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'qp2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
-  const sloppyCheckpoint = fs.readFileSync(acc.state().checkpoints.qp2.path, 'utf8');
+  const sloppyCheckpoint = fs.readFileSync(acc.checkpoint('qp2').path, 'utf8');
   check('queue: continuation lines joined into the item text', sloppyCheckpoint.includes('fix the login redirect that breaks when the session cookie is missing and the user comes from the mobile app'), true);
   acc.run(['cancel', 'qp2']);
   acc.statusline('qp2', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
@@ -1880,7 +1932,7 @@ async function scenarioWorkflows(acc) {
   check('workflow: launch allowed under the thresholds and recorded', launch === '' && acc.state().workflows.wf1.length === 1 && acc.state().workflows.wf1[0].name === 'audit-routes', true);
   acc.statusline('wf1', 'claude-fable-5-1', 93, now + 2 * 86400, 10, now + 3 * 86400, 30);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'wf1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
-  const checkpoint = fs.readFileSync(acc.state().checkpoints.wf1.path, 'utf8');
+  const checkpoint = fs.readFileSync(acc.checkpoint('wf1').path, 'utf8');
   check('workflow: checkpoint names the run and says relaunch, never restart', checkpoint.includes('audit-routes') && checkpoint.includes('asla sıfırdan başlatma'), true);
   const denied = acc.hook({ hook_event_name: 'PreToolUse', session_id: 'wf1', cwd: PROJECT_DIR, tool_name: 'Workflow', tool_input: { name: 'audit-routes' } });
   check('workflow: launch denied at the pause threshold', denied.includes('"permissionDecision":"deny"') && denied.includes('pause threshold'), true);
@@ -3005,7 +3057,7 @@ async function scenarioHousekeeping(acc) {
   const large = Date.now() - started;
   check('large transcript checkpoint stop', out.includes('"continue":false'), true);
   results.push({ name: `large transcript checkpoint ${large}ms over ${baseline}ms baseline`, ok: large - baseline < 1500, actual: large - baseline, expected: '<1500ms over baseline' });
-  const checkpoint = fs.readFileSync(acc.state().checkpoints.s9.path, 'utf8');
+  const checkpoint = fs.readFileSync(acc.checkpoint('s9').path, 'utf8');
   check('checkpoint has todos', checkpoint.includes('- [ ] tests'), true);
   acc.run(['cancel']);
   writeTranscript();
@@ -3074,6 +3126,7 @@ async function main() {
     ['weekly long wait', () => scenarioWeeklyLongWait(accA)],
     ['fable flow + handoff', () => scenarioFableFlow(accA)],
     ['stale fallback + near-edge', () => scenarioStaleFallbackAndNearEdge(accA)],
+    ['refresh aside: a slow usage endpoint never holds a hook', () => scenarioRefreshAside(accA)],
     ['stop failure', () => scenarioStopFailure(accA)],
     ['router', () => scenarioRouter(accA)],
     ['isolation + concurrency', () => scenarioIsolationAndConcurrency(accA, accB)],

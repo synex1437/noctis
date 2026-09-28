@@ -32,7 +32,7 @@ Görev Zamanlayıcı / launchd / systemd ──▶ noctis resume --sid X --accou
 Codex CLI / Antigravity CLI / Droid / Copilot CLI ──hook dosyaları──▶ aynı `noctis hook --host <araç>` ──▶ host.go çevirir ──▶ aynı karar motoru
 ```
 
-Dosyalar (`<hesap>/noctis/`): `config.json`, `usage.json` (yalnızca statusline yazar), `fable.json` (yalnızca OAuth yoklayıcı yazar), `state.json` (hook/runner, kilit dosyasıyla), `checkpoints/<sid>.md`, `launches/<sid>.json` (geçici), `guard.log` (512 KB rotasyon), `resume-output.log`.
+Dosyalar (`<hesap>/noctis/`): `config.json`, `usage.json` (yalnızca statusline yazar), `fable.json` (yalnızca OAuth yoklayıcı yazar), `state.json` (hook/runner, kilit dosyasıyla; girintisiz), `used-checkpoints.json` (kullanılmış checkpoint kayıtları; aynı kilitle, yalnızca `noctis checkpoint` ve devredilen notun okuma izni bakar), `checkpoints/<sid>.md`, `launches/<sid>.json` (geçici), `guard.log` (512 KB rotasyon), `resume-output.log`.
 
 Tek yazar ilkesi: her dosyanın tek bir yazar süreci var; `state.json` için `wx` kilit dosyası + atomik yazma (tmp + rename).
 

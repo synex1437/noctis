@@ -1098,8 +1098,15 @@ func handOverCheckpoint(sid, receiver string) {
 	})
 }
 
-func checkpointHandedTo(state object, receiver, path string) bool {
-	for _, raw := range getMap(state, "checkpoints") {
+// checkpointHandedTo says whether the note at path was handed to receiver. Every note noctis
+// writes is in checkpoints/, so for any other file it looks at no record. A checkpoint handed on
+// is a used one, so after the state write that handed it on it is in used-checkpoints.json; a
+// newer checkpoint its session wrote to the same note since was not handed on.
+func checkpointHandedTo(receiver, path string) bool {
+	if filepath.Dir(path) != filepath.Clean(files.checkpoints) {
+		return false
+	}
+	for _, raw := range allCheckpoints(peekState()) {
 		if entry := toObject(raw); entry != nil && getString(entry, "handedTo") == receiver && getString(entry, "path") == path {
 			return true
 		}
@@ -1196,10 +1203,22 @@ func taskName(sid string) string {
 }
 
 func detachedSelf(argsList []string) int {
+	child := startDetached(argsList)
+	if child == nil {
+		return 0
+	}
+	pid := child.Pid
+	_ = child.Release()
+	return pid
+}
+
+// startDetached starts noctis again with argsList, in its own session and with no terminal or
+// pipe of this process, so it outlives this one and never holds up whoever waits on its output.
+func startDetached(argsList []string) *os.Process {
 	executable, err := os.Executable()
 	if err != nil {
 		fail("detached spawn failed: %v", err)
-		return 0
+		return nil
 	}
 	child := exec.Command(executable, argsList...)
 	child.Dir = files.guardDir
@@ -1208,11 +1227,9 @@ func detachedSelf(argsList []string) int {
 	configureDetached(child)
 	if err := child.Start(); err != nil {
 		fail("detached spawn failed: %v", err)
-		return 0
+		return nil
 	}
-	pid := child.Process.Pid
-	_ = child.Process.Release()
-	return pid
+	return child.Process
 }
 
 func scheduledWithoutTask(scheduled object) bool {
@@ -1794,6 +1811,11 @@ func dropInterruptedWait(sid string, state object) {
 }
 
 func clearDeadHandoffs(state object) {
+	dropHandoffs(state, staleHandoffs(state))
+}
+
+// staleHandoffs names the hand-offs in state whose relaunch process is gone.
+func staleHandoffs(state object) []string {
 	stale := []string{}
 	for sid, raw := range getMap(state, "handedOff") {
 		record := toObject(raw)
@@ -1811,6 +1833,12 @@ func clearDeadHandoffs(state object) {
 		}
 		stale = append(stale, sid)
 	}
+	return stale
+}
+
+// dropHandoffs clears the stale hand-offs from state.json and from state, which must be the
+// caller's own.
+func dropHandoffs(state object, stale []string) {
 	if len(stale) == 0 {
 		return
 	}
@@ -1830,11 +1858,6 @@ const (
 	runnerOverdueSeconds = 600
 	strandedRearmLimit   = 3
 )
-
-func rescheduleStrandedWaits(state object) {
-	clearDeadHandoffs(state)
-	rearmStrandedWaits(state)
-}
 
 func rearmStrandedWaits(state object) {
 	thorough := strings.EqualFold(activeEvent, "SessionStart")
@@ -2266,8 +2289,15 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 		case fableCandidate:
 			reason = "fable-session"
 		}
+		// Near an edge, or when the caller makes a one-time choice (force), the answer decides
+		// whether work goes on, so the hook waits for it, up to refreshWait. Elsewhere it hands
+		// the fetch off and decides on the reading it has.
+		wait := time.Duration(0)
+		if options.force || edge || fableEdge {
+			wait = refreshWait
+		}
 		before := numberOr(readJSON(files.fable), "fetchedAt", 0)
-		after := refreshFable(cfg, now, reason, maxAge, options.force)
+		after := refreshFableWaiting(cfg, now, reason, maxAge, options.force, wait)
 		if numberOr(after, "fetchedAt", 0) != before {
 			usage = currentUsage(now)
 		} else {
@@ -2288,7 +2318,7 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 				break
 			}
 			sleepUntil(float64(nowSec())+interval, nil)
-			probe := refreshFable(cfg, nowSec(), "blind-probe", 0, !rateLimited)
+			probe := refreshFableNow(cfg, nowSec(), "blind-probe", 0, !rateLimited)
 
 			if fetched := numberOr(probe, "fetchedAt", 0); fetched > probedFrom {
 				usage = currentUsage(nowSec())
@@ -2393,8 +2423,7 @@ func recordBudgetDay(usage usageView, now int64) {
 		return
 	}
 	day := localDay(now)
-	state := readState()
-	current := getMap(state, "budgetDay")
+	current := getMap(peekState(), "budgetDay")
 	if getString(current, "day") == day && numberOr(current, "weekResetsAt", -1) == usage.sevenDay.resetsAt {
 		return
 	}

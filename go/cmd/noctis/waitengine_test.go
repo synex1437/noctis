@@ -662,7 +662,7 @@ func TestAnInHookWaitLeavesTheWaitThatReplacedItAndItsRunnerAlone(t *testing.T) 
 			t.Fatalf("the sleeper stopped the runner of the weekly wait that replaced it: %q", command)
 		}
 	}
-	if getBool(getMap(getMap(readState(), "checkpoints"), sid), "consumed", false) {
+	if getBool(checkpointRecord(sid), "consumed", false) {
 		t.Fatal("the sleeper consumed the checkpoint of the weekly wait that replaced it")
 	}
 	if want := T("wait.saved", "Weekly", formatNumber(90), formatTime(weekly.until), ""); held.outcome.stop != want || held.outcome.notice != "" {
@@ -688,7 +688,7 @@ func TestTwoPausesOfOneSessionMomentsApartShareOneWait(t *testing.T) {
 	if actionCount(actions, "pause") != 1 || actionCount(actions, "join-wait") != 1 || hasAction(actions, "wait-cancelled") {
 		t.Fatalf("two pauses of one session for the same reset, a second apart, did not share one wait: %v", actions)
 	}
-	if !getBool(getMap(getMap(readState(), "checkpoints"), sid), "consumed", false) {
+	if !getBool(checkpointRecord(sid), "consumed", false) {
 		t.Fatal("the checkpoint of the shared wait was not consumed when it ended")
 	}
 }
@@ -744,7 +744,7 @@ func TestAnInHookWaitReplacedByAPauseForTheSameResetHoldsUntilTheReset(t *testin
 	if actionCount(actions, "pause") != 2 || actionCount(actions, "join-wait") != 1 || hasAction(actions, "wait-cancelled") {
 		t.Fatalf("the replaced sleeper did not go on holding on the wait that replaced it: %v", actions)
 	}
-	if !getBool(getMap(getMap(readState(), "checkpoints"), sid), "consumed", false) {
+	if !getBool(checkpointRecord(sid), "consumed", false) {
 		t.Fatal("the checkpoint of the wait that replaced the first one was not consumed when it ended")
 	}
 }
@@ -1721,7 +1721,7 @@ func TestTheRepairPassActsOnlyOnWhatIsStillStored(t *testing.T) {
 		stateMap(state, "handedOff")["handed"] = object{"at": now, "model": "claude-opus-5", "mode": "window", "pid": float64(os.Getpid())}
 	})
 	before := storedWaitsJSON()
-	rescheduleStrandedWaits(seen)
+	rearmStrandedWaits(seen)
 	after := storedWaitsJSON()
 	if len(after) != len(before) {
 		t.Fatalf("the repair pass brought back a wait cleared since it looked: stored %v, was %v", after, before)

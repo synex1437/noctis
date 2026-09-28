@@ -176,7 +176,7 @@ func workflowAdvisable(cfg object, result decision) bool {
 }
 
 func suggestWorkflow(cfg object, prompt string, result decision) string {
-	if !looksLikeFanOut(prompt) || !workflowAdvisable(cfg, result) {
+	if !workflowAdvisable(cfg, result) || !looksLikeFanOut(prompt) {
 		return ""
 	}
 	return workflowNotice(cfg, "notice.workflowPrompt", result.usage)

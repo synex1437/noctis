@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -23,9 +22,20 @@ func fakeInstallTree(t *testing.T, engine []byte) (platform, binary string) {
 	return platform, binary
 }
 
+// shippedName is the name bin/SHA256SUMS gives the binary at path: its path under bin/, the way
+// tests/harness.js writes the file.
+func shippedName(t *testing.T, root, path string) string {
+	t.Helper()
+	relative, err := filepath.Rel(filepath.Join(root, "bin"), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filepath.ToSlash(relative)
+}
+
 func writeShippedSum(t *testing.T, sum string) {
 	t.Helper()
-	line := sum + "  " + runtime.GOOS + "-" + runtime.GOARCH + "/" + binaryFileName() + "\n"
+	line := sum + "  " + shippedName(t, files.pluginRoot, platformBinary(files.pluginRoot)) + "\n"
 	if err := os.WriteFile(filepath.Join(files.pluginRoot, "bin", "SHA256SUMS"), []byte(line), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -107,5 +117,48 @@ func TestEnsureAddsADefaultSectionTheConfigLacks(t *testing.T) {
 	logged, _ := os.ReadFile(files.log)
 	if !strings.Contains(string(logged), "1 new config section(s) added: digest") {
 		t.Fatalf("the added section was not logged: %s", logged)
+	}
+}
+
+func TestTheRepositoryShipsThisPlatformsBinaryWhereInstallsLookForIt(t *testing.T) {
+	root := repoRoot()
+	binary := platformBinary(root)
+	if statSafe(binary) == nil {
+		t.Fatalf("bin/ has no binary for this platform at %s, where an install looks for it", binary)
+	}
+	if name := shippedName(t, root, binary); shippedChecksum(root, name) == "" {
+		t.Fatalf("bin/SHA256SUMS has no line for %s, so an install from this tree would refuse its binary", name)
+	}
+}
+
+func TestACopyUpdatedOverOneMadeBefore750KeepsNoPerCPUMacOSBinary(t *testing.T) {
+	sandboxFiles(t)
+	from, to := t.TempDir(), t.TempDir()
+	engine := platformBinary(from)
+	if err := os.MkdirAll(filepath.Dir(engine), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(engine, []byte("7.5 engine"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, retired := range retiredPlatformFolders {
+		old := filepath.Join(to, "bin", retired, "noctis")
+		if err := os.MkdirAll(filepath.Dir(old), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(old, []byte("7.4 engine"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := copyPluginTree(from, to); err != nil {
+		t.Fatal(err)
+	}
+	for _, retired := range retiredPlatformFolders {
+		if statSafe(filepath.Join(to, "bin", retired)) != nil {
+			t.Fatalf("the copy still has bin/%s after an install over it", retired)
+		}
+	}
+	if copied, err := os.ReadFile(platformBinary(to)); err != nil || string(copied) != "7.5 engine" {
+		t.Fatalf("the copy's binary is %q (%v), not the one installed", copied, err)
 	}
 }

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"sd3\",\"cwd\":\"/home/dev/p\",\"tool_name\":\"Agent\",\"tool_input\":{\"subagent_type\":\"noctis:lite\",\"prompt\":\"find the parser\"},\"tool_response\":{\"content\":[{\"type\":\"text\",\"text\":\"found it in parser.go line 12.\\n<ok> & done\"}],\"totalTokens\":1234}}")

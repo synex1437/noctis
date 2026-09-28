@@ -143,6 +143,7 @@ function runManifestEntry(entry, account, lab, input, extraEnv = {}) {
     env: account.env(extraEnv),
     timeout: 60000,
   });
+  account.settleRefresh(entry.args);
   return { command, ...result };
 }
 
@@ -162,7 +163,7 @@ function checkLauncher() {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, `#!/bin/sh\necho ${relative} "$@"\n`, { mode: 0o755 });
     };
-    for (const relative of ['linux-amd64/noctis', 'linux-arm64/noctis', 'darwin-arm64/noctis', 'darwin-amd64/noctis', 'windows-amd64/noctis.exe', 'noctis.exe']) stub(relative);
+    for (const relative of ['linux-amd64/noctis', 'linux-arm64/noctis', 'darwin/noctis', 'windows-amd64/noctis.exe', 'noctis.exe']) stub(relative);
     const fake = path.join(root, 'fake');
     fs.mkdirSync(fake);
     const unameLog = path.join(root, 'uname.log');
@@ -170,8 +171,10 @@ function checkLauncher() {
     const inherited = { ...process.env };
     delete inherited.OSTYPE;
     delete inherited.HOSTTYPE;
+    delete inherited.GOMAXPROCS;
+    delete inherited.NOCTIS_OWN_GOMAXPROCS;
     // An empty OSTYPE and HOSTTYPE in the environment keep bash (sh on macOS) from setting its own.
-    const run = ({ kernelSays = [], shellSays = ['', ''], unameSays = ['', ''], extra = {}, cwd = root, script = path.join(bin, 'noctis') } = {}) => {
+    const run = ({ kernelSays = [], shellSays = ['', ''], unameSays = ['', ''], extra = {}, cwd = root, script = path.join(bin, 'noctis'), command = 'version' } = {}) => {
       fs.rmSync(kernel, { recursive: true, force: true });
       const [ostype, arch] = kernelSays;
       if (ostype !== undefined) {
@@ -180,7 +183,7 @@ function checkLauncher() {
         if (arch !== undefined) fs.writeFileSync(path.join(kernel, 'arch'), `${arch}\n`);
       }
       fs.rmSync(unameLog, { force: true });
-      const result = spawnSync('sh', [script, 'version'], {
+      const result = spawnSync('sh', [script, command], {
         cwd,
         encoding: 'utf8',
         env: { ...inherited, PATH: `${fake}${path.delimiter}${process.env.PATH}`, OSTYPE: shellSays[0], HOSTTYPE: shellSays[1], FAKE_S: unameSays[0], FAKE_M: unameSays[1], ...extra },
@@ -203,16 +206,18 @@ function checkLauncher() {
       const result = run({ kernelSays, shellSays: [ostype, hosttype] });
       check(`launcher: bash's ${ostype} ${hosttype} runs bin/${expected} without uname${kernelSays ? ' (a kernel before 6.1 has no arch file)' : ''}`, runs(result, expected, 0), result.shown);
     }
-    // macOS's /bin/bash is one build for two CPUs, so its HOSTTYPE may name the other one.
-    for (const [hosttype, machine, expected] of [['x86_64', 'arm64', 'darwin-arm64/noctis'], ['arm64', 'x86_64', 'darwin-amd64/noctis']]) {
-      const result = run({ shellSays: ['darwin23', hosttype], unameSays: ['Darwin', machine] });
-      check(`launcher: on macOS uname's ${machine}, asked once, wins over bash's HOSTTYPE ${hosttype}`, runs(result, expected, 1), result.shown);
+    // macOS has one universal binary and runs the build in it for its CPU, so the shell's OSTYPE is
+    // all the launcher asks there: not HOSTTYPE, which macOS's /bin/bash (one build for two CPUs) may
+    // get wrong, and not uname, whose answer here (Linux) would show it was asked.
+    for (const [ostype, hosttype] of [['darwin23', 'arm64'], ['darwin23', 'x86_64'], ['darwin24.0', ''], ['darwin', 'intel-mac']]) {
+      const result = run({ shellSays: [ostype, hosttype], unameSays: ['Linux', 'x86_64'] });
+      check(`launcher: on macOS the shell's ${ostype}${hosttype ? ` with HOSTTYPE ${hosttype}` : ''} runs bin/darwin/noctis without uname`, runs(result, 'darwin/noctis', 0), result.shown);
     }
     const expectations = [
       ['Linux', 'x86_64', 'linux-amd64/noctis'],
       ['Linux', 'aarch64', 'linux-arm64/noctis'],
-      ['Darwin', 'arm64', 'darwin-arm64/noctis'],
-      ['Darwin', 'x86_64', 'darwin-amd64/noctis'],
+      ['Darwin', 'arm64', 'darwin/noctis'],
+      ['Darwin', 'x86_64', 'darwin/noctis'],
       ['MINGW64_NT-10.0-26100', 'x86_64', 'windows-amd64/noctis.exe'],
       ['MSYS_NT-10.0-26100', 'x86_64', 'windows-amd64/noctis.exe'],
       ['CYGWIN_NT-10.0-26100', 'x86_64', 'windows-amd64/noctis.exe'],
@@ -223,7 +228,7 @@ function checkLauncher() {
       check(`launcher: uname's ${system} ${machine} runs bin/${expected}, asked once`, runs(result, expected, 1), result.shown);
     }
     const foreign = run({ shellSays: ['linux', 'x86_64-linux'], unameSays: ['Darwin', 'arm64'] });
-    check('launcher: an OSTYPE and HOSTTYPE bash never sets (tcsh exports these) are left to uname', runs(foreign, 'darwin-arm64/noctis', 1), foreign.shown);
+    check('launcher: an OSTYPE and HOSTTYPE bash never sets (tcsh exports these) are left to uname', runs(foreign, 'darwin/noctis', 1), foreign.shown);
     for (const [label, options] of [['the kernel', { kernelSays: ['Linux', 'armv7l'] }], ['uname', { unameSays: ['Linux', 'armv7l'] }]]) {
       const unsupported = run(options);
       check(`launcher: an unsupported CPU named by ${label} stops with its name instead of running an amd64 binary`,
@@ -233,8 +238,43 @@ function checkLauncher() {
     check('launcher: a relative path with an exported CDPATH still finds the binaries', runs(cdpath, 'linux-amd64/noctis', 0), cdpath.shown);
     const bare = run({ kernelSays: ['Linux', 'x86_64'], cwd: bin, script: 'noctis' });
     check('launcher: run by its bare name from its own folder, it finds the binaries next to it', runs(bare, 'linux-amd64/noctis', 0), bare.shown);
+    // A hook and a status line refresh get GOMAXPROCS=1 with the marker that has noctis take both
+    // out again; other commands and a GOMAXPROCS already set are left alone.
+    fs.writeFileSync(path.join(bin, 'linux-amd64', 'noctis'), '#!/bin/sh\necho "$1 GOMAXPROCS=${GOMAXPROCS-unset} marker=${NOCTIS_OWN_GOMAXPROCS-unset}"\n', { mode: 0o755 });
+    const limits = (command, extra) => {
+      const result = run({ kernelSays: ['Linux', 'x86_64'], command, extra });
+      return `exit ${result.status}: ${(result.stdout || '').trim()}${(result.stderr || '').trim()}`;
+    };
+    check('launcher: a hook runs with GOMAXPROCS=1 and the marker that has noctis take it out', limits('hook'), 'exit 0: hook GOMAXPROCS=1 marker=1');
+    check('launcher: a status line refresh too', limits('statusline'), 'exit 0: statusline GOMAXPROCS=1 marker=1');
+    check("launcher: another command keeps the Go runtime's own GOMAXPROCS", limits('status'), 'exit 0: status GOMAXPROCS=unset marker=unset');
+    check('launcher: a GOMAXPROCS already set reaches a hook as it is, with no marker', limits('hook', { GOMAXPROCS: '3' }), 'exit 0: hook GOMAXPROCS=3 marker=unset');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+// Only a Mac can run bin/darwin/noctis: as it is, and each build in it that this Mac can run (arm64
+// on Apple silicon, x86_64 on an Intel Mac or under Rosetta); lipo, where the developer tools are
+// installed, has to find both builds in it. tests/hygiene.js checks the file's layout everywhere.
+function checkUniversalBinary(account, pluginVersion) {
+  const binary = path.join(ROOT, 'bin', 'darwin', 'noctis');
+  const ran = (command, args) => {
+    const result = spawnSync(command, args, { encoding: 'utf8', env: account.env(), timeout: 60000 });
+    return { ...result, shown: `exit ${result.status}${result.error ? ` (${result.error.message})` : ''}: ${`${result.stdout || ''}${result.stderr || ''}`.trim()}` };
+  };
+  const native = ran(binary, ['version']);
+  check(`universal binary: bin/darwin/noctis runs on this ${process.arch} Mac`, native.status === 0 && native.stdout.trim() === pluginVersion, native.shown);
+  for (const cpu of ['x86_64', 'arm64']) {
+    // arch -x86_64 fails on a Mac without Rosetta, arch -arm64 on an Intel Mac.
+    if (ran('/usr/bin/arch', [`-${cpu}`, '/usr/bin/true']).status !== 0) continue;
+    const result = ran('/usr/bin/arch', [`-${cpu}`, binary, 'version']);
+    check(`universal binary: its ${cpu} build runs (arch -${cpu})`, result.status === 0 && result.stdout.trim() === pluginVersion, result.shown);
+  }
+  // Without the developer tools, /usr/bin/lipo only offers to install them.
+  if (spawnSync('/usr/bin/xcode-select', ['-p']).status === 0) {
+    const lipo = ran('/usr/bin/lipo', ['-archs', binary]);
+    check('universal binary: lipo finds the x86_64 and arm64 builds in it', lipo.status === 0 && lipo.stdout.trim().split(/\s+/).sort().join(' ') === 'arm64 x86_64', lipo.shown);
   }
 }
 
@@ -364,6 +404,7 @@ async function main() {
     account.stopRunners();
 
     if (process.platform !== 'win32') checkLauncher();
+    if (process.platform === 'darwin') checkUniversalBinary(account, pluginVersion);
 
     if (failures.length > 0) {
       console.error('CONTRACT FAILED');

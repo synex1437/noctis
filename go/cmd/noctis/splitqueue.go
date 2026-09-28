@@ -47,7 +47,7 @@ func jobClause(clause string) bool {
 }
 
 func severalJobsLikely(prompt string) bool {
-	text := strings.TrimSpace(codeFence.ReplaceAllString(prompt, " "))
+	text := strings.TrimSpace(withoutCodeBlocks(prompt))
 	if size := len([]rune(text)); size < autoQueueMinChars || size > splitQueueMaxChars || endsQuestion(text) || hasBugReportMarker(text) {
 		return false
 	}
@@ -172,10 +172,16 @@ func writesTo(file, cwd, target string) bool {
 
 func refuseJobsNotInPrompt(input, cfg object) bool {
 	sid := sessionKey(input)
-	state := readState()
+	file, cwd := getString(getMap(input, "tool_input"), "file_path"), getString(input, "cwd")
+	// A session's checklist is always at sessionQueuePath, so any other write goes ahead without a
+	// look at the state.
+	if !writesTo(file, cwd, sessionQueuePath(sid)) {
+		return false
+	}
+	state := peekState()
 	record := getMap(getMap(state, "autoQueues"), sid)
 	words, path := digestSet(getList(record, "words")), getString(record, "path")
-	if len(words) == 0 || !writesTo(getString(getMap(input, "tool_input"), "file_path"), getString(input, "cwd"), path) {
+	if len(words) == 0 || !writesTo(file, cwd, path) {
 		return false
 	}
 	current, _ := readQueueText(path)

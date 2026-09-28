@@ -276,7 +276,11 @@ func onSessionStart(input, cfg object) {
 
 		if staleSeconds := usageStaleSeconds(cfg); !usage.hasAny || float64(now)-usage.updatedAt > staleSeconds || windowStale(usage, staleSeconds) {
 
-			if refreshed := refreshFable(cfg, now, "session-start", -1, false); numberOr(refreshed, "fetchedAt", 0) > 0 {
+			wait := time.Duration(0)
+			if nearEdge(cfg, usage) {
+				wait = refreshWait
+			}
+			if refreshed := refreshFableWaiting(cfg, now, "session-start", -1, false, wait); numberOr(refreshed, "fetchedAt", 0) > 0 {
 				usage = currentUsage(now)
 			}
 		}
@@ -728,12 +732,12 @@ func subagentFallback(cfg object, model string) (string, usageView) {
 	}
 	now := nowSec()
 	usage := currentUsage(now)
-	maxAge := -1.0
+	maxAge, wait := -1.0, time.Duration(0)
 	if limit, guarded := scopedThresholdEnabled(cfg); guarded && usage.fable != nil && usage.fable.used >= limit-nearEdgeBand {
-		maxAge = nearEdgePollNormal
+		maxAge, wait = nearEdgePollNormal, refreshWait
 	}
 	before := numberOr(readJSON(files.fable), "fetchedAt", 0)
-	if after := refreshFable(cfg, now, "fable-subagent", maxAge, false); numberOr(after, "fetchedAt", 0) != before {
+	if after := refreshFableWaiting(cfg, now, "fable-subagent", maxAge, false, wait); numberOr(after, "fetchedAt", 0) != before {
 		usage = currentUsage(now)
 	}
 	return scopedSafeModel(cfg, readState(), usage, model, now), usage
@@ -902,7 +906,7 @@ func denyOwnFileWrite(input, cfg object) bool {
 		return false
 	}
 	sid := sessionKey(input)
-	applySessionLocale(cfg, readState(), sid)
+	applySessionLocale(cfg, peekState(), sid)
 	message, reason := "queue.stateFileByModel", "This is noctis's own state file: it records which queue files the user trusted and other guard state, and it is not yours to write. Do not write it with a file tool and do not change it another way. If a queue file needs trusting, tell the user to read it and run !noctis queue trust themselves."
 	if kind == "config" {
 		message, reason = "queue.configFileByModel", "This is noctis's own config.json: it sets how the guard behaves, including whether queue files need trust and any verify command it runs, so only the user changes it. Do not edit it with a file tool and do not change it another way. If the user wants a setting changed, tell them to run noctis setup or edit it themselves."
@@ -1311,19 +1315,19 @@ func onPreToolUse(input, cfg object) {
 	}
 	now := nowSec()
 	sid := sessionKey(input)
-	state := readState()
 	if agentTools[toolName] {
-		onAgentSpawn(input, cfg, state, now)
+		onAgentSpawn(input, cfg, readState(), now)
 		return
 	}
 	if toolName == "Workflow" {
-		onWorkflowLaunch(input, cfg, state, now, sid)
+		onWorkflowLaunch(input, cfg, readState(), now, sid)
 		return
 	}
-	if runsAsAgent(input, liteAgentType(cfg)) {
+	// Only the router keeps routes; with it off, WebSearch and WebFetch go ahead unread.
+	if !getBool(section(cfg, "router"), "enabled", false) || runsAsAgent(input, liteAgentType(cfg)) {
 		return
 	}
-	route := getMap(getMap(state, "routes"), sid)
+	route := getMap(getMap(peekState(), "routes"), sid)
 	if route == nil || float64(now)-numberOr(route, "at", 0) > routeTTLSeconds {
 		return
 	}
@@ -1446,7 +1450,7 @@ func onPermissionRequest(input, cfg object) {
 		return
 	}
 	sid := sessionKey(input)
-	if tool == "Read" && checkpointHandedTo(readState(), sid, requested) {
+	if tool == "Read" && checkpointHandedTo(sid, requested) {
 		allowFileRequest(sid, tool, requested, "allow-checkpoint-note", "the resume note handed to")
 		return
 	}
@@ -1720,7 +1724,7 @@ func onStop(input, cfg object) {
 	if snapshot.blocked > 0 {
 		blockedNote = fmt.Sprintf(" %d item(s) wait on unfinished dependencies and are not eligible yet.", snapshot.blocked)
 	}
-	if len(snapshot.items) > 0 && currentHost().agents && looksLikeFanOut(snapshot.items[0]) && workflowAdvisable(cfg, result) {
+	if len(snapshot.items) > 0 && currentHost().agents && workflowAdvisable(cfg, result) && looksLikeFanOut(snapshot.items[0]) {
 		systemMessage = joinNotices(systemMessage, workflowNotice(cfg, "notice.workflowQueue", result.usage))
 	}
 	if snapshot.plain {
@@ -1762,7 +1766,7 @@ func onStop(input, cfg object) {
 
 var shellTools = map[string]bool{"Bash": true, "PowerShell": true}
 
-var platformBinDir = lazyRegexp(`^[a-z0-9]+-[a-z0-9]+/$`)
+var platformBinDir = lazyRegexp(`^(?:darwin|[a-z0-9]+-[a-z0-9]+)/$`)
 
 type shellWord struct {
 	text   string
@@ -1946,7 +1950,7 @@ func onPostToolBatch(input, cfg object) {
 	}
 
 	stateStamp := fileStamp(files.state)
-	if quietEligible(cfg, readState(), sid, result, result.usageStale) {
+	if quietEligible(cfg, peekState(), sid, result, result.usageStale) {
 		writeQuietMarker(sid, stateStamp, result.contextPercent, result.hasContext, result.model)
 	} else {
 		clearQuietMarker(sid)
@@ -2565,7 +2569,7 @@ func runHook() {
 		emitFallback()
 		return
 	}
-	cfg := loadConfig()
+	cfg := loadedConfig()
 	sid := sessionKey(input)
 	promptFromPlugin = false
 	if prompt := getString(input, "prompt"); prompt != "" && event == "UserPromptSubmit" {
@@ -2574,7 +2578,10 @@ func runHook() {
 			rememberSessionLanguage(sid, prompt)
 		}
 	}
-	applySessionLocale(cfg, readState(), sid)
+	if sessionLocaleWanted(cfg) {
+		settleLocaleLater(func() { applySessionLocale(cfg, peekState(), sid) })
+		defer settleLocaleLater(nil)
+	}
 	handler(input, cfg)
 	if !emitted {
 		emitFallback()

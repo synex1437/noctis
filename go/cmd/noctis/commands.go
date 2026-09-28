@@ -472,13 +472,14 @@ func runCheckpointCommand() {
 	state := readState()
 	bestSid, latest := latestCheckpointFor(state, cwd, now)
 	if sid != "" {
-		key, unique := resolveSid(sid, getMap(state, "checkpoints"))
+		all := allCheckpoints(state)
+		key, unique := resolveSid(sid, all)
 		if !unique {
 			os.Exit(2)
 		}
 		sid = key
 		bestSid, latest = "", nil
-		if entry := toObject(getMap(state, "checkpoints")[sid]); checkpointUsable(entry, "", now) {
+		if entry := toObject(all[sid]); checkpointUsable(entry, "", now) {
 			bestSid, latest = sid, entry
 		}
 	}
@@ -500,7 +501,7 @@ func runCheckpointCommand() {
 
 func countWithheldCheckpoints(state object, cwd, sid string, now int64) int {
 	withheld := 0
-	for key, raw := range getMap(state, "checkpoints") {
+	for key, raw := range allCheckpoints(state) {
 		if sid != "" && key != sid {
 			continue
 		}
@@ -823,7 +824,7 @@ func stateWriteResult(payload object) object {
 			result = object{"ok": false, "reason": "conflict", "stamp": stamp}
 			return
 		}
-		if err := writeJSONAtomic(files.state, document); err != nil {
+		if err := writeEncodedAtomic(files.state, marshalState(document)); err != nil {
 			result = object{"ok": false, "reason": err.Error()}
 			return
 		}
@@ -905,12 +906,7 @@ func runSelftest() {
 			report(false, T("selftest.taskFailed", orDefault(scheduled.err, scheduled.stderr)))
 		} else {
 			fmt.Println(T("selftest.taskWaiting"))
-			sleepUntil(float64(nowSec()+60), nil)
-			fired := false
-			for i := 0; i < 12 && !fired; i++ {
-				sleepUntil(float64(nowSec()+5), nil)
-				fired = statSafe(marker) != nil
-			}
+			fired := awaitMarker(marker, 120*time.Second, 250*time.Millisecond)
 			removeScheduledTask("Noctis-selftest-" + token)
 			if fired {
 				_ = os.Remove(marker)
@@ -927,8 +923,7 @@ func runSelftest() {
 		report(true, T("selftest.wake", wakeText))
 	} else if !isWindows {
 		pid := detachedSelf([]string{"selftest-mark", "--token", token, "--account", files.configDir})
-		sleepUntil(float64(nowSec()+3), nil)
-		fired := statSafe(marker) != nil
+		fired := awaitMarker(marker, 3*time.Second, 20*time.Millisecond)
 		if fired {
 			_ = os.Remove(marker)
 		}
@@ -941,6 +936,18 @@ func runSelftest() {
 	}
 	fmt.Println(T("doctor.issuesFound", doctorIssues))
 	os.Exit(1)
+}
+
+// awaitMarker reports whether marker appears within limit, looking every poll.
+func awaitMarker(marker string, limit, poll time.Duration) bool {
+	for deadline := time.Now().Add(limit); ; time.Sleep(poll) {
+		if statSafe(marker) != nil {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+	}
 }
 
 type tokenBucket struct {
@@ -1336,7 +1343,7 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:24px 0 8px;color:var(-
 .bar{display:block;height:100%%;background:var(--bar);border-radius:0 4px 4px 0}
 .value{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
 table{border-collapse:collapse;width:100%%;font-variant-numeric:tabular-nums}th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--track)}th:first-child,td:first-child{text-align:left}th{color:var(--muted);font-weight:600}
-</style></head><body><h1>noctis</h1><p class="sub">%s</p>%s</body></html>`, locale, html.EscapeString(T("report.header", formatNumber(data.days), data.transcripts, files.configDir)), body.String())
+</style></head><body><h1>noctis</h1><p class="sub">%s</p>%s</body></html>`, localeNow(), html.EscapeString(T("report.header", formatNumber(data.days), data.transcripts, files.configDir)), body.String())
 }
 
 func runReport() {

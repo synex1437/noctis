@@ -104,7 +104,7 @@ func TestAFreshSessionIsNotHandedAnotherSessionsCheckpoint(t *testing.T) {
 		t.Fatalf("the fresh session the runner started with its own handoff note was handed another session's checkpoint too: %q", context)
 	}
 	state := readState()
-	if getBool(getMap(getMap(state, "checkpoints"), "other-session"), "consumed", false) {
+	if getBool(checkpointRecord("other-session"), "consumed", false) {
 		t.Fatal("the fresh session used up another session's checkpoint")
 	}
 	if got := getString(getMap(getMap(state, "freshStarts"), "fresh-one"), "transcript"); got != transcript {

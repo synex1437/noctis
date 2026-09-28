@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,6 +28,7 @@ var ported = map[string]commandFunc{
 	"doctor":           runDoctor,
 	"selftest":         runSelftest,
 	"selftest-mark":    runSelftestMark,
+	"refresh":          runRefresh,
 	"state-write":      runStateWrite,
 	"report":           runReport,
 	"install":          runInstall,
@@ -69,7 +71,7 @@ func dispatchCommand() string {
 	return "hook"
 }
 
-var plumbingCommands = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "release-check": true, "selftest-mark": true, "state-write": true}
+var plumbingCommands = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "release-check": true, "selftest-mark": true, "state-write": true, "refresh": true}
 
 func userCommands() []string {
 	names := []string{}
@@ -100,6 +102,7 @@ func offeredCommands() string {
 }
 
 func main() {
+	dropLauncherGOMAXPROCS()
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			os.Exit(crashed(recovered))
@@ -147,7 +150,56 @@ func main() {
 		fmt.Fprintln(os.Stderr, describeHostIDs())
 		os.Exit(2)
 	}
+	if shortLived[command] {
+		startupConfig = cfg
+		if os.Getenv("GOGC") == "" {
+			debug.SetGCPercent(shortLivedGCPercent)
+			collectorTuned = true
+		}
+	}
 	run()
+}
+
+// launcherGOMAXPROCS is set by bin/noctis when it gives this process GOMAXPROCS=1: a hook is over
+// in milliseconds, and a single P spares it the threads the Go runtime otherwise starts for idle
+// CPUs as it boots. The runtime has read GOMAXPROCS before main runs, so main takes both variables
+// out at once, and nothing noctis starts (Claude Code, git, a chained status line, a detached
+// noctis) inherits a limit meant for this process. A GOMAXPROCS the user set is left alone.
+const launcherGOMAXPROCS = "NOCTIS_OWN_GOMAXPROCS"
+
+func dropLauncherGOMAXPROCS() {
+	if os.Getenv(launcherGOMAXPROCS) != "" {
+		_ = os.Unsetenv("GOMAXPROCS")
+		_ = os.Unsetenv(launcherGOMAXPROCS)
+	}
+}
+
+// shortLived commands run for milliseconds on every hook event or status line refresh, so they
+// collect garbage less often (GOGC 400 unless GOGC is set); their heap stays a few megabytes. One
+// that settles in to wait puts the default back (restoreCollector).
+var shortLived = map[string]bool{"hook": true, "statusline": true}
+
+const shortLivedGCPercent = 400
+
+var collectorTuned bool
+
+func restoreCollector() {
+	if collectorTuned {
+		collectorTuned = false
+		debug.SetGCPercent(100)
+	}
+}
+
+// startupConfig is the config main loaded for this run, handed to the command once so it is not
+// read and merged again.
+var startupConfig object
+
+func loadedConfig() object {
+	if cfg := startupConfig; cfg != nil {
+		startupConfig = nil
+		return cfg
+	}
+	return loadConfig()
 }
 
 func crashed(recovered any) int {
@@ -169,7 +221,7 @@ func crashed(recovered any) int {
 	return 1
 }
 
-var startedByHost = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "ensure": true, "release-check": true, "webhook": true, "selftest-mark": true, "state-write": true}
+var startedByHost = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "ensure": true, "release-check": true, "webhook": true, "selftest-mark": true, "state-write": true, "refresh": true}
 
 var answersTheCaller = map[string]bool{"webhook": true}
 

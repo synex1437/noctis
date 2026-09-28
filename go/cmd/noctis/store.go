@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -62,7 +63,7 @@ const (
 	blindAfterSeconds       = 60
 	fetchTimeout            = 5 * time.Second
 	appServerExitGrace      = time.Second
-	pluginVersion           = "7.3.1"
+	pluginVersion           = "7.5.0"
 	codingActivityWindow    = 45 * 60
 	codingTailBytes         = 64 * 1024
 	longTextSummaryChars    = 1200
@@ -109,7 +110,6 @@ var (
 	knownPermModes   = map[string]bool{"default": true, "manual": true, "acceptEdits": true, "plan": true, "auto": true, "dontAsk": true}
 	refusedPermModes = map[string]bool{"bypassPermissions": true}
 	localHosts       = map[string]bool{"127.0.0.1": true, "localhost": true, "::1": true, "[::1]": true}
-	safeNamePattern  = lazyRegexp(`[^A-Za-z0-9_.-]`)
 	compactPrefixPat = lazyRegexp(`(?i)^this session is being continued`)
 	testedClaudeMin  = "2.1.251"
 	testedClaudeMax  = "2.1.999"
@@ -441,6 +441,19 @@ func readFileRetrying(file string) ([]byte, error) {
 }
 
 func readJSONStrict(file string) strictRead {
+	read := readJSONShared(file)
+	if read.exists {
+		read.data = copyObject(read.data)
+	}
+	return read
+}
+
+// readJSONShared is readJSONStrict without the copy: its data is the parse kept for the next read
+// of the same bytes, lent to the caller, who must not change it.
+func readJSONShared(file string) strictRead {
+	if sharedParseCheck != nil {
+		checkKeptParses()
+	}
 	content, err := readFileRetrying(file)
 	if err != nil {
 		dropParsed(file)
@@ -450,16 +463,117 @@ func readJSONStrict(file string) strictRead {
 		return strictRead{exists: true, ok: false, unopened: true, err: err.Error()}
 	}
 	if cached, seen := parsedEntry(file); seen && bytes.Equal(cached.raw, content) {
-		return strictRead{exists: true, ok: true, data: copyObject(cached.data), raw: content}
+		return strictRead{exists: true, ok: true, data: cached.data, raw: content}
 	}
-	var raw any
-	if err := json.Unmarshal(bytes.TrimPrefix(content, utf8BOM), &raw); err != nil {
+	raw, err := decodeJSON(bytes.TrimPrefix(content, utf8BOM))
+	if err != nil {
 		dropParsed(file)
 		return strictRead{exists: true, ok: false, err: err.Error()}
 	}
 	data, _ := raw.(object)
-	keepParsed(file, parsedFile{raw: content, data: copyObject(data)})
+	keepParsed(file, parsedFile{raw: content, data: data})
 	return strictRead{exists: true, ok: true, data: data, raw: content}
+}
+
+// sharedParseCheck, set by the tests, sees every kept parse before any read, so code that changed
+// a map it was only lent fails the test that ran it.
+var sharedParseCheck func(file string, parsed parsedFile)
+
+func checkKeptParses() {
+	parseCacheLock.Lock()
+	kept := make(map[string]parsedFile, len(parseCache))
+	for file, parsed := range parseCache {
+		kept[file] = parsed
+	}
+	parseCacheLock.Unlock()
+	for file, parsed := range kept {
+		sharedParseCheck(file, parsed)
+	}
+}
+
+// keepWritten keeps value as the parse of the bytes just written for it, so the next read of the
+// file needs no parse. The copy it keeps holds what parsing those bytes gives back: numbers as
+// float64, text as the encoder wrote it. A value that could not be encoded wrote nothing, so there
+// is nothing to keep: kept, its nil bytes would pass for an empty file.
+func keepWritten(file string, encoded []byte, value object) {
+	if encoded == nil {
+		return
+	}
+	if copied, ok := jsonCopy(value); ok {
+		data, _ := copied.(object)
+		keepParsed(file, parsedFile{raw: encoded, data: data})
+	}
+}
+
+func jsonCopy(value any) (any, bool) {
+	switch typed := value.(type) {
+	case nil, bool, float64:
+		return value, true
+	case string:
+		if utf8.ValidString(typed) {
+			return value, true
+		}
+	case object:
+		if typed == nil {
+			return nil, true
+		}
+		clone := make(object, len(typed))
+		for key, item := range typed {
+			if !utf8.ValidString(key) {
+				return nil, false
+			}
+			if !jsonLeaf(item) {
+				copied, ok := jsonCopy(item)
+				if !ok {
+					return nil, false
+				}
+				item = copied
+			}
+			clone[key] = item
+		}
+		return clone, true
+	case []any:
+		if typed == nil {
+			return nil, true
+		}
+		clone := make([]any, len(typed))
+		for index, item := range typed {
+			if !jsonLeaf(item) {
+				copied, ok := jsonCopy(item)
+				if !ok {
+					return nil, false
+				}
+				item = copied
+			}
+			clone[index] = item
+		}
+		return clone, true
+	}
+	// Anything else (an int, a []string, text that is not UTF-8) comes back as the encoder and the
+	// parser make it.
+	encoded, ok := encodeJSON(value, true, false)
+	if !ok {
+		var err error
+		if encoded, err = json.Marshal(value); err != nil {
+			return nil, false
+		}
+	}
+	parsed, err := decodeJSON(encoded)
+	if err != nil {
+		return nil, false
+	}
+	return parsed, true
+}
+
+// jsonLeaf reports whether jsonCopy keeps value as it is: a literal, a number or UTF-8 text.
+func jsonLeaf(value any) bool {
+	switch typed := value.(type) {
+	case nil, bool, float64:
+		return true
+	case string:
+		return utf8.ValidString(typed)
+	}
+	return false
 }
 
 func parsedEntry(file string) (parsedFile, bool) {
@@ -496,7 +610,13 @@ func readJSON(file string) object {
 	return read.data
 }
 
+// marshalPretty, marshalState and marshalCompact write what a json.Encoder with HTML escaping off
+// writes, without its closing newline: encodeJSON's bytes when it vouches for them, encoding/json's
+// otherwise.
 func marshalPretty(value any) []byte {
+	if encoded, ok := encodeJSON(value, false, true); ok {
+		return encoded
+	}
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
@@ -508,7 +628,27 @@ func marshalPretty(value any) []byte {
 	return bytes.TrimRight(buffer.Bytes(), "\n")
 }
 
+// marshalState encodes state.json and used-checkpoints.json without indentation: noctis reads
+// them far more often than people do, and without it they are a fifth smaller and quicker to
+// write and to parse. nil when value cannot be encoded.
+func marshalState(value any) []byte {
+	if encoded, ok := encodeJSON(value, false, false); ok {
+		return encoded
+	}
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
+		fail("json encode failed: %v", err)
+		return nil
+	}
+	return bytes.TrimRight(buffer.Bytes(), "\n")
+}
+
 func marshalCompact(value any) []byte {
+	if encoded, ok := encodeJSON(value, false, false); ok {
+		return encoded
+	}
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
@@ -743,11 +883,11 @@ func readStdinJSON() object {
 		warn("stdin read failed: %v", err)
 		return stdinCache
 	}
-	if strings.TrimSpace(string(content)) == "" {
+	if len(bytes.TrimSpace(content)) == 0 {
 		return stdinCache
 	}
-	var raw any
-	if err := json.Unmarshal(content, &raw); err != nil {
+	raw, err := decodeJSON(content)
+	if err != nil {
 		warn("stdin parse failed: %v", err)
 		return stdinCache
 	}
@@ -962,12 +1102,15 @@ func emptyState() object {
 		"typedTurns":       object{},
 		"continuedBy":      object{},
 		"freshStarts":      object{},
+		// usedCheckpointsDue is when the oldest record in used-checkpoints.json expires, 0 when
+		// it holds none.
+		"usedCheckpointsDue": float64(0),
 	}
 }
 
 func usableStateJSON(content []byte) bool {
-	var raw any
-	if err := json.Unmarshal(content, &raw); err != nil {
+	raw, err := decodeJSON(content)
+	if err != nil {
 		return false
 	}
 	_, isObject := raw.(map[string]any)
@@ -981,8 +1124,10 @@ func stateProblem(result strictRead) string {
 	return "not a JSON object"
 }
 
+// readStoredState lends the kept parse of state.json: readStateWithBytes copies it, peekState does
+// not.
 func readStoredState() (object, []byte) {
-	primary := readJSONStrict(files.state)
+	primary := readJSONShared(files.state)
 	if primary.ok && !primary.exists {
 		return object{}, nil
 	}
@@ -992,7 +1137,7 @@ func readStoredState() (object, []byte) {
 
 	for attempt := 0; attempt < 4 && !(primary.ok && primary.data != nil); attempt++ {
 		time.Sleep(25 * time.Millisecond)
-		primary = readJSONStrict(files.state)
+		primary = readJSONShared(files.state)
 	}
 	if primary.ok && primary.data != nil {
 		return primary.data, primary.raw
@@ -1001,7 +1146,7 @@ func readStoredState() (object, []byte) {
 	backup := readJSONStrict(files.stateBackup)
 	if !primary.unopened && backup.ok && backup.data != nil && backup.exists {
 
-		if err := writeJSONAtomic(files.state, backup.data); err != nil {
+		if err := writeEncodedAtomic(files.state, marshalState(backup.data)); err != nil {
 			warn("state.json unusable (%s); recovered from backup but could not rewrite it: %v", stateProblem(primary), err)
 		} else {
 			warn("state.json unusable (%s); restored from the backup", stateProblem(primary))
@@ -1033,6 +1178,21 @@ func readStateWithBytes() (object, []byte) {
 	if stored == nil {
 		return nil, nil
 	}
+	return stateOf(stored, true), raw
+}
+
+// peekState is readState for code that only looks: the maps in it are the kept parse of
+// state.json, lent, so nothing it returns may be changed, and it must not reach code that changes
+// the state it is given (clearDeadHandoffs does).
+func peekState() object {
+	stored, _ := readStoredState()
+	if stored == nil {
+		return emptyState()
+	}
+	return stateOf(stored, false)
+}
+
+func stateOf(stored object, copied bool) object {
 	state := emptyState()
 	for key, template := range state {
 		value, present := stored[key]
@@ -1040,16 +1200,17 @@ func readStateWithBytes() (object, []byte) {
 			continue
 		}
 		if _, templateIsMap := template.(object); templateIsMap {
-			if valueMap, ok := value.(object); ok {
-				state[key] = valueMap
-			} else {
+			if _, ok := value.(object); !ok {
 				state[key] = object{}
+				continue
 			}
-			continue
+		}
+		if copied {
+			value = copyValue(value)
 		}
 		state[key] = value
 	}
-	return state, raw
+	return state
 }
 
 func stateMap(state object, key string) object {
@@ -1177,24 +1338,7 @@ func pruneState(state object, now int64) {
 			delete(stateMap(state, "tasks"), sid)
 		}
 	}
-	for key, raw := range stateMap(state, "checkpoints") {
-		entry, _ := raw.(object)
-		if entry != nil && float64(now)-numberOr(entry, "at", 0) <= checkpointTTLSeconds {
-			continue
-		}
-		if entry != nil {
-			if target := getString(entry, "path"); target != "" && target == filepath.Join(files.checkpoints, filepath.Base(target)) {
-				if err := os.Remove(target); err != nil {
-					logInfo("expired checkpoint already gone: %s", target)
-				}
-			}
-
-			if cwd, ref := getString(entry, "cwd"), getString(entry, "snapshot"); cwd != "" && ref != "" {
-				notePruned(&prunedSnapshots, object{"cwd": cwd, "ref": ref})
-			}
-		}
-		delete(stateMap(state, "checkpoints"), key)
-	}
+	dropExpiredCheckpoints(stateMap(state, "checkpoints"), now, nil)
 
 	for name, ttl := range map[string]float64{
 		"routes":         routeTTLSeconds,
@@ -1347,6 +1491,140 @@ func drainPrunedRunners() {
 	}
 }
 
+// dropExpiredCheckpoints drops the checkpoint records past the checkpoint TTL, with the note each
+// names in checkpoints/ unless inUse says a newer record still names it, and its git snapshot.
+func dropExpiredCheckpoints(records object, now int64, inUse map[string]bool) {
+	for key, raw := range records {
+		entry, _ := raw.(object)
+		if entry != nil && float64(now)-numberOr(entry, "at", 0) <= checkpointTTLSeconds {
+			continue
+		}
+		if entry != nil {
+			if target := getString(entry, "path"); target != "" && !inUse[target] && target == filepath.Join(files.checkpoints, filepath.Base(target)) {
+				if err := os.Remove(target); err != nil {
+					logInfo("expired checkpoint already gone: %s", target)
+				}
+			}
+
+			if cwd, ref := getString(entry, "cwd"), getString(entry, "snapshot"); cwd != "" && ref != "" {
+				notePruned(&prunedSnapshots, object{"cwd": cwd, "ref": ref})
+			}
+		}
+		delete(records, key)
+	}
+}
+
+// A checkpoint that was used (a session resumed from it, or it was handed to a new session) moves
+// from state.json to used-checkpoints.json beside it, which only a Read of a note handed on and
+// the checkpoint command look at, so the state every hook reads keeps only the checkpoints still
+// to be used. The state lock covers both files.
+func usedCheckpointsFile() string {
+	return filepath.Join(filepath.Dir(files.state), "used-checkpoints.json")
+}
+
+// peekUsedCheckpoints lends the kept parse of used-checkpoints.json.
+func peekUsedCheckpoints() object {
+	if read := readJSONShared(usedCheckpointsFile()); read.ok && read.data != nil {
+		return read.data
+	}
+	return object{}
+}
+
+// allCheckpoints is every checkpoint record, used or not, for code that only looks. Of two
+// records of one session the newer wins.
+func allCheckpoints(state object) object {
+	all := object{}
+	for sid, raw := range peekUsedCheckpoints() {
+		all[sid] = raw
+	}
+	for sid, raw := range getMap(state, "checkpoints") {
+		if kept := toObject(all[sid]); kept == nil || numberOr(toObject(raw), "at", 0) >= numberOr(kept, "at", 0) {
+			all[sid] = raw
+		}
+	}
+	return all
+}
+
+// storedState is state as state.json keeps it: without the checkpoints marked used, which move
+// to used-checkpoints.json. They stay when that file cannot be written, so none is lost. state
+// itself is left as it is. used-checkpoints.json is read only when a checkpoint moves there or
+// its oldest record is due to expire, not on every write.
+func storedState(state object, now int64) object {
+	checkpoints := getMap(state, "checkpoints")
+	used := object{}
+	for sid, raw := range checkpoints {
+		if entry := toObject(raw); entry != nil && getBool(entry, "consumed", false) {
+			used[sid] = entry
+		}
+	}
+	due := numberOr(state, "usedCheckpointsDue", 0)
+	if len(used) == 0 && (due == 0 || float64(now) < due) {
+		return state
+	}
+	open := object{}
+	inUse := map[string]bool{}
+	for sid, raw := range checkpoints {
+		if _, moving := used[sid]; !moving {
+			open[sid] = raw
+			inUse[getString(toObject(raw), "path")] = true
+		}
+	}
+	next, kept := keepUsedCheckpoints(used, now, inUse)
+	if !kept {
+		return state
+	}
+	stored := make(object, len(state))
+	for key, value := range state {
+		stored[key] = value
+	}
+	stored["checkpoints"] = open
+	stored["usedCheckpointsDue"] = next
+	return stored
+}
+
+// keepUsedCheckpoints adds used to used-checkpoints.json, where a newer record of a session
+// replaces an older one, and drops the records past the checkpoint TTL. It runs under the state
+// lock, and returns when the oldest record left expires (0 when none is left) and whether the
+// file was written.
+func keepUsedCheckpoints(used object, now int64, inUse map[string]bool) (float64, bool) {
+	file := usedCheckpointsFile()
+	read := readJSONStrict(file)
+	if read.unopened {
+		warn("used-checkpoints.json could not be opened (%s); the used checkpoints stay in state.json", read.err)
+		return 0, false
+	}
+	kept := read.data
+	if kept == nil {
+		if read.exists {
+			warn("used-checkpoints.json unusable (%s); starting it over", orDefault(read.err, "not a JSON object"))
+		}
+		kept = object{}
+	}
+	for sid, raw := range used {
+		if previous := toObject(kept[sid]); previous == nil || numberOr(toObject(raw), "at", 0) >= numberOr(previous, "at", 0) {
+			kept[sid] = raw
+		}
+	}
+	dropExpiredCheckpoints(kept, now, inUse)
+	encoded := marshalState(kept)
+	if encoded == nil {
+		return 0, false
+	}
+	if err := writeEncodedAtomic(file, encoded); err != nil {
+		warn("used-checkpoints.json not written: %v; the used checkpoints stay in state.json", err)
+		return 0, false
+	}
+	keepWritten(file, encoded, kept)
+	due := 0.0
+	for _, raw := range kept {
+		// A record is dropped once more than the TTL has passed since it was made.
+		if expires := numberOr(toObject(raw), "at", 0) + checkpointTTLSeconds + 1; due == 0 || expires < due {
+			due = expires
+		}
+	}
+	return due, true
+}
+
 func updateState(mutator func(state object)) object {
 	var result object
 	withFileLock(files.stateLock, func() {
@@ -1357,8 +1635,10 @@ func updateState(mutator func(state object)) object {
 			return
 		}
 		mutator(state)
-		pruneState(state, nowSec())
-		encoded := marshalPretty(state)
+		now := nowSec()
+		pruneState(state, now)
+		stored := storedState(state, now)
+		encoded := marshalState(stored)
 		if encoded == nil {
 			fail("state.json could not be encoded; left unchanged")
 			result = state
@@ -1380,6 +1660,7 @@ func updateState(mutator func(state object)) object {
 			}
 		}
 		mustWriteEncoded(files.state, encoded)
+		keepWritten(files.state, encoded, stored)
 		result = state
 	})
 	drainPrunedRunners()
@@ -1422,7 +1703,7 @@ func hashKey(text string) string {
 }
 
 func safeName(text string) string {
-	value := safeNamePattern.ReplaceAllString(text, "_")
+	value := strings.Map(safeNameChar, text)
 	if strings.Trim(value, ".") == "" {
 		value = strings.Repeat("_", len(value))
 	}
@@ -1430,6 +1711,16 @@ func safeName(text string) string {
 		value = value[:72] + "-" + hashKey(text)
 	}
 	return value
+}
+
+// safeNameChar keeps A-Z, a-z, 0-9, '_', '.' and '-' and makes any other character, or any byte
+// that is not UTF-8, a '_'.
+func safeNameChar(char rune) rune {
+	switch {
+	case 'a' <= char && char <= 'z', 'A' <= char && char <= 'Z', '0' <= char && char <= '9', char == '_', char == '.', char == '-':
+		return char
+	}
+	return '_'
 }
 
 func sessionKey(input object) string {
@@ -1506,8 +1797,8 @@ func jsonUnmarshal(content []byte, target any) error {
 }
 
 func jsonUnmarshalObject(content []byte, target *object) error {
-	var raw any
-	if err := json.Unmarshal(content, &raw); err != nil {
+	raw, err := decodeJSON(content)
+	if err != nil {
 		return err
 	}
 	data, _ := raw.(object)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -271,14 +272,19 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 		if heal {
 			next["selfHealAt"] = float64(now)
 		}
-		if len(previous) > 0 {
-			if current := readJSONStrict(files.usage); current.ok && current.exists {
-				if err := os.WriteFile(files.usageBackup, current.raw, 0o600); err != nil {
-					warn("usage.json backup not written: %v", err)
-				}
+		encoded := marshalPretty(next)
+		current := readJSONShared(files.usage)
+		if current.ok && current.exists && encoded != nil && bytes.Equal(current.raw, encoded) {
+			// A refresh within the same second as the last one, with nothing new: no write.
+			return
+		}
+		if len(previous) > 0 && current.ok && current.exists {
+			if err := os.WriteFile(files.usageBackup, current.raw, 0o600); err != nil {
+				warn("usage.json backup not written: %v", err)
 			}
 		}
-		mustWriteJSON(files.usage, next)
+		mustWriteEncoded(files.usage, encoded)
+		keepWritten(files.usage, encoded, next)
 	})
 	return sid, heal
 }
@@ -286,7 +292,7 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 func runStatusline() {
 	input := readStdinJSON()
 	now := nowSec()
-	cfg := loadConfig()
+	cfg := loadedConfig()
 	input = normalizeStatuslineInput(activeHost, input, now)
 	sid, heal := recordStatusline(input, now, getBool(section(cfg, "usage"), "multiSessionMax", true))
 	if heal {
@@ -297,7 +303,7 @@ func runStatusline() {
 	sweepStaleLocks()
 	usage := currentUsage(now)
 	recordBudgetDay(usage, now)
-	state := readState()
+	state := peekState()
 	applySessionLocale(cfg, state, sid)
 	statuslineCfg := section(cfg, "statusline")
 	chainOutput := ""
