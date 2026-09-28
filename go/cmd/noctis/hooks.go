@@ -316,9 +316,11 @@ func releaseClearedSession(newSid, cwd string, now int64) {
 	usageFile := readJSON(files.usage)
 	state := readState()
 	sessions := getMap(usageFile, "sessions")
+	waits, handedOff := getMap(state, "waits"), getMap(state, "handedOff")
 	type candidate struct {
-		sid  string
-		info object
+		sid         string
+		info        object
+		interrupted bool
 	}
 	candidates := []candidate{}
 	for sid, raw := range sessions {
@@ -326,23 +328,32 @@ func releaseClearedSession(newSid, cwd string, now int64) {
 		if sid == newSid || info == nil || getString(info, "cwd") != cwd || float64(now)-numberOr(info, "updatedAt", 0) > clearedSessionWindow {
 			continue
 		}
-		candidates = append(candidates, candidate{sid, info})
+		wait := getMap(waits, sid)
+		// A hook that still sleeps on its session holds another window: /clear runs in a window
+		// only once its pause was stopped, and a wake of the session a window cleared is let go
+		// when that session ends (onSessionEnd).
+		if wait != nil && hookSleeping(wait) && sleeperAlive(wait) {
+			continue
+		}
+		candidates = append(candidates, candidate{sid, info, wait != nil && hookSleeping(wait) && handedOff[sid] == nil})
 	}
 	if len(candidates) == 0 {
 		return
 	}
+	// The window cleared the session it showed last; of two seen in the same second, the one whose
+	// hook was stopped.
 	sort.Slice(candidates, func(a, b int) bool {
-		return numberOr(candidates[a].info, "updatedAt", 0) > numberOr(candidates[b].info, "updatedAt", 0)
-	})
-	waits := getMap(state, "waits")
-	chosen := candidates[0]
-	for _, entry := range candidates {
-		if wait := getMap(waits, entry.sid); wait != nil && hookSleeping(wait) {
-			chosen = entry
-			break
+		seenA, seenB := numberOr(candidates[a].info, "updatedAt", 0), numberOr(candidates[b].info, "updatedAt", 0)
+		if seenA != seenB {
+			return seenA > seenB
 		}
-	}
-	if wait := getMap(waits, chosen.sid); wait != nil && hookSleeping(wait) && getMap(getMap(state, "handedOff"), chosen.sid) == nil && clearWait(chosen.sid, state) {
+		if candidates[a].interrupted != candidates[b].interrupted {
+			return candidates[a].interrupted
+		}
+		return candidates[a].sid < candidates[b].sid
+	})
+	chosen := candidates[0]
+	if chosen.interrupted && clearWait(chosen.sid, state) {
 		logInfo("/clear in %s: interrupted wait of %s released", cwd, chosen.sid)
 	}
 	override := getMap(getMap(state, "modelOverrides"), chosen.sid)
@@ -360,6 +371,13 @@ func releaseClearedSession(newSid, cwd string, now int64) {
 func onSessionEnd(input, _ object) {
 	sid := sessionKey(input)
 	handingOff := stopFailureHandedOff(sid)
+	// /clear ends the session its window showed: a wake still sleeping on it, or a pause stopped
+	// before the /clear, must not wake or resume a conversation the person cleared.
+	if state := readState(); getString(input, "reason") == "clear" && !handingOff && getMap(getMap(state, "handedOff"), sid) == nil {
+		if wait := getMap(getMap(state, "waits"), sid); wait != nil && hookSleeping(wait) && clearWait(sid, state) {
+			logInfo("/clear ended %s: the wait its hook slept on is released", sid)
+		}
+	}
 	updateState(func(state object) {
 		delete(stateMap(state, "modelOverrides"), sid)
 		delete(stateMap(state, "autoResume"), sid)

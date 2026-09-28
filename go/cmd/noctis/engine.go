@@ -1890,6 +1890,17 @@ func holderAlive(wait object) bool {
 	return pid != os.Getpid() && ownHelperProcess(processName(pid))
 }
 
+// sleeperAlive tells whether a hook still sleeps on a wait. A pause held in the hook has a holder
+// to ask; a same-session wake has none and counts as alive while its heartbeat is fresh, as the
+// runner and strandedBecause count it.
+func sleeperAlive(wait object) bool {
+	if holderAlive(wait) {
+		return true
+	}
+	waking := numberOr(wait, "waking", 0)
+	return waking > 0 && float64(nowSec())-math.Max(numberOr(wait, "heartbeat", 0), waking) < heartbeatFreshSeconds
+}
+
 func releaseInterruptedWait(sid string, state object) {
 	clearDeadHandoffs(state)
 	dropInterruptedWait(sid, state)
