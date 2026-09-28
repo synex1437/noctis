@@ -42,3 +42,44 @@ func TestALauncherThatNeverWritesItsPidDidNotStart(t *testing.T) {
 		t.Fatal("a pid file that stayed empty was taken for a session that started")
 	}
 }
+
+func TestAWindowRunnerStopsWatchingAPidThatNowNamesAnotherProcess(t *testing.T) {
+	previous := launchPollInterval
+	launchPollInterval = 20 * time.Millisecond
+	t.Cleanup(func() { launchPollInterval = previous })
+	window := idleWindow(t)
+	watch := func(started string) <-chan struct{} {
+		returned := make(chan struct{})
+		go func() {
+			defer close(returned)
+			waitForPid(window.pid, started)
+		}()
+		return returned
+	}
+
+	select {
+	case <-watch("1"):
+	case <-time.After(10 * time.Second):
+		t.Fatalf("the window ended and its pid %d went to a process started at another time, yet the runner kept watching it as the window (for up to %s)", window.pid, launchMaxWait)
+	}
+	var watchers []<-chan struct{}
+	for _, started := range []string{processStarted(window.pid), ""} {
+		watched := watch(started)
+		watchers = append(watchers, watched)
+		select {
+		case <-watched:
+			t.Fatalf("the runner stopped watching pid %d (recorded start time %q) while the launched process still runs", window.pid, started)
+		case <-time.After(300 * time.Millisecond):
+		}
+	}
+	window.stop()
+	// The watchers poll until they see the window gone, reading launchPollInterval as they go: the
+	// cleanup puts it back only once they have returned.
+	for _, watched := range watchers {
+		select {
+		case <-watched:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("the runner kept watching pid %d after the launched process ended", window.pid)
+		}
+	}
+}

@@ -48,18 +48,22 @@ func waitForFile(path string, timeout time.Duration) bool {
 	return false
 }
 
-func waitForPid(pid int) {
+// waitForPid waits while pid runs, up to launchMaxWait, and only while it still has the start time
+// started when one was recorded: a pid with another one names a program that got it after the
+// launched process ended between two polls.
+func waitForPid(pid int, started string) {
 	deadline := time.Now().Add(launchMaxWait)
-	for time.Now().Before(deadline) && processAlive(pid) {
+	for time.Now().Before(deadline) && processAlive(pid) && (started == "" || processStarted(pid) == started) {
 		time.Sleep(launchPollInterval)
 	}
 }
 
-func recordLaunch(sid string, pid int, how string) {
+func recordLaunch(sid string, pid int, how string) string {
 	started := processStarted(pid)
 	updateState(func(state object) {
 		stateMap(state, "launched")[sid] = object{"pid": float64(pid), "started": started, "at": float64(nowSec()), "how": how, "runner": float64(os.Getpid())}
 	})
+	return started
 }
 
 func clearLaunch(sid string, pid int) {
@@ -302,9 +306,9 @@ func waitForLaunchedSession(sid, pidFile, how string) bool {
 		warn("session %s: the launcher never reported a claude process; assuming it did not start", sid)
 		return false
 	}
-	recordLaunch(sid, pid, how)
+	started := recordLaunch(sid, pid, how)
 	defer clearLaunch(sid, pid)
-	waitForPid(pid)
+	waitForPid(pid, started)
 	logInfo("%s session ended (pid %d)", how, pid)
 	return true
 }
