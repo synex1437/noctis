@@ -360,10 +360,20 @@ func oauthTokenState() (string, string) {
 	if token := os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"); token != "" {
 		return token, "present"
 	}
-	credentials := credentialsFile()
-	if credentials == nil && isDarwin {
-		credentials = keychainCredentials()
+	token, state := signInState(credentialsFile())
+	if state != "present" && isDarwin {
+		// There the live sign-in sits in the Keychain, and a credentials file left from another
+		// setup, expired or without a sign-in, must not hide it.
+		if fromKeychain, keychainState := signInState(keychainCredentials()); keychainState == "present" || state == "missing" {
+			return fromKeychain, keychainState
+		}
 	}
+	return token, state
+}
+
+// signInState reads the OAuth access token out of credentials: "present" with the token, or
+// "missing" or "expired" without one.
+func signInState(credentials object) (string, string) {
 	oauth := getMap(credentials, "claudeAiOauth")
 	token := getString(oauth, "accessToken")
 	if token == "" {
