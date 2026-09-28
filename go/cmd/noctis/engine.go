@@ -1333,8 +1333,16 @@ func runPowershell(script string, timeout time.Duration) shellResult {
 	return shellResult{ok: true}
 }
 
+// psQuoteDoubled doubles every character PowerShell reads as a single quote: the apostrophe and the
+// typographic single quotes U+2018 to U+201B.
+var psQuoteDoubled = strings.NewReplacer("'", "''", "\u2018", "\u2018\u2018", "\u2019", "\u2019\u2019", "\u201a", "\u201a\u201a", "\u201b", "\u201b\u201b")
+
+// psQuote returns text as a PowerShell single-quoted string. Any of the five single quotes ends such a
+// string unless it is doubled, and a doubled one stands for itself, so a path with a typographic
+// apostrophe cannot end the string early: that broke the task registration and could run the rest of
+// the path as script.
 func psQuote(text string) string {
-	return "'" + strings.ReplaceAll(text, "'", "''") + "'"
+	return "'" + psQuoteDoubled.Replace(text) + "'"
 }
 
 func taskName(sid string) string {
