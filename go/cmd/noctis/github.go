@@ -386,19 +386,24 @@ func runQueue() {
 		}
 		lines = append(lines, fmt.Sprintf("- [ ] %s%s %s", priorityFromLabels(labels), id, title))
 	}
-	content := strings.Join(fileLines, "\n")
 	if len(lines) > 0 {
-		if content == "" {
-			content = "# TASKS" + newline
+		cr, added := strings.TrimSuffix(newline, "\n"), []string{}
+		for _, line := range lines {
+			added = append(added, line+cr)
 		}
-		if !strings.HasSuffix(content, "\n") {
-			content += newline
+		if end := len(fileLines) - 1; fileLines[end] != "" {
+			fileLines[end] += cr
+			fileLines = append(fileLines, "")
+		} else if end == 0 {
+			fileLines = []string{"# TASKS" + cr, ""}
 		}
-		if !strings.Contains(content, "## GitHub issues") {
-			content += newline + "## GitHub issues" + newline
+		at := importSectionEnd(fileLines)
+		if at < 0 {
+			at, added = len(fileLines)-1, append([]string{cr, "## GitHub issues" + cr}, added...)
 		}
-		content += strings.Join(lines, newline) + newline
+		fileLines = slices.Insert(fileLines, at, added...)
 	}
+	content := strings.Join(fileLines, "\n")
 	if bom {
 		content = "\uFEFF" + content
 	}
@@ -558,6 +563,55 @@ func rememberOpenIssues(cfg object, queuePath string) {
 			}
 		}
 	})
+}
+
+// importSectionEnd returns the line before which new items go when the file
+// already has a "## GitHub issues" heading outside a code block: after the last
+// item of that section and the lines indented under it, or right after the
+// heading while the section holds no item. The section ends at the next heading
+// of level one or two. It returns -1 when the file has no such heading.
+func importSectionEnd(fileLines []string) int {
+	heading, fenced := -1, false
+	for index, line := range fileLines {
+		if queueFence(line) {
+			fenced = !fenced
+		} else if !fenced && strings.EqualFold(strings.TrimSpace(line), "## GitHub issues") {
+			heading = index
+			break
+		}
+	}
+	if heading < 0 {
+		return -1
+	}
+	at, item := heading+1, false
+	for index := heading + 1; index < len(fileLines); index++ {
+		line := fileLines[index]
+		fence := queueFence(line)
+		if fence {
+			fenced = !fenced
+		}
+		_, _, listed := queueLineParts(line)
+		if !listed {
+			_, _, listed = queueBulletParts(line)
+		}
+		switch unindented := strings.TrimLeft(line, " \t"); {
+		case strings.TrimSpace(line) == "":
+		case item && unindented != line:
+			at = index + 1
+		case fence || fenced:
+			item = false
+		case queueHeading.MatchString(line):
+			if len(unindented)-len(strings.TrimLeft(unindented, "#")) <= 2 {
+				return at
+			}
+			item = false
+		case listed:
+			at, item = index+1, true
+		default:
+			item = false
+		}
+	}
+	return at
 }
 
 // writeImportedQueue replaces the queue file in one step, so a hook that reads it
