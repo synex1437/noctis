@@ -415,7 +415,7 @@ func firstRunSetup(defaults object) {
 				}
 			}
 		}
-		data["statusLine"] = object{"type": "command", "command": fmt.Sprintf(`"%s" statusline`, forwardSlashes(binary))}
+		data["statusLine"] = statusLineOver(getMap(data, "statusLine"), binary)
 		wired = true
 		return true
 	})
@@ -479,6 +479,14 @@ func healStatusLine() {
 	}) {
 		logInfo("ensure: statusLine re-pointed from %s to %s", from, to)
 	}
+}
+
+// statusLineOver is noctis's status line in place of line: only the command changes, so the fields of
+// a status line it chains (its padding, say) stay, and uninstall gives that line back whole.
+func statusLineOver(line object, binary string) object {
+	own := cloneObject(line)
+	own["type"], own["command"] = "command", fmt.Sprintf(`"%s" statusline`, forwardSlashes(binary))
+	return own
 }
 
 func statusLineBinary(command string) string {
@@ -603,7 +611,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		config["statusline"] = statusline
 		chained = previous
 	}
-	data["statusLine"] = object{"type": "command", "command": fmt.Sprintf(`"%s" statusline`, forwardSlashes(binary))}
+	data["statusLine"] = statusLineOver(getMap(data, "statusLine"), binary)
 	effort := orDefault(getString(section(config, "models"), "effort"), getString(section(defaults, "models"), "effort"))
 	env := getMap(data, "env")
 	if env == nil {
@@ -918,7 +926,8 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 	statusLine := getString(getMap(data, "statusLine"), "command")
 	if strings.Contains(statusLine, "guard.js") || strings.Contains(statusLine, "noctis") {
 		if chain != "" {
-			data["statusLine"] = object{"type": "command", "command": chain}
+			line := getMap(data, "statusLine")
+			line["type"], line["command"] = "command", chain
 		} else {
 			delete(data, "statusLine")
 		}
