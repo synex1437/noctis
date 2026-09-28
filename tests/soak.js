@@ -61,6 +61,7 @@ const stats = {
   overloadStorms: 0,
   overloadRetries: 0,
   overloadGiveups: 0,
+  inHookHolds: 0,
   workspaceFlags: 0,
   workflowLaunches: 0,
   workflowNotes: 0,
@@ -139,6 +140,11 @@ let ACCOUNTS = [];
 // probe may: every other hook waits for a fetch at most refreshWait and leaves the rest to a
 // refresher.
 const FETCH_TIMEOUT_HOLD_MS = 4500;
+// A reset closer than wait.maxInHookMinutes is waited out in the hook itself. The soak sets 0, which
+// noctis reads as its minimum of one minute, so an in-hook wait may hold the host that long (and a
+// little more for the hook's own work), never longer. inHookHolds counts the in-hook waits that held
+// the host at least FETCH_TIMEOUT_HOLD_MS.
+const IN_HOOK_HOLD_MS = 70 * 1000;
 
 function logSince(file, offset) {
   try {
@@ -165,7 +171,12 @@ function timedHook(acc, input, extraEnv = {}) {
   stats.latencies.push(hookMs);
   stats.timings.push({ ms: hookMs, event, sid: input.session_id || '?' });
   stats.labWaitMs = Math.max(stats.labWaitMs, elapsed - hookMs);
-  if (hookMs >= FETCH_TIMEOUT_HOLD_MS && event !== 'StopFailure' && !/probing before allowing more work/.test(logSince(log, logFrom))) {
+  const hookLog = hookMs >= FETCH_TIMEOUT_HOLD_MS ? logSince(log, logFrom) : '';
+  const inHookWait = hookLog.split('\n').some((line) => line.includes(` for ${input.session_id}: `) && line.includes('; inHook=true;'));
+  if (inHookWait) {
+    stats.inHookHolds += 1;
+    if (hookMs > IN_HOOK_HOLD_MS) stats.anomalies.push(`${event} (${input.session_id}) held the host ${hookMs} ms in an in-hook wait, past the minute the soak allows`);
+  } else if (hookMs >= FETCH_TIMEOUT_HOLD_MS && event !== 'StopFailure' && !/probing before allowing more work/.test(hookLog)) {
     stats.anomalies.push(`${event} (${input.session_id}) held the host ${hookMs} ms, as long as a usage fetch that times out`);
   }
   stats.hooks += 1;
@@ -1050,6 +1061,7 @@ async function main() {
     overloadStorms: stats.overloadStorms,
     overloadRetries: stats.overloadRetries,
     overloadGiveups: stats.overloadGiveups,
+    inHookHolds: stats.inHookHolds,
     workspaceFlags: stats.workspaceFlags,
     workflowLaunches: stats.workflowLaunches,
     workflowNotes: stats.workflowNotes,
