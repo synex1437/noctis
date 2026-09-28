@@ -923,21 +923,33 @@ func antigravityRateLimits(input object, now int64) object {
 		} else {
 			continue
 		}
-		key := "seven_day"
+		// A bucket's name says its window; the time to its reset only places a bucket whose name
+		// does not, since a weekly bucket also resets within 5 hours once a week.
+		key, named := "", true
 		lower := strings.ToLower(name)
-		if resetsAt-float64(now) <= 5*3600+15*60 || strings.Contains(lower, "5h") || strings.Contains(lower, "five") || strings.Contains(lower, "hour") {
+		switch {
+		case strings.Contains(lower, "week") || strings.Contains(lower, "7d") || strings.Contains(lower, "seven"):
+			key = "seven_day"
+		case strings.Contains(lower, "5h") || strings.Contains(lower, "five") || strings.Contains(lower, "hour"):
 			key = "five_hour"
+		case resetsAt-float64(now) <= 5*3600+15*60:
+			key, named = "five_hour", false
+		default:
+			key, named = "seven_day", false
 		}
 		used, sane := sanePercent((1 - remaining) * 100)
 		if !sane || !saneResetTime(resetsAt, now) {
 			warn("the status line quota for %q is unusable (remaining_fraction=%v); ignored", name, remaining)
 			continue
 		}
-		entry := object{"used": used, "resets_at": resetsAt}
+		entry := object{"used": used, "resets_at": resetsAt, "named": named}
 		current := getMap(limits, key)
+		if current != nil && getBool(current, "named", false) && !named {
+			continue
+		}
 		modelWords := strings.Fields(strings.ToLower(model))
 		prefers := len(modelWords) > 0 && strings.Contains(lower, modelWords[0])
-		if current == nil || prefers || (!getBool(current, "preferred", false) && used > numberOr(current, "used", 0)) {
+		if current == nil || named != getBool(current, "named", false) || prefers || (!getBool(current, "preferred", false) && used > numberOr(current, "used", 0)) {
 			entry["preferred"] = prefers
 			limits[key] = entry
 		}
