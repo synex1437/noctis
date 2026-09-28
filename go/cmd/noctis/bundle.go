@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -22,10 +23,10 @@ const (
 )
 
 var (
-	bundleTokenPattern = lazyRegexp(`(?i)(sk-ant-[A-Za-z0-9_-]+|sk-[a-z]+-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|xox[abprs]-[A-Za-z0-9-]{8,}|AKIA[0-9A-Z]{12,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+|(?:api[_-]?key|access[_-]?token|oauth[_-]?token|secret|password|bearer|token|key)["'=: ]+[A-Za-z0-9._~+/-]{8,}|glpat-[A-Za-z0-9_-]{8,}|npm_[A-Za-z0-9]{8,}|AIza[A-Za-z0-9_-]{8,}|https?://[^\s"'/]+:[^\s"'/]+@)`)
+	bundleTokenPattern = lazyRegexp(`(?i)(sk-ant-[A-Za-z0-9_-]+|sk-[a-z]+-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|xox[abprs]-[A-Za-z0-9-]{8,}|AKIA[0-9A-Z]{12,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+|(?:api[_-]?key|access[_-]?token|oauth[_-]?token|secret|password|bearer|token|key)["'=: ]+[A-Za-z0-9._~+/-]{8,}|glpat-[A-Za-z0-9_-]{8,}|npm_[A-Za-z0-9]{8,}|AIza[A-Za-z0-9_-]{8,}|[a-z][a-z0-9+.-]*://[^\s"'/]*:[^\s"'/]+@)`)
 
 	bundleWebhookPattern = lazyRegexp(`(?i)(?:[a-z][a-z0-9+.-]*:/*[^\s"']*(?:` + bundleWebhookHosts + `|[?&](?:token|key|secret|auth)=)|[^\s"']*(?:` + bundleWebhookHosts + `)/)[^\s"']*`)
-	bundleSecretKeys     = map[string]bool{"url": true, "webhook": true, "webhookurl": true, "token": true, "chatid": true, "secret": true, "key": true, "apikey": true, "password": true, "chaincommand": true}
+	bundleSecretKeys     = map[string]bool{"url": true, "webhook": true, "webhookurl": true, "token": true, "chatid": true, "secret": true, "key": true, "apikey": true, "password": true, "chaincommand": true, "verifycommand": true, "terminal": true}
 
 	// Older versions logged an alarm.webhook.url that did not parse as it was, secret and all.
 	bundleLoggedWebhookPattern = lazyRegexp(`(alarm\.webhook\.url invalid: )[^\r\n]*`)
@@ -51,13 +52,15 @@ func configuredSecrets() []string {
 	collect := func(value any) {
 		for _, text := range secretStrings(value) {
 			if len(text) >= 6 {
-				values = append(values, text)
+				quoted, encoded := strconv.Quote(text), string(marshalCompact(text))
+				values = append(values, text, quoted[1:len(quoted)-1], encoded[1:len(encoded)-1])
 			}
 		}
 	}
 	collect(getMap(section(config, "alarm"), "webhook"))
 	collect(section(config, "alarm")["webhookUrl"])
 	collect(section(config, "statusline")["chainCommand"])
+	collect(section(config, "queue")["verifyCommand"])
 	collect(getMap(section(config, "queue"), "github"))
 	sort.Strings(values)
 	return values

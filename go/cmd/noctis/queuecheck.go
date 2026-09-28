@@ -249,6 +249,6 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 	journal(sid, "Stop", "hold-queue", outcome, facts)
 	fail("queue check %q failed %s time(s) in a row for %s (%s); %s held until it passes, stop allowed", command, formatNumber(failures), sid, outcome, path)
 	shown := truncateText(command, 120)
-	notify(cfg, pluginName, T("queue.heldNotify", shown, int(failures), label))
+	notify(cfg, pluginName, T("queue.heldNotify", int(failures), label))
 	return object{"systemMessage": T("queue.heldMessage", shown, int(failures), label)}
 }

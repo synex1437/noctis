@@ -112,7 +112,7 @@ func TestExhaustedQueueCheckAttemptsAllowTheStopTellTheUserAndHoldTheQueue(t *te
 	if want := T("queue.heldMessage", command, 2, "TASKS.md"); getString(second, "systemMessage") != want {
 		t.Fatalf("the user was not told the queue is held:\n got %q\nwant %q", getString(second, "systemMessage"), want)
 	}
-	if told := loggedTimes("notify: " + pluginName + " — " + T("queue.heldNotify", command, 2, "TASKS.md")); told != 1 {
+	if told := loggedTimes("notify: " + pluginName + " — " + T("queue.heldNotify", 2, "TASKS.md")); told != 1 {
 		t.Fatalf("the hold went through the notify path %d times, want once", told)
 	}
 	if runs := queueCheckRuns(project); runs != 2 {
