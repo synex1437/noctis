@@ -371,15 +371,25 @@ func unixLaunchScript(launch launchSpec, claudePath string, claudeArgs []string,
 		"#!/bin/sh",
 		"unset " + strings.Join(claudeSessionMarkers, " "),
 		configLine,
-		"export CLAUDE_CODE_EFFORT_LEVEL=" + shellQuote(effort),
-		"export " + handoffEnv + "=" + shellQuote(launch.sid),
-		"cd " + shellQuote(launch.cwd) + " || exit 1",
-		"printf '%s' \"$$\" > " + shellQuote(pidFile),
-
-		"rm -f " + shellQuote(script),
-		"exec " + shellQuote(claudePath) + " " + shellJoin(claudeArgs),
 	}
-	if err := os.WriteFile(script, []byte(strings.Join(lines, "\n")+"\n"), 0o755); err != nil {
+	// The session's PATH, display, certificate and proxy variables, as the runner restored them from
+	// proxies/<session>.json or got them from its scheduler: a terminal that does not pass the
+	// runner's environment on (Terminal.app starts a login shell) would start claude without them. A
+	// proxy URL can hold a password, so the script is readable only by its owner, like that file.
+	for _, pair := range environmentOf(slices.Concat(carriedEnvNames, proxyEnvNames)) {
+		lines = append(lines, "export "+pair[0]+"="+shellQuote(pair[1]))
+	}
+	lines = append(lines,
+		"export CLAUDE_CODE_EFFORT_LEVEL="+shellQuote(effort),
+		"export "+handoffEnv+"="+shellQuote(launch.sid),
+		"cd "+shellQuote(launch.cwd)+" || exit 1",
+		"printf '%s' \"$$\" > "+shellQuote(pidFile),
+
+		"rm -f "+shellQuote(script),
+		"exec "+shellQuote(claudePath)+" "+shellJoin(claudeArgs),
+	)
+	_ = os.Remove(script)
+	if err := os.WriteFile(script, []byte(strings.Join(lines, "\n")+"\n"), 0o700); err != nil {
 		fail("launcher script not written (%s): %v", script, err)
 		return "", pidFile
 	}
@@ -420,7 +430,10 @@ func launchInDesktopTerminal(cfg object, launch launchSpec, claudePath string, c
 	case preference != "" && preference != "auto" && strings.Contains(preference, "{script}"):
 		opener = exec.Command("sh", "-c", strings.ReplaceAll(getString(section(cfg, "resume"), "terminal"), "{script}", shellQuote(script)))
 	case isDarwin:
-		opener = exec.Command("osascript", "-e", `tell application "Terminal" to do script "sh `+appleScriptEscape(shellQuote(script))+`"`, "-e", `tell application "Terminal" to activate`)
+		// Terminal types the command into the login shell of a new window. exec gives the shell's
+		// place to the launcher, and so to claude: the window's process ends with claude, also when
+		// a later relaunch closes it, instead of leaving a shell at its prompt that keeps the window.
+		opener = exec.Command("osascript", "-e", `tell application "Terminal" to do script "exec sh `+appleScriptEscape(shellQuote(script))+`"`, "-e", `tell application "Terminal" to activate`)
 	case os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != "":
 		for _, candidate := range [][]string{{"x-terminal-emulator", "-e"}, {"gnome-terminal", "--"}, {"konsole", "-e"}, {"xfce4-terminal", "-x"}, {"kitty"}, {"alacritty", "-e"}, {"wezterm", "start", "--"}} {
 			if locateExecutable(candidate[0]) != "" {
