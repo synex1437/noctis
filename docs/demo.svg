@@ -61,6 +61,6 @@
   </g>
 
   <line x1="44" y1="404" x2="1156" y2="404" stroke="#1d2634"/>
-  <text x="44" y="440" class="mono st">∞ 5h %61→07:35 · Wk %71●→Mon 21.09 09:00 · Opus 5.5/max · ctx 52%</text>
+  <text x="44" y="440" class="mono st">∞ 5h 61%→07:35 · Wk 71%●→Mon 21.09 09:00 · Opus 5.5/max · ctx 52%</text>
   <text x="1156" y="466" class="sans dim" font-size="13" text-anchor="end">⏸️ and ✔ lines are noctis notices shown to you; the Stop hook line is the instruction noctis hands Claude</text>
 </svg>

@@ -50,7 +50,7 @@ Setup asks one question, which model does which kind of work, and keeps the answ
 
 ## Quick start
 
-1. Look at the bottom of the window: `∞ 5h %41→14:35 · Wk %23▲→Mon 21.09 09:00 · Opus 5.5/max · ctx 37%` shows both usage windows and when each resets, the model and effort, and how full the context is.
+1. Look at the bottom of the window: `∞ 5h 41%→14:35 · Wk 23%▲→Mon 21.09 09:00 · Opus 5.5/max · ctx 37%` shows both usage windows and when each resets, the model and effort, and how full the context is.
 2. Put a few jobs in a file, one per line (`- [ ] write tests for the payments module`), and type `/noctis:start TASKS.md`. Claude works through them in order; `/noctis:stop` ends it early.
 3. Go to bed. At a limit there is nothing to do: noctis pauses, waits and continues, and a desktop notification tells you when work resumes.
 
