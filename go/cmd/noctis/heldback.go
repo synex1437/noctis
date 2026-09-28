@@ -315,13 +315,22 @@ func sentenceWords(sentence []heldToken) []string {
 // englishForbids finds "do not implement any of these", "don't touch any
 // files", "never start on them yet", "hold off on these" or "but not yet" in a
 // sentence, unless a condition comes first ("if a test fails, don't change it").
-func englishForbids(sentence []heldToken) string {
+// A listed line is read with listOnly: only an object that names the list
+// itself counts there. codeIsPart keeps "the existing code" to a rule in a
+// prompt whose work is tests or docs.
+func englishForbids(sentence []heldToken, listOnly, codeIsPart bool) string {
+	whole := func(object []string) bool {
+		if listOnly {
+			return listWorkObject(object)
+		}
+		return wholeWorkObject(object) && !(codeIsPart && codeObject(object))
+	}
 	words := sentenceWords(sentence)
 	for index, word := range words {
 		if conditionWords(word) {
 			return ""
 		}
-		if end := notYetEnd(words, index); end > 0 {
+		if end := notYetEnd(words, index); end > 0 && !listOnly {
 			return heldQuote(sentence[index:end])
 		}
 		end := englishNegationEnd(words, index)
@@ -345,11 +354,57 @@ func englishForbids(sentence []heldToken) string {
 			verb++
 		}
 		last := objectEnd(words, verb+1)
-		if wholeWorkObject(words[verb+1 : last]) {
+		if whole(words[verb+1 : last]) {
 			return heldQuote(sentence[index:last])
 		}
 	}
 	return ""
+}
+
+var (
+	listNouns = lazyWordSet(`these those them following above below item items task tasks step steps point points list job jobs
+		bullet bullets ticket tickets todo todos`)
+	codeNouns = lazyWordSet(`code codebase source`)
+)
+
+// listWorkObject tells an object that names the listed work itself, "any of
+// these" or "the following items", from one that names a part of it, "the
+// code here", which in a listed step is a rule for that step.
+func listWorkObject(words []string) bool {
+	if len(words) > 0 && workParticles(words[0]) {
+		words = words[1:]
+	}
+	if wholeQuantifiers(wordAt(words, 0)) && wordAt(words, 1) == "of" {
+		words = words[2:]
+	}
+	rest, ok, weak := referenceHead(words)
+	return ok && !weak && listNouns(words[len(words)-len(rest)-1]) && wholeWorkTail(rest)
+}
+
+// codeObject tells an object that names the code: "the existing code", "the
+// source code for now". In a prompt whose work is tests or docs it keeps the
+// work away from the code, a rule, not a hold on the job.
+func codeObject(words []string) bool {
+	for _, word := range words {
+		if codeNouns(word) {
+			return true
+		}
+	}
+	return false
+}
+
+var testDocWords = normalWordSet(`test tests testing docs documentation document readme changelog
+	testi testini testleri testlerini testler belge belgeler belgeleri belgele dokümantasyon doküman`)
+
+// namesTestsOrDocs tells a prompt whose work is tests or docs, where "don't
+// touch the existing code" keeps the work to them rather than holding it back.
+func namesTestsOrDocs(tokens []heldToken) bool {
+	for _, token := range tokens {
+		if testDocWords(token.word) {
+			return true
+		}
+	}
+	return false
 }
 
 // englishAsksOnly finds "just estimate", "only give me a plan", "without
@@ -561,17 +616,51 @@ var (
 	turkishNotWanted = normalWordSet(`istemiyorum istemiyoruz`)
 )
 
-func turkishWholeWorkIn(words []string, strong bool) bool {
+var (
+	turkishCode       = normalWordSet(`kod koda kodu kodlara kodları`)
+	turkishNowFillers = normalWordSet(`lütfen sakın daha hiç sen siz de da bir şey`)
+	turkishListWork   = normalWordSet(`hiçbirini hiçbirine hiçbiri hiçbirinde bunları bunlara bunlardan onları onlara şunları şunlara
+		maddeleri maddelere maddelerin maddelerden işleri işlere görevleri görevlere adımları`)
+)
+
+// turkishWholeWorkIn reports whether the words before a Turkish verb name the
+// whole job: "hiçbirini", "bunları", "dosyalara". Unless strong, a bare
+// "şimdi" or "henüz" does too ("şimdi yapma"), but not beside a named action:
+// "şimdilik deploy yapma" leaves the deploy for later, not the job. With
+// codeIsPart the code is such a named part of the work ("mevcut kodu
+// değiştirme", "şimdilik koda dokunma" in a prompt that asks for tests).
+func turkishWholeWorkIn(words []string, strong, codeIsPart bool) bool {
 	for _, word := range words {
 		if turkishExcept(word) {
 			return false
 		}
 	}
+	now, named := false, false
 	for index, word := range words {
-		if turkishWholeWork(word) && !(turkishPlaceNouns(word) && index > 0 && strings.HasSuffix(words[index-1], "ki")) {
+		switch {
+		case codeIsPart && turkishCode(word):
+			named = true
+		case turkishWholeWork(word) && !(turkishPlaceNouns(word) && index > 0 && strings.HasSuffix(words[index-1], "ki")):
 			return true
+		case turkishNow(word):
+			now = true
+		case !turkishNowFillers(word):
+			named = true
 		}
-		if !strong && turkishNow(word) {
+	}
+	return !strong && now && !named
+}
+
+// turkishListWorkIn tells words that name the listed work itself, "bunların
+// hiçbirini", not a part of it such as "kodu" or "dosyalara".
+func turkishListWorkIn(words []string) bool {
+	for _, word := range words {
+		if turkishExcept(word) {
+			return false
+		}
+	}
+	for _, word := range words {
+		if turkishListWork(word) {
 			return true
 		}
 	}
@@ -579,24 +668,31 @@ func turkishWholeWorkIn(words []string, strong bool) bool {
 }
 
 // turkishForbids finds "hiçbirini şimdi yapma", "dosyalara dokunma",
-// "bunları uygulamadan", "bunları yapmanı istemiyorum" in one clause.
-func turkishForbids(clause []heldToken) string {
+// "bunları uygulamadan", "bunları yapmanı istemiyorum" in one clause; listOnly
+// and codeIsPart as for englishForbids.
+func turkishForbids(clause []heldToken, listOnly, codeIsPart bool) string {
 	words := heldWords(clause)
 	if len(words) == 0 {
 		return ""
 	}
+	whole := func(object []string, strong bool) bool {
+		if listOnly {
+			return turkishListWorkIn(object)
+		}
+		return turkishWholeWorkIn(object, strong, codeIsPart)
+	}
 	last := words[len(words)-1]
-	if turkishNegatedWork(last) && turkishWholeWorkIn(words[:len(words)-1], false) {
+	if turkishNegatedWork(last) && whole(words[:len(words)-1], false) {
 		return heldQuote(clause)
 	}
-	if turkishNotWanted(last) && len(words) > 1 && turkishUnwantedWork(words[len(words)-2]) && turkishWholeWorkIn(words[:len(words)-2], false) {
+	if turkishNotWanted(last) && len(words) > 1 && turkishUnwantedWork(words[len(words)-2]) && whole(words[:len(words)-2], false) {
 		return heldQuote(clause)
 	}
-	if (last == "geçme" || last == "geçmeyin") && len(words) > 1 && (words[len(words)-2] == "uygulamaya" || words[len(words)-2] == "koda" || words[len(words)-2] == "kodlamaya") {
+	if !listOnly && (last == "geçme" || last == "geçmeyin") && len(words) > 1 && (words[len(words)-2] == "uygulamaya" || words[len(words)-2] == "koda" || words[len(words)-2] == "kodlamaya") {
 		return heldQuote(clause)
 	}
 	for index, word := range words {
-		if turkishWithoutWork(word) && !turkishBefore(wordAt(words, index+1)) && turkishWholeWorkIn(words, true) {
+		if turkishWithoutWork(word) && !turkishBefore(wordAt(words, index+1)) && whole(words, true) {
 			return heldQuote(clause)
 		}
 	}
@@ -945,22 +1041,37 @@ func heldElse(lower string, start, end int) bool {
 // heldBackWork returns why a prompt that reads like a job is not one: its
 // words forbid the work, or ask only for a plan, estimate, review or
 // explanation of it. text is the whole prompt; prose is the part around the
-// listed steps, and lead says whether its leading verbs alone may decide.
+// listed steps, and lead says whether its leading verbs alone may decide. A
+// rule inside a step ("update the docs, don't change the code here") is about
+// that step, so the listed lines count only where they hold back the list
+// itself ("don't implement any of these yet").
 func heldBackWork(text, prose string, lead bool) string {
-	for _, sentence := range heldSentences(heldTokens(text)) {
-		if quote := englishForbids(sentence); quote != "" {
+	tokens := heldTokens(text)
+	codeIsPart := namesTestsOrDocs(tokens)
+	sentences := heldSentences(heldTokens(prose))
+	for _, sentence := range sentences {
+		if quote := englishForbids(sentence, false, codeIsPart); quote != "" {
 			return forbidsReason(quote)
 		}
 		for _, clause := range heldClauses(sentence, turkishJoins) {
-			if quote := turkishForbids(clause); quote != "" {
+			if quote := turkishForbids(clause, false, codeIsPart); quote != "" {
 				return forbidsReason(quote)
 			}
 		}
 	}
-	if phrase := heldPhrase(heldNormal(text), heldForbidPhrases, true); phrase != "" {
+	if phrase := heldPhrase(heldNormal(prose), heldForbidPhrases, true); phrase != "" {
 		return forbidsReason(phrase)
 	}
-	sentences := heldSentences(heldTokens(prose))
+	for _, sentence := range heldSentences(tokens) {
+		if quote := englishForbids(sentence, true, false); quote != "" {
+			return forbidsReason(quote)
+		}
+		for _, clause := range heldClauses(sentence, turkishJoins) {
+			if quote := turkishForbids(clause, true, false); quote != "" {
+				return forbidsReason(quote)
+			}
+		}
+	}
 	for _, sentence := range sentences {
 		if quote := englishAsksOnly(sentence); quote != "" {
 			return asksReason(quote)

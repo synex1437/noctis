@@ -174,6 +174,51 @@ func TestAJobPromptWithAConstraintStillGetsItsChecklist(t *testing.T) {
 	}
 }
 
+// q2TestItems, q2TestItemsTr and q2DocItems list jobs whose work is tests or docs.
+const (
+	q2TestItems   = "\n- config loader: cover the defaults and the environment overrides\n- retry client: test the backoff with a fake server and a fake clock\n- CSV exporter: check empty files, quoted fields and malformed rows\n- date parser: add cases around the daylight saving switch\n"
+	q2TestItemsTr = "\n- yapılandırma yükleyicisinin varsayılan değerlerini test et\n- yeniden deneme istemcisinin bekleme süresini sahte sunucuyla sına\n- CSV dışa aktarıcısını boş ve bozuk satırlarla dene\n- tarih ayrıştırıcısına yaz saati geçişi için test ekle\n"
+	q2DocItems    = "\n- document the new --dry-run flag in the CLI reference\n- add a troubleshooting section for the login timeout\n- update the install guide for the renamed packages\n- fix the broken links in the contributing guide\n"
+)
+
+func TestARuleInsideAStepOrOnTheCodeOfATestsOrDocsJobKeepsTheChecklist(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, false)
+	for index, prompt := range []string{
+		"Please do the following for the schema change, one after the other:\n- add a created_at column to the users table with a migration\n" +
+			"- backfill created_at for the existing users from the audit log\n- update the docs for the schema change, don't change the code here\n" +
+			"- add a test that runs the migration twice without errors\n",
+		"Write tests for all of these modules; don't change the existing code, only add new test files." + q2TestItems,
+		"Add tests for all of these. Do not touch the source code, only the test files." + q2TestItems,
+		"Don't touch any code, this is docs only." + q2DocItems,
+		"Bunların hepsini sırayla yap, şimdilik deploy yapma, bitince bana haber ver." + heldBackItemsTr,
+		"Aşağıdakilerin hepsini sırayla yap ama henüz commit yapma, önce ben bakacağım." + heldBackItemsTr,
+		"Aşağıdaki modüllerin her biri için test yaz, mevcut kodu değiştirme, sadece test dosyası ekle." + q2TestItemsTr,
+		"Write the tests for these, but don't touch the code for now." + q2TestItems,
+		"Testleri yaz ama şimdilik koda dokunma." + q2TestItemsTr,
+	} {
+		sid := fmt.Sprintf("hb-q2-%d", index)
+		startQueue(t, cfg, sid, project, prompt)
+		if record := getMap(getMap(readState(), "autoQueues"), sid); numberOr(record, "items", 0) != 4 {
+			t.Errorf("%s: a rule on how to do the work lost the checklist: %v items (journal: %q)", sid, record["items"], journaledReason(sid, "no-auto-queue"))
+		}
+	}
+}
+
+func TestAListedLineThatHoldsBackTheWholeListStillGetsNoChecklist(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, false)
+	for index, prompt := range []string{
+		"Here is the backlog for the next sprint:" + heldBackItems + "- don't implement any of these yet, I only want an estimate for each\n",
+		"Gelecek sprintin işleri:" + heldBackItemsTr + "- bunların hiçbirini henüz yapma, sadece her biri için süre tahmini ver\n",
+		"Don't change any code yet; first tell me which tests each of these would need." + heldBackItems,
+	} {
+		sid := fmt.Sprintf("hb-q2-held-%d", index)
+		expectNoChecklist(t, cfg, sid, project, prompt)
+		if journaledReason(sid, "no-auto-queue") == "" {
+			t.Errorf("%s: the skipped job was not journaled", sid)
+		}
+	}
+}
+
 func TestTheHeldBackPhrasesAreWrittenAsTheyAreMatched(t *testing.T) {
 	for _, list := range [][]string{heldForbidPhrases, heldAskPhrases} {
 		for _, phrase := range list {
