@@ -307,7 +307,12 @@ func runQueue() {
 		authors, named = importAuthors(cwd, issuesHost(repo, issues), wanted)
 	}
 	existing, _ := os.ReadFile(destination)
-	fileLines := strings.Split(strings.TrimPrefix(string(existing), "\uFEFF"), "\n")
+	text, bom := strings.CutPrefix(string(existing), "\uFEFF")
+	newline := "\n"
+	if end := strings.IndexByte(text, '\n'); end > 0 && text[end-1] == '\r' {
+		newline = "\r\n"
+	}
+	fileLines := strings.Split(text, "\n")
 	known, bare := map[string]bool{}, map[string][]bareIssueItem{}
 	fenced := false
 	for index, line := range fileLines {
@@ -375,18 +380,21 @@ func runQueue() {
 	content := strings.Join(fileLines, "\n")
 	if len(lines) > 0 {
 		if content == "" {
-			content = "# TASKS\n"
+			content = "# TASKS" + newline
 		}
 		if !strings.HasSuffix(content, "\n") {
-			content += "\n"
+			content += newline
 		}
 		if !strings.Contains(content, "## GitHub issues") {
-			content += "\n## GitHub issues\n"
+			content += newline + "## GitHub issues" + newline
 		}
-		content += strings.Join(lines, "\n") + "\n"
+		content += strings.Join(lines, newline) + newline
 	}
-	if content != string(existing) {
-		if err := os.WriteFile(destination, []byte(content), 0o644); err != nil {
+	if bom {
+		content = "\uFEFF" + content
+	}
+	if len(lines) > 0 || qualified > 0 {
+		if err := writeImportedQueue(destination, []byte(content)); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -541,6 +549,19 @@ func rememberOpenIssues(cfg object, queuePath string) {
 			}
 		}
 	})
+}
+
+// writeImportedQueue replaces the queue file in one step, so a hook that reads it
+// meanwhile sees the old list or the new one, never half of it. A file the import
+// creates starts out with the usual mode of a project file: the store's writer
+// would make it private, as it does noctis's own files.
+func writeImportedQueue(file string, content []byte) error {
+	if created, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644); err == nil {
+		created.Close()
+	} else if !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	return writeEncodedAtomic(file, content)
 }
 
 func importDestination(folder, target string) (string, string) {
