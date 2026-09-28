@@ -202,11 +202,11 @@ func onSessionStart(input, cfg object) {
 	}
 	output := object{}
 	contexts := []string{}
-	queueNotice, queueNoticeKey, cutOffSid := "", "", ""
+	queueNotice, queueNoticeKey, cutOffSid, handedSid := "", "", "", ""
 	fresh := noteFreshStart(state, sid, getString(input, "transcript_path"))
 	if (source == "startup" || source == "clear") && !fresh {
 		if checkpointSid, checkpoint := checkpointForNewSession(state, cwd, now); checkpoint != nil {
-			handOverCheckpoint(checkpointSid, sid)
+			handedSid = checkpointSid
 			contexts = append(contexts, T("session.checkpoint", pluginName, formatTime(numberOr(checkpoint, "at", 0)), getString(checkpoint, "path"), hostResumeCommand(currentHost().id, checkpointSid)))
 			if note := cutOffNote(readState(), checkpointSid); note != "" {
 				contexts = append(contexts, note)
@@ -305,6 +305,10 @@ func onSessionStart(input, cfg object) {
 	}
 	if observed(sid, "SessionStart", "inject-context", source, nil) {
 		return
+	}
+	// The checkpoint is handed over only with the note: observe mode leaves it to the next session.
+	if handedSid != "" {
+		handOverCheckpoint(handedSid, sid)
 	}
 	emit(output)
 	if cutOffSid != "" {
