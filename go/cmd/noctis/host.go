@@ -762,6 +762,7 @@ func fetchCodexRateLimits(exe string, timeout time.Duration) (object, error) {
 	}
 	command := inGuardDir(exec.Command(exe, "app-server"))
 	isolateTree(command)
+	hideConsole(command)
 	command.WaitDelay = time.Second
 	stdin, err := command.StdinPipe()
 	if err != nil {

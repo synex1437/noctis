@@ -649,6 +649,7 @@ func launchClaude(cfg object, launch launchSpec) launchResult {
 	command.Env = env
 	command.Dir = launch.cwd
 	command.Stdout, command.Stderr = logFile, logFile
+	hideConsole(command)
 	if err := command.Run(); err != nil {
 		warn("headless session ended with status %v", err)
 		_, isExit := err.(*exec.ExitError)
@@ -678,6 +679,7 @@ func launchHostSession(cfg object, host hostSpec, exe string, launch launchSpec)
 	command.Env = hostRelaunchEnv(host, launch)
 	command.Dir = launch.cwd
 	command.Stdout, command.Stderr = logFile, logFile
+	hideConsole(command)
 	if err := command.Run(); err != nil {
 		warn("%s session ended with status %v", host.exe, err)
 		_, isExit := err.(*exec.ExitError)

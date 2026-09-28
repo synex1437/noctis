@@ -20,3 +20,10 @@ func killTree(process *os.Process) {
 	_ = syscall.Kill(-process.Pid, syscall.SIGKILL)
 	_ = process.Kill()
 }
+
+// hideConsoleWindow and headlessConsoleHost matter only on Windows: a child here opens no window.
+func hideConsoleWindow(_ *exec.Cmd) {}
+
+func headlessConsoleHost() string {
+	return ""
+}

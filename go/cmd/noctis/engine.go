@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 const bulletMarker = `[-*+•]`
@@ -947,6 +948,14 @@ func gitStatus(cwd string) []string {
 	return lines
 }
 
+// hideConsole starts a console program the engine runs without a window of its own (see
+// hideConsoleWindow), and taskConsoleHost names the console host a scheduled task can run the runner
+// in without a window (see headlessConsoleHost). Tests replace them.
+var (
+	hideConsole     = hideConsoleWindow
+	taskConsoleHost = headlessConsoleHost
+)
+
 func runWithTimeout(command *exec.Cmd, timeout time.Duration) ([]byte, error) {
 	return runUntil(command, timeout, func() { _ = command.Process.Kill() })
 }
@@ -967,6 +976,7 @@ func runUntil(command *exec.Cmd, timeout time.Duration, stop func()) ([]byte, er
 
 func waitUntil(command *exec.Cmd, timeout time.Duration, stop func()) error {
 	command.WaitDelay = 500 * time.Millisecond
+	hideConsole(command)
 	if err := command.Start(); err != nil {
 		return err
 	}
@@ -1513,15 +1523,50 @@ func windowsTaskArgument(launcher string, commandArgs []string) string {
 	return windowsShellArgument(`"` + launcher + `" ` + strings.Join(commandArgs, " "))
 }
 
+// windowsTaskAction returns what the scheduled task starts: the runner launcher through cmd.exe, in
+// a console the runner keeps for the whole relaunch (up to the task's 7-day limit). Where the console
+// host can run without a window, the task starts cmd.exe in it (conhost.exe --headless), so no blank
+// console sits on the desktop, where closing it would end a headless session. The console host splits
+// its command line into words and joins them again for cmd.exe, and not every Windows release quotes
+// a word again, so that form is used only when no word needs quotes: a path with a space or with a
+// character cmd.exe reads as syntax keeps a console window of its own.
+func windowsTaskAction(consoleHost, launcher string, commandArgs []string) (execute, argument string) {
+	if consoleHost != "" {
+		if words, plain := plainTaskWords(append([]string{launcher}, commandArgs...)); plain {
+			return consoleHost, "--headless cmd.exe /d /c " + strings.Join(words, " ")
+		}
+	}
+	return "cmd.exe", windowsTaskArgument(launcher, commandArgs)
+}
+
+// plainTaskWords returns words without the quotes around any of them, or false when one would need
+// quotes: it is empty or holds a character other than a letter, a digit or one of \/:._-~+@#$[]{}.
+func plainTaskWords(words []string) ([]string, bool) {
+	needsQuotes := func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune(`\/:._-~+@#$[]{}`, r)
+	}
+	plain := make([]string, 0, len(words))
+	for _, word := range words {
+		if len(word) >= 2 && word[0] == '"' && word[len(word)-1] == '"' {
+			word = word[1 : len(word)-1]
+		}
+		if word == "" || strings.IndexFunc(word, needsQuotes) >= 0 {
+			return nil, false
+		}
+		plain = append(plain, word)
+	}
+	return plain, true
+}
+
 func windowsTaskScript(launcher, name string, at float64, commandArgs []string, wake bool) string {
-	argument := windowsTaskArgument(launcher, commandArgs)
+	execute, argument := windowsTaskAction(taskConsoleHost(), launcher, commandArgs)
 	wakeFlag := ""
 	if wake {
 		wakeFlag = "-WakeToRun "
 	}
 	return strings.Join([]string{
 		"$ErrorActionPreference = 'Stop'",
-		"$action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument " + psQuote(argument) + " -WorkingDirectory " + psQuote(files.guardDir),
+		"$action = New-ScheduledTaskAction -Execute " + psQuote(execute) + " -Argument " + psQuote(argument) + " -WorkingDirectory " + psQuote(files.guardDir),
 		"$trigger = New-ScheduledTaskTrigger -Once -At ([datetime]" + psQuote(localISO(at)) + ")",
 		"$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries " + wakeFlag + "-ExecutionTimeLimit (New-TimeSpan -Days 7) -MultipleInstances IgnoreNew",
 		"Register-ScheduledTask -TaskName " + psQuote(name) + " -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null",

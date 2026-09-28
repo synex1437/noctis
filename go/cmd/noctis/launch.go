@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	launchStartTimeout = 20 * time.Second
-	launchMaxWait      = 7 * 24 * time.Hour
-	launchQuickExit    = 30 * time.Second
+	launchMaxWait   = 7 * 24 * time.Hour
+	launchQuickExit = 30 * time.Second
 )
 
 var (
+	launchStartTimeout = 20 * time.Second
 	launchPidTimeout   = 60 * time.Second
 	launchPollInterval = 2 * time.Second
 )
@@ -274,6 +274,9 @@ func launchInWindowsTerminal(cfg object, launch launchSpec, claudePath string, c
 		defer logFile.Close()
 		command.Stdout, command.Stderr = logFile, logFile
 	}
+	// The launcher only starts claude in a console window of its own (Start-Process) and waits for
+	// it, so its own console stays hidden; the Windows Terminal tab above is left as it is.
+	hideConsole(command)
 	if err := command.Start(); err != nil {
 		fail("window launch failed: %v", err)
 		return false
