@@ -616,7 +616,9 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
         if (!/retry budget spent/.test(errors)) anomaly(`overload give-up not logged ${acc.name}/${session.sid}`);
         const out = parseOutput(timedHook(acc, { hook_event_name: 'UserPromptSubmit', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, prompt: 'devam et' }));
         if (out.decision === 'block' && !/⏸|↪|\/model/.test(out.reason)) anomaly(`prompt blocked after overload give-up ${acc.name}/${session.sid}: ${out.reason}`);
-        if ((acc.state().overload || {})[session.sid]) anomaly(`overload episode not cleared by the next prompt ${acc.name}/${session.sid}`);
+        // A prompt is no progress, so the episode outlives it; the first tools of the turn it starts end it.
+        timedHook(acc, { hook_event_name: 'PostToolBatch', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript });
+        if ((acc.state().overload || {})[session.sid]) anomaly(`overload episode not cleared by the next batch of tools ${acc.name}/${session.sid}`);
       }
       break;
     }
