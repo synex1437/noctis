@@ -246,6 +246,30 @@ for (const name of fs.readdirSync(workflowDir).filter((file) => /\.ya?ml$/.test(
   }
 }
 
+// A job that opens or changes an issue needs a token that may write issues: the default token of a
+// newer repository only reads, and a job's own permissions replace the workflow's.
+const permissionsAt = (text, indent) => {
+  const found = new RegExp(`^ {${indent}}permissions:(.*)\\n((?: {${indent + 2},}.*\\n)*)`, 'm').exec(text);
+  return found && found[1] + '\n' + found[2];
+};
+for (const name of fs.readdirSync(workflowDir).filter((file) => /\.ya?ml$/.test(file))) {
+  const workflow = fs.readFileSync(path.join(workflowDir, name), 'utf8');
+  const at = workflow.search(/^jobs:/m);
+  if (at < 0) continue;
+  const top = permissionsAt(workflow.slice(0, at), 0);
+  for (const job of workflow.slice(at).split(/^ {2}(?=[\w-]+:\s*$)/m).slice(1)) {
+    if (!/\bgithub\.rest\.issues\.(?!get|list|check)\w+\(|\bgh issue (?:create|edit|comment|close|reopen)\b/.test(job)) continue;
+    const granted = permissionsAt(job, 4) ?? top;
+    if (!granted || !/\bissues:\s*write\b|\bwrite-all\b/.test(granted)) {
+      problems.push(`.github/workflows/${name}: job ${job.slice(0, job.indexOf(':'))} writes to issues, but its token may not (it needs permissions: issues: write)`);
+    }
+    // Code a job installs can read the token the job holds, so a job that may write issues installs none.
+    if (/\bnpm (?:i|install|ci)\b|\bpip3? install\b|\bgo install\b/.test(job)) {
+      problems.push(`.github/workflows/${name}: job ${job.slice(0, job.indexOf(':'))} writes to issues and installs other code; open the issue from a job of its own`);
+    }
+  }
+}
+
 const release = fs.readFileSync(path.join(workflowDir, 'release.yml'), 'utf8');
 const releaseTrigger = /^on:\n((?: {2}.*\n)+)/m.exec(release);
 if (!releaseTrigger || releaseTrigger[1] !== '  workflow_run:\n    workflows: [ci]\n    types: [completed]\n    branches: [main]\n') {

@@ -7,11 +7,14 @@ on:
 # week this installs the real CLIs and checks the surfaces the plugin depends on (flags, hook file
 # locations, the app-server handshake). It never signs in and never runs a model. Installing is
 # best-effort (a registry hiccup is not a contract break); the checks themselves fail the run, and
-# the job opens an issue so a silent change cannot pass unnoticed.
+# a second job opens an issue so a silent change cannot pass unnoticed.
 jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # The job runs the CLIs it installs, so its token only reads.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,8 +49,18 @@ jobs:
       - name: Lab against the fakes (contract regression)
         timeout-minutes: 30
         run: node tests/lab.js
+  report:
+    # Opens the issue when the check failed or ran out of time. It is a job of its own, so the token
+    # that may write issues (the default token of a newer repository only reads) never reaches the
+    # CLIs the check installs.
+    needs: smoke
+    if: always() && (needs.smoke.result == 'failure' || needs.smoke.result == 'cancelled')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
       - name: Open an issue when a contract moved
-        if: failure() || cancelled()
         uses: actions/github-script@v7
         with:
           script: |
