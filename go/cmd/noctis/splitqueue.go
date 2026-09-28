@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -170,7 +171,9 @@ func writesTo(file, cwd, target string) bool {
 			return true
 		}
 	}
-	return false
+	// Another spelling of a name reaches the same file on a case-insensitive file system.
+	written, known := statSafe(file), statSafe(target)
+	return written != nil && known != nil && os.SameFile(written, known)
 }
 
 // writesInto tells whether a write to file reaches a file directly inside folder.

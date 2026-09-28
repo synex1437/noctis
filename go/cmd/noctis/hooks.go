@@ -959,6 +959,9 @@ func noctisOwnFile(file, cwd string) string {
 	if resolved := resolvedWritePath(abs); resolved != "" {
 		candidates[resolved] = true
 	}
+	// On a case-insensitive file system (the default on macOS and Windows) another spelling of a
+	// name reaches the same file, as a hard link does anywhere, so the files are compared too.
+	written := statSafe(abs)
 	for _, target := range []struct{ path, kind string }{{files.state, "state"}, {files.stateBackup, "state"}, {files.config, "config"}} {
 		if target.path == "" {
 			continue
@@ -967,6 +970,9 @@ func noctisOwnFile(file, cwd string) string {
 			if known != "" && candidates[known] {
 				return target.kind
 			}
+		}
+		if known := statSafe(target.path); written != nil && known != nil && os.SameFile(written, known) {
+			return target.kind
 		}
 	}
 	return ""
