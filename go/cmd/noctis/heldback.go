@@ -172,6 +172,11 @@ func englishNegationEnd(words []string, index int) int {
 		if wordAt(words, index+1) == "not" {
 			return index + 2
 		}
+	case "not":
+		// "I'm not asking you to do these"
+		if next := wordAt(words, index+1); next == "asking" || next == "expecting" || next == "requesting" {
+			return index + 2
+		}
 	case "no":
 		if wordAt(words, index+1) == "need" && wordAt(words, index+2) == "to" {
 			return index + 3
@@ -181,12 +186,48 @@ func englishNegationEnd(words []string, index int) int {
 			return index + 2
 		}
 	case "hold":
-		if wordAt(words, index+1) == "off" {
+		// "hold off on implementing these"; "don't hold off" asks for the work.
+		if prev := wordAt(words, index-1); wordAt(words, index+1) == "off" && prev != "don't" && prev != "dont" && prev != "not" && prev != "never" {
+			if particle := wordAt(words, index+2); (particle == "on" || particle == "with") && englishWorkVerbs(wordAt(words, index+3)) {
+				return index + 3
+			}
 			return index + 2
 		}
 	}
 	return -1
 }
+
+var laterWords = lazyWordSet(`tomorrow tonight later monday tuesday wednesday thursday friday saturday sunday next further`)
+
+// untilLater tells "until tomorrow" or "till next week", a time the work
+// waits for, from "until the tests pass", a step of the work.
+func untilLater(words []string, index int) bool {
+	return (words[index] == "until" || words[index] == "till") && laterWords(wordAt(words, index+1))
+}
+
+// notYetEnd reads a clause that is only "not now" or "not yet", as in
+// "Implement these, but not yet", and returns where it ends, or -1.
+func notYetEnd(words []string, index int) int {
+	if words[index] != "not" {
+		return -1
+	}
+	if prev := wordAt(words, index-1); prev != "" && !clauseJoins(prev) && prev != "please" && prev != "just" {
+		return -1
+	}
+	end := index + 1
+	for end < len(words) && end <= index+3 && notYetWords(words[end]) {
+		end++
+	}
+	if last := words[end-1]; last != "now" && last != "yet" && last != "today" && last != "tonight" {
+		return -1
+	}
+	if next := wordAt(words, end); next != "" && next != "please" {
+		return -1
+	}
+	return end
+}
+
+var notYetWords = lazyWordSet(`now yet today tonight right just`)
 
 // referenceHead reads a reference to the listed work at the start of words
 // and returns what follows it; weak marks a bare "it", "this" or "that",
@@ -217,6 +258,9 @@ func wholeWorkTail(words []string) bool {
 		if restrictWords(word) {
 			rest, ok, _ := referenceHead(words[index+1:])
 			return ok && wholeWorkTail(rest)
+		}
+		if untilLater(words, index) {
+			return true
 		}
 		if !timeWords(word) {
 			return false
@@ -249,12 +293,12 @@ func wholeWorkObject(words []string) bool {
 		rest, ok, weak := referenceHead(words)
 		return ok && !(weak && len(rest) == 0) && wholeWorkTail(rest)
 	}
-	return timeWords(first) && wholeWorkTail(words)
+	return (timeWords(first) || untilLater(words, 0)) && wholeWorkTail(words)
 }
 
 func objectEnd(words []string, from int) int {
 	end := from
-	for end < len(words) && words[end] != "" && !objectEnders(words[end]) {
+	for end < len(words) && words[end] != "" && (!objectEnders(words[end]) || untilLater(words, end)) {
 		end++
 	}
 	return end
@@ -269,13 +313,16 @@ func sentenceWords(sentence []heldToken) []string {
 }
 
 // englishForbids finds "do not implement any of these", "don't touch any
-// files", "never start on them yet" in a sentence, unless a condition comes
-// first ("if a test fails, don't change it").
+// files", "never start on them yet", "hold off on these" or "but not yet" in a
+// sentence, unless a condition comes first ("if a test fails, don't change it").
 func englishForbids(sentence []heldToken) string {
 	words := sentenceWords(sentence)
 	for index, word := range words {
 		if conditionWords(word) {
 			return ""
+		}
+		if end := notYetEnd(words, index); end > 0 {
+			return heldQuote(sentence[index:end])
 		}
 		end := englishNegationEnd(words, index)
 		if end < 0 {
@@ -287,7 +334,11 @@ func englishForbids(sentence []heldToken) string {
 		}
 		switch {
 		case !englishWorkVerbs(wordAt(words, verb)):
-			continue
+			if word != "hold" {
+				continue
+			}
+			// "hold off on these": the hold is the verb, what follows it the object.
+			verb = index + 1
 		case (words[verb] == "start" || words[verb] == "begin") && wordAt(words, verb+1) == "to" && englishWorkVerbs(wordAt(words, verb+2)):
 			verb += 2
 		case (words[verb] == "start" || words[verb] == "starting" || words[verb] == "begin") && englishWorkVerbs(wordAt(words, verb+1)):
@@ -400,8 +451,15 @@ func englishTalkLead(sentence []heldToken) (string, bool) {
 			asks = true
 		case englishWorkVerb(verb) && !negatedObject(next):
 			work = true
-		case talkVerbs(verb) || tellVerbs(verb) && (next == "me" || next == "us") || verb == "let" && (next == "me" || next == "us") && wordAt(words, at+2) == "know":
-			asks = listReferenceWithin(words[at+1:], 5) && !adviceWhileWorking(words)
+		case talkVerbs(verb):
+			asks = listReferenceWithin(words[at+1:], len(words)) && !adviceWhileWorking(words)
+		case tellVerbs(verb) && (next == "me" || next == "us") || verb == "let" && (next == "me" || next == "us") && wordAt(words, at+2) == "know":
+			// "tell me which of these …"; past a plan or an estimate the list
+			// may come later: "give me a time estimate for each of the following".
+			asks = (listReferenceWithin(words[at+1:], 5) || talkNounWithin(words[at+2:], 4) && listReferenceWithin(words[at+1:], len(words))) &&
+				!adviceWhileWorking(words)
+		case wantedTalk(words):
+			asks = listReferenceWithin(words, len(words)) && !adviceWhileWorking(words)
 		}
 		if asks && talk == "" {
 			talk = heldQuote(clause)
@@ -415,7 +473,20 @@ var (
 	questionWords     = lazyWordSet(`what how which why where who whose`)
 	listReferences    = lazyWordSet(`these those them following list above below items tasks points jobs each every how which what all ones`)
 	adviceTimingWords = lazyWordSet(`before after once while when whenever`)
+	wantLeads         = lazyWordSet(`i we i'd we'd would really also just still`)
+	stepSubjects      = lazyWordSet(`you we i it they you're we're i'm it's they're`)
 )
+
+// wantedTalk finds "I need a rough estimate" or "we'd like your plan" in any
+// place of a clause: a plan, estimate or other talk the user wants.
+func wantedTalk(words []string) bool {
+	for index, word := range words {
+		if (word == "need" || word == "want" || word == "like") && wantLeads(wordAt(words, index-1)) && talkNounWithin(words[index+1:], 4) {
+			return true
+		}
+	}
+	return false
+}
 
 func listReferenceWithin(words []string, limit int) bool {
 	for index := 0; index < len(words) && index < limit; index++ {
@@ -427,14 +498,33 @@ func listReferenceWithin(words []string, limit int) bool {
 }
 
 // adviceWhileWorking tells "review each change before committing", advice on
-// how to do the work, from "review the following", a request for talk.
+// how to do the work, from "review the following", a request for talk. A
+// "before" that names a time ("before the meeting") or holds all of the work
+// off ("before doing anything") gives no such advice.
 func adviceWhileWorking(words []string) bool {
-	for _, word := range words {
-		if adviceTimingWords(word) {
+	for index, word := range words {
+		if adviceTimingWords(word) && (word != "before" || workStepAfter(words[index+1:])) {
 			return true
 		}
 	}
 	return false
+}
+
+// workStepAfter tells whether the words after "before" name a step of the
+// work, "committing" or "you push", rather than a time or the whole work.
+func workStepAfter(words []string) bool {
+	at := 0
+	if stepSubjects(wordAt(words, 0)) {
+		at = 1
+	}
+	verb := wordAt(words, at)
+	switch {
+	case at == 0 && !strings.HasSuffix(verb, "ing"), verb == "morning", verb == "evening":
+		return false
+	case englishWorkVerbs(verb):
+		return !wholeWorkObject(words[at+1 : objectEnd(words, at+1)])
+	}
+	return true
 }
 
 var (
@@ -463,6 +553,14 @@ var (
 	turkishAskWords = normalWordSet(`misin misiniz musun musunuz müsün müsünüz`)
 )
 
+// turkishUnwantedWork and turkishNotWanted read "bunları yapmanı istemiyorum",
+// "I don't want you to do these".
+var (
+	turkishUnwantedWork = normalWordSet(`yapmanı yapmanızı uygulamanı uygulamanızı başlamanı başlamanızı dokunmanı dokunmanızı
+		değiştirmeni değiştirmenizi düzenlemeni düzenlemenizi kodlamanı kodlamanızı`)
+	turkishNotWanted = normalWordSet(`istemiyorum istemiyoruz`)
+)
+
 func turkishWholeWorkIn(words []string, strong bool) bool {
 	for _, word := range words {
 		if turkishExcept(word) {
@@ -481,7 +579,7 @@ func turkishWholeWorkIn(words []string, strong bool) bool {
 }
 
 // turkishForbids finds "hiçbirini şimdi yapma", "dosyalara dokunma",
-// "bunları uygulamadan" in one clause.
+// "bunları uygulamadan", "bunları yapmanı istemiyorum" in one clause.
 func turkishForbids(clause []heldToken) string {
 	words := heldWords(clause)
 	if len(words) == 0 {
@@ -489,6 +587,9 @@ func turkishForbids(clause []heldToken) string {
 	}
 	last := words[len(words)-1]
 	if turkishNegatedWork(last) && turkishWholeWorkIn(words[:len(words)-1], false) {
+		return heldQuote(clause)
+	}
+	if turkishNotWanted(last) && len(words) > 1 && turkishUnwantedWork(words[len(words)-2]) && turkishWholeWorkIn(words[:len(words)-2], false) {
 		return heldQuote(clause)
 	}
 	if (last == "geçme" || last == "geçmeyin") && len(words) > 1 && (words[len(words)-2] == "uygulamaya" || words[len(words)-2] == "koda" || words[len(words)-2] == "kodlamaya") {
@@ -692,6 +793,9 @@ var heldForbidPhrases = []string{
 	"fassen sie nichts an", "fass den code nicht an", "fasse den code nicht an", "rühr nichts an", "rühre nichts an", "keinen code schreiben",
 	"schreib keinen code", "schreibe keinen code", "schreib noch keinen code", "schreibe noch keinen code", "schreiben sie keinen code",
 	"fang noch nicht an", "fange noch nicht an", "noch nicht anfangen", "noch nicht damit anfangen",
+	"setze das noch nicht um", "setz das noch nicht um", "setze es noch nicht um", "setze sie noch nicht um", "setzen sie das noch nicht um",
+	"implementiere das noch nicht", "implementiere das bitte noch nicht", "implementiere es noch nicht", "implementiere sie noch nicht",
+	"implementiere bitte noch nicht", "implementieren sie das noch nicht",
 	"n'implémente rien", "n'implémentez rien", "n'implémente pas encore", "n'implémentez pas encore", "n'implémente aucun", "n'implémentez aucun",
 	"ne fais rien", "ne faites rien", "ne fais pas encore", "ne faites pas encore", "ne touche à aucun", "ne touchez à aucun", "ne touche à rien",
 	"ne touchez à rien", "ne touche pas aux fichiers", "ne touchez pas aux fichiers", "ne touche pas au code", "ne touchez pas au code",
@@ -703,7 +807,8 @@ var heldForbidPhrases = []string{
 	"no toques ningún", "no toques ninguna", "no toques nada", "no toque ningún", "no toque nada", "no toquen nada", "no toques los archivos",
 	"no toques el código", "no modifiques nada", "no modifique nada", "no modifiques ningún", "no modifiques los archivos",
 	"no modifiques el código", "no cambies nada", "no cambie nada", "no escribas código", "no escriba código", "no escribas ningún código",
-	"no empieces todavía", "no empieces aún", "no comiences todavía", "no comiences aún",
+	"no empieces todavía", "no empieces aún", "no comiences todavía", "no comiences aún", "no implementes estas tareas",
+	"no implementes estos puntos", "no implementes estos cambios", "no implemente estas tareas", "no implemente estos puntos",
 	"não implemente nada", "não implementa nada", "não implementem nada", "não implemente ainda", "não implemente nenhum",
 	"não implemente nenhuma", "não faça nada", "não faz nada", "não façam nada", "não faça nenhum", "não faça nenhuma", "não faça ainda",
 	"não toque em nenhum", "não toque em nenhuma", "não toque em nada", "não toque nos arquivos", "não toque no código", "não mexa em nada",
@@ -730,6 +835,7 @@ var heldForbidPhrases = []string{
 	"не трогайте файлы", "не трогай код", "не трогайте код", "ничего не трогай", "не трогай ничего", "не трогайте ничего", "ничего не меняй",
 	"не меняй ничего", "не меняйте ничего", "не меняй файлы", "не меняйте файлы", "не изменяй файлы", "не изменяйте файлы", "не изменяй код",
 	"не изменяйте код", "не пиши код", "не пишите код", "не пиши пока код", "не начинай пока", "не начинайте пока", "пока не начинай",
+	"не надо ничего делать", "ничего не надо делать", "не нужно ничего делать", "ничего не нужно делать",
 	"まだ実装しない", "何も実装しない", "実装はまだ", "実装は不要", "実装せずに", "ファイルを変更しない", "ファイルは変更しない", "ファイルに触れない",
 	"ファイルには触れない", "ファイルにも触れない", "ファイルに触らない", "ファイルを編集しない", "コードを書かない", "コードは書かない", "コードを変更しない",
 	"コードには触れない", "何も変更しない", "手を付けない", "手をつけない", "着手しない",
@@ -769,7 +875,7 @@ var heldAskPhrases = []string{
 	"tylko oszacuj", "tylko oszacowanie", "tylko wycena", "tylko wyceń", "tylko plan", "tylko zaplanuj", "tylko oceń", "bez implementacji",
 	"bez implementowania", "bez wdrażania", "bez zmian w kodzie", "bez zmieniania czegokolwiek", "bez zmieniania plików",
 	"bez zmieniania kodu", "bez pisania kodu",
-	"только оцени", "только оценку", "только оценка", "только план", "только спланируй", "без реализации", "без внесения изменений",
+	"только оцени", "только оценку", "только оценка", "только план", "только спланируй", "просто оцени", "без реализации", "без внесения изменений",
 	"без написания кода", "не внося изменений", "ничего не меняя", "ничего не реализуя",
 	"見積もりだけ", "見積もりのみ", "見積りだけ", "見積りのみ", "見積だけ", "見積のみ", "計画だけ", "計画のみ", "プランだけ", "プランのみ", "レビューだけ",
 	"レビューのみ", "説明だけ", "説明のみ", "見積もるだけ",

@@ -116,6 +116,34 @@ func TestAProseRequestThatHoldsItsJobsBackIsNotSplitIntoAChecklist(t *testing.T)
 	}
 }
 
+func TestAPromptThatHoldsTheWorkOffOrAsksForAnEstimateInOtherWordsGetsNoChecklist(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, false)
+	prompts := []string{
+		"Please hold off on these until Monday. Give me a summary of the risks." + heldBackItems,
+		"Hold off on implementing these:" + heldBackItems,
+		heldBackItems + "I need a rough estimate for each of the above before the meeting.",
+		"Give me a time estimate for each of the following, so I can plan the sprint with the team." + heldBackItems,
+		"Let's discuss these before doing anything." + heldBackItems,
+		"I'm not asking you to do these. I want your estimate for each one." + heldBackItems,
+		"This is a read-only session. For the items below, give me a written plan for each." + heldBackItems,
+		"Don't start on this until tomorrow; for now write me a short overview." + heldBackItems,
+		"Bunları şu an yapmanı istemiyorum, her biri için kaç saat süreceğini söyle bana." + heldBackItemsTr,
+		"Bitte setze das noch nicht um, ich brauche zuerst eine Einschätzung für jeden Punkt." + heldBackItems,
+		"Implementiere das bitte noch nicht. Sag mir nur, wie lange jeder Punkt ungefähr dauert." + heldBackItems,
+		"No implementes estas tareas todavía; dame una estimación de cuánto tardaría cada una." + heldBackItems,
+		"Пока не надо ничего делать, просто оцени, сколько времени займёт каждый пункт." + heldBackItems,
+		"Implement these, but not yet. First give me a summary of the risks." + heldBackItems,
+		"Here is what the next release needs:" + heldBackItems + "Please hold off on these for now; I only want them written down.",
+	}
+	for index, prompt := range prompts {
+		sid := fmt.Sprintf("hb-q1-%d", index)
+		expectNoChecklist(t, cfg, sid, project, prompt)
+		if journaledReason(sid, "no-auto-queue") == "" {
+			t.Errorf("%s: the skipped job was not journaled (%q)", sid, strings.SplitN(prompt, "\n", 2)[0])
+		}
+	}
+}
+
 func TestAJobPromptWithAConstraintStillGetsItsChecklist(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, false)
 	for index, prompt := range []string{
@@ -134,6 +162,9 @@ func TestAJobPromptWithAConstraintStillGetsItsChecklist(t *testing.T) {
 		"No breaking changes and no new dependencies, please. Don't do all of them at once; one commit per item." + heldBackItems,
 		"Her değişikliği commit etmeden önce incele ve testlerin geçtiğinden emin ol." + heldBackItemsTr,
 		"Kullanıcı şimdi uygulamadan çıkınca oturum kapanmıyor; bu yüzden şu maddeleri sırayla hallet." + heldBackItemsTr,
+		"Do these in order, but hold off on the deploy until I review the diff." + heldBackItems,
+		"Don't hold off on these any longer; do them now, one after the other." + heldBackItems,
+		"Here is the list for today. Let me know if anything is unclear about any of these." + heldBackItems,
 	} {
 		sid := fmt.Sprintf("hb-job-%d", index)
 		startQueue(t, cfg, sid, project, prompt)
