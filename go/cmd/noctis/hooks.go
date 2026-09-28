@@ -545,19 +545,21 @@ func onUserPromptSubmit(input, cfg object) {
 		onStopPrompt(input, cfg, sid)
 		return
 	}
-	if guardPaused(cfg, state, now) {
-		retireOwnCheckpoint(state, sid)
-		if controlCommand(getString(input, "prompt")) == "/"+pluginName+":start" {
-			emit(object{"decision": "block", "reason": T("queue.startPaused", formatTime(numberOr(state, "disabledUntil", 0)), pluginName)})
-		}
-		return
-	}
+	// A session that goes on in another window stays refused here while the guard is paused too:
+	// the pause lifts limits, not the rule that one process drives a session.
 	clearDeadHandoffs(state)
 	if handoff := getMap(getMap(state, "handedOff"), sid); handoff != nil && !isHandoffSession(sid) {
 		if observed(sid, "UserPromptSubmit", "block-duplicate-window", getString(handoff, "model"), nil) {
 			return
 		}
 		emit(object{"decision": "block", "reason": T("handoff.blocked", formatTime(numberOr(handoff, "at", 0)), getString(handoff, "model"), sid)})
+		return
+	}
+	if guardPaused(cfg, state, now) {
+		retireOwnCheckpoint(state, sid)
+		if controlCommand(getString(input, "prompt")) == "/"+pluginName+":start" {
+			emit(object{"decision": "block", "reason": T("queue.startPaused", formatTime(numberOr(state, "disabledUntil", 0)), pluginName)})
+		}
 		return
 	}
 	releaseInterruptedWait(sid, state)
