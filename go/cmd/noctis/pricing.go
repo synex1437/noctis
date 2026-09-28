@@ -25,6 +25,7 @@ var builtinPrices = []struct {
 	{"opus-4-5", modelPrice{5, 25, 6.25, 0.5}},
 	{"opus-4-1", modelPrice{15, 75, 18.75, 1.5}},
 	{"opus-4", modelPrice{15, 75, 18.75, 1.5}},
+	{"sonnet-5-5", modelPrice{2, 10, 2.5, 0.2}},
 	{"sonnet-5", modelPrice{2, 10, 2.5, 0.2}},
 	{"sonnet-4-6", modelPrice{3, 15, 3.75, 0.3}},
 	{"sonnet-4-5", modelPrice{3, 15, 3.75, 0.3}},

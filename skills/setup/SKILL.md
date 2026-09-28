@@ -10,9 +10,9 @@ Speak the user's language throughout (the language they are writing in right now
 
 **Step 1 — ask which model does which work** (skip this step if `$ARGUMENTS` already contains `--profile` or a role flag). Ask one question with these choices and wait for the answer:
 
-1. **Code** — for people who mostly write code: code and planning on **Opus 5.5 · xhigh**, research and writing on Opus 5.5 · high, noisy-output digests and file search on Haiku 4.5.
+1. **Code** — for people who mostly write code: code and planning on **Opus 5.5 · xhigh**, research and writing on Sonnet 5.5 · high, noisy-output digests and file search on Haiku 4.5.
 2. **Search** — for people who mostly research and write: research and writing on **Opus 5.5 · xhigh**, code and planning on Opus 5.5 · xhigh, digests and search on Haiku 4.5.
-3. **Balanced** — spends less of the usage limits: code and planning on Opus 5.5 · high, research on Opus 5.5 · medium, digests and search on Haiku 4.5.
+3. **Balanced** — spends less of the usage limits: code, research and writing on **Sonnet 5.5 · high** (half Opus's price per token), planning on Opus 5.5, digests and search on Haiku 4.5. Sonnet 5.5 needs Claude Code 2.1.284 or newer.
 4. **SYNEX** (the default, and the only profile at max): code and planning on **Opus 5.5 · max**, research and writing on **Opus 5.5 · xhigh**, digests and search on Haiku 4.5. Opus 5.5 beats Fable 5.1 on every coding benchmark Anthropic published with it, and every paid plan includes it.
 5. **custom**: ask for each role separately — code, research & writing, planning, noisy-output digests, file search, fallback — as `model` or `model:effort` (models: fable, opus, sonnet, haiku or a full model id; effort: low, medium, high, xhigh, max).
 

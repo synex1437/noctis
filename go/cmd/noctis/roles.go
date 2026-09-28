@@ -58,7 +58,7 @@ func anthropicHost(address string) bool {
 var roleProfiles = map[string]object{
 	"code": {
 		"code":     object{"model": "opus", "effort": "xhigh"},
-		"research": object{"model": "opus", "effort": "high"},
+		"research": object{"model": "sonnet", "effort": "high"},
 		"planning": object{"model": "opus"},
 		"digest":   object{"model": "haiku"},
 		"explore":  object{"model": "haiku"},
@@ -73,12 +73,12 @@ var roleProfiles = map[string]object{
 		"fallback": object{"model": "opus", "effort": "xhigh"},
 	},
 	"balanced": {
-		"code":     object{"model": "opus", "effort": "high"},
-		"research": object{"model": "opus", "effort": "medium"},
+		"code":     object{"model": "sonnet", "effort": "high"},
+		"research": object{"model": "sonnet", "effort": "high"},
 		"planning": object{"model": "opus"},
 		"digest":   object{"model": "haiku"},
 		"explore":  object{"model": "haiku"},
-		"fallback": object{"model": "opus", "effort": "high"},
+		"fallback": object{"model": "sonnet", "effort": "high"},
 	},
 	"synex": {
 		"code":     object{"model": "opus", "effort": "max"},
@@ -92,22 +92,47 @@ var roleProfiles = map[string]object{
 
 var profileTitles = map[string]string{"code": "Code", "search": "Search", "balanced": "Balanced", "synex": "SYNEX"}
 
-var retiredProfiles = map[string]object{
-	"synex": {
-		"code":     object{"model": "fable", "effort": "max"},
-		"research": object{"model": "opus", "effort": "xhigh"},
-		"planning": object{"model": "fable"},
-		"digest":   object{"model": "haiku"},
-		"explore":  object{"model": "haiku"},
-		"fallback": object{"model": "opus", "effort": "max"},
+// retiredProfiles holds, for each profile, the assignments earlier versions shipped under its name,
+// newest first: a configuration that still holds one is told the profile was re-tuned, and how to
+// adopt it, rather than being switched on its own.
+var retiredProfiles = map[string][]object{
+	"code": {
+		{
+			"code":     object{"model": "opus", "effort": "xhigh"},
+			"research": object{"model": "opus", "effort": "high"},
+			"planning": object{"model": "opus"},
+			"digest":   object{"model": "haiku"},
+			"explore":  object{"model": "haiku"},
+			"fallback": object{"model": "opus", "effort": "xhigh"},
+		},
 	},
 	"balanced": {
-		"code":     object{"model": "opus", "effort": "high"},
-		"research": object{"model": "sonnet", "effort": "high"},
-		"planning": object{"model": "opus"},
-		"digest":   object{"model": "haiku"},
-		"explore":  object{"model": "haiku"},
-		"fallback": object{"model": "sonnet"},
+		{
+			"code":     object{"model": "opus", "effort": "high"},
+			"research": object{"model": "opus", "effort": "medium"},
+			"planning": object{"model": "opus"},
+			"digest":   object{"model": "haiku"},
+			"explore":  object{"model": "haiku"},
+			"fallback": object{"model": "opus", "effort": "high"},
+		},
+		{
+			"code":     object{"model": "opus", "effort": "high"},
+			"research": object{"model": "sonnet", "effort": "high"},
+			"planning": object{"model": "opus"},
+			"digest":   object{"model": "haiku"},
+			"explore":  object{"model": "haiku"},
+			"fallback": object{"model": "sonnet"},
+		},
+	},
+	"synex": {
+		{
+			"code":     object{"model": "fable", "effort": "max"},
+			"research": object{"model": "opus", "effort": "xhigh"},
+			"planning": object{"model": "fable"},
+			"digest":   object{"model": "haiku"},
+			"explore":  object{"model": "haiku"},
+			"fallback": object{"model": "opus", "effort": "max"},
+		},
 	},
 }
 
@@ -287,11 +312,40 @@ func sameRoles(a, b object) bool {
 
 func retunedProfile(roles object) string {
 	name := profileAlias(strings.ToLower(getString(roles, "profile")))
-	earlier, known := retiredProfiles[name]
-	if !known || !sameRoles(earlier, roles) || sameRoles(roleProfiles[name], roles) {
+	if current, known := roleProfiles[name]; !known || sameRoles(current, roles) {
 		return ""
 	}
-	return name
+	for _, earlier := range retiredProfiles[name] {
+		if sameRoles(earlier, roles) {
+			return name
+		}
+	}
+	return ""
+}
+
+// sonnetClaudeMin is the first Claude Code whose sonnet alias is Sonnet 5.5, the model the profiles
+// put on it; an older one resolves the alias to an earlier Sonnet (Sonnet 5 from 2.1.197).
+const sonnetClaudeMin = "2.1.284"
+
+// oldSonnetNotice names the roles that run on the sonnet alias when the last Claude Code session
+// noctis saw is older than sonnetClaudeMin, where those roles get an earlier Sonnet; it is "" when
+// no role does, or when that version is new enough or unknown.
+func oldSonnetNotice(roles object) string {
+	names := []string{}
+	for _, role := range roleNames {
+		if strings.TrimSuffix(strings.ToLower(strings.TrimSpace(getString(getMap(roles, role), "model"))), "[1m]") == "sonnet" {
+			names = append(names, T("roles."+role))
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	_, version := lastClaudeSession()
+	match := versionPattern.FindStringSubmatch(version)
+	if match == nil || compareVersions(match[1], sonnetClaudeMin) >= 0 {
+		return ""
+	}
+	return T("roles.sonnetOld", sonnetClaudeMin, match[1], strings.Join(names, ", "))
 }
 
 func applyRoles(configFile string, config object, roles object) {

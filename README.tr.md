@@ -26,7 +26,7 @@ Kuyruğa kırk iş koyup yattınız; sabah sizi 01:40'ta düşmüş bir *"You've
 - **Bir iş kuyruğunu bitirir.** `/noctis:start deneme.md` bir dosyadaki işleri durup sormadan sırayla yürütür; birkaç iş içeren uzun bir istem kendiliğinden böyle bir listeye dönüşür; izin verdiğiniz bir `TASKS.md` her oturumu sürükler — öncelikler, bağımlılıklar, GitHub issue'ları.
 - **Ücretli kullanım kredisi harcamaz.** Eşikler kapalı olsa bile bir pencerenin %100'ünde durur ve kalan paya sığmayacak çok parçalı bir workflow'u reddeder.
 - **Karar başına sıfır token.** Kullanım verileriniz üzerinde sabit kurallar işler ve her karar kaydedilir (`noctis why`). Kendi başına çalışan tek bir Go binary'si, Linux'ta hook başına yaklaşık 5 ms; Node, Git Bash, derleyici gerekmez.
-- **Her işe uygun model.** Varsayılan olarak kod Opus 5.5 · max'ta, dosya arama ve çıktı özetleri Haiku 4.5'te; yönlendirici açıkken araştırma ve yazı kendi alt-ajanında.
+- **Her işe uygun model.** Varsayılan olarak kod Opus 5.5 · max'ta, daha az harcamak için Sonnet 5.5 · high'da (Balanced), dosya arama ve çıktı özetleri Haiku 4.5'te; yönlendirici açıkken araştırma ve yazı kendi alt-ajanında.
 - **Yalın sıkıştırma, durum çubuğu ve 14 dil.** Bağlam %70'e varınca turlar arasında sıkıştırır, iki kullanım penceresini ve sıfırlanma zamanlarını gösteren bir durum çubuğu çizer ve yazdığınız dilde konuşur.
 - **Ayrıca** OpenAI Codex CLI, Antigravity CLI, Factory Droid ve GitHub Copilot CLI içinde de, daha az özellikle çalışır.
 
@@ -46,7 +46,7 @@ Claude Code içinde, yaklaşık bir dakika:
 
 Setup tek bir soru sorar — hangi model hangi işi yapsın — ve cevabı rol profiliniz olarak saklar. `/noctis:setup` henüz bulunamıyorsa önce `/reload-plugins` çalıştırın. Terminalden: `claude plugin marketplace add synex1437/noctis && claude plugin install noctis@noctis`, ardından Claude Code içinde `/noctis:setup`. Klon ve ZIP kurulumu, profiller ve tüm bayraklar: [kurulum ayrıntıları](docs/GUIDE.tr.md#kurulum-ayrıntı).
 
-**Gereksinimler:** Claude Code 2.1.251 veya üstü (yalın sıkıştırma 2.1.281 ile denendi); Windows, macOS ya da Linux; limit koruması için Pro ya da Max aboneliği. Her profil, tüm ücretli planlarda bulunan Opus 5.5 ve Haiku 4.5 ile çalışır.
+**Gereksinimler:** Claude Code 2.1.251 veya üstü (yalın sıkıştırma 2.1.281 ile denendi); Windows, macOS ya da Linux; limit koruması için Pro ya da Max aboneliği. Her profil tüm ücretli planlarda bulunan modellerle çalışır: Opus 5.5 ve Haiku 4.5, Code ile Balanced'da ayrıca Claude Code 2.1.284 veya üstünü isteyen Sonnet 5.5.
 
 ## Hızlı başlangıç
 

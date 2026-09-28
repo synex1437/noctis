@@ -101,6 +101,9 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	if profile := retunedProfile(section(cfg, "roles")); profile != "" {
 		lines = append(lines, T("status.roles", retunedNotice(profile)))
 	}
+	if notice := oldSonnetNotice(section(cfg, "roles")); notice != "" {
+		lines = append(lines, T("status.roles", notice))
+	}
 	fable := readJSON(files.fable)
 	fableText := T("status.notFetched")
 	if fetched := numberOr(fable, "fetchedAt", 0); fetched > 0 {
@@ -590,6 +593,9 @@ func doctorLines(cfg object) []string {
 	lines = append(lines, fixLine(getString(settings.data, "model") != "", T("doctor.model", orDefault(getString(settings.data, "model"), T("doctor.none"))), "doctor.fixSetup")...)
 	if profile := retunedProfile(section(cfg, "roles")); profile != "" {
 		lines = append(lines, checkLine(false, retunedNotice(profile)))
+	}
+	if notice := oldSonnetNotice(section(cfg, "roles")); notice != "" {
+		lines = append(lines, checkLine(false, notice))
 	}
 	lines = append(lines, tokenDoctorLines(cfg)...)
 	thresholdText, thresholdsGuarded := thresholdDoctorText(cfg)

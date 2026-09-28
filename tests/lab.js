@@ -1596,7 +1596,7 @@ async function scenarioMarketplaceBootstrap(acc) {
   check('roles: settings.json follows the code role', readJson(path.join(rolesDir, 'settings.json')).model === 'opus' && readJson(path.join(rolesDir, 'settings.json')).env.CLAUDE_CODE_EFFORT_LEVEL === 'xhigh', true);
   const lite = fs.readFileSync(path.join(root, 'agents', 'lite.md'), 'utf8');
   const digest = fs.readFileSync(path.join(root, 'agents', 'digest.md'), 'utf8');
-  check('roles: plugin agents rewritten from the profile', /^model: opus$/m.test(lite) && /^effort: high$/m.test(lite) && /^model: haiku$/m.test(digest) && !/^effort:/m.test(digest) && lite.split('---').length === 3, true);
+  check('roles: plugin agents rewritten from the profile (Code researches on Sonnet 5.5 at high)', /^model: sonnet$/m.test(lite) && /^effort: high$/m.test(lite) && /^model: haiku$/m.test(digest) && !/^effort:/m.test(digest) && lite.split('---').length === 3, true);
   check('setup: permissions.defaultMode=auto when the CLI supports it', readJson(path.join(rolesDir, 'settings.json')).permissions.defaultMode === 'auto' && readJson(path.join(rolesDir, PLUGIN_NAME, 'config.json')).managedPermissionMode === 'auto', true);
   const keepDir = path.join(LAB_ROOT, 'keep-account');
   fs.mkdirSync(keepDir, { recursive: true });
@@ -1633,7 +1633,7 @@ async function scenarioMarketplaceBootstrap(acc) {
   const setOnFable = readJson(path.join(switchDir, 'settings.json')).model;
   spawnSync(shipped, ['setup', '--config-dir', switchDir, '--profile', 'balanced'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
   const afterSwitch = readJson(path.join(switchDir, 'settings.json'));
-  check('roles: a profile switch replaces the model setup itself wrote', setOnFable === 'fable' && afterSwitch.model === 'opus' && afterSwitch.env.CLAUDE_CODE_EFFORT_LEVEL === 'high', true);
+  check('roles: a profile switch replaces the model setup itself wrote (Balanced codes on Sonnet 5.5 at high)', setOnFable === 'fable' && afterSwitch.model === 'sonnet' && afterSwitch.env.CLAUDE_CODE_EFFORT_LEVEL === 'high', true);
   spawnSync(shipped, ['install', '--source', root, '--config-dir', switchDir, '--uninstall'], { encoding: 'utf8', env });
   check('uninstall: after a replaced model the person gets back what they had', 'model' in readJson(path.join(switchDir, 'settings.json')), false);
   const ownDir = path.join(LAB_ROOT, 'own-model-account');

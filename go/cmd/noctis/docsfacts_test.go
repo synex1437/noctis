@@ -167,3 +167,63 @@ func TestTheReferenceGivesTheShippedDefaultRolesProfile(t *testing.T) {
 		t.Errorf("docs/REFERENCE.md gives %q as the default roles profile; config.default.json ships %q", row[1], shipped)
 	}
 }
+
+// docsFactsModel names a role's assignment the way the guides and the setup picture do: the model and
+// its version, then the effort after separator (" · " in the guides, "·" in the picture).
+func docsFactsModel(t *testing.T, assignment object, separator string) string {
+	t.Helper()
+	name, known := map[string]string{"opus": "Opus 5.5", "sonnet": "Sonnet 5.5", "haiku": "Haiku 4.5"}[getString(assignment, "model")]
+	if !known {
+		t.Fatalf("the docs have no name for the model %q", getString(assignment, "model"))
+	}
+	if effort := getString(assignment, "effort"); effort != "" {
+		return name + separator + effort
+	}
+	return name
+}
+
+func TestTheGuidesAndTheSetupPictureGiveEachProfileTheModelsItSets(t *testing.T) {
+	for name, roles := range roleProfiles {
+		// One column of the guides' table holds both digests and file search.
+		if docsFactsModel(t, getMap(roles, "digest"), " · ") != docsFactsModel(t, getMap(roles, "explore"), " · ") {
+			t.Fatalf("%s gives digests and file search different models; the guides show them in one column", name)
+		}
+	}
+	for _, doc := range []string{"docs/GUIDE.md", "docs/GUIDE.tr.md"} {
+		text := docsFactsFile(t, doc)
+		for name, roles := range roleProfiles {
+			cells := []string{}
+			for _, role := range []string{"code", "research", "planning", "digest", "fallback"} {
+				cells = append(cells, docsFactsModel(t, getMap(roles, role), " · "))
+			}
+			want := "| " + strings.Join(cells, " | ") + " |"
+			row := regexp.MustCompile("(?m)^\\| \\*\\*" + regexp.QuoteMeta(profileTitles[name]) + "\\*\\*[^|]*(\\|.*)$").FindStringSubmatch(text)
+			if row == nil {
+				t.Errorf("%s has no row for the %s profile in its roles table", doc, profileTitles[name])
+			} else if row[1] != want {
+				t.Errorf("%s gives the %s profile\n  %s\nwhile it sets\n  %s", doc, profileTitles[name], row[1], want)
+			}
+		}
+	}
+	picture := docsFactsFile(t, "docs/install.svg")
+	for name, roles := range roleProfiles {
+		line := regexp.MustCompile(">\\d " + regexp.QuoteMeta(profileTitles[name]) + "</text>\\s*<text [^>]*>([^<]*)</text>").FindStringSubmatch(picture)
+		if line == nil {
+			t.Errorf("docs/install.svg shows no line for the %s profile", profileTitles[name])
+			continue
+		}
+		for role, label := range map[string]string{"code": "code", "research": "research", "digest": "digests"} {
+			if want := docsFactsModel(t, getMap(roles, role), "·") + " " + label; !strings.Contains(line[1], want) {
+				t.Errorf("docs/install.svg shows the %s profile as %q, without %q", profileTitles[name], line[1], want)
+			}
+		}
+	}
+}
+
+func TestTheDocsNameTheClaudeCodeWhoseSonnetIsSonnet55(t *testing.T) {
+	for _, doc := range []string{"README.md", "README.tr.md", "docs/GUIDE.md", "docs/GUIDE.tr.md", "docs/REFERENCE.md", "skills/setup/SKILL.md"} {
+		if !strings.Contains(docsFactsFile(t, doc), sonnetClaudeMin) {
+			t.Errorf("%s does not name Claude Code %s, the first whose sonnet alias is Sonnet 5.5", doc, sonnetClaudeMin)
+		}
+	}
+}

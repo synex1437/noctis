@@ -26,7 +26,7 @@ You queued forty tasks, went to bed, and woke up to *"You've hit your session li
 - **Works through a task queue.** `/noctis:start jobs.md` runs the jobs in a file in order without stopping to ask; a long prompt with several tasks becomes such a list by itself; a `TASKS.md` you trust drives every session, with priorities, dependencies and GitHub issues.
 - **Never spends paid usage credits.** It stops at 100 % of a window even when the thresholds are off, and refuses a fan-out workflow that would not fit in what is left.
 - **Zero tokens per decision.** Fixed rules over your usage data, and every decision logged (`noctis why`). One self-contained Go binary, about 5 ms per hook on Linux; no Node, Git Bash or compiler.
-- **The right model for each job.** Code on Opus 5.5 · max by default, file search and output digests on Haiku 4.5, and, with the router on, research and writing in a subagent of their own.
+- **The right model for each job.** Code on Opus 5.5 · max by default, or on Sonnet 5.5 · high to spend less (Balanced), file search and output digests on Haiku 4.5, and, with the router on, research and writing in a subagent of their own.
 - **Lean compaction, a status line and 14 languages.** It compacts between turns at 70 % context, draws a status line with both usage windows and their reset times, and speaks the language you type in.
 - **Also runs in** OpenAI Codex CLI, Antigravity CLI, Factory Droid and GitHub Copilot CLI, with fewer features.
 
@@ -46,7 +46,7 @@ Inside Claude Code, about a minute:
 
 Setup asks one question, which model does which kind of work, and keeps the answer as your roles profile. If `/noctis:setup` is not found yet, run `/reload-plugins` first. From a terminal: `claude plugin marketplace add synex1437/noctis && claude plugin install noctis@noctis`, then `/noctis:setup` inside Claude Code. Clone and ZIP installs, the profiles and every flag: [install details](docs/GUIDE.md#install-details).
 
-**Requirements:** Claude Code 2.1.251 or newer (lean compaction was tested with 2.1.281); Windows, macOS or Linux; a Pro or Max plan for the limit guard. Every profile runs on Opus 5.5 and Haiku 4.5, which every paid plan includes.
+**Requirements:** Claude Code 2.1.251 or newer (lean compaction was tested with 2.1.281); Windows, macOS or Linux; a Pro or Max plan for the limit guard. Every profile runs on models every paid plan includes: Opus 5.5 and Haiku 4.5, and Sonnet 5.5 in Code and Balanced, which needs Claude Code 2.1.284 or newer.
 
 ## Quick start
 
