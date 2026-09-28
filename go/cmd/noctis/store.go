@@ -352,9 +352,22 @@ func ensureDir(dir string) {
 	_ = os.MkdirAll(dir, 0o700)
 }
 
+// rotateLockName is the lock, beside the log, that a process holds while it rotates the log.
+const rotateLockName = "rotate.lock"
+
+// appendRotating appends line to file, first moving a file past logMaxBytes aside to file.1. Only a
+// process that holds rotate.lock rotates, and only if the file is still past the limit when it looks
+// again there: otherwise two processes that both found the log due could rotate one after the other,
+// the second moving the fresh log the first had just started over the history the first had moved
+// to file.1. A process that finds the lock taken appends without rotating; the holder rotates.
 func appendRotating(file, line string) error {
 	if info, err := os.Stat(file); err == nil && info.Size() > logMaxBytes {
-		_ = renameAtomic(file, file+".1")
+		if release, locked := tryFileLock(filepath.Join(filepath.Dir(file), rotateLockName)); locked {
+			if info, err := os.Stat(file); err == nil && info.Size() > logMaxBytes {
+				_ = renameAtomic(file, file+".1")
+			}
+			release()
+		}
 	}
 	handle, err := os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
