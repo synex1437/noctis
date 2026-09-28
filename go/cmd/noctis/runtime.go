@@ -1054,6 +1054,7 @@ func resumeWait(sid, release string) {
 	prompt = relaunchPrompt(prompt)
 	runnerStarted := processStarted(os.Getpid())
 	claimed, continued, woken, watcher := false, false, 0.0, 0
+	var dropped object
 	updateState(func(next object) {
 
 		if handoffHeldFor(next, sid, startedAt) > 0 {
@@ -1089,6 +1090,7 @@ func resumeWait(sid, release string) {
 				checkpoint["handedTo"] = plan.sid
 			}
 		}
+		dropped = getMap(record, "scheduled")
 		delete(record, "scheduled")
 	})
 	if continued {
@@ -1107,6 +1109,12 @@ func resumeWait(sid, release string) {
 	if !claimed {
 		leaveSessionToItsRunner(sid)
 		return
+	}
+	// The claim drops the pause's schedule. A systemd timer set for later than now (this runner
+	// resumes early: a reset watcher's) would still fire, and neither cancel nor uninstall would
+	// find it any more. A timer that started this runner has fired and is left alone.
+	if getString(dropped, "method") == "systemd" && !ownSystemdUnit(getString(dropped, "unit")) {
+		cancelNative(sid, dropped)
 	}
 	defer releaseHandoff(sid, startedAt)
 	kept := plan.sid == ""
