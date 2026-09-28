@@ -271,7 +271,7 @@ func currentUsageIn(now int64, guardDir string) usageView {
 	fable := readJSON(filepath.Join(guardDir, "fable.json"))
 	usageAt := numberOr(usage, "updatedAt", 0)
 	fetchedAt := numberOr(fable, "fetchedAt", 0)
-	offset := numberOr(fable, "clockOffset", 0)
+	offset := liveClockOffset(fable, now)
 	oauthHistory := getMap(fable, "history")
 	statusHistory := getMap(usage, "history")
 	build := func(key string) *window {
@@ -769,6 +769,19 @@ func clockOffsetFrom(result fetchResult, previous float64) float64 {
 		warn("clock skew detected: local clock is %s the server by %ds; reset times adjusted", direction, int(math.Abs(offset)))
 	}
 	return offset
+}
+
+// clockOffsetMaxAge is how long after its fetch a measured clock offset still moves reset times:
+// when the clock is set right while the fetches fail, an old measurement stops moving them then.
+const clockOffsetMaxAge = 30 * 60
+
+// liveClockOffset is the offset the last successful fetch measured, while that fetch lies at most
+// clockOffsetMaxAge from now either way (a clock set back since puts it in the future).
+func liveClockOffset(fable object, now int64) float64 {
+	if math.Abs(float64(now)-numberOr(fable, "fetchedAt", 0)) > clockOffsetMaxAge {
+		return 0
+	}
+	return numberOr(fable, "clockOffset", 0)
 }
 
 // refreshFable brings fable.json up to date when its reading is older than maxAge (the poll
