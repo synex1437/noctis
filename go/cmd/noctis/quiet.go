@@ -39,15 +39,14 @@ func quietEligible(cfg, state object, sid string, result decision, usageStale bo
 	if len(getList(state, "interruptedWaits")) > 0 || numberOr(state, "hookCapSeconds", 0) > 0 || numberOr(state, "disabledUntil", 0) > float64(nowSec()) {
 		return false
 	}
-	thresholds := section(cfg, "thresholds")
 	for _, spec := range []struct {
 		win *window
 		key string
 	}{{result.usage.fiveHour, "session5h"}, {result.usage.sevenDay, "weeklyAll"}} {
-		if spec.win == nil || !validThreshold(thresholds[spec.key]) {
+		limit, guarded := stopPoint(cfg, spec.key)
+		if spec.win == nil || !guarded {
 			continue
 		}
-		limit := thresholdOf(cfg, spec.key)
 		if spec.win.used >= limit-warnBandMax-quietHeadroomPoints || spec.win.projected >= limit-warnBandMax {
 			return false
 		}
