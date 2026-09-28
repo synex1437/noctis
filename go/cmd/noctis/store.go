@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -933,6 +934,9 @@ func getNumber(source object, key string) (float64, bool) {
 func toNumber(value any) (float64, bool) {
 	switch typed := value.(type) {
 	case float64:
+		if math.IsNaN(typed) || math.IsInf(typed, 0) {
+			return 0, false
+		}
 		return typed, true
 	case int:
 		return float64(typed), true
@@ -940,7 +944,7 @@ func toNumber(value any) (float64, bool) {
 		return float64(typed), true
 	case string:
 		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
-		if err != nil {
+		if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
 			return 0, false
 		}
 		return parsed, true
