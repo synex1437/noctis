@@ -139,8 +139,8 @@ func TestTheDocsSayNoLeanTakesBackOnlyTheSwitchSetupWrote(t *testing.T) {
 		never          string
 	}{
 		{"skills/setup/SKILL.md", "`--no-lean` (", ")", []string{"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS", "setup wrote is taken back", "the user set stays"}, "alone"},
-		{"README.md", "`/noctis:setup --no-lean`", ". ", []string{"takes the switch back if setup wrote it", "you set yourself stays"}, "alone"},
-		{"README.tr.md", "`/noctis:setup --no-lean`", ". ", []string{"setup yazdıysa geri alır", "sizin koyduğunuz bir değer kalır"}, "dokunmaz"},
+		{"docs/GUIDE.md", "`/noctis:setup --no-lean`", ". ", []string{"takes the switch back if setup wrote it", "you set yourself stays"}, "alone"},
+		{"docs/GUIDE.tr.md", "`/noctis:setup --no-lean`", ". ", []string{"setup yazdıysa geri alır", "sizin koyduğunuz bir değer kalır"}, "dokunmaz"},
 	} {
 		raw, err := os.ReadFile(filepath.Join(repoRoot(), doc.file))
 		if err != nil {
