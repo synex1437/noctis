@@ -197,6 +197,42 @@ func TestARelaunchThatNeverAnswersGivesUpAfterTheLastAttempt(t *testing.T) {
 	}
 }
 
+func TestAWindowWhoseLauncherIsSlowToWriteItsPidIsNotLaunchedAgainHeadless(t *testing.T) {
+	sid := "slow-pid"
+	date, err := exec.LookPath("date")
+	if err != nil {
+		t.Fatalf("date is not on PATH: %v", err)
+	}
+	_, bin, calls := terminalSandbox(t)
+	if err := os.Symlink(date, filepath.Join(bin, "date")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NOCTIS_NO_TASKS", "1")
+	t.Setenv("NOCTIS_NO_SCHEDULE", "1")
+	t.Setenv("NOCTIS_NO_EARLY_TRIGGER", "")
+	t.Setenv(handoffEnv, "")
+	// This terminal creates the pid file empty, as the launcher's own redirection does before it
+	// writes the pid, and runs the launcher a second later.
+	relaunchConfig(object{"mode": "window", "prompt": "carry on", "terminal": `s={script}; exec 3< "$s"; : > "${s%.sh}.pid"; sleep 1; sh <&3`})
+	writeStub(t, bin, "claude", fakeClaude(answerLine, "exit 0"))
+	parkForRelaunch(t, sid, "batch", "")
+
+	resumeWait(sid, "")
+
+	content, _ := os.ReadFile(calls)
+	for _, line := range strings.Split(string(content), "\n") {
+		if strings.HasPrefix(line, "-p ") {
+			t.Fatalf("the session was launched headless beside its window: %q", line)
+		}
+	}
+	if got := launchesOf(calls, sid); got != 1 {
+		t.Fatalf("the runner launched the session %d time(s), want 1", got)
+	}
+	if wait := waitOf(sid); wait != nil {
+		t.Fatalf("the session answered in its window, but its wait was kept for a retry: %v (journal %v)", wait, journaledFor(sid))
+	}
+}
+
 func TestAWindowThatClosesAtOnceWithoutTouchingTheSessionIsRetried(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -204,7 +240,11 @@ func TestAWindowThatClosesAtOnceWithoutTouchingTheSessionIsRetried(t *testing.T)
 		retry bool
 	}{
 		{"claude exited before it touched the session", []string{"exit 1"}, true},
-		{"claude wrote to the session before the window closed", []string{answerLine, "exit 0"}, false},
+		// The runner tells a window that answered by the transcript's time, which the system can
+		// stamp a clock tick (or on some file systems a second) late; a real claude takes longer
+		// than that to answer, and a stand-in that answered at once could be stamped before the
+		// launch.
+		{"claude wrote to the session before the window closed", []string{"sleep 1", answerLine, "exit 0"}, false},
 	}
 	for index, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -631,13 +631,20 @@ func openTasks(state object, sid string) []object {
 }
 
 func insideGitRepo(cwd string) bool {
+	return gitDotOf(cwd) != ""
+}
+
+// gitDotOf is the .git of the repository around cwd, looked for in cwd and the five folders above
+// it, or "" when there is none.
+func gitDotOf(cwd string) string {
 	if cwd == "" {
-		return false
+		return ""
 	}
 	dir, _ := filepath.Abs(cwd)
 	for depth := 0; depth < 6; depth++ {
-		if statSafe(filepath.Join(dir, ".git")) != nil {
-			return true
+		dotGit := filepath.Join(dir, ".git")
+		if statSafe(dotGit) != nil {
+			return dotGit
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -645,7 +652,110 @@ func insideGitRepo(cwd string) bool {
 		}
 		dir = parent
 	}
-	return false
+	return ""
+}
+
+// gitSteeringEnv names the variables that change where git finds a repository or its references.
+var gitSteeringEnv = []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES", "GIT_NAMESPACE"}
+
+// gitDirsOf is where the repository around cwd keeps its files, found as git finds it: gitDir holds
+// what belongs to this working tree (HEAD, the index), commonDir what all its working trees share
+// (refs, packed-refs). ok is false when git could find it elsewhere, since one of gitSteeringEnv is
+// set, or when a .git or commondir file cannot be read or does not read as git writes it.
+func gitDirsOf(cwd string) (gitDir, commonDir string, ok bool) {
+	for _, name := range gitSteeringEnv {
+		if os.Getenv(name) != "" {
+			return "", "", false
+		}
+	}
+	gitDir = gitDotOf(cwd)
+	if gitDir == "" {
+		return "", "", false
+	}
+	if info := statSafe(gitDir); info != nil && !info.IsDir() {
+		raw, err := readFileShared(gitDir)
+		if err != nil {
+			return "", "", false
+		}
+		target, found := strings.CutPrefix(strings.TrimRight(string(raw), " \t\r\n"), "gitdir: ")
+		if !found || target == "" {
+			return "", "", false
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(gitDir), target)
+		}
+		gitDir = target
+	}
+	commonDir = gitDir
+	raw, err := readFileShared(filepath.Join(gitDir, "commondir"))
+	if err == nil {
+		common := strings.TrimRight(string(raw), " \t\r\n")
+		if !filepath.IsAbs(common) {
+			common = filepath.Join(gitDir, common)
+		}
+		commonDir = common
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return "", "", false
+	}
+	return gitDir, commonDir, true
+}
+
+// gitHeadFromFiles reads the commit HEAD names from the repository's files, as `git rev-parse
+// --verify HEAD` gives it, without starting git: a detached HEAD, or the branch HEAD names, loose
+// or packed. ok is false for anything else it would have to guess at (a reference table, a
+// symbolic reference, a branch with no commit yet, a file that does not read as git writes it or
+// cannot be read), and git answers then. On Windows the files are opened so that git can still
+// rename a new one over them, which is how it rewrites them.
+func gitHeadFromFiles(cwd string) (string, bool) {
+	gitDir, commonDir, ok := gitDirsOf(cwd)
+	if !ok || statSafe(filepath.Join(commonDir, "reftable")) != nil {
+		return "", false
+	}
+	raw, err := readFileShared(filepath.Join(gitDir, "HEAD"))
+	if err != nil {
+		return "", false
+	}
+	head := strings.TrimSpace(string(raw))
+	ref, symbolic := strings.CutPrefix(head, "ref: ")
+	if !symbolic {
+		return head, gitObjectName(head)
+	}
+	if !strings.HasPrefix(ref, "refs/heads/") {
+		return "", false
+	}
+	// A loose ref is newer than a packed one, so the packed one counts only where no loose one is.
+	raw, err = readFileShared(filepath.Join(commonDir, filepath.FromSlash(ref)))
+	if err == nil {
+		loose := strings.TrimSpace(string(raw))
+		return loose, gitObjectName(loose)
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return "", false
+	}
+	packed, err := readFileShared(filepath.Join(commonDir, "packed-refs"))
+	if err != nil {
+		return "", false
+	}
+	for _, line := range strings.Split(string(packed), "\n") {
+		hash, entry, found := strings.Cut(strings.TrimRight(line, "\r"), " ")
+		if found && entry == ref {
+			return hash, gitObjectName(hash)
+		}
+	}
+	return "", false
+}
+
+// gitObjectName tells whether text is a full object name, SHA-1 or SHA-256, as git writes one.
+func gitObjectName(text string) bool {
+	if len(text) != 40 && len(text) != 64 {
+		return false
+	}
+	for _, char := range text {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 type gitStatusCacheEntry struct {
@@ -715,6 +825,9 @@ func treeFingerprint(cwd string) string {
 }
 
 func gitHead(cwd string) string {
+	if head, ok := gitHeadFromFiles(cwd); ok {
+		return head
+	}
 	command := exec.Command("git", "rev-parse", "-q", "--verify", "HEAD")
 	command.Dir = cwd
 	output, err := runWithTimeout(command, 3*time.Second)
@@ -1032,7 +1145,15 @@ func removeIndexLeftovers(index string) {
 	}
 }
 
-func gitIndexCopy(cwd string) (string, bool) {
+// gitIndexPath is the index of the working tree around cwd, as `git rev-parse --git-path index`
+// gives it, read from the repository's files unless GIT_INDEX_FILE or one of gitSteeringEnv moves
+// it elsewhere.
+func gitIndexPath(cwd string) (string, bool) {
+	if os.Getenv("GIT_INDEX_FILE") == "" {
+		if gitDir, _, ok := gitDirsOf(cwd); ok {
+			return filepath.Join(gitDir, "index"), true
+		}
+	}
 	locate := exec.Command("git", "rev-parse", "--git-path", "index")
 	locate.Dir = cwd
 	output, err := runWithTimeout(locate, 5*time.Second)
@@ -1042,6 +1163,14 @@ func gitIndexCopy(cwd string) (string, bool) {
 	source := strings.TrimSpace(string(output))
 	if !filepath.IsAbs(source) {
 		source = filepath.Join(cwd, source)
+	}
+	return source, true
+}
+
+func gitIndexCopy(cwd string) (string, bool) {
+	source, ok := gitIndexPath(cwd)
+	if !ok {
+		return "", false
 	}
 	content, err := readFileShared(source)
 	if err != nil {
@@ -1424,7 +1553,11 @@ func scheduleRunnerLocked(cfg object, sid string, atEpoch, rearms float64) objec
 	at := math.Max(atEpoch, float64(now+15))
 	cloud := cloudSession()
 	nativeAllowed := os.Getenv("NOCTIS_NO_TASKS") == "" && !cloud
-	backend := schedulerBackend()
+	// Picking the backend can mean asking systemctl, which matters only when a native one may run.
+	backend := ""
+	if nativeAllowed {
+		backend = schedulerBackend()
+	}
 	replacingTask := nativeAllowed && backend == "task"
 	cancelRunnerKeepingTask(sid, readState(), replacingTask)
 	var scheduled object
