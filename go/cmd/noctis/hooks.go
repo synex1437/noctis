@@ -432,8 +432,12 @@ func controlCommand(prompt string) string {
 	if len(fields) == 0 {
 		return ""
 	}
-	if name, found := strings.CutPrefix(fields[0], "/"+pluginName+":"); found && controlSkills[name] {
-		return fields[0]
+	// A copy of the skills in .claude/skills answers to /noctis-pause (see
+	// copiedSkillCommands); it is named the plugin's way from here on.
+	for _, separator := range []string{":", "-"} {
+		if name, found := strings.CutPrefix(fields[0], "/"+pluginName+separator); found && controlSkills[name] {
+			return "/" + pluginName + ":" + name
+		}
 	}
 	return ""
 }

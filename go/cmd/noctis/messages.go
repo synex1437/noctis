@@ -1118,9 +1118,9 @@ func T(key string, values ...any) string {
 		return key
 	}
 	if len(values) == 0 {
-		return text
+		return copiedSkillCommands(text)
 	}
-	return fmt.Sprintf(text, values...)
+	return copiedSkillCommands(fmt.Sprintf(text, values...))
 }
 
 func dayName(weekday int) string {
