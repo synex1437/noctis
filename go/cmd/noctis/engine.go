@@ -2483,7 +2483,7 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 		}
 	}
 	fetchedOnce := numberOr(readJSON(files.fable), "fetchedAt", 0) > 0
-	permanentError := refreshError == "no-token" || strings.HasPrefix(refreshError, "http-40")
+	permanentError := refreshError == "no-token" || refreshError == "token-expired" || strings.HasPrefix(refreshError, "http-40")
 	if edge && refreshError != "" && fetchedOnce && !permanentError && !options.noProbe && float64(now)-snapshot.updatedAt > blindAfterSeconds {
 		warn("near the limit without fresh data (%s); probing before allowing more work", refreshError)
 		rounds := int(math.Max(1, numberOr(usageCfg, "blindProbeRounds", 5)))

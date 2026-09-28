@@ -171,6 +171,7 @@
   "status.fetchedAt": "récupéré %s",
   "status.error": " · erreur : %s",
   "refresh.noToken": "aucune connexion Claude trouvée",
+  "refresh.tokenExpired": "la connexion Claude a expiré ; Claude Code la renouvelle à sa prochaine requête",
   "refresh.rejected": "la connexion a été refusée (HTTP %s) ; ouvre Claude Code une fois pour qu'il se reconnecte",
   "refresh.rateLimited": "le point d'accès d'usage limite les requêtes de noctis",
   "refresh.network": "point d'accès d'usage injoignable : %s",

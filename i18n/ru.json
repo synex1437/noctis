@@ -171,6 +171,7 @@
   "status.fetchedAt": "получено %s",
   "status.error": " · ошибка: %s",
   "refresh.noToken": "вход в Claude не найден",
+  "refresh.tokenExpired": "вход в Claude истёк; Claude Code обновит его при следующем запросе",
   "refresh.rejected": "вход отклонён (HTTP %s); открой Claude Code один раз, чтобы он вошёл заново",
   "refresh.rateLimited": "эндпоинт использования ограничивает запросы noctis",
   "refresh.network": "не удалось связаться с эндпоинтом использования: %s",

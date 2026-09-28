@@ -171,6 +171,7 @@
   "status.fetchedAt": "opgehaald %s",
   "status.error": " · fout: %s",
   "refresh.noToken": "geen Claude-aanmelding gevonden",
+  "refresh.tokenExpired": "de Claude-aanmelding is verlopen; Claude Code vernieuwt die bij zijn volgende verzoek",
   "refresh.rejected": "de aanmelding werd geweigerd (HTTP %s); open Claude Code één keer zodat het opnieuw aanmeldt",
   "refresh.rateLimited": "het gebruiks-endpoint beperkt de verzoeken van noctis",
   "refresh.network": "het gebruiks-endpoint is niet bereikbaar: %s",

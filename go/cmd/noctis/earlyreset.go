@@ -87,7 +87,7 @@ func earlyRelease(cfg object, sid string, record object, poll, relaunch bool) st
 	if poll && pollEvery > 0 && currentHost().limits {
 		backoff := numberOr(readJSON(files.fable), "backoffUntil", 0)
 		fable := refreshFable(cfg, now, "early-reset", math.Max(1, pollEvery-2), false)
-		if getString(fable, "error") == "no-token" && numberOr(fable, "backoffUntil", 0) != backoff {
+		if getString(fable, "error") == "token-expired" && numberOr(fable, "backoffUntil", 0) != backoff {
 			tellSignInExpired(cfg, record, numberOr(fable, "fetchedAt", 0))
 		}
 	}

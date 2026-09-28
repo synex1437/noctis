@@ -171,6 +171,7 @@
   "status.fetchedAt": "جُلبت %s",
   "status.error": " · خطأ: %s",
   "refresh.noToken": "لم يُعثر على تسجيل دخول إلى Claude",
+  "refresh.tokenExpired": "انتهت صلاحية تسجيل الدخول إلى Claude؛ يجدّده Claude Code مع طلبه التالي",
   "refresh.rejected": "رُفض تسجيل الدخول (HTTP %s)؛ افتح Claude Code مرة ليسجّل الدخول من جديد",
   "refresh.rateLimited": "نقطة نهاية الاستخدام تحدّ من طلبات noctis",
   "refresh.network": "تعذّر الوصول إلى نقطة نهاية الاستخدام: %s",

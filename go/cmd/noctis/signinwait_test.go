@@ -53,8 +53,8 @@ func TestAWaitTellsTheUserOnceThatAnExpiredSignInHidesEarlyResets(t *testing.T) 
 
 	pollWithoutBackoff(t, cfg, record, 3)
 
-	if getString(readJSON(files.fable), "error") != "no-token" {
-		t.Fatalf("the polls did not find the sign-in unusable: %v", readJSON(files.fable))
+	if getString(readJSON(files.fable), "error") != "token-expired" {
+		t.Fatalf("the polls did not find the sign-in expired: %v", readJSON(files.fable))
 	}
 	if told := strings.Count(string(readFileOrEmpty(files.log)), notice); told != 1 {
 		t.Fatalf("the Claude sign-in expired during a weekly wait, so no early reset can be read any more, and the user was told %d times, want once:\n%s", told, readFileOrEmpty(files.log))

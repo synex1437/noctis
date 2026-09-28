@@ -171,6 +171,7 @@
   "status.fetchedAt": "取得 %s",
   "status.error": " · エラー: %s",
   "refresh.noToken": "Claude のサインインが見つかりません",
+  "refresh.tokenExpired": "Claude のサインインの有効期限が切れています。Claude Code が次のリクエストで更新します",
   "refresh.rejected": "サインインが拒否されました（HTTP %s）。Claude Code を一度開いてサインインし直させてください",
   "refresh.rateLimited": "使用量エンドポイントが noctis のリクエストを制限しています",
   "refresh.network": "使用量エンドポイントに接続できません: %s",

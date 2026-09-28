@@ -171,6 +171,7 @@
   "status.fetchedAt": "consultado %s",
   "status.error": " · error: %s",
   "refresh.noToken": "no se encontró ningún inicio de sesión de Claude",
+  "refresh.tokenExpired": "el inicio de sesión de Claude caducó; Claude Code lo renueva con su próxima solicitud",
   "refresh.rejected": "se rechazó el inicio de sesión (HTTP %s); abre Claude Code una vez para que vuelva a iniciar sesión",
   "refresh.rateLimited": "el endpoint de uso está limitando las peticiones de noctis",
   "refresh.network": "no se pudo contactar con el endpoint de uso: %s",

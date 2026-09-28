@@ -673,6 +673,8 @@ func refreshProblemText(code string) string {
 	switch {
 	case code == "no-token":
 		return T("refresh.noToken")
+	case code == "token-expired":
+		return T("refresh.tokenExpired")
 	case code == "unexpected-shape":
 		return T("refresh.unexpectedShape")
 	case strings.HasPrefix(code, "bad-json"):
@@ -817,13 +819,18 @@ func fetchFable(cfg, cached object, now int64, reason string) object {
 // not answered within a limit short of fetchTimeout has not failed yet: nothing is written and
 // the answer is false, so a fetch that waits the full time can ask again.
 func fetchOauthFable(cfg, cached object, now int64, reason string, limit time.Duration) (object, bool) {
-	token := oauthToken()
+	token, tokenState := oauthTokenState()
 	if token == "" {
 		next := cloneObject(cached)
 		next["error"] = "no-token"
 		next["backoffUntil"] = float64(now + 1800)
+		if tokenState == "expired" {
+			// Claude Code renews an expired token with its next request, so the next try is soon.
+			next["error"] = "token-expired"
+			next["backoffUntil"] = float64(now + 120)
+		}
 		mustWriteJSON(files.fable, next)
-		logInfo("fable refresh skipped (%s): no usable OAuth token in %s", reason, files.credentials)
+		logInfo("fable refresh skipped (%s): no usable OAuth token in %s (%s)", reason, files.credentials, tokenState)
 		return next, true
 	}
 	response := fetchOauthUsage(token, limit)

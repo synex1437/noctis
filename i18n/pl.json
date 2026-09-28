@@ -171,6 +171,7 @@
   "status.fetchedAt": "pobrano %s",
   "status.error": " · błąd: %s",
   "refresh.noToken": "nie znaleziono logowania do Claude",
+  "refresh.tokenExpired": "logowanie do Claude wygasło; Claude Code odnowi je przy następnym żądaniu",
   "refresh.rejected": "logowanie zostało odrzucone (HTTP %s); otwórz raz Claude Code, żeby zalogował się ponownie",
   "refresh.rateLimited": "punkt końcowy zużycia ogranicza zapytania noctis",
   "refresh.network": "nie można połączyć się z punktem końcowym zużycia: %s",

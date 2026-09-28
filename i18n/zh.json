@@ -171,6 +171,7 @@
   "status.fetchedAt": "获取于 %s",
   "status.error": " · 错误：%s",
   "refresh.noToken": "找不到 Claude 登录信息",
+  "refresh.tokenExpired": "Claude 登录已过期；Claude Code 会在下一次请求时续期",
   "refresh.rejected": "登录被拒绝（HTTP %s）；打开一次 Claude Code 让它重新登录",
   "refresh.rateLimited": "用量接口正在对 noctis 限流",
   "refresh.network": "无法连接用量接口：%s",

@@ -171,6 +171,7 @@
   "status.fetchedAt": "consultado %s",
   "status.error": " · erro: %s",
   "refresh.noToken": "nenhum login do Claude encontrado",
+  "refresh.tokenExpired": "o login do Claude expirou; o Claude Code o renova na próxima solicitação",
   "refresh.rejected": "o login foi recusado (HTTP %s); abra o Claude Code uma vez para ele entrar de novo",
   "refresh.rateLimited": "o endpoint de uso está limitando as requisições do noctis",
   "refresh.network": "não foi possível alcançar o endpoint de uso: %s",

@@ -171,6 +171,7 @@
   "status.fetchedAt": "abgerufen %s",
   "status.error": " · Fehler: %s",
   "refresh.noToken": "keine Claude-Anmeldung gefunden",
+  "refresh.tokenExpired": "die Claude-Anmeldung ist abgelaufen; Claude Code erneuert sie mit seiner nächsten Anfrage",
   "refresh.rejected": "die Anmeldung wurde abgelehnt (HTTP %s); öffne Claude Code einmal, damit es sich neu anmeldet",
   "refresh.rateLimited": "der Nutzungs-Endpunkt drosselt die Anfragen von noctis",
   "refresh.network": "Nutzungs-Endpunkt nicht erreichbar: %s",
