@@ -967,6 +967,7 @@ func awaitMarker(marker string, limit, poll time.Duration) bool {
 
 type tokenBucket struct {
 	input, output, cacheRead, cacheWrite float64
+	cacheWrite1h                         float64 // the part of cacheWrite cached for one hour
 	calls                                int
 }
 
@@ -974,7 +975,9 @@ func (bucket *tokenBucket) add(usage object) {
 	bucket.input += numberOr(usage, "input_tokens", 0)
 	bucket.output += numberOr(usage, "output_tokens", 0)
 	bucket.cacheRead += numberOr(usage, "cache_read_input_tokens", 0)
-	bucket.cacheWrite += numberOr(usage, "cache_creation_input_tokens", 0)
+	written := numberOr(usage, "cache_creation_input_tokens", 0)
+	bucket.cacheWrite += written
+	bucket.cacheWrite1h += min(numberOr(getMap(usage, "cache_creation"), "ephemeral_1h_input_tokens", 0), written)
 	bucket.calls++
 }
 
@@ -1207,6 +1210,7 @@ func reportJSON(cfg object, data reportData) object {
 		totals.output += bucket.output
 		totals.cacheRead += bucket.cacheRead
 		totals.cacheWrite += bucket.cacheWrite
+		totals.cacheWrite1h += bucket.cacheWrite1h
 		totals.calls += bucket.calls
 		entry := bucket.toJSON()
 		entry["date"] = day

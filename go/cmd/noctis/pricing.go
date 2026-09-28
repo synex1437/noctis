@@ -29,14 +29,23 @@ var builtinPrices = []struct {
 	{"sonnet-4-6", modelPrice{3, 15, 3.75, 0.3}},
 	{"sonnet-4-5", modelPrice{3, 15, 3.75, 0.3}},
 	{"sonnet-4", modelPrice{3, 15, 3.75, 0.3}},
+	{"3-7-sonnet", modelPrice{3, 15, 3.75, 0.3}},
 	{"haiku-4-5", modelPrice{1, 5, 1.25, 0.1}},
 	{"haiku-3-5", modelPrice{0.8, 4, 1, 0.08}},
+	{"3-5-haiku", modelPrice{0.8, 4, 1, 0.08}},
 }
 
 func priceFor(cfg object, model string) (modelPrice, bool) {
 	needle := strings.ToLower(model)
 	if needle == "" {
 		return modelPrice{}, false
+	}
+	listed, found := modelPrice{}, false
+	for _, entry := range builtinPrices {
+		if strings.Contains(needle, entry.match) || (len(needle) >= 4 && strings.Contains(entry.match, needle)) {
+			listed, found = entry.price, true
+			break
+		}
 	}
 
 	overrides := getMap(section(cfg, "report"), "pricing")
@@ -55,18 +64,17 @@ func priceFor(cfg object, model string) (modelPrice, bool) {
 		if entry == nil || !strings.Contains(needle, strings.ToLower(key)) {
 			continue
 		}
-		return modelPrice{numberOr(entry, "input", 0), numberOr(entry, "output", 0), numberOr(entry, "cacheWrite", 0), numberOr(entry, "cacheRead", 0)}, true
+		// A price the override leaves out stays the list price.
+		return modelPrice{numberOr(entry, "input", listed.input), numberOr(entry, "output", listed.output), numberOr(entry, "cacheWrite", listed.cacheWrite), numberOr(entry, "cacheRead", listed.cacheRead)}, true
 	}
-	for _, entry := range builtinPrices {
-		if strings.Contains(needle, entry.match) || (len(needle) >= 4 && strings.Contains(entry.match, needle)) {
-			return entry.price, true
-		}
-	}
-	return modelPrice{}, false
+	return listed, found
 }
 
+// cost prices a five-minute cache write at price.cacheWrite and a one-hour
+// cache write at twice the input price, as the API bills them.
 func (bucket tokenBucket) cost(price modelPrice) float64 {
-	return (bucket.input*price.input + bucket.output*price.output + bucket.cacheWrite*price.cacheWrite + bucket.cacheRead*price.cacheRead) / 1e6
+	fiveMinute := bucket.cacheWrite - bucket.cacheWrite1h
+	return (bucket.input*price.input + bucket.output*price.output + fiveMinute*price.cacheWrite + bucket.cacheWrite1h*2*price.input + bucket.cacheRead*price.cacheRead) / 1e6
 }
 
 func formatUSD(value float64) string {
