@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -403,7 +404,9 @@ func runChain(chain string, input []byte) string {
 	}
 	command.Env = append(command.Env, statuslineChainEnv+"=1")
 	output, err := runTreeWithTimeout(command, 4*time.Second)
-	if err != nil {
+	// A status line that exits non-zero after printing its line (`…; [ -n "$X" ] && echo extra`
+	// ends with 1) still shows it; only one cut off at its time limit, half written, does not.
+	if errors.Is(err, errTimedOut) {
 		return ""
 	}
 	return strings.TrimRight(string(output), "\r\n\t ")
