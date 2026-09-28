@@ -250,24 +250,6 @@ func (f *shellFrame) caseWord(word shellArgument) {
 	}
 }
 
-// comment keeps the words of a comment, as the command around it is kept, but
-// not its quotes or operators, which the shell does not read there.
-func (f *shellFrame) comment(text string) {
-	if words := strings.Fields(text); len(words) > 0 {
-		segment := []shellArgument{}
-		for _, word := range words {
-			segment = append(segment, shellArgument{text: word})
-		}
-		f.reader.segments = append(f.reader.segments, segment)
-	}
-	f.out.WriteString(strings.Map(func(r rune) rune {
-		if strings.ContainsRune("'\"`\\$;&|(){}<>\n\r", r) {
-			return ' '
-		}
-		return r
-	}, text))
-}
-
 func (f *shellFrame) bash(stop byte) {
 	for f.pos < len(f.src) {
 		c := f.src[f.pos]
@@ -276,11 +258,13 @@ func (f *shellFrame) bash(stop byte) {
 			continue
 		}
 		if c == '#' && !f.inWord && !f.arith {
+			// A comment runs to the end of the line and is never executed, so
+			// it is dropped; a here-document or a command that follows it on a
+			// later line is read as usual.
 			end := strings.IndexByte(f.src[f.pos:], '\n')
 			if end < 0 {
 				end = len(f.src) - f.pos
 			}
-			f.comment(f.src[f.pos : f.pos+end])
 			f.pos += end
 			continue
 		}
@@ -812,7 +796,6 @@ func (f *shellFrame) powershell(stop byte) {
 				if end < 0 {
 					end = len(f.src) - f.pos
 				}
-				f.comment(f.src[f.pos : f.pos+end])
 				f.pos += end
 				continue
 			}
@@ -826,7 +809,6 @@ func (f *shellFrame) powershell(stop byte) {
 			if end < 0 {
 				end = len(f.src) - f.pos - 2
 			}
-			f.comment(f.src[f.pos : f.pos+2+end])
 			f.pos = min(f.pos+end+4, len(f.src))
 			continue
 		}
