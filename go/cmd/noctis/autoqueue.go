@@ -252,8 +252,17 @@ type promptJob struct {
 	lead    bool     // the steps are lines of their own, so the words around them may be read alone
 }
 
+// withoutCodeBlocks drops a prompt's fenced code blocks. Most prompts have no fence, and those are
+// handed back as they are, without building the pattern.
+func withoutCodeBlocks(prompt string) string {
+	if !strings.Contains(prompt, "```") {
+		return prompt
+	}
+	return codeFence.ReplaceAllString(prompt, " ")
+}
+
 func promptJobOf(prompt string) promptJob {
-	text := strings.TrimSpace(codeFence.ReplaceAllString(prompt, " "))
+	text := strings.TrimSpace(withoutCodeBlocks(prompt))
 	job := promptJob{text: text}
 	if len([]rune(text)) < autoQueueMinChars || hasBugReportMarker(text) {
 		return job
@@ -577,9 +586,13 @@ func namedLines(texts []string) (note, notice string) {
 	return note, notice
 }
 
+func sessionQueuePath(sid string) string {
+	return filepath.Join(autoQueueDir(), safeName(sid)+".md")
+}
+
 func writeSessionQueue(sid string, record object, lines []string) string {
 	ensureDir(autoQueueDir())
-	path := filepath.Join(autoQueueDir(), safeName(sid)+".md")
+	path := sessionQueuePath(sid)
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
 		warn("auto queue could not be written: %v", err)
 		return ""
@@ -818,7 +831,7 @@ func denyQueueTrustByModel(input object) {
 	}
 	cfg := loadConfig()
 	sid := sessionKey(input)
-	applySessionLocale(cfg, readState(), sid)
+	applySessionLocale(cfg, peekState(), sid)
 	journal(sid, "PreToolUse", target.journal, truncateText(command, 200), nil)
 	logInfo("denied %s run by the model in %s", target.logName, sid)
 	emit(object{

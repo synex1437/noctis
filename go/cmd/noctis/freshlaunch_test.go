@@ -154,7 +154,10 @@ func TestAFreshSessionThatNeverAnswersGivesTheQueueBackAndTheRetryResumes(t *tes
 	if getMap(getMap(state, "freshStarts"), fresh) != nil {
 		t.Fatalf("the fresh start that never answered is still recorded: %v", getMap(state, "freshStarts"))
 	}
-	updateState(func(state object) { getMap(getMap(state, "checkpoints"), sid)["consumed"] = false })
+	// The hand-off used the checkpoint up; put it back as unused for the relaunch below.
+	unused := copyObject(checkpointRecord(sid))
+	unused["consumed"] = false
+	updateState(func(state object) { stateMap(state, "checkpoints")[sid] = unused })
 
 	resumeWait(sid, "")
 

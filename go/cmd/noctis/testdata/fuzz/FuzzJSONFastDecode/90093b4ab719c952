@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"budgetDay\":{\"day\":\"2026-09-26\",\"spent\":[0.5,1.75,3,0.0625],\"startUsed\":12.25},\"sessionLocale\":{\"8d0f7a1c-2b3e-4f5a-a6b7-c8d9e0f1a2b3\":{\"at\":1790456864,\"lang\":\"tr\"}},\"waits\":{},\"lastHookAt\":1790456864.25,\"disabledUntil\":0}")

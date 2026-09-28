@@ -8,15 +8,27 @@ import (
 type lazyRe struct {
 	once    sync.Once
 	pattern string
-	re      *regexp.Regexp
+	// source builds pattern on first use, for one assembled from word lists: a process that never
+	// matches it does not assemble it as it starts.
+	source func() string
+	re     *regexp.Regexp
 }
 
 func lazyRegexp(pattern string) *lazyRe {
 	return &lazyRe{pattern: pattern}
 }
 
+func lazyRegexpOf(source func() string) *lazyRe {
+	return &lazyRe{source: source}
+}
+
 func (l *lazyRe) get() *regexp.Regexp {
-	l.once.Do(func() { l.re = regexp.MustCompile(l.pattern) })
+	l.once.Do(func() {
+		if l.source != nil {
+			l.pattern = l.source()
+		}
+		l.re = regexp.MustCompile(l.pattern)
+	})
 	return l.re
 }
 

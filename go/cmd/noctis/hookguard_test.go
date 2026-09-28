@@ -105,6 +105,7 @@ func TestAnAgentSessionsMainThreadMeetsTheSpawnAndWorkflowGates(t *testing.T) {
 
 func TestAnAgentSessionsMainThreadFollowsTheResearchRoute(t *testing.T) {
 	cfg, project := agentSessionSandbox(t, 10)
+	section(cfg, "router")["enabled"] = true
 	route := func(sid string) {
 		updateState(func(state object) {
 			stateMap(state, "routes")[sid] = object{"at": float64(nowSec()), "denies": float64(0), "signal": "web-words"}
@@ -942,6 +943,7 @@ func TestOnlyPlainCallsOfThePluginBinaryCountAsItsOwnCommands(t *testing.T) {
 				`"${CLAUDE_PLUGIN_ROOT}/bin/noctis" setup --profile balanced --code opus:high --research sonnet:high`,
 				`$CLAUDE_PLUGIN_ROOT/bin/noctis status`,
 				`"{root}/bin/linux-arm64/noctis" doctor`,
+				`"{root}/bin/darwin/noctis" status`,
 				"\"{root}/bin/noctis\" status\n\"{root}/bin/noctis\" why --last 10\n",
 				`"{root}/bin/noctis" status && "{root}/bin/noctis" why --last 10`,
 				`"{root}/bin/noctis" status 2>&1`,
@@ -971,6 +973,8 @@ func TestOnlyPlainCallsOfThePluginBinaryCountAsItsOwnCommands(t *testing.T) {
 				`"/usr/local/bin/noctis" status`,
 				`"{root}/bin/noctis-dev" status`,
 				`"{root}/bin/tools/extra/noctis" status`,
+				`"{root}/bin/darwin/tools/noctis" status`,
+				`"{root}/bin/macos/noctis" status`,
 				`"{root}/scripts/install.sh"`,
 				`"{root}/bin/noctis"status`,
 				`"{root}/bin/noctis status`,
@@ -1432,7 +1436,7 @@ func TestOnlyAnErrorCopilotCannotRecoverFromIsRetried(t *testing.T) {
 			t.Fatalf("Copilot ignores what errorOccurred prints, yet the hook printed %v", output)
 		}
 		state := readState()
-		if wait, episode, checkpoint := getMap(getMap(state, "waits"), "cp-live"), getMap(getMap(state, "overload"), "cp-live"), getMap(getMap(state, "checkpoints"), "cp-live"); wait != nil || episode != nil || checkpoint != nil {
+		if wait, episode, checkpoint := getMap(getMap(state, "waits"), "cp-live"), getMap(getMap(state, "overload"), "cp-live"), checkpointRecord("cp-live"); wait != nil || episode != nil || checkpoint != nil {
 			t.Fatalf("an error Copilot goes on from (%v) set up a relaunch of the live session: wait %v, overload episode %v, checkpoint %v", fields, wait, episode, checkpoint)
 		}
 	}
@@ -1474,7 +1478,7 @@ func TestACopilotSessionStartHandsOverTheCheckpointOnce(t *testing.T) {
 	if context := getString(start, "additionalContext"); !strings.Contains(context, checkpoint) || !strings.Contains(context, "Queue mode (TASKS.md: 2 open)") {
 		t.Fatalf("Copilot's sessionStart names no event and the new session was not handed the checkpoint and the queue: %v", start)
 	}
-	if !getBool(getMap(getMap(readState(), "checkpoints"), "cp-old"), "consumed", false) {
+	if !getBool(checkpointRecord("cp-old"), "consumed", false) {
 		t.Fatal("the checkpoint Copilot's sessionStart delivered is still offered to the next session")
 	}
 	later := hostHook(t, "copilot", copilotPayload("cp-later", project, object{"source": "new"}))

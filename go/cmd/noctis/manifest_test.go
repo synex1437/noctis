@@ -75,6 +75,9 @@ func capturedStdout(t *testing.T, run func()) string {
 func mainThreadAnswers(t *testing.T, cfg object) map[string]bool {
 	t.Helper()
 	defer func(previous bool) { emitted = previous }(emitted)
+	// Routes are kept only while the router is on, so the routed prompt below needs it on.
+	cfg = copyObject(cfg)
+	section(cfg, "router")["enabled"] = true
 	call := func(tool, filePath string) string {
 		updateState(func(state object) {
 			stateMap(state, "routes")["routed"] = object{"at": float64(nowSec()), "denies": float64(0)}

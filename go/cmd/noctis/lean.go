@@ -50,20 +50,24 @@ func leanSwitchedOff(value any) bool {
 }
 
 func leanValueValid(key string, value any) bool {
-	number, isNumber := leanNumber(value)
 	switch key {
 	case "lean":
 		_, ok := value.(bool)
 		return ok
+	case "instructions":
+		_, ok := value.(string)
+		return ok
+	}
+	// Only the numeric keys read their value as a number: a string such as the shipped empty
+	// instructions would otherwise build leanDecimal each time a process loads the config.
+	number, isNumber := leanNumber(value)
+	switch key {
 	case "compactAtPercent":
 		return leanSwitchedOff(value) || (isNumber && number > 0 && number <= 100)
 	case "keepTurns":
 		return isNumber && number == math.Trunc(number) && number >= 0
 	case "maxToolResultChars":
 		return isNumber && number == math.Trunc(number) && number >= 100
-	case "instructions":
-		_, ok := value.(string)
-		return ok
 	}
 	return false
 }

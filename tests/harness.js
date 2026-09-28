@@ -9,9 +9,15 @@ const { spawn, spawnSync, fork } = require('child_process');
 const PLUGIN_NAME = 'noctis';
 const SOURCE_ROOT = path.resolve(__dirname, '..');
 
+// The folder of bin/ with this platform's binary: macOS has one universal binary for both CPUs,
+// every other system one binary per CPU.
+function platformDir() {
+  if (process.platform === 'darwin') return 'darwin';
+  return `${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch === 'x64' ? 'amd64' : process.arch}`;
+}
+
 function sourceBinary() {
-  const platform = `${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch === 'x64' ? 'amd64' : process.arch}`;
-  return path.join(SOURCE_ROOT, 'bin', platform, process.platform === 'win32' ? 'noctis.exe' : 'noctis');
+  return path.join(SOURCE_ROOT, 'bin', platformDir(), process.platform === 'win32' ? 'noctis.exe' : 'noctis');
 }
 const IS_WINDOWS = process.platform === 'win32';
 
@@ -143,7 +149,7 @@ class Lab {
 
   snapshotSource() {
     this.sourceRoot = path.join(this.root, 'source');
-    const platform = `${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch === 'x64' ? 'amd64' : process.arch}`;
+    const platform = platformDir();
     const binary = process.platform === 'win32' ? 'noctis.exe' : 'noctis';
     const wanted = [
       path.join('bin', platform, binary),
@@ -322,8 +328,8 @@ class Lab {
     }
   }
 
-  setOutage(mode) {
-    writeJson(path.join(this.mockDir, 'outage.json'), { mode });
+  setOutage(mode, ms) {
+    writeJson(path.join(this.mockDir, 'outage.json'), ms ? { mode, ms } : { mode });
   }
 
   setSkew(seconds) {
@@ -460,11 +466,31 @@ class Account {
     const [binary, prefix] = this.engine();
     const result = spawnSync(binary, [...prefix, ...args], { encoding: 'utf8', input: input ? JSON.stringify(input) : undefined, env: this.env(extraEnv), timeout: 120000 });
     if (result.error) throw result.error;
+    this.settleRefresh(args);
     return result.stdout.trim();
   }
 
   hook(input, extraEnv = {}) {
     return this.run(['hook'], input, extraEnv);
+  }
+
+  // A hook hands a due usage fetch to a detached `noctis refresh` that holds fable.lock until its
+  // answer is written. The lab waits for it, so each step sees the reading the previous one asked
+  // for; the hook itself does not.
+  settleRefresh(args = [], limitMs = 12000) {
+    const account = args.indexOf('--account');
+    const lockFile = path.join(account >= 0 ? path.join(args[account + 1], PLUGIN_NAME) : this.guardDir, 'fable.lock');
+    for (const until = Date.now() + limitMs; Date.now() < until; sleepSync(5)) {
+      let owner;
+      try {
+        owner = fs.readFileSync(lockFile, 'utf8');
+      } catch {
+        return true;
+      }
+      const pid = Number((owner.match(/\d+/) || [])[0]);
+      if (!pid || !isAlive(pid)) return true;
+    }
+    return false;
   }
 
   runPromise(args, input, extraEnv = {}) {
@@ -485,6 +511,7 @@ class Account {
     const [binary, prefix] = this.engine();
     const result = spawnSync(binary, [...prefix, ...args], { encoding: 'utf8', input: input ? JSON.stringify(input) : undefined, env: this.env(extraEnv), timeout: 120000 });
     if (result.error) throw result.error;
+    this.settleRefresh(args);
     return { status: result.status, stdout: result.stdout.trim(), stderr: result.stderr.trim() };
   }
 
@@ -503,7 +530,10 @@ class Account {
         stdout += chunk;
       });
       child.on('error', reject);
-      child.on('close', () => resolve(stdout.trim()));
+      child.on('close', () => {
+        this.settleRefresh();
+        resolve(stdout.trim());
+      });
     });
   }
 
@@ -526,6 +556,15 @@ class Account {
 
   state() {
     return readJson(this.stateFile) || {};
+  }
+
+  // The record of sid's checkpoint wherever noctis keeps it: in state.json while it is still to be
+  // used, in used-checkpoints.json once it was. Of two, the newer.
+  checkpoint(sid) {
+    const open = (this.state().checkpoints || {})[sid];
+    const used = (readJson(path.join(this.guardDir, 'used-checkpoints.json')) || {})[sid];
+    if (!open || !used) return open || used;
+    return Number(open.at || 0) >= Number(used.at || 0) ? open : used;
   }
 
   stateAnswer(out) {

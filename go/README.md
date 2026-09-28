@@ -2,20 +2,16 @@
 
 `noctis` is the plugin's whole runtime: every hook, the status line, the resume runner, the scheduler, the installer and the CLI commands live in this single static binary (standard library only, `CGO_ENABLED=0`).
 
-Build for the current platform:
+Build for the current platform, from the repository root (into `bin/<os>-<arch>/`, or `bin/darwin/` on macOS, where the launcher `bin/noctis` looks):
 
 ```sh
-cd go && go build -trimpath -ldflags="-s -w" -o ../bin/noctis ./cmd/noctis
+node scripts/build.js --host
 ```
 
-All six shipped targets (what CI does):
+All six shipped targets, the way CI builds them (`CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" ./cmd/noctis` in this folder for each target; the two macOS builds become one universal binary, `bin/darwin/noctis`; `bin/noctis.exe`, the shipped fallback so exec-form hooks work before `noctis ensure` runs, is the windows-amd64 build; `bin/SHA256SUMS` is regenerated):
 
 ```sh
-for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
-  GOOS=${target%/*} GOARCH=${target#*/}; ext=""; [ "$GOOS" = windows ] && ext=".exe"
-  (cd go && CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -ldflags="-s -w" -o ../bin/$GOOS-$GOARCH/noctis$ext ./cmd/noctis)
-done
-cp bin/windows-amd64/noctis.exe bin/noctis.exe   # shipped fallback so exec-form hooks work before `noctis ensure` runs
+node scripts/build.js
 ```
 
 Layout of `cmd/noctis`:

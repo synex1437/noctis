@@ -42,7 +42,7 @@ func TestANewSessionIsNotHandedTheCheckpointOfARelaunchThatWentOnByItself(t *tes
 	}
 	cfg := loadConfig()
 	hookOutput(t, onStopFailure, agentHookInput("StopFailure", sid, cwd, object{"error": "rate_limit", "last_assistant_message": "API Error: Request rejected (429) · Number of request tokens has exceeded your per-minute rate limit"}), cfg)
-	checkpoint := getMap(getMap(readState(), "checkpoints"), sid)
+	checkpoint := checkpointRecord(sid)
 	if waitOf(sid) == nil || checkpoint == nil || getBool(checkpoint, "consumed", true) {
 		t.Fatalf("the relaunched session's 429 should leave a retry and an unused checkpoint: wait %v, checkpoint %v", waitOf(sid), checkpoint)
 	}

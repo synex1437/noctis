@@ -157,3 +157,21 @@ func TestAStaleLockIsTakenOverByOneWriterAtATime(t *testing.T) {
 		}
 	}
 }
+
+func TestALockThatNamesNoProcessIsTakenOverAsSoonAsOneWhoseHolderDied(t *testing.T) {
+	sandboxFiles(t)
+	if err := os.WriteFile(files.usageLock, []byte("garbage"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-3 * time.Second)
+	if err := os.Chtimes(files.usageLock, old, old); err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	if !withFileLock(files.usageLock, func() {}) {
+		t.Fatal("a writer could not take a 3 s old usage.lock that names no process")
+	}
+	if waited := time.Since(started); waited > time.Second {
+		t.Errorf("a writer waited %s for a 3 s old usage.lock that names no process; one whose holder died goes after 2 s", waited)
+	}
+}

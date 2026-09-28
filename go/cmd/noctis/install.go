@@ -42,12 +42,22 @@ func healTargetBinary() string {
 	return executable
 }
 
+// platformFolder is the folder of bin/ that holds the binary built for this platform: macOS has one
+// universal binary for both CPUs, every other system one binary per CPU. It follows what this binary
+// was built for, not isDarwin, which tests switch to act out macOS.
+func platformFolder() string {
+	if runtime.GOOS == "darwin" {
+		return "darwin"
+	}
+	return runtime.GOOS + "-" + runtime.GOARCH
+}
+
 func platformBinary(sourceRoot string) string {
-	return filepath.Join(sourceRoot, "bin", runtime.GOOS+"-"+runtime.GOARCH, binaryFileName())
+	return filepath.Join(sourceRoot, "bin", platformFolder(), binaryFileName())
 }
 
 func installedPaths() (files []string, dirs []string) {
-	platform := filepath.Join("bin", runtime.GOOS+"-"+runtime.GOARCH, binaryFileName())
+	platform := filepath.Join("bin", platformFolder(), binaryFileName())
 	return []string{
 			platform,
 			filepath.Join("bin", "SHA256SUMS"),
@@ -80,6 +90,10 @@ func hooksModules(root string) []string {
 	return modules
 }
 
+// retiredPlatformFolders are folders of bin/ that an install of an earlier version placed and no
+// version places any more: macOS had one binary per CPU before 7.5.0 put both in bin/darwin.
+var retiredPlatformFolders = []string{"darwin-amd64", "darwin-arm64"}
+
 func copyPluginTree(from, to string) error {
 	wanted, dirs := installedPaths()
 	for _, relative := range append(wanted, hooksModules(from)...) {
@@ -98,6 +112,13 @@ func copyPluginTree(from, to string) error {
 		}
 		if err := copyTree(source, filepath.Join(to, dir)); err != nil {
 			return err
+		}
+	}
+	// Nothing runs a binary left there once the hooks point at the new one, so a copy updated over
+	// one made before 7.5.0 would keep the old macOS binaries until an uninstall.
+	for _, retired := range retiredPlatformFolders {
+		if err := os.RemoveAll(filepath.Join(to, "bin", retired)); err != nil {
+			warn("install: old binary folder left behind: %v", err)
 		}
 	}
 	return nil
