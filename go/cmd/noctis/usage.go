@@ -607,12 +607,41 @@ func payloadWindow(entry object, resetsAt any) (object, bool) {
 }
 
 func knownUsageShape(payload object) bool {
-	for _, key := range []string{"limits", "five_hour", "seven_day", "seven_day_fable"} {
+	for _, key := range []string{"limits", "five_hour", "seven_day"} {
 		if _, found := payload[key]; found {
 			return true
 		}
 	}
+	for key := range payload {
+		if strings.HasPrefix(key, modelWeekPrefix) {
+			return true
+		}
+	}
 	return false
+}
+
+// modelWeekPrefix starts the older answer's key for one model's weekly bucket; the model family
+// follows it (seven_day_fable).
+const modelWeekPrefix = "seven_day_"
+
+// scopedWeekWindow reads the older answer's weekly bucket of the model that scoped matches: the
+// first usable one in key order, so a rule on another model never reads Fable's bucket.
+func scopedWeekWindow(payload object, scoped *regexp.Regexp) (object, bool) {
+	keys := []string{}
+	for key := range payload {
+		if family, ok := strings.CutPrefix(key, modelWeekPrefix); ok && scoped.MatchString(family) {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if flat := getMap(payload, key); flat != nil {
+			if win, ok := payloadWindow(flat, flat["resets_at"]); ok {
+				return win, true
+			}
+		}
+	}
+	return nil, false
 }
 
 func parseUsagePayload(payload object, scoped *regexp.Regexp) object {
@@ -647,16 +676,21 @@ func parseUsagePayload(payload object, scoped *regexp.Regexp) object {
 	if len(buckets) > 0 {
 		parsed["buckets"] = strings.Join(buckets, ", ")
 	}
-	for _, pair := range [][2]string{{"five_hour", "five_hour"}, {"seven_day", "seven_day"}, {"seven_day_fable", "fable"}} {
-		if parsed[pair[1]] != nil {
+	for _, key := range []string{"five_hour", "seven_day"} {
+		if parsed[key] != nil {
 			continue
 		}
-		flat := getMap(payload, pair[0])
+		flat := getMap(payload, key)
 		if flat == nil {
 			continue
 		}
 		if win, ok := payloadWindow(flat, flat["resets_at"]); ok {
-			parsed[pair[1]] = win
+			parsed[key] = win
+		}
+	}
+	if parsed["fable"] == nil {
+		if win, ok := scopedWeekWindow(payload, scoped); ok {
+			parsed["fable"] = win
 		}
 	}
 	return parsed
