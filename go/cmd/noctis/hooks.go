@@ -810,25 +810,7 @@ func onAgentSpawn(input, cfg, state object, now int64) {
 			specific["additionalContext"] = context
 		}
 	}
-	toolInput := getMap(input, "tool_input")
-	requested := orDefault(firstString(toolInput, "subagent_type", "agent"), getString(input, "tool_name"))
-	model := pinnedSubagentModel(cfg, input)
-	action, reason, facts := "pin-subagent-model", requested+" → "+model, object(nil)
-	target := orDefault(getString(toolInput, "model"), model)
-	if safe, usage := subagentFallback(cfg, target); safe != target {
-		model, action, facts = safe, "subagent-fallback", usageFacts(usage)
-		reason = fmt.Sprintf("%s: %s → %s, the %s quota is out", requested, target, safe, scopedLabel(cfg))
-	}
-	if model != "" {
-		if observed(sid, "PreToolUse", action, reason, facts) {
-			return
-		}
-		updated := cloneObject(toolInput)
-		updated["model"] = model
-		specific["permissionDecision"], specific["updatedInput"] = "allow", updated
-		journal(sid, "PreToolUse", action, reason, facts)
-		logInfo("subagent model for %s: %s (%s)", sid, reason, action)
-	}
+	pinSpawnedModel(input, cfg, sid, specific)
 	if observing {
 		return
 	}
@@ -843,6 +825,45 @@ func onAgentSpawn(input, cfg, state object, now int64) {
 	if len(output) > 0 {
 		emit(output)
 	}
+}
+
+// pinSpawnedModel puts the model a new subagent runs on into specific: the router's pin for its type
+// or, while the scoped quota is out, the fallback in place of a scoped model. Observe mode only
+// journals it.
+func pinSpawnedModel(input, cfg object, sid string, specific object) {
+	toolInput := getMap(input, "tool_input")
+	requested := orDefault(firstString(toolInput, "subagent_type", "agent"), getString(input, "tool_name"))
+	model := pinnedSubagentModel(cfg, input)
+	action, reason, facts := "pin-subagent-model", requested+" → "+model, object(nil)
+	target := orDefault(getString(toolInput, "model"), model)
+	if safe, usage := subagentFallback(cfg, target); safe != target {
+		model, action, facts = safe, "subagent-fallback", usageFacts(usage)
+		reason = fmt.Sprintf("%s: %s → %s, the %s quota is out", requested, target, safe, scopedLabel(cfg))
+	}
+	if model == "" || observed(sid, "PreToolUse", action, reason, facts) {
+		return
+	}
+	updated := cloneObject(toolInput)
+	updated["model"] = model
+	specific["permissionDecision"], specific["updatedInput"] = "allow", updated
+	journal(sid, "PreToolUse", action, reason, facts)
+	logInfo("subagent model for %s: %s (%s)", sid, reason, action)
+}
+
+// onSubagentSpawn handles an Agent or Task call a subagent makes to start one of its own (Claude Code
+// allows that up to CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH) once denySubagentTool let it through: the
+// new subagent runs on the model a spawn from the main thread would get.
+func onSubagentSpawn(input, cfg object) {
+	if guardPaused(cfg, readState(), nowSec()) {
+		return
+	}
+	specific := object{}
+	pinSpawnedModel(input, cfg, sessionKey(input), specific)
+	if observing || len(specific) == 0 {
+		return
+	}
+	specific["hookEventName"] = "PreToolUse"
+	emit(object{"hookSpecificOutput": specific})
 }
 
 func textExtensionList() string {
@@ -1341,7 +1362,11 @@ func onPreToolUse(input, cfg object) {
 		}
 	}
 	if insideSubagent(input) {
-		if !denySubagentTool(input, cfg) {
+		switch {
+		case denySubagentTool(input, cfg):
+		case agentTools[toolName]:
+			onSubagentSpawn(input, cfg)
+		default:
 			agentWritePolicy(input, cfg)
 		}
 		return
