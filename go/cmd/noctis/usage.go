@@ -112,7 +112,7 @@ func scopedLabel(cfg object) string {
 
 func scopedThresholdValue(cfg object) any {
 	thresholds := section(cfg, "thresholds")
-	if value, present := thresholds["weeklyScoped"]; present && validThreshold(value) {
+	if value, present := thresholds["weeklyScoped"]; present && (validThreshold(value) || thresholdSwitchedOff(value)) {
 		return value
 	}
 	return thresholds["weeklyFable"]
