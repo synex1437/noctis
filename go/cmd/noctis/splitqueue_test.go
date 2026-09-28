@@ -142,6 +142,35 @@ func TestATurkishRequestForSeveralJobsIsListedToo(t *testing.T) {
 	}
 }
 
+func TestATurkishJobThatWritesTheIOfThePromptInTheOtherCaseIsNotRefused(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, false)
+	for _, tc := range []struct{ sid, prompt, jobs string }{
+		{
+			"q8-dotless",
+			"Uygulamanın ayarlar ekranı epey eskidi ve kullanıcılar bu hafta tema seçenekleriyle ilgili birkaç şikâyet yazdı, o yüzden bu sürümde ekranı toparlayalım. " +
+				"Ayarlar ekranına ışık temasını ekle, ısı haritası grafiğindeki renk hatasını düzelt ve ılık renk paletini tema seçicisine taşı.",
+			"- [ ] Işık temasını ayarlar ekranına ekle\n- [ ] Isı haritası grafiğindeki renk hatasını düzelt\n- [ ] Ilık renk paletini tema seçicisine taşı\n",
+		},
+		{
+			"q8-capital",
+			"Işık temasını ayarlar ekranına ekle. Isı haritası grafiğindeki renk hatasını düzelt. Ilık renk paletini tema seçicisine taşı. " +
+				"Kullanıcılar bu hafta tema seçenekleriyle ilgili birkaç şikâyet yazdı, o yüzden bu sürümde ayarlar ekranını baştan sona toparlayalım.",
+			"- [ ] ayarlar ekranına ışık temasını ekle\n- [ ] ısı haritası grafiğindeki renk hatasını düzelt\n- [ ] ılık renk paletini tema seçicisine taşı\n",
+		},
+		{
+			"q8-dotted",
+			"Uygulamanın indirme ekranı kullanıcıları epey yoruyor ve bu hafta destek ekibine bununla ilgili birkaç şikâyet geldi, o yüzden bu sürümde ekranı toparlayalım. " +
+				"İlk açılışta bildirim izni için bir ekran ekle, indirme ilerlemesini gösteren çubuğu düzelt ve iptal düğmesini ekranın altına taşı.",
+			"- [ ] ilk açılışta bildirim izni için bir ekran ekle\n- [ ] İndirme ilerlemesini gösteren çubuğu düzelt\n- [ ] İptal düğmesini ekranın altına taşı\n",
+		},
+	} {
+		checklist, _ := splitChecklist(t, cfg, tc.sid, project, tc.prompt)
+		if output := listJobs(t, cfg, tc.sid, project, checklist, tc.jobs); getString(output, "systemMessage") != T("queue.autoNotice", 3, pluginName) {
+			t.Errorf("%s: jobs in the prompt's own words were refused over the case of a Turkish I: %v", tc.sid, output)
+		}
+	}
+}
+
 func TestAChecklistFromAListPromptRefusesJobsThePromptDidNotAskForToo(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, false)
 	startQueue(t, cfg, "sp8", project, listPromptForAutoQueue())

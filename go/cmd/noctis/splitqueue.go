@@ -88,8 +88,11 @@ func jobWords(text string) []string {
 	return words
 }
 
+// jobWordDigest hashes a word in the form heldNormal gives it, so the
+// Turkish I is one letter in every case: "Işık" in a job and "ışık" in the
+// prompt, or "İzin" and "izin", are the same word.
 func jobWordDigest(word string) string {
-	sum := sha256.Sum256([]byte(word))
+	sum := sha256.Sum256([]byte(heldNormal(word)))
 	return hex.EncodeToString(sum[:6])
 }
 
