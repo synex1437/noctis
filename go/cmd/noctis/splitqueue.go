@@ -170,12 +170,29 @@ func writesTo(file, cwd, target string) bool {
 	return false
 }
 
+// writesInto tells whether a write to file reaches a file directly inside folder.
+func writesInto(file, cwd, folder string) bool {
+	if file == "" || folder == "" {
+		return false
+	}
+	if !filepath.IsAbs(file) {
+		file = filepath.Join(cwd, file)
+	}
+	for _, candidate := range []string{filepath.Clean(file), resolvedWritePath(file)} {
+		if candidate != "" && writesTo(filepath.Dir(candidate), cwd, folder) {
+			return true
+		}
+	}
+	return false
+}
+
 func refuseJobsNotInPrompt(input, cfg object) bool {
 	sid := sessionKey(input)
 	file, cwd := getString(getMap(input, "tool_input"), "file_path"), getString(input, "cwd")
-	// A session's checklist is always at sessionQueuePath, so any other write goes ahead without a
-	// look at the state.
-	if !writesTo(file, cwd, sessionQueuePath(sid)) {
+	// Every checklist is in the queues folder, so any other write goes ahead without a look at the
+	// state. It need not be named after this session: a fresh session that took over a long pause
+	// keeps the checklist of the session it came from.
+	if !writesInto(file, cwd, autoQueueDir()) {
 		return false
 	}
 	state := peekState()
