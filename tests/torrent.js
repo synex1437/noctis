@@ -200,13 +200,17 @@ async function main() {
       for (let a = 0; a < accounts.length; a += 1) {
         if (stats.jobs >= options.jobs) break;
         const world = worlds[a];
+        // The clock noctis reads does not move with the jobs, so a window that runs out starts over
+        // now: it resets one window length from now (a second after the old one at least), never
+        // further off than a real window can, which noctis would rightly refuse to read.
+        const clock = Math.floor(Date.now() / 1000);
         if (world.fiveUsed >= 99) {
           world.fiveUsed = 1;
-          world.fiveReset += 5 * 3600;
+          world.fiveReset = Math.max(world.fiveReset + 1, clock + 5 * 3600);
         }
         if (world.weekUsed >= 97) {
           world.weekUsed = 2 + random() * 8;
-          world.weekReset += 7 * 86400;
+          world.weekReset = Math.max(world.weekReset + 1, clock + 7 * 86400);
         }
         report.push(runJob(lab, accounts[a], random, index, world));
         if (!options.quiet && stats.jobs % 250 === 0) {
