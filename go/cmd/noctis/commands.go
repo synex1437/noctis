@@ -439,12 +439,25 @@ func pauseMinutes(request string) (float64, bool) {
 }
 
 func runOn() {
+	if code := resumeGuard(); code != 0 {
+		os.Exit(code)
+	}
+}
+
+func resumeGuard() int {
+	applied, failures := false, writeFailures
 	updateState(func(next object) {
+		applied = true
 		next["disabledUntil"] = float64(0)
 		next["hookCapSeconds"] = float64(0)
 		next["interruptedWaits"] = []any{}
 	})
+	if !applied || writeFailures != failures {
+		fmt.Fprintln(os.Stderr, T("on.notSaved", pluginName, files.errors))
+		return 1
+	}
 	fmt.Println(T("on.done", pluginName))
+	return 0
 }
 
 func runModel() {

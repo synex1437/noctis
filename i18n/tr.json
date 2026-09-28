@@ -210,6 +210,7 @@
   "off.cancelOne": " — iptal etmek için: noctis cancel --sid %s",
   "off.cancelAll": "Hepsini iptal etmek için: noctis cancel",
   "on.done": "%s aktif.",
+  "on.notSaved": "%s yeniden açılmadı: state.json kaydedilemedi — nedeni %s dosyasında.",
   "doctor.engine": "engine: %s (native)",
   "doctor.claude": "claude: %s",
   "doctor.notFound": "bulunamadı",

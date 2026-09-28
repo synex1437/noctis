@@ -207,6 +207,7 @@
   "off.cancelOne": " — pour l'annuler : noctis cancel --sid %s",
   "off.cancelAll": "Pour toutes les annuler : noctis cancel",
   "on.done": "%s actif.",
+  "on.notSaved": "%s n'a pas été réactivé : state.json n'a pas pu être enregistré — la raison est dans %s.",
   "doctor.engine": "moteur : %s (natif)",
   "doctor.claude": "claude : %s",
   "doctor.notFound": "introuvable",

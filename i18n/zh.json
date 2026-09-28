@@ -207,6 +207,7 @@
   "off.cancelOne": " — 取消它：noctis cancel --sid %s",
   "off.cancelAll": "全部取消：noctis cancel",
   "on.done": "%s 已启用。",
+  "on.notSaved": "%s 未能重新启用：无法保存 state.json — 原因见 %s。",
   "doctor.engine": "引擎：%s（原生）",
   "doctor.claude": "claude：%s",
   "doctor.notFound": "未找到",

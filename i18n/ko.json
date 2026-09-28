@@ -207,6 +207,7 @@
   "off.cancelOne": " — 취소하려면: noctis cancel --sid %s",
   "off.cancelAll": "모두 취소하려면: noctis cancel",
   "on.done": "%s 활성.",
+  "on.notSaved": "%s 를 다시 켜지 못했습니다: state.json 을 저장하지 못했습니다 — 이유는 %s 에 있습니다.",
   "doctor.engine": "엔진: %s(네이티브)",
   "doctor.claude": "claude: %s",
   "doctor.notFound": "찾을 수 없음",

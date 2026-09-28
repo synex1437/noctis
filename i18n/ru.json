@@ -207,6 +207,7 @@
   "off.cancelOne": " — чтобы отменить: noctis cancel --sid %s",
   "off.cancelAll": "Чтобы отменить все: noctis cancel",
   "on.done": "%s активен.",
+  "on.notSaved": "%s не включён снова: не удалось сохранить state.json — причина в %s.",
   "doctor.engine": "движок: %s (нативный)",
   "doctor.claude": "claude: %s",
   "doctor.notFound": "не найдено",
