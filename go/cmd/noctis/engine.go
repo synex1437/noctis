@@ -2517,6 +2517,11 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 			return blind
 		}
 	}
+	// The status line also records where the budget's day starts; a session without one, whose
+	// usage comes from the endpoint alone, has only this.
+	if numberOr(section(cfg, "budget"), "dailyWeeklyPercent", 0) > 0 {
+		recordBudgetDay(usage, now)
+	}
 	result := evaluate(cfg, usage, model, contextPercent, hasContext)
 	result.usageStale, result.contextPercent, result.hasContext = usageStale, contextPercent, hasContext
 	notices, marks := planNotices(cfg, state, usage, &result, sid, now, currentHost().limits)
