@@ -629,7 +629,9 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		delete(config, "managedEffort")
 	}
 	leanNote := wireLeanSwitch(config, env)
-	if _, had := data["env"]; had || len(env) > 0 {
+	if len(env) > 0 {
+		placeSetupObject(data, config, "env", env)
+	} else if _, had := data["env"]; had {
 		data["env"] = env
 	}
 	current := getString(data, "model")
@@ -661,7 +663,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		before := valueSetupFound(permissions, "defaultMode", modeFound, modeFoundRecorded)
 		config["managedPermissionPrevious"] = before
 		permissions["defaultMode"] = mode
-		data["permissions"] = permissions
+		placeSetupObject(data, config, "permissions", permissions)
 		permissionNote = permissionChangeNote(mode, before)
 	} else if choiceOf(permissionChoices, flagString("permissions")) == "" {
 		if current := getString(getMap(data, "permissions"), "defaultMode"); current != "" {
@@ -714,6 +716,20 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	}
 	fmt.Println(leanNote)
 	return nil
+}
+
+// placeSetupObject puts holder into settings.json at key and, when setup is the one that adds it, records
+// that in config.json, so uninstall can take the object away again once nothing is left in it.
+func placeSetupObject(data, config object, key string, holder object) {
+	if _, had := data[key]; !had {
+		created := getMap(config, "managedCreated")
+		if created == nil {
+			created = object{}
+			config["managedCreated"] = created
+		}
+		created[key] = true
+	}
+	data[key] = holder
 }
 
 // takeBackEffort puts back the effort level found before the first setup when env still holds the one
@@ -926,7 +942,7 @@ func settleStateDir(configDir string) {
 	fmt.Println(T("install.purged", guardDir))
 }
 
-var setupRecords = []string{"managedModel", "managedEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep", "managedFunctionHooks", "managedAutoUpdate"}
+var setupRecords = []string{"managedModel", "managedEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep", "managedFunctionHooks", "managedAutoUpdate", "managedCreated"}
 
 func forgetSetupRecords(configFile string, config object) {
 	forgotten := false
@@ -982,6 +998,11 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 		} else {
 			delete(data, "model")
 			modelNote = T("install.modelRemoved")
+		}
+	}
+	for key, created := range getMap(guardConfig, "managedCreated") {
+		if holder, isObject := data[key].(object); created == true && isObject && len(holder) == 0 {
+			delete(data, key)
 		}
 	}
 	if err := writeJSONKeepingOrder(settingsFile, data); err != nil {
