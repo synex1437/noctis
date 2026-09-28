@@ -1965,7 +1965,8 @@ func clearDeadHandoffs(state object) {
 	dropHandoffs(state, staleHandoffs(state))
 }
 
-// staleHandoffs names the hand-offs in state whose relaunch process is gone.
+// staleHandoffs names the hand-offs in state whose relaunch process is gone, also when its pid
+// now names another process.
 func staleHandoffs(state object) []string {
 	stale := []string{}
 	for sid, raw := range getMap(state, "handedOff") {
@@ -1975,7 +1976,7 @@ func staleHandoffs(state object) []string {
 			continue
 		}
 		pid := int(numberOr(record, "pid", 0))
-		if pid <= 0 || pid == os.Getpid() || processAlive(pid) {
+		if pid <= 0 || pid == os.Getpid() || runnerStillRuns(record) {
 			continue
 		}
 

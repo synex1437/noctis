@@ -790,10 +790,26 @@ func runResume() {
 
 func liveRunner(handoff object) int {
 	pid := int(numberOr(handoff, "pid", 0))
-	if pid == os.Getpid() || !processAlive(pid) {
+	if pid == os.Getpid() || !runnerStillRuns(handoff) {
 		return 0
 	}
 	return pid
+}
+
+// runnerStillRuns reports whether the runner a hand-off names may still run: its pid is alive and
+// still has the start time the runner recorded, so a pid that went to another program after the
+// runner died without releasing the hand-off (Windows hands a freed pid out again at once, and any
+// system after a reboot) holds nothing. Where that time is unknown (a hand-off an earlier version
+// wrote, or a process this user may not query), the pid must run noctis or be one that cannot be
+// named.
+func runnerStillRuns(handoff object) bool {
+	pid := int(numberOr(handoff, "pid", 0))
+	if recorded := getString(handoff, "started"); recorded != "" && processAlive(pid) {
+		if started := processStarted(pid); started != "" {
+			return started == recorded
+		}
+	}
+	return mayBeOurHelper(pid)
 }
 
 func handoffHeldFor(state object, sid string, startedAt float64) int {
@@ -1034,6 +1050,7 @@ func resumeWait(sid, release string) {
 		prompt = freshPrompt(sid, plan, getString(wait, "transcript")) + prompt
 	}
 	prompt = relaunchPrompt(prompt)
+	runnerStarted := processStarted(os.Getpid())
 	claimed, continued, woken, watcher := false, false, 0.0, 0
 	updateState(func(next object) {
 
@@ -1054,7 +1071,7 @@ func resumeWait(sid, release string) {
 			return
 		}
 		claimed, watcher = true, liveRunner(getMap(getMap(next, "handedOff"), sid))
-		handoff, running := object{"at": float64(nowSec()), "model": model, "mode": getString(resume, "mode"), "pid": float64(os.Getpid()), "waitStartedAt": startedAt}, sid
+		handoff, running := object{"at": float64(nowSec()), "model": model, "mode": getString(resume, "mode"), "pid": float64(os.Getpid()), "started": runnerStarted, "waitStartedAt": startedAt}, sid
 		if plan.sid != "" {
 			handoff["fresh"], running = plan.sid, plan.sid
 			moveSessionRecords(next, sid, plan.sid)
