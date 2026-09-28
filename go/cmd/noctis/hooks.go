@@ -600,9 +600,13 @@ func onUserPromptSubmit(input, cfg object) {
 			logInfo("warn band for %s: %s %%%s", sid, result.warnWindow.window, formatNumber(result.warnWindow.used))
 		}
 	}
-	if getBool(section(cfg, "queue"), "auto", true) && getBool(section(cfg, "queue"), "enabled", true) && !observing && !promptFromPlugin && getString(getMap(getMap(state, "autoQueues"), sid), "source") == "" && followedQueueFile(cfg, queueDirs(input)...) == "" {
-		job := promptJobOf(getString(input, "prompt"))
-		split := len(job.items) == 0 && severalJobsLikely(getString(input, "prompt"))
+	agentTurn := agentWrittenTurn(getString(input, "prompt"))
+	if getBool(section(cfg, "queue"), "auto", true) && getBool(section(cfg, "queue"), "enabled", true) && (!observing || agentTurn != "") && !promptFromPlugin && getString(getMap(getMap(state, "autoQueues"), sid), "source") == "" && followedQueueFile(cfg, queueDirs(input)...) == "" {
+		job, split := promptJob{}, false
+		if agentTurn == "" {
+			job = promptJobOf(getString(input, "prompt"))
+			split = len(job.items) == 0 && severalJobsLikely(getString(input, "prompt"))
+		}
 		held := ""
 		switch {
 		case len(job.items) > 0:
@@ -611,6 +615,11 @@ func onUserPromptSubmit(input, cfg object) {
 			held = heldBackWork(job.text, job.text, false)
 		}
 		switch {
+		case agentTurn != "":
+			// A subagent's report or another agent's message is no request of the
+			// user's: nothing in it is queued, and the user's own checklist goes on.
+			journal(sid, "UserPromptSubmit", "no-auto-queue", agentTurn, nil)
+			logInfo("no auto queue for %s: %s", sid, agentTurn)
 		case held != "":
 			endAutoQueue(sid, true)
 			journal(sid, "UserPromptSubmit", "no-auto-queue", held, nil)

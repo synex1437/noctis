@@ -233,13 +233,44 @@ func endsQuestion(text string) bool {
 
 func stepLike(unit, lang string) bool {
 	unit = strings.TrimSpace(unit)
-	if unit == "" || endsQuestion(unit) || strings.HasSuffix(unit, ":") || logLikeLine.MatchString(unit) {
+	if unit == "" || endsQuestion(unit) || strings.HasSuffix(unit, ":") || logLikeLine.MatchString(unit) || reportLine(unit) {
 		return false
 	}
 	if len(wordSplit.Split(unit, -1)) < autoQueueMinWords {
 		return false
 	}
 	return !descriptiveStarter(lang, firstWord(unit)) || endsInVerb(unit, lang) || mainClauseImperative(unit)
+}
+
+// reportFieldLabels hold the labels a report writes before the fields of a
+// finding ("Where: file.go:12", "Status: confirmed", "Fix direction: …"), a
+// space written as "_"; passedWords report a check as passed.
+var (
+	reportFieldLabels = normalWordSet(`where status severity impact evidence cause root_cause why what_happens what_happened
+		fix_direction suggested_fix proposed_fix outcome verdict confidence finding
+		nerede durum önem etki kanıt neden kök_neden ne_oluyor ne_oldu düzeltme_yönü önerilen_düzeltme karar bulgu`)
+	passedWords = lazyWordSet(`pass passed passes passing ok clean green`)
+)
+
+// reportLine tells a listed line that reports rather than asks: a field of a
+// finding under a label such as "Where:" or "Fix direction:", or a check that
+// passed ("gofmt -l ./cmd/noctis: pass", "go test ./...: 14 passed, 0 failed").
+func reportLine(unit string) bool {
+	label, value, found := strings.Cut(unit, ":")
+	if !found {
+		return false
+	}
+	if reportFieldLabels(heldNormal(strings.Join(strings.Fields(strings.Trim(label, "*_` ")), "_"))) {
+		return true
+	}
+	words := strings.Fields(strings.TrimLeft(value, "*_` "))
+	if len(words) > 1 && (words[0] == "all" || words[0] == "both" || strings.Trim(words[0], "0123456789/") == "") {
+		words = words[1:]
+	}
+	if len(words) == 0 || !passedWords(stepWord(words[0])) {
+		return false
+	}
+	return len(words) == 1 || stepWord(words[0]) != strings.ToLower(words[0]) || strings.HasPrefix(words[1], "(")
 }
 
 // promptJob is what a prompt asks for when it reads like a multi-step job.
@@ -259,6 +290,24 @@ func withoutCodeBlocks(prompt string) string {
 		return prompt
 	}
 	return codeFence.ReplaceAllString(prompt, " ")
+}
+
+// agentTurnMarkers are the words Claude Code writes around a user turn it
+// makes itself: a subagent's report handed back or a message from another
+// session, a background task's notice, a system notice, a Stop hook's
+// feedback.
+var agentTurnMarkers = []string{"Another Claude session sent a message:", "<agent-message", `<\agent-message`, "[Subagent hand-back]", "<task-notification>", "[SYSTEM NOTIFICATION", "Stop hook feedback:"}
+
+// agentWrittenTurn tells why a prompt is a turn Claude Code wrote, not a
+// request the user typed, or returns "". Such a turn is never queued: its
+// lines are another agent's words, not work the user asked for.
+func agentWrittenTurn(prompt string) string {
+	for _, marker := range agentTurnMarkers {
+		if strings.Contains(prompt, marker) {
+			return `the prompt is a turn Claude Code wrote, not a request the user typed: it holds "` + marker + `"`
+		}
+	}
+	return ""
 }
 
 func promptJobOf(prompt string) promptJob {
