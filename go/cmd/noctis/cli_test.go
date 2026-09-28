@@ -80,13 +80,25 @@ func startNoctisCLIAt(t *testing.T, home, input string, env map[string]string, a
 		var exit *exec.ExitError
 		switch {
 		case err == nil:
-			return cliRun{0, stdout.String(), stderr.String()}
+			return cliRun{0, cliChildOutput(stdout.String()), stderr.String()}
 		case errors.As(err, &exit):
-			return cliRun{exit.ExitCode(), stdout.String(), stderr.String()}
+			return cliRun{exit.ExitCode(), cliChildOutput(stdout.String()), stderr.String()}
 		}
 		t.Fatalf("the command-line child did not finish: %v", err)
 		return cliRun{}
 	}
+}
+
+// cliChildOutput is what the child printed for its command. Under go test -cover the child test binary
+// ends with a line of its own, the share of statements it covered, which differs from one command to
+// the next and is no part of what noctis printed.
+func cliChildOutput(stdout string) string {
+	body := strings.TrimSuffix(stdout, "\n")
+	last := body[strings.LastIndexByte(body, '\n')+1:]
+	if strings.HasPrefix(last, "coverage: ") {
+		return body[:len(body)-len(last)]
+	}
+	return stdout
 }
 
 func (run cliRun) String() string {
