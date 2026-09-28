@@ -989,7 +989,10 @@ func noctisOwnFile(file, cwd string) string {
 	// On a case-insensitive file system (the default on macOS and Windows) another spelling of a
 	// name reaches the same file, as a hard link does anywhere, so the files are compared too.
 	written := statSafe(abs)
-	for _, target := range []struct{ path, kind string }{{files.state, "state"}, {files.stateBackup, "state"}, {files.config, "config"}} {
+	// used-checkpoints.json is state too: the used checkpoints moved there from state.json, and its
+	// hand-over records let a session read the note it was handed without a prompt.
+	owned := []struct{ path, kind string }{{files.state, "state"}, {files.stateBackup, "state"}, {usedCheckpointsFile(), "state"}, {files.config, "config"}}
+	for _, target := range owned {
 		if target.path == "" {
 			continue
 		}
