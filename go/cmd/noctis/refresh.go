@@ -59,7 +59,7 @@ func refreshAside(cfg, cached object, now int64, reason string, wait time.Durati
 	}
 	handLockTo(handle, refresher.Pid)
 	if wait <= 0 {
-		_ = refresher.Release()
+		reapWhenDone(refresher)
 		return cached, true
 	}
 	if !awaitExit(refresher, wait) {

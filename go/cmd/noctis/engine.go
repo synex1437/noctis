@@ -1355,8 +1355,16 @@ func detachedSelf(argsList []string) int {
 		return 0
 	}
 	pid := child.Pid
-	_ = child.Release()
+	reapWhenDone(child)
 	return pid
+}
+
+// reapWhenDone waits for a child left to run on its own in the background: it stays this
+// process's child, and on Unix one that exits unwaited for stays a zombie until this process
+// ends, which for an in-hook wait or a runner is hours of hand-offs. The wait holds nothing up
+// and ends with this process; the child then goes on as before.
+func reapWhenDone(child *os.Process) {
+	go func() { _, _ = child.Wait() }()
 }
 
 // startDetached starts noctis again with argsList, in its own session and with no terminal or
@@ -1865,7 +1873,7 @@ func notify(cfg object, title, body string) string {
 				warn("notify failed: %v", err)
 			}
 		} else {
-			_ = child.Process.Release()
+			reapWhenDone(child.Process)
 		}
 	}
 	if webhookSettings(cfg).target != "" {
