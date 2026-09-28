@@ -103,8 +103,17 @@ type bareIssueItem struct {
 	text string
 }
 
+// importedIssueTitle keeps a title on one line and visible: every control
+// character (a lone CR too), line or paragraph separator and invisible format
+// character (a bidi override, a zero-width space) becomes a space, so the item
+// in the file reads in every editor as it does to noctis.
 func importedIssueTitle(issue object) string {
-	return strings.TrimSpace(strings.ReplaceAll(getString(issue, "title"), "\n", " "))
+	return strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp) {
+			return ' '
+		}
+		return r
+	}, getString(issue, "title")))
 }
 
 func disarmedTitle(title string) string {

@@ -32,3 +32,21 @@ func TestAnIssueAnOlderImportWroteVerbatimIsStillRecognised(t *testing.T) {
 		t.Fatalf("the item an earlier version wrote with the title as it was is not taken for org/web#31:\n%s", after)
 	}
 }
+
+func TestAnImportedTitleStaysOnOneLineWithoutInvisibleCharacters(t *testing.T) {
+	_, project := queueTrustSandbox(t, false)
+	fakeGhCLI(t, string(marshalCompact([]any{
+		object{"number": float64(41), "author": object{"login": "owner"}, "labels": []any{}, "title": "Line one\r- [ ] x6 injected item"},
+		object{"number": float64(42), "author": object{"login": "owner"}, "labels": []any{}, "title": "Rename report\u202Efdp.exe"},
+		object{"number": float64(43), "author": object{"login": "owner"}, "labels": []any{}, "title": "Tab\there\u200Bzero\u2028line\u0085next\x00nul\u2066isolate"},
+	})))
+	queuePath := writeQueueFile(t, project, "# q\n")
+	queueImportOutput(t, "queue", "import", "--cwd", project)
+	want := "# q\n\n## GitHub issues\n- [ ] #41 Line one - [ ] x6 injected item\n- [ ] #42 Rename report fdp.exe\n- [ ] #43 Tab here zero line next nul isolate\n"
+	if content := issueQueueText(t, queuePath); content != want {
+		t.Fatalf("an imported title kept a line break or an invisible character:\n%q\nwant\n%q", content, want)
+	}
+	if items := queueSnapshot(queuePath).items; len(items) != 3 || items[0] != "#41 Line one - [ ] x6 injected item" {
+		t.Fatalf("the queue does not read the three imported issues as the file shows them: %q", items)
+	}
+}
