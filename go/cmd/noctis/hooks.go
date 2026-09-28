@@ -1445,14 +1445,8 @@ func resetIdleGuard(state object, sid string) {
 	})
 }
 
-// openItemsDigest names the open items of a queue, so a give-up holds until
-// one of them is ticked, added or edited.
-func openItemsDigest(view queueView) string {
-	return queueItemDigest(fmt.Sprintf("%d open: %s", view.total, strings.Join(view.items, "\n")))
-}
-
 // openEntriesDigest names every open item of a queue in full, blocked ones
-// included.
+// included, so a give-up holds until one of them is ticked, added or edited.
 func openEntriesDigest(content string) string {
 	entries, _ := parseQueueEntries(content)
 	open := []string{}
@@ -1631,7 +1625,7 @@ func onStop(input, cfg object) {
 	}
 	guard := getMap(getMap(state, "stopGuard"), sid)
 	if guard != nil && getString(guard, "gaveUpPath") == queuePath {
-		if getString(guard, "gaveUpOpen") == openItemsDigest(snapshot) {
+		if getString(guard, "gaveUpOpen") == openEntriesDigest(content) {
 			journal(sid, "Stop", "allow-stop", "queue gave up earlier and is unchanged", object{"open": snapshot.total})
 			logInfo("queue for %s gave up earlier and nothing changed since: %d open; stop allowed", sid, snapshot.total)
 			return
@@ -1677,7 +1671,7 @@ func onStop(input, cfg object) {
 		stuckKey := fmt.Sprintf("stuck:%s:%s", sid, queuePath)
 		alreadyTold := getMap(state, "notified")[stuckKey] != nil
 		updateState(func(next object) {
-			stateMap(next, "stopGuard")[sid] = object{"forced": float64(0), "idle": float64(0), "lastOpen": nil, "at": float64(now), "gaveUp": float64(now), "gaveUpPath": queuePath, "gaveUpOpen": openItemsDigest(snapshot), "cycles": numberOr(guard, "cycles", 0) + 1}
+			stateMap(next, "stopGuard")[sid] = object{"forced": float64(0), "idle": float64(0), "lastOpen": nil, "at": float64(now), "gaveUp": float64(now), "gaveUpPath": queuePath, "gaveUpOpen": openEntriesDigest(content), "cycles": numberOr(guard, "cycles", 0) + 1}
 			stateMap(next, "notified")[stuckKey] = float64(now)
 		})
 		fail("queue not progressing for %s: %d open after %s idle continues (total %s); stop allowed", sid, snapshot.total, formatNumber(numberOr(guard, "idle", 0)), formatNumber(numberOr(guard, "forced", 0)))
