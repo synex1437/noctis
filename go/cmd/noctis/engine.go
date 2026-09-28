@@ -1927,6 +1927,13 @@ func dropInterruptedWait(sid string, state object) {
 	if !clearWait(sid, state) {
 		return
 	}
+	// Only a pause held in the hook tells how long a hook may run. A same-session wake runs without
+	// a holder, and one whose session went on (a prompt or a tool batch there) was taken over, not
+	// cut off, so its time is no sample of a hook timeout.
+	if !getBool(wait, "inHook", false) {
+		logInfo("same-session wake of %s let go after %ds of %ds: the session went on in place; runner cancelled", sid, int(slept), int(intended))
+		return
+	}
 	if slept > 120 && intended-slept > 120 {
 		updateState(func(next object) {
 			samples := getList(next, "interruptedWaits")
