@@ -1351,7 +1351,7 @@ func startDetached(argsList []string) *os.Process {
 	}
 	child := exec.Command(executable, argsList...)
 	child.Dir = files.guardDir
-	child.Env = os.Environ()
+	child.Env = withoutEnv(os.Environ(), statuslineChainEnv)
 	child.Stdin, child.Stdout, child.Stderr = nil, nil, nil
 	configureDetached(child)
 	if err := child.Start(); err != nil {

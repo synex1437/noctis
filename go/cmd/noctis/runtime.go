@@ -307,7 +307,7 @@ func runStatusline() {
 	applySessionLocale(cfg, state, sid)
 	statuslineCfg := section(cfg, "statusline")
 	chainOutput := ""
-	if chain := getString(statuslineCfg, "chainCommand"); chain != "" {
+	if chain := getString(statuslineCfg, "chainCommand"); chain != "" && os.Getenv(statuslineChainEnv) == "" {
 		chainOutput = runChain(chain, marshalCompact(input))
 	}
 	if getString(statuslineCfg, "mode") == "silent" {
@@ -381,9 +381,20 @@ func platformShell(line string) *exec.Cmd {
 	return exec.Command("sh", "-c", line)
 }
 
+// statuslineChainEnv is set for the command chained under noctis's status line. A status line of
+// the user's that calls `noctis statusline` is chained like any other, and the noctis it starts
+// then runs no chain of its own: that would start the same command again, which starts noctis
+// again, without end, each level in a process group of its own that the first one's time limit
+// does not reach. Detached noctis processes do not inherit it (startDetached).
+const statuslineChainEnv = "NOCTIS_STATUSLINE_CHAIN"
+
 func runChain(chain string, input []byte) string {
 	command := platformShell(chain)
 	command.Stdin = strings.NewReader(string(input))
+	if command.Env == nil {
+		command.Env = os.Environ()
+	}
+	command.Env = append(command.Env, statuslineChainEnv+"=1")
 	output, err := runTreeWithTimeout(command, 4*time.Second)
 	if err != nil {
 		return ""
