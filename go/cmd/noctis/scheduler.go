@@ -121,8 +121,22 @@ var runScheduler = func(command *exec.Cmd, timeout time.Duration) ([]byte, error
 	return runWithTimeout(command, timeout)
 }
 
+// systemZone is the zone launchd reads StartCalendarInterval in: the system's, from
+// /etc/localtime, and UTC without one, whatever TZ the shell that started this process set.
+func systemZone() *time.Location {
+	data, err := os.ReadFile("/etc/localtime")
+	if err != nil {
+		return time.UTC
+	}
+	zone, err := time.LoadLocationFromTZData("Local", data)
+	if err != nil {
+		return time.UTC
+	}
+	return zone
+}
+
 func scheduleAtMinute(at float64) time.Time {
-	moment := time.Unix(int64(at), 0).Local()
+	moment := time.Unix(int64(at), 0).In(systemZone())
 	if moment.Second() > 0 || moment.Nanosecond() > 0 {
 		moment = moment.Add(time.Minute).Truncate(time.Minute)
 	}
@@ -290,7 +304,9 @@ func bootOutFinishedLaunchdJob(sid string) {
 }
 
 func systemdRunArgs(unit, executable string, commandArgs []string, at float64, wake bool) []string {
-	moment := time.Unix(int64(at), 0).Local()
+	// In UTC, and saying so: systemd reads a calendar time without a zone in the system's zone,
+	// which the TZ of the shell that started this process need not be.
+	moment := time.Unix(int64(at), 0).UTC()
 	arguments := []string{
 		"--user", "--quiet", "--collect",
 		"--unit=" + unit,
@@ -301,7 +317,7 @@ func systemdRunArgs(unit, executable string, commandArgs []string, at float64, w
 	}
 	arguments = append(arguments,
 		"--property=KillMode=process",
-		"--on-calendar="+moment.Format("2006-01-02 15:04:05"),
+		"--on-calendar="+moment.Format("2006-01-02 15:04:05")+" UTC",
 		"--timer-property=AccuracySec=1s",
 	)
 	if wake {

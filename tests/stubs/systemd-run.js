@@ -51,10 +51,14 @@ if (!calendar) die('systemd-run: no --on-calendar');
 if (command.length === 0) die('systemd-run: no command to run');
 if (!/^[A-Za-z0-9:_.\\-]+$/.test(unit)) die('systemd-run: not a valid unit name: ' + unit);
 
-if (!/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(calendar)) {
+if (!/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d( UTC)?$/.test(calendar)) {
   die('systemd-run: OnCalendar is not in a form systemd accepts: ' + calendar);
 }
-const resolved = spawnSync('date', ['-d', calendar, '+%s'], { encoding: 'utf8' });
+// The user manager reads a calendar time without a zone in the system's zone, not in the TZ of
+// the process that asked for the timer.
+const systemEnv = { ...process.env };
+delete systemEnv.TZ;
+const resolved = spawnSync('date', ['-d', calendar, '+%s'], { encoding: 'utf8', env: systemEnv });
 if (resolved.status !== 0) die('systemd-run: date could not resolve ' + calendar);
 const fireAt = Number(resolved.stdout.trim());
 if (!Number.isFinite(fireAt) || fireAt <= 0) die('systemd-run: unusable fire time from ' + calendar);

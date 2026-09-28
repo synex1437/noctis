@@ -89,8 +89,8 @@ async function scenarioSystemdFiresAndResumes(lab) {
 
   if (scheduled.length === 1) {
     const entry = scheduled[0];
-    check('systemd: the timer is a calendar timer, not a monotonic one',
-      /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(entry.calendar), entry.calendar);
+    check('systemd: the timer is a calendar timer in UTC, not a monotonic one',
+      /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC$/.test(entry.calendar), entry.calendar);
     check('systemd: accuracy is tightened to a second',
       entry.properties.includes('AccuracySec=1s'), entry.properties.join(','));
     check('systemd: the command is this binary resuming this session',

@@ -69,7 +69,7 @@ func TestScheduleAtMinuteRoundsUp(t *testing.T) {
 }
 
 func TestLaunchdPlistBody(t *testing.T) {
-	at := time.Date(2026, 3, 14, 9, 5, 30, 0, time.Local)
+	at := time.Date(2026, 3, 14, 9, 5, 30, 0, systemZone())
 	plist := launchdPlistBody("com.synex.noctis.abc", "/opt/no ctis/bin/noctis",
 		[]string{"resume", "--sid", "s1", "--account", "/home/a/.claude"}, float64(at.Unix()), "/home/a/.claude/noctis")
 
@@ -122,14 +122,14 @@ func TestLaunchdPlistEscapesXML(t *testing.T) {
 }
 
 func TestSystemdRunArgsUseACalendarTimer(t *testing.T) {
-	at := time.Date(2026, 3, 14, 9, 5, 30, 0, time.Local)
+	at := time.Date(2026, 3, 14, 9, 5, 30, 0, time.UTC)
 	args := systemdRunArgs("noctis-abc", "/opt/noctis", []string{"resume", "--sid", "s1"}, float64(at.Unix()), false)
 	joined := strings.Join(args, " ")
 
 	if strings.Contains(joined, "--on-active") {
 		t.Fatalf("a monotonic timer is back; it does not advance over suspend: %s", joined)
 	}
-	if !strings.Contains(joined, "--on-calendar=2026-03-14 09:05:30") {
+	if indexOf(args, "--on-calendar=2026-03-14 09:05:30 UTC") < 0 {
 		t.Fatalf("expected an absolute calendar deadline, got: %s", joined)
 	}
 	for _, want := range []string{"--user", "--unit=noctis-abc", "AccuracySec=1s"} {
