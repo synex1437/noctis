@@ -19,7 +19,7 @@ func TestTheUsageRequestNamesNoctisAsItsUserAgent(t *testing.T) {
 	defer server.Close()
 	t.Setenv("NOCTIS_USAGE_URL", server.URL+"/api/oauth/usage")
 
-	fetchOauthUsage("test-token")
+	fetchOauthUsage("test-token", fetchTimeout)
 	select {
 	case got := <-agents:
 		if want := pluginName + "/" + pluginVersion; got != want {

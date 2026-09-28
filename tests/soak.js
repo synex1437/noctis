@@ -80,6 +80,7 @@ const stats = {
   maxTypedFive: 0,
   latencies: [],
   timings: [],
+  labWaitMs: 0,
 };
 const pendingResumes = [];
 
@@ -134,12 +135,39 @@ function publishTruth(acc) {
 
 let ACCOUNTS = [];
 
+// A hook that holds the host this long waited out a usage fetch timeout (5 s). Only the blind
+// probe may: every other hook waits for a fetch at most refreshWait and leaves the rest to a
+// refresher.
+const FETCH_TIMEOUT_HOLD_MS = 4500;
+
+function logSince(file, offset) {
+  try {
+    const text = fs.readFileSync(file);
+    return text.subarray(text.length >= offset ? offset : 0).toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
 function timedHook(acc, input, extraEnv = {}) {
+  const log = path.join(acc.guardDir, 'guard.log');
+  let logFrom = 0;
+  try {
+    logFrom = fs.statSync(log).size;
+  } catch {}
   const started = Date.now();
   const output = acc.hook(input, extraEnv);
   const elapsed = Date.now() - started;
-  stats.latencies.push(elapsed);
-  stats.timings.push({ ms: elapsed, event: input.hook_event_name || '?', sid: input.session_id || '?' });
+  // The host waits on the hook process alone. The lab then waits for any refresher the hook
+  // started, which is its own time, not the host's: that is counted apart.
+  const hookMs = Math.round(acc.lastRunMs);
+  const event = input.hook_event_name || '?';
+  stats.latencies.push(hookMs);
+  stats.timings.push({ ms: hookMs, event, sid: input.session_id || '?' });
+  stats.labWaitMs = Math.max(stats.labWaitMs, elapsed - hookMs);
+  if (hookMs >= FETCH_TIMEOUT_HOLD_MS && event !== 'StopFailure' && !/probing before allowing more work/.test(logSince(log, logFrom))) {
+    stats.anomalies.push(`${event} (${input.session_id}) held the host ${hookMs} ms, as long as a usage fetch that times out`);
+  }
   stats.hooks += 1;
   if (elapsed >= 2000) {
     T += Math.round(elapsed / 1000);
@@ -1039,6 +1067,7 @@ async function main() {
     maxUsageWhenAllowed: { five: Number(stats.maxAllowedFive.toFixed(1)), week: Number(stats.maxAllowedWeek.toFixed(1)) },
     typedTurnCalls: { calls: stats.typedCalls, maxFive: Number(stats.maxTypedFive.toFixed(1)) },
     hookLatencyMs: { p50: percentile(stats.latencies, 0.5), p95: percentile(stats.latencies, 0.95), max: Math.max(...stats.latencies) },
+    labWaitForRefresherMaxMs: stats.labWaitMs,
     guardLatencyMs: { p95, budget: 400 },
     stopFailureLatencyMs: {
       p50: pausing.length ? percentile(pauseTimes, 0.5) : 0,

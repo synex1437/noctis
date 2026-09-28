@@ -112,7 +112,6 @@ function runJob(lab, account, random, index, world) {
     const isGate = event === 'UserPromptSubmit' || event === 'PostToolBatch'
       || (event === 'PreToolUse' && /Task|Agent/.test(payload.tool_name || ''));
 
-    const started = process.hrtime.bigint();
     const out = account.run(['hook'], {
       session_id: sid,
       cwd: lab.projectDir,
@@ -120,7 +119,8 @@ function runJob(lab, account, random, index, world) {
       hook_event_name: event,
       ...payload,
     });
-    stats.hookMs.push(Number(process.hrtime.bigint() - started) / 1e6);
+    // The hook process alone, as the host waits on it; not the lab's wait for its refresher.
+    stats.hookMs.push(account.lastRunMs);
     stats.hooks += 1;
 
     const blocked = /"decision":\s*"block"|"continue":\s*false|"permissionDecision":\s*"deny"/.test(out);

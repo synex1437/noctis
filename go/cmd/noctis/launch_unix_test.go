@@ -265,6 +265,11 @@ func TestAWindowThatPausesAgainIsRelaunchedWhileItsFirstRunnerStillWatchesIt(t *
 		t.Fatalf("runner %d went away and deleted %s, the launcher the new window has yet to run; the window never opens and the runner falls back to a headless run", first.Process.Pid, script)
 	}
 
+	prompts := func() int {
+		content, _ := os.ReadFile(transcript)
+		return strings.Count(string(content), `"content":"carry on"`)
+	}
+	promptsBefore := prompts()
 	writeScript(t, open, "")
 	secondWindow := 0
 	for deadline := time.Now().Add(30 * time.Second); secondWindow == 0 && time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
@@ -280,6 +285,13 @@ func TestAWindowThatPausesAgainIsRelaunchedWhileItsFirstRunnerStillWatchesIt(t *
 	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
 	if len(lines) != 2 || launchesOf(calls, sid) != 2 || strings.Contains(string(content), " -p ") {
 		t.Fatalf("expected the first window and one relaunch in a window, claude ran %d time(s): %q", len(lines), lines)
+	}
+	// The stand-in writes its prompt to the transcript after it records its call. A window closed
+	// before that did nothing, and its runner rightly keeps the pause for another try.
+	for deadline := time.Now().Add(30 * time.Second); prompts() == promptsBefore; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the relaunched session never wrote its prompt to %s", transcript)
+		}
 	}
 	if err := terminateProcess(secondWindow); err != nil {
 		t.Fatal(err)

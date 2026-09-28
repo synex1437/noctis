@@ -24,8 +24,10 @@ const refresherAdoptWait = 2 * time.Second
 // refreshAside hands a due fetch to a detached `noctis refresh`. The hook takes fable.lock in the
 // refresher's name, so one fetch is in flight at a time and fable.lock stands for it until its
 // answer is written. The hook decides on the reading it has and waits for the answer only up to
-// wait, or refreshWait when that reading is missing or stale. It reports false, having started
-// nothing, when no refresher could be started, and the caller then fetches itself.
+// wait, or refreshWait when that reading is missing or stale. A hook that waits asks the OAuth
+// endpoint itself first, which spares it starting a process, and hands the fetch on only when no
+// answer came within wait. It reports false, having started nothing, when no refresher could be
+// started, and the caller then fetches itself.
 func refreshAside(cfg, cached object, now int64, reason string, wait time.Duration) (object, bool) {
 	if fetchedAt := numberOr(cached, "fetchedAt", 0); fetchedAt == 0 || float64(now)-fetchedAt > usageStaleSeconds(cfg) {
 		wait = max(wait, refreshWait)
@@ -37,6 +39,18 @@ func refreshAside(cfg, cached object, now int64, reason string, wait time.Durati
 		}
 		logInfo("fable refresh skipped (%s): another process is fetching", reason)
 		return cached, true
+	}
+	if latest := readJSON(files.fable); latest != nil && numberOr(latest, "fetchedAt", 0) > numberOr(cached, "fetchedAt", 0) {
+		releaseLock(handle, files.fableLock)
+		return latest, true
+	}
+	if wait > 0 && getString(section(cfg, "fable"), "source") == "oauth" {
+		if answer, answered := fetchOauthFable(cfg, cached, now, reason, wait); answered {
+			releaseLock(handle, files.fableLock)
+			return answer, true
+		}
+		logInfo("fable refresh (%s) got no answer within %s; a refresher asks again and leaves its answer for the next hook", reason, wait)
+		wait = 0
 	}
 	refresher := startDetached(refresherArgs(reason))
 	if refresher == nil {

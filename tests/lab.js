@@ -556,7 +556,25 @@ async function scenarioRefreshAside(acc) {
     process.stdout.write(`  refresh aside: no reading, 4 s endpoint: hook ${blind.ms} ms\n`);
     check('refresh aside: with no reading at all the hook waits for the fetch, but only 1.5 s', blind.status === 0 && blind.ms >= 1400 && blind.ms < 3500, true);
     check('refresh aside: the answer it stopped waiting for still lands', acc.settleRefresh() && (readJson(fableFile) || {}).fetchedAt >= now, true);
-    check('refresh aside: one request for the blind hook', mock.hits - hitsBefore, 1);
+    // The hook asked the endpoint itself and gave that request its 1.5 s; the refresher it started
+    // when no answer came asked again with the full 5 s.
+    check('refresh aside: the blind hook asks once itself and its refresher once more', mock.hits - hitsBefore, 2);
+    lab.setOutage('');
+    fs.rmSync(fableFile, { force: true });
+    hitsBefore = mock.hits;
+    const guardLog = path.join(acc.guardDir, 'guard.log');
+    const logBefore = fs.existsSync(guardLog) ? fs.statSync(guardLog).size : 0;
+    const answered = timedHook('ra4');
+    process.stdout.write(`  refresh aside: no reading, endpoint answers: hook ${answered.ms} ms\n`);
+    check('refresh aside: with no reading and an endpoint that answers, the hook returns with the answer', answered.status === 0 && answered.ms < 1300 && (readJson(fableFile) || {}).fetchedAt >= now, true);
+    check('refresh aside: it lets fable.lock go before it returns', fs.existsSync(lockFile), false);
+    check('refresh aside: one request for that hook', acc.settleRefresh() && mock.hits - hitsBefore, 1);
+    // Every log line names the command that wrote it: the answer came to the hook, not to a
+    // refresher it started.
+    const logged = fs.readFileSync(guardLog);
+    const fetchedBy = logged.subarray(logged.length >= logBefore ? logBefore : 0).toString('utf8').split('\n')
+      .filter((line) => line.includes('fable refresh ok')).map((line) => (line.match(/\[INFO \d+ (\S+)\]/) || [])[1]);
+    check('refresh aside: the hook fetched the answer itself, with no refresher', fetchedBy, ['hook']);
   } finally {
     lab.setOutage('');
     acc.settleRefresh();
