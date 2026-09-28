@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -107,5 +109,61 @@ func TestTheGuidesCountTheFilesACloneInstallCopies(t *testing.T) {
 		if !strings.Contains(docsFactsFile(t, doc), want) {
 			t.Errorf("%s does not say %q", doc, want)
 		}
+	}
+}
+
+// docsFactsCommands returns the backquoted names in the part of text that starts at from and ends at
+// the next to.
+func docsFactsCommands(t *testing.T, text, from, to string) map[string]bool {
+	t.Helper()
+	start := strings.Index(text, from)
+	if start < 0 {
+		t.Fatalf("docs/REFERENCE.md no longer says %q", from)
+	}
+	part := text[start+len(from):]
+	if end := strings.Index(part, to); end >= 0 {
+		part = part[:end]
+	}
+	names := map[string]bool{}
+	for _, match := range regexp.MustCompile("`([a-z-]+)`").FindAllStringSubmatch(part, -1) {
+		names[match[1]] = true
+	}
+	return names
+}
+
+func TestTheReferenceNamesEveryCommandTheHostOrNoctisStarts(t *testing.T) {
+	reference := docsFactsFile(t, "docs/REFERENCE.md")
+	missing := func(listed, want map[string]bool) []string {
+		out := []string{}
+		for name := range want {
+			if !listed[name] {
+				out = append(out, name)
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
+	started := docsFactsCommands(t, reference, "the commands a host or noctis itself starts (", ")")
+	if gone := missing(started, startedByHost); len(gone) > 0 {
+		t.Errorf("docs/REFERENCE.md leaves %v out of the commands a host or noctis itself starts", gone)
+	}
+	plumbing := docsFactsCommands(t, reference, "Called by the plugin itself: ", "\n")
+	if gone := missing(plumbing, plumbingCommands); len(gone) > 0 {
+		t.Errorf("docs/REFERENCE.md leaves %v out of the commands the plugin calls itself", gone)
+	}
+}
+
+func TestTheReferenceGivesTheShippedDefaultRolesProfile(t *testing.T) {
+	var defaults object
+	if err := json.Unmarshal([]byte(docsFactsFile(t, "config.default.json")), &defaults); err != nil {
+		t.Fatal(err)
+	}
+	shipped := getString(section(defaults, "roles"), "profile")
+	row := regexp.MustCompile("(?m)^\\| `roles\\.profile / [^|]*\\| ([^ |]+) /").FindStringSubmatch(docsFactsFile(t, "docs/REFERENCE.md"))
+	if row == nil {
+		t.Fatal("docs/REFERENCE.md has no roles.profile row in its configuration table")
+	}
+	if shipped == "" || row[1] != shipped {
+		t.Errorf("docs/REFERENCE.md gives %q as the default roles profile; config.default.json ships %q", row[1], shipped)
 	}
 }
