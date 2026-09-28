@@ -2415,6 +2415,15 @@ func recordHookPulse(state object, now int64) {
 	updateState(func(next object) { next["lastHookAt"] = float64(now) })
 }
 
+// pausedHookPulse is decide's pulse for a hook that noctis being off stops before decide. The hook
+// ran all the same, and without the pulse the status line takes the hooks for ones that no longer
+// run once the last pulse is 30 minutes old.
+func pausedHookPulse(sid string, state object, now int64) {
+	if sid != selftestSession {
+		recordHookPulse(state, now)
+	}
+}
+
 type decideOptions struct {
 	force   bool
 	noProbe bool

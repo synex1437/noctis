@@ -560,6 +560,7 @@ func onUserPromptSubmit(input, cfg object) {
 		return
 	}
 	if guardPaused(cfg, state, now) {
+		pausedHookPulse(sid, state, now)
 		retireOwnCheckpoint(state, sid)
 		if controlCommand(getString(input, "prompt")) == "/"+pluginName+":start" {
 			emit(object{"decision": "block", "reason": T("queue.startPaused", formatTime(numberOr(state, "disabledUntil", 0)), pluginName)})
@@ -777,6 +778,7 @@ func subagentFallback(cfg object, model string) (string, usageView) {
 func onAgentSpawn(input, cfg, state object, now int64) {
 	sid := sessionKey(input)
 	if guardPaused(cfg, state, now) {
+		pausedHookPulse(sid, state, now)
 		return
 	}
 	result := decide(cfg, state, input, now, decideOptions{})
@@ -1567,6 +1569,7 @@ func onStop(input, cfg object) {
 	state := readState()
 	endTypedTurn(state, sid)
 	if guardPaused(cfg, state, now) {
+		pausedHookPulse(sid, state, now)
 		return
 	}
 	if getMap(getMap(state, "handedOff"), sid) != nil && !isHandoffSession(sid) {
@@ -1993,6 +1996,7 @@ func onPostToolBatch(input, cfg object) {
 	clearOverload(state, sid)
 	clearFailureRetries(state, sid)
 	if guardPaused(cfg, state, now) {
+		pausedHookPulse(sid, state, now)
 		return
 	}
 	releaseInterruptedWait(sid, state)
