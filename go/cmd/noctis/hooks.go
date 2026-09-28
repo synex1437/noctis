@@ -363,7 +363,6 @@ func onSessionEnd(input, _ object) {
 	updateState(func(state object) {
 		delete(stateMap(state, "modelOverrides"), sid)
 		delete(stateMap(state, "autoResume"), sid)
-		delete(stateMap(state, "overload"), sid)
 		if getMap(getMap(state, "waits"), sid) == nil && !handingOff {
 
 			delete(stateMap(state, "workflows"), sid)
@@ -544,7 +543,6 @@ func onUserPromptSubmit(input, cfg object) {
 		return
 	}
 	releaseInterruptedWait(sid, state)
-	clearOverload(state, sid)
 	if !queueContinuationPrompt(getString(input, "prompt")) {
 		resetIdleGuard(state, sid)
 		if !promptFromPlugin {

@@ -1401,11 +1401,11 @@ func TestCopilotHooksThatNameNoEventStillReachTheirHandlers(t *testing.T) {
 		t.Fatalf("Copilot's agentStop names no event and the trusted queue did not continue: %v", stop)
 	}
 	updateState(func(state object) {
-		stateMap(state, "overload")["cp-2"] = object{"firstAt": float64(nowSec() - 60), "attempts": float64(1), "lastAt": float64(nowSec() - 60)}
+		stateMap(state, "stopGuard")["cp-2"] = object{"forced": float64(2), "idle": float64(2), "lastOpen": float64(2), "at": float64(nowSec() - 60)}
 	})
 	hostHook(t, "copilot", copilotPayload("cp-2", project, object{"prompt": "parser testlerini yaz ve bayrakları belgele"}))
-	if lang, episode := sessionLanguage(readState(), "cp-2"), getMap(getMap(readState(), "overload"), "cp-2"); lang != "tr" || episode != nil {
-		t.Fatalf("Copilot's userPromptSubmitted names no event and the prompt handler never saw it: session language %q, overload episode %v", lang, episode)
+	if lang, idle := sessionLanguage(readState(), "cp-2"), numberOr(getMap(getMap(readState(), "stopGuard"), "cp-2"), "idle", -1); lang != "tr" || idle != 0 {
+		t.Fatalf("Copilot's userPromptSubmitted names no event and the prompt handler never saw it: session language %q, idle continues %v", lang, idle)
 	}
 	updateState(func(state object) {
 		stateMap(state, "autoResume")["cp-3"] = object{"type": "quota_auto_resume_fired", "at": float64(nowSec())}
