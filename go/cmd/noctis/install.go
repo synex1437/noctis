@@ -129,6 +129,9 @@ func copyOneFile(source, target string) error {
 	if statErr != nil {
 		return statErr
 	}
+	if os.SameFile(info, statSafe(target)) {
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
@@ -164,6 +167,9 @@ func copyTree(from, to string) error {
 		if statErr != nil {
 			return statErr
 		}
+		if os.SameFile(info, statSafe(target)) {
+			return nil
+		}
 		in, openErr := os.Open(source)
 		if openErr != nil {
 			return openErr
@@ -182,6 +188,37 @@ func copyTree(from, to string) error {
 func isInside(child, parent string) bool {
 	relative, err := filepath.Rel(parent, child)
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(os.PathSeparator))
+}
+
+// installOverlap compares the folder an install copies the plugin into with the one it copies it from,
+// both with their symbolic links followed: a copy reached through a link (a linked ~/.claude, or a
+// skills folder linked to the clone) is the source itself, and copying it would delete every file
+// before reading it.
+func installOverlap(sourceRoot, installRoot string) (same, nested bool) {
+	source, install := linkedPath(sourceRoot), linkedPath(installRoot)
+	if source == install || os.SameFile(statSafe(sourceRoot), statSafe(installRoot)) {
+		return true, false
+	}
+	return false, isInside(source, install) || isInside(install, source)
+}
+
+// linkedPath is path with its symbolic links followed as far as it exists, so a folder an install is
+// about to create resolves through a linked folder above it.
+func linkedPath(path string) string {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	rest := ""
+	for dir := absolute; ; dir = filepath.Dir(dir) {
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			return filepath.Join(resolved, rest)
+		}
+		if filepath.Dir(dir) == dir {
+			return absolute
+		}
+		rest = filepath.Join(filepath.Base(dir), rest)
+	}
 }
 
 func backupFile(file string) string {
@@ -739,8 +776,8 @@ func installInto(configDir, sourceRoot string, noModel bool, defaults object) er
 		return err
 	}
 	installRoot := filepath.Join(configDir, "skills", pluginName)
-	if absInstall, _ := filepath.Abs(installRoot); absInstall != sourceRoot {
-		if isInside(sourceRoot, installRoot) || isInside(installRoot, sourceRoot) {
+	if same, nested := installOverlap(sourceRoot, installRoot); !same {
+		if nested {
 			return errors.New(T("install.nested", sourceRoot, installRoot))
 		}
 		if err := copyPluginTree(sourceRoot, installRoot); err != nil {
@@ -1209,8 +1246,8 @@ func installHost(host, configDir, sourceRoot string, defaults object) error {
 		return err
 	}
 	installRoot := filepath.Join(guardDir, "plugin")
-	if absInstall, _ := filepath.Abs(installRoot); absInstall != sourceRoot {
-		if isInside(sourceRoot, installRoot) || isInside(installRoot, sourceRoot) {
+	if same, nested := installOverlap(sourceRoot, installRoot); !same {
+		if nested {
 			return errors.New(T("install.nested", sourceRoot, installRoot))
 		}
 		if err := copyPluginTree(sourceRoot, installRoot); err != nil {
