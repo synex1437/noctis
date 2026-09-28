@@ -260,9 +260,9 @@ func runQueue() {
 		fmt.Fprintln(os.Stderr, T("queue.importLink", target, folder, leads))
 		os.Exit(1)
 	}
-	limit := "200"
+	limit := 200.0
 	if value, ok := toNumber(flagString("limit")); ok && value >= 1 {
-		limit = formatNumber(value)
+		limit = value
 	}
 	repo, valid := importRepo(flagString("repo"))
 	if !valid {
@@ -270,22 +270,37 @@ func runQueue() {
 		os.Exit(2)
 	}
 	wanted := importAuthorNames()
-	arguments := []string{"issue", "list", "--state", "open", "--limit", limit, "--json", "number,title,labels,author,url"}
-	if repo != "" {
-		arguments = append(arguments, "--repo", repo)
-	}
-	if label := flagString("label"); label != "" {
-		arguments = append(arguments, "--label", label)
-	}
-	output, err := ghCommand(cwd, arguments...)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, T("queue.ghFailed", err))
-		os.Exit(1)
-	}
-	var issues []any
-	if err := jsonUnmarshal(output, &issues); err != nil {
-		fmt.Fprintln(os.Stderr, T("queue.ghFailed", err))
-		os.Exit(1)
+	issues, listed, full := []any{}, map[float64]bool{}, []string{}
+	for _, author := range wanted {
+		arguments := []string{"issue", "list", "--state", "open", "--author", author, "--limit", formatNumber(limit), "--json", "number,title,labels,author,url"}
+		if repo != "" {
+			arguments = append(arguments, "--repo", repo)
+		}
+		if label := flagString("label"); label != "" {
+			arguments = append(arguments, "--label", label)
+		}
+		output, err := ghCommand(cwd, arguments...)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, T("queue.ghFailed", err))
+			os.Exit(1)
+		}
+		var page []any
+		if err := jsonUnmarshal(output, &page); err != nil {
+			fmt.Fprintln(os.Stderr, T("queue.ghFailed", err))
+			os.Exit(1)
+		}
+		if float64(len(page)) >= limit {
+			full = append(full, author)
+		}
+		for _, raw := range page {
+			if number, ok := getNumber(toObject(raw), "number"); ok {
+				if listed[number] {
+					continue
+				}
+				listed[number] = true
+			}
+			issues = append(issues, raw)
+		}
 	}
 	authors, named := map[string]bool{}, ""
 	if len(issues) > 0 {
@@ -382,10 +397,16 @@ func runQueue() {
 	if qualified > 0 {
 		logInfo("queue import: %d item(s) in %s that an older import wrote as a bare #N now name %s", qualified, filepath.Base(target), repo)
 	}
-	if len(lines) == 0 {
-		fmt.Println(T("queue.importNone", len(issues)-skipped, filepath.Base(target)))
-	} else {
-		fmt.Println(T("queue.importDone", len(lines), len(issues)-skipped-len(lines), filepath.Base(target)))
+	switch fetched := len(issues) - skipped; {
+	case fetched == 0:
+		fmt.Println(T("queue.importEmpty", strings.Join(wanted, ", ")))
+	case len(lines) == 0:
+		fmt.Println(T("queue.importNone", fetched, named, filepath.Base(target)))
+	default:
+		fmt.Println(T("queue.importDone", len(lines), fetched-len(lines), filepath.Base(target)))
+	}
+	for _, author := range full {
+		fmt.Println(T("queue.importLimit", formatNumber(limit), author))
 	}
 	if skipped > 0 {
 		if len(others) == 0 {
