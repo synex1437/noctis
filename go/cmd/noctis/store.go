@@ -806,14 +806,26 @@ func writeEncodedAtomic(file string, encoded []byte) error {
 		mode = info.Mode().Perm()
 	}
 	tmp := fmt.Sprintf("%s.%d.tmp", file, os.Getpid())
-	if err := os.WriteFile(tmp, encoded, mode); err != nil {
+	out, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	if err != nil {
+		return err // whatever holds the name was not made by this write, so it stays
+	}
+	_, err = out.Write(encoded)
+	if closeErr := out.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		// A write cut short (a full disk) takes its temp file away again: stray temp files are swept
+		// only in the guard folder, and settings.json or hooks.json live elsewhere.
+		if removeErr := os.Remove(tmp); removeErr != nil {
+			warn("temp file left behind: %s", tmp)
+		}
 		return err
 	}
 	if statErr == nil && !isWindows {
 		_ = os.Chmod(tmp, mode)
 	}
 
-	var err error
 	for attempt := 0; attempt < 8; attempt++ {
 		if err = renameAtomic(tmp, file); err == nil {
 			return nil

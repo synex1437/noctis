@@ -120,3 +120,22 @@ func TestAUsageBackupCutShortByAFullDiskLeavesTheOlderBackupWhole(t *testing.T) 
 		t.Fatal("usage.json broke after the full disk, and the readings were not restored from the backup")
 	}
 }
+
+func TestAWriteCutShortByAFullDiskLeavesNoTempFileBehind(t *testing.T) {
+	if s1FullDiskChild(t) {
+		if err := writeEncodedAtomic(files.settings, bytes.Repeat([]byte(" "), 2*s1FullDiskBytes)); err == nil {
+			t.Fatal("a write twice the size the full disk has room for went through")
+		}
+		return
+	}
+	dir := sandboxFiles(t)
+	older := []byte("{\"hooks\": {}}\n")
+	cliWrite(t, files.settings, older)
+
+	s1RunOnAFullDisk(t, dir)
+
+	if left, _ := filepath.Glob(filepath.Join(dir, "*.tmp")); len(left) != 0 {
+		t.Fatalf("a write the full disk cut short left its temp file behind, where nothing sweeps it outside the guard folder: %v", left)
+	}
+	cliUnchanged(t, files.settings, older)
+}
