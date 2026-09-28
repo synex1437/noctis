@@ -1659,8 +1659,10 @@ func updateState(mutator func(state object)) object {
 			return
 		}
 		if before != nil && (parsed || usableStateJSON(before)) {
-			if err := os.WriteFile(files.stateBackup, before, 0o600); err != nil {
-				warn("state.json backup not written: %v", err)
+			// Through a temp file and a rename: a write cut short (a full disk) must not leave a
+			// backup that no longer holds the last good state.
+			if err := writeEncodedAtomic(files.stateBackup, before); err != nil {
+				warn("state.json backup not written (%v); the older backup, if any, is left as it was", err)
 			}
 		}
 		mustWriteEncoded(files.state, encoded)

@@ -287,8 +287,8 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 			return
 		}
 		if len(previous) > 0 && current.ok && current.exists {
-			if err := os.WriteFile(files.usageBackup, current.raw, 0o600); err != nil {
-				warn("usage.json backup not written: %v", err)
+			if err := writeEncodedAtomic(files.usageBackup, current.raw); err != nil {
+				warn("usage.json backup not written (%v); the older backup, if any, is left as it was", err)
 			}
 		}
 		mustWriteEncoded(files.usage, encoded)
