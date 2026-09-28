@@ -363,6 +363,8 @@
   "install.configBroken": "%s ist nicht lesbar (%s); nichts wurde geändert — repariere die Datei oder leg sie beiseite und führe das Setup erneut aus",
   "install.configUnwritable": "%s konnte nicht geschrieben werden (%s); die Einstellungen blieben unverändert — mach den Ordner beschreibbar und führe das Setup erneut aus",
   "install.uninstallBroken": "%s ist nicht lesbar (%s); nichts wurde entfernt — repariere die Datei und führe die Deinstallation erneut aus",
+  "install.settingsUnsaved": "%s blieb unverändert: ein anderer Prozess hielt die Datei gesperrt, oder sie ließ sich nicht lesen oder schreiben (der Grund steht in %s) — führe das Setup erneut aus, sobald sie geschrieben werden kann",
+  "install.undoUnsaved": "%s wurde nicht zurückgesetzt: ein anderer Prozess hielt die Datei gesperrt, oder sie ließ sich nicht lesen oder schreiben (der Grund steht in %s); das Plugin bleibt an seinem Platz — führe die Deinstallation erneut aus, sobald sie geschrieben werden kann",
   "install.undoByHand": "   oder stell den alten Stand von Hand wieder her: entferne statusLine, permissions.defaultMode, model, env.CLAUDE_CODE_EFFORT_LEVEL und env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS, soweit das Setup sie gesetzt hat, oder spiel die älteste Kopie settings.json.bak-* zurück",
   "install.nested": "Quelle (%s) und Ziel (%s) liegen ineinander; entpacke das Plugin woanders und versuche es erneut",
   "install.copyFailed": "Kopieren des Plugins fehlgeschlagen: %w",

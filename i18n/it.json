@@ -363,6 +363,8 @@
   "install.configBroken": "%s non è leggibile (%s); non è stato modificato nulla — correggi il file o spostalo altrove, poi esegui di nuovo la configurazione",
   "install.configUnwritable": "impossibile scrivere %s (%s); le impostazioni sono rimaste com'erano — rendi scrivibile la sua cartella, poi esegui di nuovo la configurazione",
   "install.uninstallBroken": "%s non è leggibile (%s); non è stato rimosso nulla — correggilo, poi esegui di nuovo la disinstallazione",
+  "install.settingsUnsaved": "%s è rimasto com'era: un altro processo lo teneva bloccato, oppure non è stato possibile leggerlo o scriverlo (il motivo è in %s) — esegui di nuovo la configurazione quando potrà essere scritto",
+  "install.undoUnsaved": "%s non è stato ripristinato: un altro processo lo teneva bloccato, oppure non è stato possibile leggerlo o scriverlo (il motivo è in %s); il plugin è rimasto al suo posto — esegui di nuovo la disinstallazione quando potrà essere scritto",
   "install.undoByHand": "   oppure rimettilo a posto a mano: togli statusLine, permissions.defaultMode, model, env.CLAUDE_CODE_EFFORT_LEVEL ed env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS dove li ha impostati la configurazione, oppure ripristina la copia settings.json.bak-* più vecchia",
   "install.nested": "origine (%s) e destinazione (%s) sono annidate; scompatta il plugin altrove e riprova",
   "install.copyFailed": "copia del plugin non riuscita: %w",

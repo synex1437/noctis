@@ -363,6 +363,8 @@
   "install.configBroken": "%s est illisible (%s) ; rien n'a été modifié — corrige le fichier ou mets-le de côté, puis relance la configuration",
   "install.configUnwritable": "%s n'a pas pu être écrit (%s) ; les réglages sont restés tels quels — rends son dossier accessible en écriture, puis relance la configuration",
   "install.uninstallBroken": "%s est illisible (%s) ; rien n'a été retiré — corrige-le, puis relance la désinstallation",
+  "install.settingsUnsaved": "%s est resté tel quel : un autre processus le gardait verrouillé, ou il n'a pas pu être lu ou écrit (la raison est dans %s) — relance la configuration dès qu'il peut être écrit",
+  "install.undoUnsaved": "%s n'a pas été remis en l'état : un autre processus le gardait verrouillé, ou il n'a pas pu être lu ou écrit (la raison est dans %s) ; le plugin est resté en place — relance la désinstallation dès qu'il peut être écrit",
   "install.undoByHand": "   ou annule les changements à la main : retire statusLine, permissions.defaultMode, model, env.CLAUDE_CODE_EFFORT_LEVEL et env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS là où la configuration les a posés, ou restaure la plus ancienne copie settings.json.bak-*",
   "install.nested": "la source (%s) et la cible (%s) sont imbriquées ; décompresse le plugin ailleurs et réessaie",
   "install.copyFailed": "échec de la copie du plugin : %w",

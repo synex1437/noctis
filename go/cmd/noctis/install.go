@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
@@ -603,6 +604,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	if data == nil {
 		data = object{}
 	}
+	asRead := copyObject(data)
 	chained := ""
 	previous := getString(getMap(data, "statusLine"), "command")
 	if previous != "" && !strings.Contains(previous, "guard.js") && !strings.Contains(previous, "noctis") && getString(section(config, "statusline"), "chainCommand") != previous {
@@ -679,10 +681,13 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	if err := writeInstallConfig(configFile, config); err != nil {
 		return err
 	}
-	backup := backupFile(settingsFile)
-	if err := writeJSONKeepingOrder(settingsFile, data); err != nil {
-		writeFailures++
-		fail("write %s failed: %v", filepath.Base(settingsFile), err)
+	backup := ""
+	if failed := lockedSettingsChange(configDir, func(fresh object) {
+		backup = backupFile(settingsFile)
+		applySettingsChanges(fresh, asRead, data)
+		data = fresh
+	}); failed != "" {
+		return errors.New(T("install.settingsUnsaved", settingsFile, failed))
 	}
 	model := getString(data, "model")
 	settleModelSwitch(configDir, noModel, func(switched object) string {
@@ -712,7 +717,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	if effort != "" {
 		fmt.Println(T("install.settings", backupText, effort, getString(data, "model")))
 	} else {
-		fmt.Println(T("install.settingsNoEffort", backupText, getString(data, "model"), orDefault(getString(env, "CLAUDE_CODE_EFFORT_LEVEL"), T("doctor.none"))))
+		fmt.Println(T("install.settingsNoEffort", backupText, getString(data, "model"), orDefault(getString(getMap(data, "env"), "CLAUDE_CODE_EFFORT_LEVEL"), T("doctor.none"))))
 	}
 	fmt.Println(leanNote)
 	return nil
@@ -965,6 +970,7 @@ func forgetSetupRecords(configFile string, config object) {
 }
 
 func undoSetupSettings(settingsFile string, data, guardConfig object) error {
+	asRead := copyObject(data)
 	chain := getString(section(guardConfig, "statusline"), "chainCommand")
 	statusLine := getString(getMap(data, "statusLine"), "command")
 	if strings.Contains(statusLine, "guard.js") || strings.Contains(statusLine, "noctis") {
@@ -1005,11 +1011,84 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 			delete(data, key)
 		}
 	}
-	if err := writeJSONKeepingOrder(settingsFile, data); err != nil {
-		return err
+	if failed := lockedSettingsChange(filepath.Dir(settingsFile), func(fresh object) {
+		applySettingsChanges(fresh, asRead, data)
+	}); failed != "" {
+		return errors.New(T("install.undoUnsaved", settingsFile, failed))
 	}
 	fmt.Println(T("install.restored", modelNote))
 	return nil
+}
+
+// lockedSettingsChange writes the settings.json of the account in configDir as every other writer of it
+// does: under its settings lock, with change made to the file as it is read there, so a value another
+// process wrote since setup or uninstall read it stays. It returns "" once the file is written, else the
+// log that says why it was not.
+func lockedSettingsChange(configDir string, change func(fresh object)) string {
+	previous := files
+	defer func() { files = previous }()
+	files = pathsFor(configDir, files.pluginRoot)
+	hadStateDir := statSafe(files.guardDir) != nil
+	if !withSettings(func(fresh object) bool {
+		change(fresh)
+		return true
+	}) {
+		return files.errors
+	}
+	if !hadStateDir {
+		// The lock lives in the state folder; an account that had none is left without one.
+		_ = os.Remove(files.guardDir)
+	}
+	return ""
+}
+
+// applySettingsChanges makes in fresh the changes that turned before into after: only the keys whose
+// values changed and, inside an object, only the entries that did. Every other key and entry keeps what
+// fresh holds; an object setup or uninstall removed keeps the entries added to it since, if there are any.
+func applySettingsChanges(fresh, before, after object) {
+	for key, value := range after {
+		if old, had := before[key]; had && reflect.DeepEqual(old, value) {
+			continue
+		}
+		changed, isObject := value.(object)
+		current, freshObject := fresh[key].(object)
+		if _, present := fresh[key]; !isObject || (present && !freshObject) {
+			fresh[key] = value
+			continue
+		}
+		if current == nil {
+			current = object{}
+			fresh[key] = current
+		}
+		previous, _ := before[key].(object)
+		for entry, entryValue := range changed {
+			if old, had := previous[entry]; !had || !reflect.DeepEqual(old, entryValue) {
+				current[entry] = entryValue
+			}
+		}
+		for entry := range previous {
+			if _, kept := changed[entry]; !kept {
+				delete(current, entry)
+			}
+		}
+	}
+	for key, old := range before {
+		if _, kept := after[key]; kept {
+			continue
+		}
+		previous, wasObject := old.(object)
+		current, freshObject := fresh[key].(object)
+		if !wasObject || !freshObject {
+			delete(fresh, key)
+			continue
+		}
+		for entry := range previous {
+			delete(current, entry)
+		}
+		if len(current) == 0 {
+			delete(fresh, key)
+		}
+	}
 }
 
 var setupFlags = []string{"profile", "preset", "permissions", "updates", "router", "no-model", "no-lean", "no-ask", "config-dir", "account", "host", "code", "research", "planning", "digest", "explore", "fallback"}

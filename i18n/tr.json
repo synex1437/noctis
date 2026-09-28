@@ -366,6 +366,8 @@
   "install.configBroken": "%s okunamıyor (%s); hiçbir şey değiştirilmedi — dosyayı düzeltin ya da bir kenara taşıyın, sonra setup'ı tekrar çalıştırın",
   "install.configUnwritable": "%s yazılamadı (%s); ayarlara dokunulmadı — klasörünü yazılabilir yapıp setup'ı tekrar çalıştırın",
   "install.uninstallBroken": "%s okunamıyor (%s); hiçbir şey kaldırılmadı — dosyayı düzeltip kaldırmayı tekrar çalıştırın",
+  "install.settingsUnsaved": "%s olduğu gibi bırakıldı: başka bir süreç onu kilitli tuttu ya da okunamadı veya yazılamadı (nedeni %s dosyasında) — yazılabildiğinde setup'ı tekrar çalıştırın",
+  "install.undoUnsaved": "%s geri alınmadı: başka bir süreç onu kilitli tuttu ya da okunamadı veya yazılamadı (nedeni %s dosyasında); plugin yerinde bırakıldı — yazılabildiğinde kaldırmayı yeniden çalıştır",
   "install.undoByHand": "   ya da elle geri alın: setup'ın yazdığı statusLine, permissions.defaultMode, model, env.CLAUDE_CODE_EFFORT_LEVEL ve env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS değerlerini silin veya en eski settings.json.bak-* kopyasını geri yükleyin",
   "install.nested": "kaynak (%s) ve hedef (%s) iç içe; plugin klasörünü başka bir yere açıp tekrar çalıştırın",
   "install.copyFailed": "plugin kopyalanamadı: %w",

@@ -363,6 +363,8 @@
   "install.configBroken": "%s 를 읽을 수 없습니다(%s). 아무것도 바꾸지 않았습니다 — 파일을 고치거나 다른 곳으로 옮긴 뒤 설치를 다시 실행하세요",
   "install.configUnwritable": "%s 를 기록하지 못했습니다(%s). 설정은 그대로 두었습니다 — 폴더를 쓰기 가능하게 만든 뒤 설치를 다시 실행하세요",
   "install.uninstallBroken": "%s 를 읽을 수 없습니다(%s). 아무것도 제거하지 않았습니다 — 고친 뒤 제거를 다시 실행하세요",
+  "install.settingsUnsaved": "%s 는 그대로 두었습니다: 다른 프로세스가 잠근 채로 있었거나, 읽거나 쓸 수 없었습니다(이유는 %s 에 있습니다) — 쓸 수 있게 되면 설치를 다시 실행하세요",
+  "install.undoUnsaved": "%s 를 되돌리지 못했습니다: 다른 프로세스가 잠근 채로 있었거나, 읽거나 쓸 수 없었습니다(이유는 %s 에 있습니다). 플러그인은 그대로 두었습니다 — 쓸 수 있게 되면 제거를 다시 실행하세요",
   "install.undoByHand": "   또는 직접 되돌리세요: 설치가 넣은 statusLine, permissions.defaultMode, model, env.CLAUDE_CODE_EFFORT_LEVEL, env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS 을 지우거나, 가장 오래된 settings.json.bak-* 사본을 복원하세요",
   "install.nested": "원본(%s)과 대상(%s)이 서로 중첩되어 있습니다. 플러그인을 다른 곳에 풀고 다시 시도하세요",
   "install.copyFailed": "플러그인 복사 실패: %w",

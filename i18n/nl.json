@@ -363,6 +363,8 @@
   "install.configBroken": "%s is onleesbaar (%s); er is niets gewijzigd — herstel het bestand of zet het opzij en voer de setup opnieuw uit",
   "install.configUnwritable": "%s kon niet worden geschreven (%s); de instellingen zijn gebleven zoals ze waren — maak de map beschrijfbaar en voer de setup opnieuw uit",
   "install.uninstallBroken": "%s is onleesbaar (%s); er is niets verwijderd — herstel het en voer het verwijderen opnieuw uit",
+  "install.settingsUnsaved": "%s is gebleven zoals het was: een ander proces hield het vergrendeld, of het kon niet worden gelezen of geschreven (de reden staat in %s) — voer de setup opnieuw uit zodra het kan worden geschreven",
+  "install.undoUnsaved": "%s is niet teruggezet: een ander proces hield het vergrendeld, of het kon niet worden gelezen of geschreven (de reden staat in %s); de plugin is blijven staan — voer het verwijderen opnieuw uit zodra het kan worden geschreven",
   "install.undoByHand": "   of zet het met de hand terug: haal statusLine, permissions.defaultMode, model, env.CLAUDE_CODE_EFFORT_LEVEL en env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS weg waar de setup ze heeft gezet, of zet de oudste kopie settings.json.bak-* terug",
   "install.nested": "bron (%s) en doel (%s) zitten in elkaar; pak de plugin elders uit en probeer opnieuw",
   "install.copyFailed": "kopiëren van de plugin mislukt: %w",

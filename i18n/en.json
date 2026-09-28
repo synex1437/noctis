@@ -366,6 +366,8 @@
   "install.configBroken": "%s cannot be read (%s); nothing was changed — fix the file or move it aside, then run setup again",
   "install.configUnwritable": "%s could not be written (%s); settings were left as they were — make its folder writable, then run setup again",
   "install.uninstallBroken": "%s cannot be read (%s); nothing was removed — fix it, then run the uninstall again",
+  "install.settingsUnsaved": "%s was left as it was: another process kept it locked, or it could not be read or written (the reason is in %s) — run setup again once it can be written",
+  "install.undoUnsaved": "%s was not set back: another process kept it locked, or it could not be read or written (the reason is in %s); the plugin was left in place — run the uninstall again once it can be written",
   "install.undoByHand": "   or put it back by hand: remove statusLine, permissions.defaultMode, model, env.CLAUDE_CODE_EFFORT_LEVEL and env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS where setup set them, or restore the oldest settings.json.bak-* copy",
   "install.nested": "source (%s) and target (%s) are nested; unpack the plugin somewhere else and retry",
   "install.copyFailed": "plugin copy failed: %w",

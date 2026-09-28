@@ -363,6 +363,8 @@
   "install.configBroken": "%s jest nieczytelny (%s); nic nie zostało zmienione — napraw plik albo odłóż go na bok, a potem uruchom konfigurację ponownie",
   "install.configUnwritable": "nie udało się zapisać %s (%s); ustawienia zostały bez zmian — nadaj folderowi prawo zapisu i uruchom konfigurację ponownie",
   "install.uninstallBroken": "%s jest nieczytelny (%s); nic nie zostało usunięte — napraw go i uruchom odinstalowanie ponownie",
+  "install.settingsUnsaved": "%s został bez zmian: inny proces trzymał na nim blokadę albo nie dało się go odczytać lub zapisać (przyczyna jest w %s) — uruchom konfigurację ponownie, gdy da się go zapisać",
+  "install.undoUnsaved": "%s nie został przywrócony: inny proces trzymał na nim blokadę albo nie dało się go odczytać lub zapisać (przyczyna jest w %s); wtyczka została na miejscu — uruchom odinstalowanie ponownie, gdy da się go zapisać",
   "install.undoByHand": "   albo cofnij zmiany ręcznie: usuń statusLine, permissions.defaultMode, model, env.CLAUDE_CODE_EFFORT_LEVEL i env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS tam, gdzie ustawiła je konfiguracja, albo odtwórz najstarszą kopię settings.json.bak-*",
   "install.nested": "źródło (%s) i cel (%s) są zagnieżdżone; rozpakuj wtyczkę gdzie indziej i spróbuj ponownie",
   "install.copyFailed": "kopiowanie wtyczki nie powiodło się: %w",

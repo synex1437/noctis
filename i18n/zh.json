@@ -363,6 +363,8 @@
   "install.configBroken": "%s 无法读取（%s）；未做任何更改 — 请修复该文件或把它移到别处，然后重新运行安装",
   "install.configUnwritable": "%s 无法写入（%s）；设置保持原样 — 请让它所在的文件夹可写，然后重新运行安装",
   "install.uninstallBroken": "%s 无法读取（%s）；未移除任何内容 — 请修复它，然后重新运行卸载",
+  "install.settingsUnsaved": "%s 保持原样：另一个进程一直锁着它，或者无法读取或写入它（原因见 %s） — 等它可以写入后重新运行安装",
+  "install.undoUnsaved": "%s 未恢复：另一个进程一直锁着它，或者无法读取或写入它（原因见 %s）；插件保留原处 — 等它可以写入后重新运行卸载",
   "install.undoByHand": "   或者手动恢复：删除安装写入的 statusLine、permissions.defaultMode、model、env.CLAUDE_CODE_EFFORT_LEVEL 和 env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS，或还原最早的 settings.json.bak-* 副本",
   "install.nested": "源目录（%s）与目标目录（%s）互相嵌套；请把插件解压到别处再试",
   "install.copyFailed": "复制插件失败：%w",

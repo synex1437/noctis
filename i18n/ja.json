@@ -363,6 +363,8 @@
   "install.configBroken": "%s を読み取れません（%s）。何も変更していません — ファイルを直すか別の場所に移してから、セットアップをやり直してください",
   "install.configUnwritable": "%s を書き込めませんでした（%s）。設定はそのままです — フォルダーを書き込み可能にしてから、セットアップをやり直してください",
   "install.uninstallBroken": "%s を読み取れません（%s）。何も削除していません — 直してから、アンインストールをやり直してください",
+  "install.settingsUnsaved": "%s はそのままです: 別のプロセスがロックしたままだったか、読み書きできませんでした（理由は %s にあります） — 書き込めるようになったら、セットアップをやり直してください",
+  "install.undoUnsaved": "%s を元に戻せませんでした: 別のプロセスがロックしたままだったか、読み書きできませんでした（理由は %s にあります）。プラグインはそのまま残しています — 書き込めるようになったら、アンインストールをやり直してください",
   "install.undoByHand": "   または手作業で元に戻してください: セットアップが設定した statusLine、permissions.defaultMode、model、env.CLAUDE_CODE_EFFORT_LEVEL、env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS を削除するか、いちばん古い settings.json.bak-* のコピーを戻します",
   "install.nested": "コピー元（%s）とコピー先（%s）が入れ子になっています。別の場所にプラグインを展開してやり直してください",
   "install.copyFailed": "プラグインのコピーに失敗しました: %w",
