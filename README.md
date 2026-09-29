@@ -23,7 +23,7 @@ You queued forty tasks, went to bed, and woke up to *"You've hit your session li
 
 - **Pauses before the limit, not after the 429.** At 92 % of the 5-hour window and 95 % of the weekly one by default, or earlier when a burst or the burn rate says the next turns would cross it, after a checkpoint of the last request, the touched files, `git status`, todos and the next jobs.
 - **Auto-resumes the same session.** A reset within about 5½ hours is waited out inside the turn, context intact. A later one, such as the weekly limit, relaunches `claude --resume` from Task Scheduler, launchd or systemd, even days later and even after Claude Code was closed; Windows, and Linux with `CAP_WAKE_ALARM`, can wake the machine for it.
-- **Works through a task queue.** `/noctis:start jobs.md` runs the jobs in a file in order without stopping to ask; a long prompt with several tasks becomes such a list by itself; a `TASKS.md` you trust drives every session, with priorities, dependencies and GitHub issues.
+- **Works through a task queue.** `/noctis:start jobs.md` runs the jobs in a file in order without stopping to ask; a long prompt with several tasks becomes such a list by itself; a `TASKS.md` you trust drives every session, with priorities, dependencies and GitHub issues. Steps marked `(human)` wait for you, a `noctis-verify` line runs your checks between items, and long builds run as background jobs the queue waits for.
 - **Never spends paid usage credits.** It stops at 100 % of a window even when the thresholds are off, and refuses a fan-out workflow that would not fit in what is left.
 - **Zero tokens per decision.** Fixed rules over your usage data, and every decision logged (`noctis why`). One self-contained Go binary, about 5 ms per hook on Linux; no Node, Git Bash or compiler.
 - **The right model for each job.** Code on Opus 5.5 · max by default, or on Sonnet 5.5 · high to spend less (Balanced), file search and output digests on Haiku 4.5, and, with the router on, research and writing in a subagent of their own.
@@ -113,7 +113,13 @@ An API key has no usage windows, so the limit guard has nothing to act on, and t
 <details>
 <summary><b>Can a cloned repository's TASKS.md make Claude run things?</b></summary>
 
-Not until you trust it. A `TASKS.md` drives nothing until you type `!noctis queue trust`, and a line added or changed later stops it again until you trust it anew. When Claude runs `noctis queue trust` itself, the hook refuses the call. [Queue file](docs/GUIDE.md#queue-file).
+Not until you trust it. A `TASKS.md` drives nothing until you type `!noctis queue trust`, and a line added or changed later stops it again until you trust it anew. When Claude runs `noctis queue trust` itself, the hook refuses the call. A check command the file names on a `noctis-verify` line runs only while your trust covers that line. [Queue file](docs/GUIDE.md#queue-file).
+</details>
+
+<details>
+<summary><b>Can it carry a large project on a server for days?</b></summary>
+
+That is what the queue is for. Run `claude` inside tmux on the server, write the plan as a `TASKS.md` with priorities, dependencies and a `noctis-verify` check line, mark the steps only you can do `(human)`, and trust the file once you have read it. Claude works through it and commits as it goes, runs long builds as `noctis job` jobs, sets aside what waits on something outside the session, and stops with the list of what is yours once nothing else is left; a relaunch after a long wait opens as a new tmux window, and `noctis queue status --json` tells a monitoring script where the queue stands. [Large projects on a server](docs/GUIDE.md#large-projects-on-a-server).
 </details>
 
 <details>
@@ -137,7 +143,7 @@ Every push runs the Go tests on Linux, macOS and Windows, fuzzing, a lab that dr
 
 ## Documentation
 
-- [Guide](docs/GUIDE.md): what it changes and how to undo it, the queue format, what it does while you are away, lean compaction, the status line, install details and the other AI coding tools
+- [Guide](docs/GUIDE.md): what it changes and how to undo it, the queue format, what it does while you are away, large projects on a server, lean compaction, the status line, install details and the other AI coding tools
 - [Reference](docs/REFERENCE.md): every command, flag, configuration key and file
 - [Testing](docs/TESTING.md): what each suite asks and what the latest runs measured
 - [Release notes](https://github.com/synex1437/noctis/releases)

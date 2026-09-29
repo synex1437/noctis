@@ -23,7 +23,7 @@ Kuyruğa kırk iş koyup yattınız; sabah sizi 01:40'ta düşmüş bir *"You've
 
 - **Limitten önce duraklar, 429'dan sonra değil.** Varsayılan olarak 5 saatlik pencerenin %92'sinde, haftalığın %95'inde; ani bir yükseliş ya da yakım hızı sonraki turların limiti aşacağını söylüyorsa daha erken. Duraklamadan önce son isteğin, dokunulan dosyaların, `git status`'un, yapılacakların ve sıradaki işlerin checkpoint'ini alır.
 - **Aynı oturumu kendiliğinden sürdürür.** Yaklaşık 5½ saat içindeki bir sıfırlanma tur içinde beklenir, bağlam korunur. Haftalık limit gibi daha geç bir sıfırlanmada oturum Task Scheduler, launchd ya da systemd'den `claude --resume` ile yeniden başlatılır; günler sonra da, Claude Code kapatılmış olsa da. Windows ve `CAP_WAKE_ALARM` ile Linux bunun için makineyi uyandırabilir.
-- **Bir iş kuyruğunu bitirir.** `/noctis:start deneme.md` bir dosyadaki işleri durup sormadan sırayla yürütür; birkaç iş içeren uzun bir istem kendiliğinden böyle bir listeye dönüşür; izin verdiğiniz bir `TASKS.md` her oturumu sürükler — öncelikler, bağımlılıklar, GitHub issue'ları.
+- **Bir iş kuyruğunu bitirir.** `/noctis:start deneme.md` bir dosyadaki işleri durup sormadan sırayla yürütür; birkaç iş içeren uzun bir istem kendiliğinden böyle bir listeye dönüşür; izin verdiğiniz bir `TASKS.md` her oturumu sürükler — öncelikler, bağımlılıklar, GitHub issue'ları. `(insan)` işaretli adımlar sizi bekler, bir `noctis-verify` satırı maddeler arasında denetimlerinizi çalıştırır, uzun derlemeler de kuyruğun beklediği arka plan işleri olarak çalışır.
 - **Ücretli kullanım kredisi harcamaz.** Eşikler kapalı olsa bile bir pencerenin %100'ünde durur ve kalan paya sığmayacak çok parçalı bir workflow'u reddeder.
 - **Karar başına sıfır token.** Kullanım verileriniz üzerinde sabit kurallar işler ve her karar kaydedilir (`noctis why`). Kendi başına çalışan tek bir Go binary'si, Linux'ta hook başına yaklaşık 5 ms; Node, Git Bash, derleyici gerekmez.
 - **Her işe uygun model.** Varsayılan olarak kod Opus 5.5 · max'ta, daha az harcamak için Sonnet 5.5 · high'da (Balanced), dosya arama ve çıktı özetleri Haiku 4.5'te; yönlendirici açıkken araştırma ve yazı kendi alt-ajanında.
@@ -113,7 +113,13 @@ API anahtarında kullanım pencereleri olmaz; bu yüzden limit korumasının izl
 <details>
 <summary><b>Klonlanan bir deponun TASKS.md'si Claude'a iş yaptırabilir mi?</b></summary>
 
-Siz izin verene kadar hayır. Bir `TASKS.md`, siz `!noctis queue trust` yazana kadar hiçbir şeyi sürüklemez; sonradan eklenen ya da değişen bir satır, siz yeniden izin verene kadar onu yine durdurur. Claude `noctis queue trust`'ı kendisi çalıştırırsa hook bu çağrıyı reddeder. [Kuyruk dosyası](docs/GUIDE.tr.md#kuyruk-dosyası).
+Siz izin verene kadar hayır. Bir `TASKS.md`, siz `!noctis queue trust` yazana kadar hiçbir şeyi sürüklemez; sonradan eklenen ya da değişen bir satır, siz yeniden izin verene kadar onu yine durdurur. Claude `noctis queue trust`'ı kendisi çalıştırırsa hook bu çağrıyı reddeder. Dosyanın bir `noctis-verify` satırında adını verdiği denetim komutu da yalnızca verdiğiniz güven o satırı kapsadığı sürece çalışır. [Kuyruk dosyası](docs/GUIDE.tr.md#kuyruk-dosyası).
+</details>
+
+<details>
+<summary><b>Büyük bir projeyi sunucuda günlerce yürütebilir mi?</b></summary>
+
+Kuyruk bunun için var. Sunucuda `claude`'u tmux içinde çalıştırın, planı öncelikleri, bağımlılıkları ve bir `noctis-verify` denetim satırı olan bir `TASKS.md` olarak yazın, yalnızca sizin yapabileceğiniz adımları `(insan)` ile işaretleyin ve dosyayı okuduktan sonra ona bir kez güvenin. Claude onu yürütür ve yol boyunca commit atar, uzun derlemeleri `noctis job` işleri olarak çalıştırır, oturum dışındaki bir şeyi bekleyeni kenara alır ve başka iş kalmayınca sizde olanların listesiyle durur; uzun bir beklemeden sonraki yeniden başlatma tmux'ta yeni bir pencere olarak açılır, `noctis queue status --json` de bir izleme betiğine kuyruğun nerede olduğunu söyler. [Sunucuda büyük projeler](docs/GUIDE.tr.md#sunucuda-büyük-projeler).
 </details>
 
 <details>
@@ -137,7 +143,7 @@ Her push'ta Linux, macOS ve Windows'ta Go testleri, fuzzing, hook'ları Claude C
 
 ## Belgeler
 
-- [Rehber](docs/GUIDE.tr.md): neyi değiştirdiği ve nasıl geri alınacağı, kuyruk biçimi, siz yokken ne yaptığı, yalın sıkıştırma, durum çubuğu, kurulum ayrıntıları ve diğer yapay zekâ kodlama araçları
+- [Rehber](docs/GUIDE.tr.md): neyi değiştirdiği ve nasıl geri alınacağı, kuyruk biçimi, siz yokken ne yaptığı, sunucuda büyük projeler, yalın sıkıştırma, durum çubuğu, kurulum ayrıntıları ve diğer yapay zekâ kodlama araçları
 - [Referans](docs/REFERENCE.md): her komut, bayrak, yapılandırma anahtarı ve dosya (İngilizce)
 - [Testler](docs/TESTING.md): her test takımının neyi sorduğu ve son çalıştırmaların ölçtükleri (İngilizce)
 - [Sürüm notları](https://github.com/synex1437/noctis/releases)
