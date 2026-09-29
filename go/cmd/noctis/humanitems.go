@@ -36,8 +36,13 @@ func humanItemNames(view queueView) (note, notice string) {
 // stopForWaitingItems lets the session stop when every open item left is the user's, is deferred,
 // or waits for one of those. The user hears it once per set of open items and deferrals; the queue
 // stays, so ticking an item, or taking a deferred one up again, and typing a prompt goes on with
-// the items that waited for it.
-func stopForWaitingItems(cfg, state object, sid, queuePath, content, label string, view queueView, now int64) {
+// the items that waited for it. When a deferral with an end holds an item that could go on then,
+// the hook waits for it if it may wait that long (waitForDeferral); otherwise a wake resumes the
+// session then (armQueueWake).
+func stopForWaitingItems(cfg, state, input object, sid, queuePath, content, label string, view queueView, now int64) {
+	if waitForDeferral(cfg, state, input, sid, queuePath, label, view, now) {
+		return
+	}
 	key := fmt.Sprintf("waiting:%s:%s:%s:%s", sid, queuePath, openEntriesDigest(content), deferralDigest(view))
 	told := getMap(state, "notified")[key] != nil
 	updateState(func(next object) {
@@ -46,6 +51,7 @@ func stopForWaitingItems(cfg, state object, sid, queuePath, content, label strin
 	})
 	journal(sid, "Stop", "allow-stop", "queue waits on the user", object{"open": view.total, "human": view.human, "deferred": view.deferred})
 	logInfo("queue %s of %s waits on %d item(s) marked (human) and %d deferred, %d open item(s) blocked; stop allowed", queuePath, sid, view.human, view.deferred, view.blocked)
+	wake := armQueueWake(cfg, input, sid, queuePath, label, view.freeAt, "")
 	if told || observing {
 		return
 	}
@@ -63,7 +69,15 @@ func stopForWaitingItems(cfg, state object, sid, queuePath, content, label strin
 	if view.deferred > 0 {
 		_, names := deferredNames(view)
 		notify(cfg, pluginName, T("queue.deferredNotify", view.deferred, label, names))
-		messages = append(messages, T("queue.deferredMessage", view.deferred, label, names, pluginName))
+		message := T("queue.deferredMessage", view.deferred, label, names, pluginName)
+		switch {
+		case wake <= 0:
+		case getString(section(cfg, "resume"), "mode") == "none":
+			message += " " + T("queue.deferredWakeTell", formatTime(wake))
+		default:
+			message += " " + T("queue.deferredWake", formatTime(wake))
+		}
+		messages = append(messages, message)
 	}
 	emit(object{"systemMessage": joinNotices(messages...)})
 }

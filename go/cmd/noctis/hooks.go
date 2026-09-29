@@ -381,6 +381,8 @@ func onSessionEnd(input, _ object) {
 		if wait := getMap(getMap(state, "waits"), sid); wait != nil && hookSleeping(wait) && clearWait(sid, state) {
 			logInfo("/clear ended %s: the wait its hook slept on is released", sid)
 		}
+		// Nor may a wake set for when a deferral of its queue ends.
+		dropQueueWake(sid, "")
 	}
 	updateState(func(state object) {
 		delete(stateMap(state, "modelOverrides"), sid)
@@ -549,6 +551,8 @@ func onUserPromptSubmit(input, cfg object) {
 	now := nowSec()
 	sid := sessionKey(input)
 	state := readState()
+	// A prompt takes the queue up again: a wake set for when a deferral ends is moot now.
+	dropQueueWakes(cfg, state, input, sid)
 	if controlCommand(getString(input, "prompt")) == "/"+pluginName+":stop" {
 		onStopPrompt(input, cfg, sid)
 		return
@@ -1630,7 +1634,7 @@ func onStop(input, cfg object) {
 			return
 		}
 		if snapshot.human > 0 || snapshot.deferred > 0 {
-			stopForWaitingItems(cfg, state, sid, queuePath, content, queueLabel, snapshot, now)
+			stopForWaitingItems(cfg, state, input, sid, queuePath, content, queueLabel, snapshot, now)
 			return
 		}
 		driven := getMap(getMap(state, "stopGuard"), sid) != nil || isAutoQueue(queuePath)
@@ -1665,7 +1669,7 @@ func onStop(input, cfg object) {
 			return
 		}
 		if snapshot.human > 0 || snapshot.deferred > 0 {
-			stopForWaitingItems(cfg, state, sid, queuePath, content, queueLabel, snapshot, now)
+			stopForWaitingItems(cfg, state, input, sid, queuePath, content, queueLabel, snapshot, now)
 			return
 		}
 		// Every open item is blocked here: the user hears of these items once, as of a queue that
@@ -1850,7 +1854,7 @@ func onStop(input, cfg object) {
 	if snapshot.blocked > 0 {
 		blockedNote = fmt.Sprintf(" %d item(s) wait on unfinished dependencies and are not eligible yet.", snapshot.blocked)
 	}
-	blockedNote += humanItemsRule(snapshot) + deferredRule(snapshot, queuePath)
+	blockedNote += endedDeferralRule() + humanItemsRule(snapshot) + deferredRule(snapshot, queuePath)
 	if numberOr(guard, "idle", 0) > 0 {
 		// Claude stopped without ticking or committing anything: the item may wait on something only
 		// the user has.
@@ -1890,7 +1894,7 @@ func onStop(input, cfg object) {
 		reason = waitContext + "\n" + reason
 	}
 	output := object{"decision": "block", "reason": reason}
-	if systemMessage = joinNotices(systemMessage, result.notice, unmatchedNotice, emptyNotice); systemMessage != "" {
+	if systemMessage = joinNotices(systemMessage, result.notice, endedDeferralNotice(), unmatchedNotice, emptyNotice); systemMessage != "" {
 		output["systemMessage"] = systemMessage
 	}
 	emit(output)

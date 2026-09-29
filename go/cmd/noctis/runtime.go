@@ -776,6 +776,9 @@ func mergeInto(target, source object) {
 }
 
 func readyNotice(wait object, release string, now int64, tail string) string {
+	if getString(wait, "window") == "queue" {
+		return T("wait.queueReady", getString(wait, "label"), tail)
+	}
 	if release != "reset" && dataPause(wait) && float64(now) < numberOr(wait, "until", 0) {
 		return T("wait.dataReady", getString(wait, "label"), tail)
 	}
