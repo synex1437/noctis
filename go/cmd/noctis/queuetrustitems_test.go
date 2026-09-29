@@ -32,7 +32,7 @@ func TestAnItemAddedAfterTheTrustStopsTheQueueFromDriving(t *testing.T) {
 	if getString(output, "decision") == "block" {
 		t.Fatalf("an item added after the trust drove the Stop hook: %v", output)
 	}
-	if want := T("queue.trustChanged", "TASKS.md", 1, pluginName); getString(output, "systemMessage") != want {
+	if want := T("queue.trustChangedNotice", "TASKS.md", 1, pluginName); getString(output, "systemMessage") != want {
 		t.Fatalf("the Stop hook did not say that TASKS.md gained an item nobody trusted:\n got %q\nwant %q", getString(output, "systemMessage"), want)
 	}
 	if output := stopHookOutput(t, stopInput("ti1", project), cfg); output != nil {
@@ -114,7 +114,7 @@ func TestALineOutsideTheItemsAddedAfterTheTrustStopsTheQueueFromDriving(t *testi
 			if getString(output, "decision") == "block" {
 				t.Fatalf("a %s added after the trust, which Claude reads with the items, let TASKS.md drive the Stop hook: %v", name, output)
 			}
-			if want := T("queue.trustChanged", "TASKS.md", added.count, pluginName); getString(output, "systemMessage") != want {
+			if want := T("queue.trustChangedNotice", "TASKS.md", added.count, pluginName); getString(output, "systemMessage") != want {
 				t.Fatalf("the Stop hook did not say what changed since the trust:\n got %q\nwant %q", getString(output, "systemMessage"), want)
 			}
 			if printed := queueImportOutput(t, "queue", "status", "--file", queuePath); !strings.Contains(printed, added.shown) || strings.Contains(printed, "migrate the users table") {
@@ -133,7 +133,7 @@ func TestReopeningAnItemTickedAtTheTrustNeedsTheTrustAgain(t *testing.T) {
 	if getString(output, "decision") == "block" {
 		t.Fatalf("an item that was ticked when TASKS.md was trusted, reopened since, drove the Stop hook: %v", output)
 	}
-	if want := T("queue.trustChanged", "TASKS.md", 1, pluginName); getString(output, "systemMessage") != want {
+	if want := T("queue.trustChangedNotice", "TASKS.md", 1, pluginName); getString(output, "systemMessage") != want {
 		t.Fatalf("the Stop hook did not say that one item changed since the trust:\n got %q\nwant %q", getString(output, "systemMessage"), want)
 	}
 	if printed := queueImportOutput(t, "queue", "status", "--file", queuePath); !strings.Contains(printed, "- [ ] drop the staging database") || strings.Contains(printed, "write the release notes") {
@@ -234,7 +234,7 @@ func TestSessionStartSaysHowManyItemsAreNewSinceTheTrust(t *testing.T) {
 	if context := contextOf(output); strings.Contains(context, "TASKS.md") {
 		t.Fatalf("a TASKS.md with items nobody trusted got the queue instructions at session start: %q", context)
 	}
-	if want := T("queue.trustChanged", "TASKS.md", 2, pluginName); !strings.Contains(getString(output, "systemMessage"), want) {
+	if want := T("queue.trustChangedNotice", "TASKS.md", 2, pluginName); !strings.Contains(getString(output, "systemMessage"), want) {
 		t.Fatalf("session start did not say that two items are new since the trust:\n got %q\nwant %q", getString(output, "systemMessage"), want)
 	}
 }

@@ -223,7 +223,7 @@ func onSessionStart(input, cfg object) {
 				case legacy:
 					queueNotice = T("queue.trustLegacy", filepath.Base(queuePath), pluginName)
 				case len(changed) > 0:
-					queueNotice = T("queue.trustChanged", filepath.Base(queuePath), len(changed), pluginName)
+					queueNotice = T("queue.trustChangedNotice", filepath.Base(queuePath), len(changed), pluginName)
 				}
 			}
 			logInfo("queue file %s found but not trusted (%d open, %d added or changed since a trust, record from an older noctis: %t): no directive injected", queuePath, snapshot.total, len(changed), legacy)
@@ -1555,7 +1555,7 @@ func allowFileRequest(sid, tool, path, action, role string) {
 }
 
 func noteQueueTrustGap(sid, queuePath string, changed []string, legacy bool, now int64) {
-	mark, notice := queueItemDigest(strings.Join(changed, "\n")), T("queue.trustChanged", filepath.Base(queuePath), len(changed), pluginName)
+	mark, notice := queueItemDigest(strings.Join(changed, "\n")), T("queue.trustChangedNotice", filepath.Base(queuePath), len(changed), pluginName)
 	if legacy {
 		mark, notice = "legacy", T("queue.trustLegacy", filepath.Base(queuePath), pluginName)
 	}

@@ -39,6 +39,8 @@ func TestOtherShellCallsPassTheQueueTrustCheck(t *testing.T) {
 	for _, command := range []string{
 		"ls -la",
 		"noctis queue status",
+		"noctis queue status --json",
+		"noctis queue verify",
 		"noctis queue untrust",
 		`grep -rn "noctis queue trust" docs/`,
 		`git commit -m "queue: say that noctis queue trust is typed by the user"`,

@@ -17,7 +17,7 @@ func TestHelpSaysWhatEachCommandDoes(t *testing.T) {
 		"help.cmd.check":      {"10", "11", "20"},
 		"help.cmd.checkpoint": {"NONE"},
 		"help.cmd.model":      {"--sid <id>"},
-		"help.cmd.queue":      {"queue import", "trust", "untrust", "status"},
+		"help.cmd.queue":      {"queue import", "trust", "untrust", "status", "verify"},
 		"help.cmd.job":        {"job run", "list", "stop", "forget"},
 		"help.cmd.cancel":     {"noctis cancel <id>"},
 		"help.cmd.setup":      {"settings.json"},

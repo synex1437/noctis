@@ -160,9 +160,15 @@ func ghCommand(cwd string, arguments ...string) ([]byte, error) {
 func runQueueTrust(cfg object, cwd, action string) {
 	target := flagString("file")
 	if target == "" {
-
 		if target = queueFileFor(cfg, cwd, flagString("sid")); target == "" {
+			if action == "status" && args.present["json"] {
+				fmt.Println(`{"file":""}`)
+				return
+			}
 			fmt.Println(T("queue.trustNone", strings.Join(queueFileNames(cfg), ", ")))
+			if action == "verify" {
+				os.Exit(1)
+			}
 			return
 		}
 	} else if !filepath.IsAbs(target) {
@@ -178,10 +184,19 @@ func runQueueTrust(cfg object, cwd, action string) {
 	switch action {
 	case "defer", "undefer":
 		runQueueDefer(target, action)
+	case "verify":
+		if status := verifyQueueNow(cfg, cwd, target); status != 0 {
+			os.Exit(status)
+		}
 	case "trust":
+		_, changed, _ := queueTrustGap(cfg, target)
 		trustQueueFile(target, true)
 		rememberOpenIssues(cfg, target)
 		fmt.Println(T("queue.trustGranted", target))
+		if len(changed) > 0 {
+			fmt.Println(T("queue.trustIncludes", len(changed)))
+			printChangedItems(changed)
+		}
 		view := queueSnapshot(target)
 		printUnmatchedReferences(target, view)
 		printEmptyLines(target, view)
@@ -193,6 +208,10 @@ func runQueueTrust(cfg object, cwd, action string) {
 		fmt.Println(T("queue.trustRevoked", target))
 	default:
 		view := queueSnapshot(target)
+		if args.present["json"] {
+			fmt.Println(string(marshalCompact(queueStatusFacts(cfg, target, view))))
+			return
+		}
 		trusted, changed, legacy := queueTrustGap(cfg, target)
 		switch {
 		case trusted:
@@ -201,21 +220,19 @@ func runQueueTrust(cfg object, cwd, action string) {
 			fmt.Println(T("queue.trustLegacy", filepath.Base(target), pluginName))
 		case len(changed) > 0:
 			fmt.Println(T("queue.trustChanged", filepath.Base(target), len(changed), pluginName))
-			shown := map[string]bool{}
-			for _, text := range changed {
-				if line := printableItem(text); !shown[line] {
-					shown[line] = true
-					fmt.Println("  " + line)
-				}
-			}
+			printChangedItems(changed)
 		default:
 			fmt.Println(T("queue.trustAsk", filepath.Base(target), view.total, pluginName))
+		}
+		if trusted {
+			printQueueProgress(target, view)
 		}
 		printUnmatchedReferences(target, view)
 		printEmptyLines(target, view)
 		printHumanItems(target, view)
 		printDeferrals(target, view)
 		printQueueCheck(cfg, target)
+		printQueueHold(cfg, target)
 	}
 }
 
@@ -229,6 +246,9 @@ func printQueueCheck(cfg object, target string) {
 		fmt.Println(T("queue.verifyFromFile", printableItem(command)))
 	case line != "":
 		fmt.Println(T("queue.verifyWaits", printableItem(line)))
+		if command != "" {
+			fmt.Println(T("queue.verifyFromConfig", printableItem(command)))
+		}
 	case command != "":
 		fmt.Println(T("queue.verifyFromConfig", printableItem(command)))
 	}
@@ -270,7 +290,7 @@ func printUnmatchedReferences(target string, view queueView) {
 
 func runQueue() {
 	action := positional(1)
-	if action != "import" && action != "trust" && action != "untrust" && action != "status" && action != "defer" && action != "undefer" {
+	if action != "import" && action != "trust" && action != "untrust" && action != "status" && action != "verify" && action != "defer" && action != "undefer" {
 		fmt.Fprintln(os.Stderr, T("queue.usage"))
 		os.Exit(2)
 	}

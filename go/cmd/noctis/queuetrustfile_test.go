@@ -74,12 +74,20 @@ func TestQueueStatusAndTrustNameAnAfterReferenceThatMatchesNoItemAndLeaveFreeTex
 	queueCLI := func(argv ...string) cliRun {
 		return startNoctisCLIAt(t, home, "", nil, append([]string{"queue"}, argv...)...)()
 	}
+	// Only the warning is checked for the silent words: status also names the next item, whose text
+	// carries #auth.
 	named := func(run cliRun) bool {
-		if run.code != 0 || !strings.Contains(run.stdout, "#Atuh, 42.") || strings.Count(run.stdout, "⚠") != 1 || strings.Count(run.stdout, "#Atuh") != 1 {
+		warning := ""
+		for _, line := range strings.Split(run.stdout, "\n") {
+			if strings.Contains(line, "⚠") {
+				warning = line
+			}
+		}
+		if run.code != 0 || !strings.Contains(warning, "#Atuh, 42.") || strings.Count(run.stdout, "⚠") != 1 || strings.Count(run.stdout, "#Atuh") != 1 {
 			return false
 		}
 		for _, silent := range []string{"#atuh", "#auth", "#tidy", "release", "password", "#12", "review", "#café"} {
-			if strings.Contains(run.stdout, silent) {
+			if strings.Contains(warning, silent) {
 				return false
 			}
 		}
