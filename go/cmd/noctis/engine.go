@@ -32,7 +32,7 @@ var (
 	queueHeading       = lazyRegexp(`^\s*#{1,6}\s`)
 	queuePriority      = lazyRegexp(`(?i)\(p([0-9])\)`)
 	queueAfter         = lazyRegexp(`(?i)\(after\s+([^)]+)\)`)
-	queueTag           = lazyRegexp(`#([A-Za-z][\w-]*)`)
+	queueTag           = lazyRegexp(`#(\pL[\pL\pN_-]*)`)
 	queueHuman         = lazyRegexp(`(?i)\((?:human|insan)\)`)
 	queueReference     = lazyRegexp(`^(?:\d+|#\pL[\pL\pN_-]*|(?:` + issueRepoPattern + `)?#\d+)$`)
 )
@@ -473,9 +473,19 @@ func newQueueEntry(ordinal int, text string, checked bool) queueEntry {
 		}
 	}
 	for _, found := range queueTag.FindAllStringSubmatch(queueAfter.ReplaceAllString(entry.text, ""), -1) {
-		entry.tags[strings.ToLower(found[1])] = true
+		entry.tags[foldTag(found[1])] = true
 	}
 	return entry
+}
+
+// tagFolding takes Turkish's dotted and dotless i for one letter once strings.ToLower has mapped İ
+// to i and a combining dot, and I to i rather than ı.
+var tagFolding = strings.NewReplacer("\u0307", "", "ı", "i")
+
+// foldTag is how tags and (after …) references compare: letter case aside, #İşlem, #işlem, #IŞIK
+// and #ışık as a Turkish writer means them.
+func foldTag(text string) string {
+	return tagFolding.Replace(strings.ToLower(text))
 }
 
 var readQueueText = func(file string) (string, bool) {
@@ -541,7 +551,7 @@ func queueSnapshotOf(file, content string) queueView {
 		doneByOrdinal[entry.ordinal] = entry.checked || entry.text == ""
 	}
 	satisfied := func(self queueEntry, reference string) (done, matched bool) {
-		reference = strings.ToLower(reference)
+		reference = foldTag(reference)
 		key := ""
 		if at := strings.LastIndexByte(reference, '#'); at >= 0 {
 			number := reference[at+1:]

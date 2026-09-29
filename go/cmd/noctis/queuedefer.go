@@ -138,7 +138,7 @@ func matchQueueItems(content, reference string) ([]queueEntry, []queueEntry) {
 	matched := []queueEntry{}
 	if tag, found := strings.CutPrefix(reference, "#"); found && tag != "" {
 		for _, entry := range open {
-			if entry.tags[strings.ToLower(tag)] {
+			if entry.tags[foldTag(tag)] {
 				matched = append(matched, entry)
 			}
 		}

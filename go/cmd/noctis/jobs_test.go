@@ -182,6 +182,16 @@ func TestAJobStopEndsTheCommandAndWhatItStarted(t *testing.T) {
 	if after := string(cliRead(t, files.state)); after != before {
 		t.Fatal("a refused job still changed noctis's state")
 	}
+	if err := os.Symlink(files.state, filepath.Join(lab.project, "link.log")); err == nil {
+		if clobber := lab.noctis("job", "run", "--log", "link.log", "--", "echo overwritten"); clobber.code != 2 || !strings.Contains(clobber.stderr, "noctis keeps its own files") {
+			t.Fatalf("a job's log was let overwrite noctis's state through a link:\n%s", clobber)
+		}
+		if after := string(cliRead(t, files.state)); after != before {
+			t.Fatal("a job refused for its linked log still changed noctis's state")
+		}
+	} else if !isWindows {
+		t.Fatal(err)
+	}
 }
 
 func TestADoubleDashEndsWhatNoctisReadsAsItsOwn(t *testing.T) {

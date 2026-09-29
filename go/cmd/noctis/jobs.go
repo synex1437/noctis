@@ -111,8 +111,9 @@ func startJob() {
 	if logPath != "" && !filepath.IsAbs(logPath) {
 		logPath = filepath.Join(folder, logPath)
 	}
-	// A log named among noctis's own files would overwrite one of them.
-	if logPath != "" && isInside(filepath.Clean(logPath), files.guardDir) && !isInside(filepath.Clean(logPath), jobsDir()) {
+	// A log named among noctis's own files, or reaching one of them through a link, would overwrite
+	// it: the PreToolUse hook keeps Claude's writes off those files, and a job's log is one.
+	if logPath != "" && ((isInside(filepath.Clean(logPath), files.guardDir) && !isInside(filepath.Clean(logPath), jobsDir())) || noctisOwnFile(logPath, folder) != "") {
 		fmt.Fprintln(os.Stderr, T("job.logFailed", logPath, errors.New("noctis keeps its own files in that folder")))
 		os.Exit(2)
 	}
