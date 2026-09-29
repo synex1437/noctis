@@ -253,14 +253,14 @@ async function scenarioWorkspaceGuard(acc) {
   fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n');
   git('add', '.');
   git('commit', '-q', '-m', 'init');
-  acc.statusline('wg1', 'claude-fable-5-1', 100, now + 3, 23, now + 3 * 86400);
+  acc.statusline('wg1', 'claude-fable-5-1', 100, nowSec() + 3, 23, now + 3 * 86400);
   const child = acc.hookAsync({ hook_event_name: 'UserPromptSubmit', session_id: 'wg1', cwd: repo, transcript_path: TRANSCRIPT, prompt: 'keep going with a.txt' });
   let stdout = '';
   child.stdout.on('data', (chunk) => {
     stdout += chunk;
   });
   const wg1 = await waitRecord(acc, 'wg1');
-  check('workspace guard: fingerprint stored with the wait', typeof wg1.tree === 'string' && wg1.tree.length === 16, true);
+  check('workspace guard: fingerprint stored with the wait', Boolean(wg1) && typeof wg1.tree === 'string' && wg1.tree.length === 16, true);
   fs.writeFileSync(path.join(repo, 'a.txt'), 'someone edited this while it waited\n');
   await new Promise((resolve) => child.on('close', resolve));
   check('workspace guard: user notice mentions the changed tree', stdout.includes('çalışma ağacı değişti'), true);
