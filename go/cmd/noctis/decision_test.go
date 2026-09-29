@@ -331,12 +331,23 @@ func TestTornStateReadDoesNotRollBackToTheBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	go func() {
-		time.Sleep(30 * time.Millisecond)
-		_ = os.WriteFile(files.state, whole, 0o600)
-	}()
+	// The write finishes while the reader waits after its torn read. A writer that slept 30 ms
+	// raced the reader's retries instead, and on a busy runner the retries ran out first.
+	waits := 0
+	beforeStateReread = func() {
+		waits++
+		if waits == 1 {
+			if err := os.WriteFile(files.state, whole, 0o600); err != nil {
+				t.Error(err)
+			}
+		}
+	}
+	t.Cleanup(func() { beforeStateReread = nil })
 
 	state, _ := readStoredState()
+	if waits == 0 {
+		t.Fatal("the reader took the torn state.json without waiting for it to be whole")
+	}
 	if getMap(getMap(state, "waits"), "fresh") == nil {
 		t.Fatal("a torn read rolled state back and lost a parked session")
 	}

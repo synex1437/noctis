@@ -1155,6 +1155,10 @@ func stateProblem(result strictRead) string {
 	return "not a JSON object"
 }
 
+// beforeStateReread, set by the tests, runs each time a reader waits to read an unusable state.json
+// again, so a test can finish a write there instead of racing the wait.
+var beforeStateReread func()
+
 // readStoredState lends the kept parse of state.json: readStateWithBytes copies it, peekState does
 // not. It is for a reader that does not hold state.lock.
 func readStoredState() (object, []byte) {
@@ -1176,6 +1180,9 @@ func readStoredStateHolding(holding bool) (object, []byte) {
 	}
 
 	for attempt := 0; attempt < 4 && !(primary.ok && primary.data != nil); attempt++ {
+		if beforeStateReread != nil {
+			beforeStateReread()
+		}
 		time.Sleep(25 * time.Millisecond)
 		primary = readJSONShared(files.state)
 	}
