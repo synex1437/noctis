@@ -432,27 +432,57 @@ func launchInDesktopTerminal(cfg object, launch launchSpec, claudePath string, c
 		_ = os.Remove(script)
 		_ = os.Remove(pidFile)
 	}()
-	var opener *exec.Cmd
-	switch {
-	case preference != "" && preference != "auto" && strings.Contains(preference, "{script}"):
-		opener = exec.Command("sh", "-c", strings.ReplaceAll(getString(section(cfg, "resume"), "terminal"), "{script}", shellQuote(script)))
-	case isDarwin:
-		// Terminal types the command into the login shell of a new window. exec gives the shell's
-		// place to the launcher, and so to claude: the window's process ends with claude, also when
-		// a later relaunch closes it, instead of leaving a shell at its prompt that keeps the window.
-		opener = exec.Command("osascript", "-e", `tell application "Terminal" to do script "exec sh `+appleScriptEscape(shellQuote(script))+`"`, "-e", `tell application "Terminal" to activate`)
-	case os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != "":
-		for _, candidate := range [][]string{{"x-terminal-emulator", "-e"}, {"gnome-terminal", "--"}, {"konsole", "-e"}, {"xfce4-terminal", "-x"}, {"kitty"}, {"alacritty", "-e"}, {"wezterm", "start", "--"}} {
-			if locateExecutable(candidate[0]) != "" {
-				opener = exec.Command(candidate[0], append(candidate[1:], "sh", script)...)
-				break
-			}
-		}
-	}
+	_, opener := desktopTerminal(cfg, script)
 	if opener == nil || !openTerminal(opener, pidFile) {
 		return false
 	}
 	return waitForLaunchedSession(launch.running(), pidFile, "terminal")
+}
+
+// desktopTerminal picks the window a relaunch on macOS or Linux opens in: the resume.terminal
+// template, a new window of the tmux session noctis runs in, Terminal on macOS, or a terminal of the
+// desktop. A server has no desktop, and a session in tmux outlives the user's login and is where the
+// user looks for it, so tmux comes first. name says which, for noctis doctor; opener is nil when there
+// is none, and the relaunch runs headless.
+func desktopTerminal(cfg object, script string) (name string, opener *exec.Cmd) {
+	preference := terminalPreference(cfg)
+	tmux := ""
+	if os.Getenv("TMUX") != "" {
+		tmux = locateExecutable("tmux")
+	}
+	switch {
+	case preference == "none" || os.Getenv("NOCTIS_NO_TERMINAL") != "":
+	case preference != "" && preference != "auto" && strings.Contains(preference, "{script}"):
+		return "resume.terminal", exec.Command("sh", "-c", strings.ReplaceAll(getString(section(cfg, "resume"), "terminal"), "{script}", shellQuote(script)))
+	case tmux != "":
+		// The window runs the command with tmux's shell; exec hands the window to claude, so it
+		// closes when the session ends, as a Terminal window does.
+		return "tmux", exec.Command(tmux, "new-window", "exec sh "+shellQuote(script))
+	case isDarwin:
+		// Terminal types the command into the login shell of a new window. exec gives the shell's
+		// place to the launcher, and so to claude: the window's process ends with claude, also when
+		// a later relaunch closes it, instead of leaving a shell at its prompt that keeps the window.
+		return "Terminal", exec.Command("osascript", "-e", `tell application "Terminal" to do script "exec sh `+appleScriptEscape(shellQuote(script))+`"`, "-e", `tell application "Terminal" to activate`)
+	case os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != "":
+		for _, candidate := range [][]string{{"x-terminal-emulator", "-e"}, {"gnome-terminal", "--"}, {"konsole", "-e"}, {"xfce4-terminal", "-x"}, {"kitty"}, {"alacritty", "-e"}, {"wezterm", "start", "--"}} {
+			if locateExecutable(candidate[0]) != "" {
+				return candidate[0], exec.Command(candidate[0], append(candidate[1:], "sh", script)...)
+			}
+		}
+	}
+	return "", nil
+}
+
+// relaunchDoctorLines say where an automatic relaunch on macOS or Linux opens, or that it runs
+// headless where nobody sees it, unless a window was turned off.
+func relaunchDoctorLines(cfg object) []string {
+	if isWindows || getString(section(cfg, "resume"), "mode") != "window" || terminalPreference(cfg) == "none" || os.Getenv("NOCTIS_NO_TERMINAL") != "" {
+		return nil
+	}
+	if name, _ := desktopTerminal(cfg, ""); name != "" {
+		return []string{checkLine(true, T("doctor.relaunchWindow", name))}
+	}
+	return []string{"ℹ " + T("doctor.relaunchHeadless")}
 }
 
 func openTerminal(opener *exec.Cmd, pidFile string) bool {

@@ -354,6 +354,7 @@ func terminalSandbox(t *testing.T) (home, bin, calls string) {
 	t.Setenv("PATH", bin)
 	t.Setenv("DISPLAY", ":9")
 	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("TMUX", "")
 	t.Setenv("NOCTIS_NO_TERMINAL", "")
 	previousPid, previousPoll := launchPidTimeout, launchPollInterval
 	launchPidTimeout, launchPollInterval = 4*time.Second, 50*time.Millisecond
@@ -406,12 +407,25 @@ func TestATerminalThatStaysInTheForegroundKeepsTheSessionAndRecordsItWhileItRuns
 	}
 }
 
-var terminalOpeners = []struct {
+type terminalOpener struct {
 	name, opener string
-	darwin       bool
-}{
-	{"an X terminal", "x-terminal-emulator", false},
-	{"Terminal.app", "osascript", true},
+	darwin, tmux bool
+}
+
+var terminalOpeners = []terminalOpener{
+	{name: "an X terminal", opener: "x-terminal-emulator"},
+	{name: "Terminal.app", opener: "osascript", darwin: true},
+	{name: "a tmux window", opener: "tmux", tmux: true},
+}
+
+// openerFor sets up the platform a terminal opens on: macOS for Terminal.app, a session in tmux for
+// tmux.
+func openerFor(t *testing.T, terminal terminalOpener) {
+	t.Helper()
+	openerOnPlatform(t, terminal.darwin)
+	if terminal.tmux {
+		t.Setenv("TMUX", "/tmp/tmux-test/default,4242,0")
+	}
 }
 
 func openerOnPlatform(t *testing.T, darwin bool) {
@@ -421,8 +435,17 @@ func openerOnPlatform(t *testing.T, darwin bool) {
 	isDarwin = darwin
 }
 
-func forkingOpener(darwin bool) string {
-	if !darwin {
+func forkingOpener(terminal terminalOpener) string {
+	switch {
+	case terminal.tmux:
+		return strings.Join([]string{
+			"#!/bin/sh",
+			`if [ "$#" -ne 2 ] || [ "$1" != new-window ]; then echo "tmux: unexpected arguments: $*" >&2; exit 1; fi`,
+			`sh -c "$2" </dev/null >/dev/null 2>&1 &`,
+			"exit 0",
+			"",
+		}, "\n")
+	case !terminal.darwin:
 		return "#!/bin/sh\nshift\n\"$@\" </dev/null >/dev/null 2>&1 &\nexit 0\n"
 	}
 	return strings.Join([]string{
@@ -448,7 +471,7 @@ func TestATerminalThatFailsAtOnceFallsBackToHeadlessWithoutWaiting(t *testing.T)
 	for index, terminal := range terminalOpeners {
 		t.Run(terminal.name, func(t *testing.T) {
 			home, bin, calls := terminalSandbox(t)
-			openerOnPlatform(t, terminal.darwin)
+			openerFor(t, terminal)
 			writeStub(t, bin, terminal.opener, "#!/bin/sh\nexit 1\n")
 			started := time.Now()
 			if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: fmt.Sprintf("fail%d", index+1), cwd: home, prompt: "carry on"}).started {
@@ -468,8 +491,8 @@ func TestATerminalThatForksAndReturnsIsRecorded(t *testing.T) {
 	for index, terminal := range terminalOpeners {
 		t.Run(terminal.name, func(t *testing.T) {
 			home, bin, calls := terminalSandbox(t)
-			openerOnPlatform(t, terminal.darwin)
-			writeStub(t, bin, terminal.opener, forkingOpener(terminal.darwin))
+			openerFor(t, terminal)
+			writeStub(t, bin, terminal.opener, forkingOpener(terminal))
 			if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: fmt.Sprintf("fork%d", index+1), cwd: home, prompt: "carry on"}).started {
 				t.Fatal("the window relaunch reported failure")
 			}
@@ -517,9 +540,9 @@ func TestALauncherInAFolderWithASpaceOrAQuoteOpensItsWindow(t *testing.T) {
 	for index, terminal := range terminalOpeners {
 		t.Run(terminal.name, func(t *testing.T) {
 			home, bin, calls := terminalSandbox(t)
-			openerOnPlatform(t, terminal.darwin)
+			openerFor(t, terminal)
 			files.launches = filepath.Join(t.TempDir(), "Application Support", "owner's launches")
-			writeStub(t, bin, terminal.opener, forkingOpener(terminal.darwin))
+			writeStub(t, bin, terminal.opener, forkingOpener(terminal))
 			if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: fmt.Sprintf("space%d", index+1), cwd: home, prompt: "carry on"}).started {
 				t.Fatal("the window relaunch reported failure")
 			}
@@ -527,5 +550,54 @@ func TestALauncherInAFolderWithASpaceOrAQuoteOpensItsWindow(t *testing.T) {
 				t.Fatalf("the launcher in %q never ran in the window %s opened: claude ran %q (recorded=%t)", files.launches, terminal.opener, runs, recorded)
 			}
 		})
+	}
+}
+
+func TestARelaunchFromASessionInTmuxOpensATmuxWindowBeforeADesktopTerminal(t *testing.T) {
+	for _, inTmux := range []bool{true, false} {
+		t.Run(fmt.Sprintf("in tmux %t", inTmux), func(t *testing.T) {
+			home, bin, calls := terminalSandbox(t)
+			openerOnPlatform(t, false)
+			for _, terminal := range terminalOpeners {
+				if !terminal.darwin {
+					writeStub(t, bin, terminal.opener, strings.Replace(forkingOpener(terminal), "#!/bin/sh\n", "#!/bin/sh\necho opened "+terminal.opener+` >> "$NOCTIS_TEST_CALLS"`+"\n", 1))
+				}
+			}
+			want := "opened x-terminal-emulator"
+			if inTmux {
+				t.Setenv("TMUX", "/tmp/tmux-test/default,4242,0")
+				want = "opened tmux"
+			}
+			if !launchClaude(object{"resume": object{"mode": "window"}}, launchSpec{sid: fmt.Sprintf("tmux%t", inTmux), cwd: home, prompt: "carry on"}).started {
+				t.Fatal("the window relaunch reported failure")
+			}
+			if runs, recorded := terminalRuns(t, calls); len(runs) != 1 || strings.HasPrefix(runs[0], "-p ") || !recorded {
+				t.Fatalf("expected one recorded interactive run, claude ran %q (recorded=%t)", runs, recorded)
+			}
+			if log := string(cliRead(t, calls)); !strings.Contains(log, want) || strings.Count(log, "opened ") != 1 {
+				t.Fatalf("expected the relaunch to open through %q only:\n%s", strings.TrimPrefix(want, "opened "), log)
+			}
+		})
+	}
+}
+
+func TestDoctorSaysWhereARelaunchOpensOrThatNobodySeesIt(t *testing.T) {
+	_, bin, _ := terminalSandbox(t)
+	openerOnPlatform(t, false)
+	window := object{"resume": object{"mode": "window"}}
+	t.Setenv("DISPLAY", "")
+	lines := relaunchDoctorLines(window)
+	if len(lines) != 1 || !strings.Contains(lines[0], T("doctor.relaunchHeadless")) {
+		t.Fatalf("with no desktop and no tmux the doctor did not say a relaunch runs unseen: %q", lines)
+	}
+	writeStub(t, bin, "tmux", forkingOpener(terminalOpener{tmux: true}))
+	t.Setenv("TMUX", "/tmp/tmux-test/default,4242,0")
+	if lines := relaunchDoctorLines(window); len(lines) != 1 || !strings.Contains(lines[0], T("doctor.relaunchWindow", "tmux")) {
+		t.Fatalf("in tmux the doctor did not name the tmux window: %q", lines)
+	}
+	for _, cfg := range []object{{"resume": object{"mode": "headless"}}, {"resume": object{"mode": "window", "terminal": "none"}}} {
+		if lines := relaunchDoctorLines(cfg); lines != nil {
+			t.Fatalf("the doctor spoke of a relaunch window that %v turned off: %q", cfg, lines)
+		}
 	}
 }

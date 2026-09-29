@@ -612,6 +612,7 @@ func doctorLines(cfg object) []string {
 		lines = append(lines, checkLine(result.ok, T("doctor.powershell", psText)))
 	}
 	lines = append(lines, schedulerDoctorLines()...)
+	lines = append(lines, relaunchDoctorLines(cfg)...)
 	installRoot := files.pluginRoot
 	agent := orDefault(getString(section(cfg, "router"), "agent"), "lite")
 	lines = append(lines, fixLine(statSafe(filepath.Join(installRoot, "hooks", "hooks.json")) != nil, T("doctor.pluginRoot", installRoot), "doctor.fixPluginRoot")...)

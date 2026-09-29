@@ -17,10 +17,11 @@ func TestAScheduledRunnerGetsThePathButNoProxyOnItsCommandLine(t *testing.T) {
 	t.Setenv("NODE_EXTRA_CA_CERTS", "/etc/corp/ca & root.pem")
 	t.Setenv("DISPLAY", "")
 	t.Setenv("WAYLAND_DISPLAY", "wayland-0")
+	t.Setenv("TMUX", "/tmp/tmux-1000/default,4242,0")
 
 	arguments := systemdRunArgs("noctis-abc-1700000000", "/opt/noctis", []string{"resume", "--sid", "s1"}, float64(time.Now().Add(time.Hour).Unix()), false)
 	executableAt := indexOf(arguments, "/opt/noctis")
-	for _, want := range []string{"--setenv=PATH=" + path, "--setenv=NODE_EXTRA_CA_CERTS=/etc/corp/ca & root.pem", "--setenv=WAYLAND_DISPLAY=wayland-0"} {
+	for _, want := range []string{"--setenv=PATH=" + path, "--setenv=NODE_EXTRA_CA_CERTS=/etc/corp/ca & root.pem", "--setenv=WAYLAND_DISPLAY=wayland-0", "--setenv=TMUX=/tmp/tmux-1000/default,4242,0"} {
 		if at := indexOf(arguments, want); at < 0 || at > executableAt {
 			t.Fatalf("the systemd timer does not hand the runner %s before the command: %v", want, arguments)
 		}
