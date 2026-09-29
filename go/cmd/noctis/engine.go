@@ -1001,7 +1001,7 @@ func buildCheckpoint(input object, reasonLine, model string, cfg object) string 
 	queuePath := ""
 	var queue *queueView
 	if cfg != nil {
-		if candidate := sessionQueueFile(cfg, sid, queueDirs(input)...); candidate != "" {
+		if candidate := drivenQueueFile(cfg, nil, input, sid); candidate != "" {
 			if view, trusted := trustedQueueSnapshot(cfg, candidate); trusted {
 				queuePath, queue = candidate, &view
 			}
@@ -1645,6 +1645,9 @@ func prepareWait(sid string, record object, cfg object) {
 	}
 	record["configDirEnv"] = os.Getenv(claudeConfigEnv)
 	recordProjectDir(record)
+	if cfg != nil && queueOffFor(cfg, sid) {
+		record["queueOff"] = true
+	}
 	if tokens, ok := sessionContextTokens(sid); ok {
 		record["contextTokens"] = tokens
 	}

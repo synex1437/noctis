@@ -1010,7 +1010,14 @@ func resumeWait(sid, release string) {
 	}
 	dirs := sessionDirs(getString(wait, "projectDir"), getString(wait, "cwd"))
 	plan := freshStartFor(cfg, readState(), wait, sid, nowSec())
-	queuePath := sessionQueueFile(cfg, sid, dirs...)
+	queuePath := ""
+	if getBool(wait, "queueOff", false) {
+		// No queue drove the session when it paused (a headless run, or NOCTIS_QUEUE=off): its
+		// relaunch, and whatever that starts, stays out of queues as well.
+		_ = os.Setenv(queueEnv, "off")
+	} else {
+		queuePath = sessionQueueFile(cfg, sid, dirs...)
+	}
 	prompt := orDefault(getString(wait, "queuedPrompt"), getString(resume, "prompt"))
 	launchDir := dirs[0]
 	view, trusted := queueView{}, false

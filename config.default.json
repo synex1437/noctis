@@ -145,6 +145,7 @@
       "comment": "Completed by Claude Code (noctis queue)."
     },
     "requireTrust": true,
+    "headless": false,
     "verifyCommand": "",
     "verifyTimeoutSeconds": 900,
     "verifyAttempts": 2

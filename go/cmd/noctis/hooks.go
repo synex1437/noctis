@@ -214,7 +214,7 @@ func onSessionStart(input, cfg object) {
 			}
 		}
 	}
-	if queuePath := sessionQueueFile(cfg, sid, queueDirs(input)...); queuePath != "" {
+	if queuePath := drivenQueueFile(cfg, state, input, sid); queuePath != "" {
 		snapshot := queueSnapshot(queuePath)
 		if trusted, changed, legacy := queueTrustGap(cfg, queuePath); !trusted {
 
@@ -628,7 +628,7 @@ func onUserPromptSubmit(input, cfg object) {
 		}
 	}
 	agentTurn := agentWrittenTurn(getString(input, "prompt"))
-	if getBool(section(cfg, "queue"), "auto", true) && getBool(section(cfg, "queue"), "enabled", true) && (!observing || agentTurn != "") && !promptFromPlugin && getString(getMap(getMap(state, "autoQueues"), sid), "source") == "" && followedQueueFile(cfg, queueDirs(input)...) == "" {
+	if getBool(section(cfg, "queue"), "auto", true) && getBool(section(cfg, "queue"), "enabled", true) && (!observing || agentTurn != "") && !promptFromPlugin && getString(getMap(getMap(state, "autoQueues"), sid), "source") == "" && queuesDriveRun(cfg, state, sid) && followedQueueFile(cfg, queueDirs(input)...) == "" {
 		job, split := promptJob{}, false
 		if agentTurn == "" {
 			job = promptJobOf(getString(input, "prompt"))
@@ -1533,7 +1533,7 @@ func onPermissionRequest(input, cfg object) {
 		allowFileRequest(sid, tool, requested, "allow-checkpoint-note", "the resume note handed to")
 		return
 	}
-	queuePath := sessionQueueFile(cfg, sid, queueDirs(input)...)
+	queuePath := drivenQueueFile(cfg, nil, input, sid)
 	if queuePath == "" || requested != queuePath || !queueTrusted(cfg, queuePath) {
 		return
 	}
@@ -1595,7 +1595,7 @@ func onStop(input, cfg object) {
 	}
 	clearOverload(state, sid)
 	clearFailureRetries(state, sid)
-	queuePath := sessionQueueFile(cfg, sid, queueDirs(input)...)
+	queuePath := drivenQueueFile(cfg, state, input, sid)
 	if queuePath == "" {
 		return
 	}

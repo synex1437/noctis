@@ -74,6 +74,7 @@ func TestMain(m *testing.M) {
 	// test into one about that kind of session.
 	_ = os.Unsetenv("CLAUDE_CODE_REMOTE")
 	_ = os.Unsetenv("CLAUDE_CODE_ENTRYPOINT")
+	_ = os.Unsetenv(queueEnv)
 	os.Exit(m.Run())
 }
 

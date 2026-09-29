@@ -76,6 +76,10 @@ func onStartPrompt(input, cfg object, sid, notice string) {
 		refuse(T("queue.startOff", pluginName))
 		return
 	}
+	if queueEnvSetting() == "off" {
+		refuse(T("queue.startEnvOff", queueEnv, pluginName))
+		return
+	}
 	if name == "" {
 		refuse(T("queue.startUsage", pluginName))
 		return

@@ -61,7 +61,7 @@ func rearmQueueCheck(cfg, input object, sid string) {
 	if queueCheckCommand(cfg) == "" {
 		return
 	}
-	path := sessionQueueFile(cfg, sid, queueDirs(input)...)
+	path := drivenQueueFile(cfg, nil, input, sid)
 	if path == "" || !queueHeld(cfg, readState(), path) {
 		return
 	}

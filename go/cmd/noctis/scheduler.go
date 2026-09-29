@@ -143,7 +143,7 @@ func scheduleAtMinute(at float64) time.Time {
 	return moment
 }
 
-var carriedEnvNames = []string{"PATH", "DISPLAY", "WAYLAND_DISPLAY", "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS"}
+var carriedEnvNames = []string{"PATH", "DISPLAY", "WAYLAND_DISPLAY", "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", queueEnv}
 
 var proxyEnvNames = []string{"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy"}
 
