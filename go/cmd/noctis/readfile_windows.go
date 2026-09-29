@@ -58,3 +58,25 @@ func readFileShared(path string) ([]byte, error) {
 	}
 	return buffer.Bytes(), nil
 }
+
+// fileWriteExtendedAttributes is FILE_WRITE_EA, which syscall does not export.
+const fileWriteExtendedAttributes = 0x00000010
+
+// openAppend opens path for appending and creates it when it is missing, with the rights os.OpenFile
+// asks for with O_APPEND, but it also lets another process rename or delete the file while it is
+// open. os.OpenFile does not: its handle keeps a process that rotates the log from moving it aside,
+// and its open fails with a sharing violation while that process holds the file to move it.
+func openAppend(path string) (*os.File, error) {
+	wide, err := syscall.UTF16PtrFromString(extendedPath(path))
+	if err != nil {
+		return nil, &os.PathError{Op: "open", Path: path, Err: err}
+	}
+	handle, err := syscall.CreateFile(wide,
+		syscall.FILE_APPEND_DATA|syscall.FILE_WRITE_ATTRIBUTES|fileWriteExtendedAttributes|syscall.STANDARD_RIGHTS_WRITE|syscall.SYNCHRONIZE,
+		syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE|syscall.FILE_SHARE_DELETE,
+		nil, syscall.OPEN_ALWAYS, syscall.FILE_ATTRIBUTE_NORMAL, 0)
+	if err != nil {
+		return nil, &os.PathError{Op: "open", Path: path, Err: err}
+	}
+	return os.NewFile(uintptr(handle), path), nil
+}

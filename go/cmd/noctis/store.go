@@ -359,7 +359,9 @@ const rotateLockName = "rotate.lock"
 // process that holds rotate.lock rotates, and only if the file is still past the limit when it looks
 // again there: otherwise two processes that both found the log due could rotate one after the other,
 // the second moving the fresh log the first had just started over the history the first had moved
-// to file.1. A process that finds the lock taken appends without rotating; the holder rotates.
+// to file.1. A process that finds the lock taken appends without rotating; the holder rotates. Each
+// writer opens the log with openAppend, so on Windows the holder can move it aside while others
+// have it open, and a writer opening it while the holder moves it does not fail.
 func appendRotating(file, line string) error {
 	if info, err := os.Stat(file); err == nil && info.Size() > logMaxBytes {
 		if release, locked := tryFileLock(filepath.Join(filepath.Dir(file), rotateLockName)); locked {
@@ -369,7 +371,7 @@ func appendRotating(file, line string) error {
 			release()
 		}
 	}
-	handle, err := os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	handle, err := openAppend(file)
 	if err != nil {
 		return err
 	}
