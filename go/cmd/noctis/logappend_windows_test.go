@@ -71,7 +71,11 @@ func TestAWriterOpensTheLogWhileAnotherProcessMovesIt(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if content, _ := os.ReadFile(file); string(content) != "history\nline\n" {
+	content, err := readFileShared(file)
+	if err != nil {
+		t.Fatalf("the log could not be read while the move still held it: %v", err)
+	}
+	if string(content) != "history\nline\n" {
 		t.Fatalf("the log holds %q; want the line after its history", content)
 	}
 }
