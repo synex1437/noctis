@@ -1144,6 +1144,9 @@ func emptyState() object {
 		"jobSeq":           float64(0),
 		"continuedBy":      object{},
 		"freshStarts":      object{},
+		// queueWakes are the runners set to resume a stopped session when a deferral of its queue
+		// ends (armQueueWake), by session.
+		"queueWakes": object{},
 		// usedCheckpointsDue is when the oldest record in used-checkpoints.json expires, 0 when
 		// it holds none.
 		"usedCheckpointsDue": float64(0),
@@ -1319,6 +1322,17 @@ func pruneState(state object, now int64) {
 		delete(stateMap(state, "waits"), sid)
 		warn("stale wait for %s dropped (resume time passed %dh ago without a live runner)", sid, int((float64(now)-numberOr(wait, "resumeAt", 0))/3600+0.5))
 	}
+	for sid, raw := range stateMap(state, "queueWakes") {
+		wake, _ := raw.(object)
+		scheduled := getMap(wake, "scheduled")
+		if wake != nil && waitLive(object{"resumeAt": numberOr(wake, "at", 0), "scheduled": scheduled}, now) {
+			continue
+		}
+		if scheduled != nil {
+			notePruned(&prunedRunners, object{"sid": queueWakeKey(sid), "scheduled": scheduled})
+		}
+		delete(stateMap(state, "queueWakes"), sid)
+	}
 	for signal, raw := range stateMap(state, "routerLearned") {
 		record, _ := raw.(object)
 		if record == nil || float64(now)-numberOr(record, "at", 0) > 30*86400 {
@@ -1457,7 +1471,7 @@ func pruneState(state object, now int64) {
 
 func lockQueueMs() time.Duration {
 	switch command {
-	case "sleeper", "resume":
+	case "sleeper", "resume", "queue-wake":
 		return lockQueueBackgroundMs
 	default:
 		return lockLiveHolderMs
@@ -1478,7 +1492,7 @@ func lockPollDelay(waited time.Duration) time.Duration {
 
 func lockNoProgressMs() time.Duration {
 	switch command {
-	case "sleeper", "resume":
+	case "sleeper", "resume", "queue-wake":
 		return lockLiveHolderMs
 	default:
 		return lockWaitForegroundMs

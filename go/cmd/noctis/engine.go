@@ -305,6 +305,11 @@ type queueView struct {
 	// deferred counts the open items noctis queue defer holds back, also left out of total.
 	deferred      int
 	deferredItems []deferredItem
+	// freeAt is the soonest end of a deferral whose item waits for nothing else, and freed the
+	// items that deferral holds: once it ends they are eligible again. It is 0 when no deferral
+	// with an end holds an item that could go on.
+	freeAt        float64
+	freed         []deferredItem
 	items         []string
 	plain         bool
 	unmatched     []string
@@ -609,8 +614,16 @@ func queueSnapshotOf(file, content string) queueView {
 			}
 		case deferred:
 			view.deferred++
+			item := deferredItem{text: truncateText(entry.text, 160), reason: held.reason, until: held.until, digest: queueItemDigest(entry.text)}
 			if len(view.deferredItems) < queueMaxItems {
-				view.deferredItems = append(view.deferredItems, deferredItem{text: truncateText(entry.text, 160), reason: held.reason, until: held.until})
+				view.deferredItems = append(view.deferredItems, item)
+			}
+			switch {
+			case !ready || held.until <= 0:
+			case view.freeAt == 0 || held.until < view.freeAt:
+				view.freeAt, view.freed = held.until, []deferredItem{item}
+			case held.until == view.freeAt:
+				view.freed = append(view.freed, item)
 			}
 		case ready:
 			view.total++
@@ -2263,7 +2276,8 @@ func waitsInHook(waitCfg object, learnedCap, remaining, reserve float64) bool {
 		}
 		limit = math.Min(limit, budget-hookBudgetSlackSeconds-reserve)
 	}
-	return remaining <= limit
+	// A hook that answers a stop again after waiting for a deferral has used that much of its time.
+	return remaining+hookWaited <= limit
 }
 
 // wakeSleepLimit is how long a same-session wake may sleep in the StopFailure hook, and what sets

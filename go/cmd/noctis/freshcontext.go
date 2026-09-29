@@ -47,21 +47,26 @@ type freshPlan struct {
 	idle   float64
 }
 
-func freshStartFor(cfg, state, wait object, sid string, now int64) freshPlan {
+// freshStartDue tells whether the session a wait stopped holds enough context, and has been idle
+// long enough, that its relaunch would start fresh from a handoff note: resume.freshAboveTokens and
+// resume.freshAfterMinutes.
+func freshStartDue(cfg, wait object, sid string, now int64) (tokens, idle float64, due bool) {
 	resume := section(cfg, "resume")
 	after, above := numberOr(resume, "freshAfterMinutes", 60), numberOr(resume, "freshAboveTokens", 100000)
 	if currentHost().id != "claude" || after <= 0 || above <= 0 || getBool(wait, "freshFailed", false) {
-		return freshPlan{}
+		return 0, 0, false
 	}
 	tokens, known := getNumber(wait, "contextTokens")
 	if !known {
 		tokens, known = sessionContextTokens(sid)
 	}
-	idle := float64(now) - lastActiveAt(wait)
-	if !known || tokens < above || idle < after*60 {
-		return freshPlan{}
-	}
-	if len(workflowLaunches(state, sid)) > 0 {
+	idle = float64(now) - lastActiveAt(wait)
+	return tokens, idle, known && tokens >= above && idle >= after*60
+}
+
+func freshStartFor(cfg, state, wait object, sid string, now int64) freshPlan {
+	tokens, idle, due := freshStartDue(cfg, wait, sid, now)
+	if !due || len(workflowLaunches(state, sid)) > 0 {
 		return freshPlan{}
 	}
 	checkpoint := getMap(getMap(state, "checkpoints"), sid)

@@ -25,6 +25,7 @@ type deferredItem struct {
 	text   string
 	reason string
 	until  float64
+	digest string // queueItemDigest of the item's whole text, as queueDeferrals keys it
 }
 
 // queueDeferrals are the live deferrals of the queue at path by item digest. state may be nil; it

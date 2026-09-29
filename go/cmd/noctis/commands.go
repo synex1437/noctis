@@ -135,9 +135,9 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	if observing {
 		lines = append(lines, T("status.observe"))
 	}
-	waits := getMap(state, "waits")
+	waits, wakes := getMap(state, "waits"), getMap(state, "queueWakes")
 	waitHeader := T("status.waits")
-	if len(waits) == 0 {
+	if len(waits) == 0 && len(wakes) == 0 {
 		waitHeader += T("status.waitsNone")
 	}
 	lines = append(lines, waitHeader)
@@ -152,6 +152,15 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 		}
 		if checkpoint := getString(wait, "checkpoint"); checkpoint != "" {
 			entry += " cp=" + filepath.Base(checkpoint)
+		}
+		lines = append(lines, entry)
+	}
+	// A queue whose items wait on deferrals resumes its stopped session when the first one ends.
+	for _, sid := range sortedKeys(wakes) {
+		wake := toObject(wakes[sid])
+		entry := T("status.waitLine", shortSid(sid), "queue", getString(wake, "label"), formatTime(numberOr(wake, "at", 0)))
+		if scheduled := getMap(wake, "scheduled"); scheduled != nil {
+			entry += " [" + getString(scheduled, "method") + "]"
 		}
 		lines = append(lines, entry)
 	}
@@ -288,7 +297,7 @@ func runCancel() {
 }
 
 func pendingOf(state object) ([]object, map[string]bool) {
-	pending := []object{getMap(state, "waits"), getMap(state, "handedOff"), getMap(state, "launchFailures")}
+	pending := []object{getMap(state, "waits"), getMap(state, "handedOff"), getMap(state, "launchFailures"), getMap(state, "queueWakes")}
 	found := map[string]bool{}
 	for _, bucket := range pending {
 		for sid := range bucket {
@@ -338,6 +347,7 @@ func cancelSessions(sids []string, state object) bool {
 			delete(stateMap(next, "waits"), sid)
 			delete(stateMap(next, "handedOff"), sid)
 			delete(stateMap(next, "launchFailures"), sid)
+			delete(stateMap(next, "queueWakes"), sid)
 		}
 	})
 	if !applied || writeFailures != failures {
@@ -345,6 +355,9 @@ func cancelSessions(sids []string, state object) bool {
 	}
 	for _, sid := range sids {
 		cancelRunner(sid, state)
+		if wake := getMap(getMap(state, "queueWakes"), sid); wake != nil {
+			cancelScheduled(queueWakeKey(sid), getMap(wake, "scheduled"))
+		}
 	}
 	return true
 }

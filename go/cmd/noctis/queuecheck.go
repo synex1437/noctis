@@ -199,7 +199,7 @@ func queueCheckReserve(kind string, cfg, input object) float64 {
 }
 
 func queueCheckLimit(cfg object, started int64) float64 {
-	limit, elapsed := queueCheckSeconds(cfg), float64(nowSec()-started)
+	limit, elapsed := queueCheckSeconds(cfg), float64(nowSec()-started)+hookWaited
 	if learned := numberOr(readState(), "hookCapSeconds", 0); learned > 0 {
 		limit = math.Min(limit, learned-60-elapsed)
 	}
