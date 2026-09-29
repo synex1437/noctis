@@ -45,19 +45,30 @@ func TestQueueImportKeepsTheBOMAndTheLineEndingOfTheFile(t *testing.T) {
 	}
 }
 
+// identityNow returns the FileInfo of the file at path with its identity read now. On Windows
+// os.Stat notes only the path, and os.SameFile reads the identity later from whatever file has the
+// name by then, so a FileInfo taken before the file was replaced would match one taken after.
+func identityNow(t *testing.T, path string) os.FileInfo {
+	t.Helper()
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return info
+}
+
 func TestQueueImportReplacesTheFileInOneStep(t *testing.T) {
 	_, project := queueTrustSandbox(t, false)
 	fakeGhCLI(t, x5ImportIssues)
 	queuePath := writeQueueFile(t, project, "# q\n- [ ] #21 Speed up the parser\n")
-	before, err := os.Stat(queuePath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	before := identityNow(t, queuePath)
 	queueImportOutput(t, "queue", "import", "--cwd", project)
-	after, err := os.Stat(queuePath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	after := identityNow(t, queuePath)
 	if os.SameFile(before, after) {
 		t.Errorf("the import rewrote %s in place, so a hook reading it meanwhile can see it cut short; it must write a new file and rename it over the old one", filepath.Base(queuePath))
 	}
