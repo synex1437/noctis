@@ -33,29 +33,39 @@ func humanItemNames(view queueView) (note, notice string) {
 	return note, notice
 }
 
-// stopForHumanItems lets the session stop when every open item left is the user's or waits for one
-// of them. The user hears it once per set of open items; the queue stays, so ticking an item and
-// typing a prompt goes on with the items that waited for it.
-func stopForHumanItems(cfg, state object, sid, queuePath, content, label string, view queueView, now int64) {
-	key := fmt.Sprintf("human:%s:%s:%s", sid, queuePath, openEntriesDigest(content))
+// stopForWaitingItems lets the session stop when every open item left is the user's, is deferred,
+// or waits for one of those. The user hears it once per set of open items and deferrals; the queue
+// stays, so ticking an item, or taking a deferred one up again, and typing a prompt goes on with
+// the items that waited for it.
+func stopForWaitingItems(cfg, state object, sid, queuePath, content, label string, view queueView, now int64) {
+	key := fmt.Sprintf("waiting:%s:%s:%s:%s", sid, queuePath, openEntriesDigest(content), deferralDigest(view))
 	told := getMap(state, "notified")[key] != nil
 	updateState(func(next object) {
 		delete(stateMap(next, "stopGuard"), sid)
 		stateMap(next, "notified")[key] = float64(now)
 	})
-	journal(sid, "Stop", "allow-stop", "queue waits on the user's items", object{"open": view.total, "human": view.human})
-	logInfo("queue %s of %s waits on %d item(s) marked (human), %d open item(s) blocked; stop allowed", queuePath, sid, view.human, view.blocked)
+	journal(sid, "Stop", "allow-stop", "queue waits on the user", object{"open": view.total, "human": view.human, "deferred": view.deferred})
+	logInfo("queue %s of %s waits on %d item(s) marked (human) and %d deferred, %d open item(s) blocked; stop allowed", queuePath, sid, view.human, view.deferred, view.blocked)
 	if told || observing {
 		return
 	}
-	_, names := humanItemNames(view)
-	if view.total == 0 {
-		notify(cfg, pluginName, T("queue.humanNotify", view.human, label, names))
-		emit(object{"systemMessage": T("queue.humanMessage", view.human, label, names)})
-		return
+	messages := []string{}
+	if view.human > 0 {
+		_, names := humanItemNames(view)
+		if view.total == 0 {
+			notify(cfg, pluginName, T("queue.humanNotify", view.human, label, names))
+			messages = append(messages, T("queue.humanMessage", view.human, label, names))
+		} else {
+			notify(cfg, pluginName, T("queue.humanBlockedNotify", view.total, label, view.human, names))
+			messages = append(messages, T("queue.humanBlockedMessage", view.total, view.human, names))
+		}
 	}
-	notify(cfg, pluginName, T("queue.humanBlockedNotify", view.total, label, view.human, names))
-	emit(object{"systemMessage": T("queue.humanBlockedMessage", view.total, view.human, names)})
+	if view.deferred > 0 {
+		_, names := deferredNames(view)
+		notify(cfg, pluginName, T("queue.deferredNotify", view.deferred, label, names))
+		messages = append(messages, T("queue.deferredMessage", view.deferred, label, names, pluginName))
+	}
+	emit(object{"systemMessage": joinNotices(messages...)})
 }
 
 // noteUserTurn keeps whether the user typed the prompt of the turn that runs now: only then may

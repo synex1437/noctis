@@ -163,7 +163,7 @@ type parsedArgs struct {
 	present    map[string]bool
 }
 
-var switchFlags = map[string]bool{"help": true, "h": true, "json": true, "skip-task": true, "watch": true, "uninstall": true, "purge": true, "no-model": true, "no-ask": true, "no-lean": true}
+var switchFlags = map[string]bool{"help": true, "h": true, "json": true, "skip-task": true, "watch": true, "uninstall": true, "purge": true, "no-model": true, "no-ask": true, "no-lean": true, "all": true}
 
 func parseArgs(argv []string) parsedArgs {
 	out := parsedArgs{flags: map[string]string{}, values: map[string][]string{}, present: map[string]bool{}}
@@ -1132,6 +1132,7 @@ func emptyState() object {
 		"queueVerify":      object{},
 		"typedTurns":       object{},
 		"userTurns":        object{},
+		"queueDefer":       object{},
 		"continuedBy":      object{},
 		"freshStarts":      object{},
 		// usedCheckpointsDue is when the oldest record in used-checkpoints.json expires, 0 when
@@ -1400,6 +1401,7 @@ func pruneState(state object, now int64) {
 		}
 	}
 	dropExpiredCheckpoints(stateMap(state, "checkpoints"), now, nil)
+	pruneDeferrals(state, now)
 
 	for name, ttl := range map[string]float64{
 		"routes":         routeTTLSeconds,

@@ -300,8 +300,11 @@ type queueView struct {
 	blocked int
 	// human counts the open items marked (human): the user's own work, left out of total. The
 	// items that wait for them stay blocked until the user ticks them.
-	human         int
-	humanItems    []string
+	human      int
+	humanItems []string
+	// deferred counts the open items noctis queue defer holds back, also left out of total.
+	deferred      int
+	deferredItems []deferredItem
 	items         []string
 	plain         bool
 	unmatched     []string
@@ -515,6 +518,7 @@ func queueSnapshotOf(file, content string) queueView {
 	}
 	entries, plain := parseQueueEntries(content)
 	view := queueView{plain: plain}
+	deferrals := queueDeferrals(nil, file)
 	doneByOrdinal := map[int]bool{}
 	carriers, waitingOn := map[string]int{}, map[string]int{}
 	marks := func(entry queueEntry) []string {
@@ -586,11 +590,17 @@ func queueSnapshotOf(file, content string) queueView {
 				view.unmatchedMore++
 			}
 		}
+		held, deferred := deferrals[queueItemDigest(entry.text)]
 		switch {
 		case entry.human:
 			view.human++
 			if len(view.humanItems) < queueMaxItems {
 				view.humanItems = append(view.humanItems, truncateText(entry.text, 160))
+			}
+		case deferred:
+			view.deferred++
+			if len(view.deferredItems) < queueMaxItems {
+				view.deferredItems = append(view.deferredItems, deferredItem{text: truncateText(entry.text, 160), reason: held.reason, until: held.until})
 			}
 		case ready:
 			view.total++

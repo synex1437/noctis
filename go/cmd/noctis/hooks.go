@@ -233,10 +233,10 @@ func onSessionStart(input, cfg object) {
 			rememberOpenIssues(cfg, queuePath)
 			switch {
 			case !isAutoQueue(queuePath):
-				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total)+humanItemsRule(snapshot))
+				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total)+humanItemsRule(snapshot)+deferredRule(snapshot, queuePath)+queueDeferHint(queuePath))
 				touchQueueTrust(queuePath, now)
 			case snapshot.total > 0:
-				contexts = append(contexts, sessionQueueDirective(sid, queuePath, snapshot.total)+humanItemsRule(snapshot))
+				contexts = append(contexts, sessionQueueDirective(sid, queuePath, snapshot.total)+humanItemsRule(snapshot)+deferredRule(snapshot, queuePath)+queueDeferHint(queuePath))
 			}
 			logInfo("queue mode for %s: %s (%d open)", sid, queuePath, snapshot.total)
 		}
@@ -1626,8 +1626,8 @@ func onStop(input, cfg object) {
 			emit(gated)
 			return
 		}
-		if snapshot.human > 0 {
-			stopForHumanItems(cfg, state, sid, queuePath, content, queueLabel, snapshot, now)
+		if snapshot.human > 0 || snapshot.deferred > 0 {
+			stopForWaitingItems(cfg, state, sid, queuePath, content, queueLabel, snapshot, now)
 			return
 		}
 		driven := getMap(getMap(state, "stopGuard"), sid) != nil || isAutoQueue(queuePath)
@@ -1661,8 +1661,8 @@ func onStop(input, cfg object) {
 			emit(gated)
 			return
 		}
-		if snapshot.human > 0 {
-			stopForHumanItems(cfg, state, sid, queuePath, content, queueLabel, snapshot, now)
+		if snapshot.human > 0 || snapshot.deferred > 0 {
+			stopForWaitingItems(cfg, state, sid, queuePath, content, queueLabel, snapshot, now)
 			return
 		}
 		// Every open item is blocked here: the user hears of these items once, as of a queue that
@@ -1840,7 +1840,11 @@ func onStop(input, cfg object) {
 	if snapshot.blocked > 0 {
 		blockedNote = fmt.Sprintf(" %d item(s) wait on unfinished dependencies and are not eligible yet.", snapshot.blocked)
 	}
-	blockedNote += humanItemsRule(snapshot)
+	blockedNote += humanItemsRule(snapshot) + deferredRule(snapshot, queuePath)
+	if numberOr(guard, "idle", 0) > 0 {
+		// Claude stopped without ticking anything: the item may wait on something only the user has.
+		blockedNote += queueDeferHint(queuePath)
+	}
 	if len(snapshot.items) > 0 && currentHost().agents && workflowAdvisable(cfg, result) && looksLikeFanOut(snapshot.items[0]) {
 		systemMessage = joinNotices(systemMessage, workflowNotice(cfg, "notice.workflowQueue", result.usage))
 	}
