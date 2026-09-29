@@ -183,6 +183,7 @@ func runQueueTrust(cfg object, cwd, action string) {
 		view := queueSnapshot(target)
 		printUnmatchedReferences(target, view)
 		printEmptyLines(target, view)
+		printHumanItems(target, view)
 		printQueueCheck(cfg, target)
 	case "untrust":
 		trustQueueFile(target, false)
@@ -209,6 +210,7 @@ func runQueueTrust(cfg object, cwd, action string) {
 		}
 		printUnmatchedReferences(target, view)
 		printEmptyLines(target, view)
+		printHumanItems(target, view)
 		printQueueCheck(cfg, target)
 	}
 }
@@ -225,6 +227,13 @@ func printQueueCheck(cfg object, target string) {
 		fmt.Println(T("queue.verifyWaits", printableItem(line)))
 	case command != "":
 		fmt.Println(T("queue.verifyFromConfig", printableItem(command)))
+	}
+}
+
+func printHumanItems(target string, view queueView) {
+	if view.human > 0 {
+		_, names := humanItemNames(view)
+		fmt.Println(T("queue.humanStatus", filepath.Base(target), view.human, printableItem(names)))
 	}
 }
 

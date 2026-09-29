@@ -286,7 +286,11 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 	}
 	stored := object{"ticked": kept, "failures": failures, "at": now}
 	if failures < queueCheckAttempts(cfg) {
-		updateState(func(next object) { stateMap(next, "queueVerify")[key] = stored })
+		// Claude goes back to work on noctis's word, not the user's: see noteUserTurn.
+		updateState(func(next object) {
+			stateMap(next, "queueVerify")[key] = stored
+			delete(stateMap(next, "userTurns"), sid)
+		})
 		journal(sid, "Stop", "verify-queue", outcome, facts)
 		logInfo("queue check %q for %s %s (%s in a row); Claude is sent back to fix it", command, sid, outcome, formatNumber(failures))
 		output := "It printed nothing."

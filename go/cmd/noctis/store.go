@@ -1131,6 +1131,7 @@ func emptyState() object {
 		"failureRetries":   object{},
 		"queueVerify":      object{},
 		"typedTurns":       object{},
+		"userTurns":        object{},
 		"continuedBy":      object{},
 		"freshStarts":      object{},
 		// usedCheckpointsDue is when the oldest record in used-checkpoints.json expires, 0 when
@@ -1410,6 +1411,7 @@ func pruneState(state object, now int64) {
 		"failureRetries": stateEntryTTLSeconds,
 		"modelOverrides": launchRecordTTLSeconds,
 		"typedTurns":     stateEntryTTLSeconds,
+		"userTurns":      stateEntryTTLSeconds,
 		"continuedBy":    stateEntryTTLSeconds,
 		"freshStarts":    stateEntryTTLSeconds,
 	} {

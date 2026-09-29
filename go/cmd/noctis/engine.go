@@ -33,6 +33,7 @@ var (
 	queuePriority      = lazyRegexp(`(?i)\(p([0-9])\)`)
 	queueAfter         = lazyRegexp(`(?i)\(after\s+([^)]+)\)`)
 	queueTag           = lazyRegexp(`#([A-Za-z][\w-]*)`)
+	queueHuman         = lazyRegexp(`(?i)\((?:human|insan)\)`)
 	queueReference     = lazyRegexp(`^(?:\d+|#\pL[\pL\pN_-]*|(?:` + issueRepoPattern + `)?#\d+)$`)
 )
 
@@ -295,8 +296,12 @@ func recordProjectDir(record object) {
 }
 
 type queueView struct {
-	total         int
-	blocked       int
+	total   int
+	blocked int
+	// human counts the open items marked (human): the user's own work, left out of total. The
+	// items that wait for them stay blocked until the user ticks them.
+	human         int
+	humanItems    []string
 	items         []string
 	plain         bool
 	unmatched     []string
@@ -393,6 +398,7 @@ type queueEntry struct {
 	ordinal     int
 	text        string
 	checked     bool
+	human       bool
 	priority    int
 	tags        map[string]bool
 	after       []string
@@ -452,6 +458,7 @@ func parseQueueBullet(line string, ordinal int) (queueEntry, bool) {
 
 func newQueueEntry(ordinal int, text string, checked bool) queueEntry {
 	entry := queueEntry{ordinal: ordinal, text: strings.TrimSpace(text), checked: checked, priority: 5, tags: map[string]bool{}}
+	entry.human = queueHuman.MatchString(entry.text)
 	if found := queuePriority.FindStringSubmatch(entry.text); found != nil {
 		entry.priority = int(found[1][0] - '0')
 	}
@@ -565,7 +572,6 @@ func queueSnapshotOf(file, content string) queueView {
 			view.empty = append(view.empty, entry.first+1)
 			continue
 		}
-		view.total++
 		ready := true
 		for _, reference := range entry.after {
 			done, matched := satisfied(entry, reference)
@@ -580,9 +586,17 @@ func queueSnapshotOf(file, content string) queueView {
 				view.unmatchedMore++
 			}
 		}
-		if ready {
+		switch {
+		case entry.human:
+			view.human++
+			if len(view.humanItems) < queueMaxItems {
+				view.humanItems = append(view.humanItems, truncateText(entry.text, 160))
+			}
+		case ready:
+			view.total++
 			eligible = append(eligible, entry)
-		} else {
+		default:
+			view.total++
 			view.blocked++
 		}
 	}

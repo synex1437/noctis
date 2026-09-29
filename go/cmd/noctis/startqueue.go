@@ -164,7 +164,8 @@ func onStopPrompt(input, cfg object, sid string) {
 		return
 	}
 	total := int(numberOr(record, "items", 0))
-	done := max(0, total-queueSnapshot(path).total)
+	left := queueSnapshot(path)
+	done := max(0, total-left.total-left.human)
 	label := sessionQueueLabel(sid)
 	endAutoQueue(sid, true)
 	journal(sid, "UserPromptSubmit", "stop-queue", fmt.Sprintf("%d of %d done", done, total), nil)

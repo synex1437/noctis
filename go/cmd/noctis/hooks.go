@@ -233,10 +233,10 @@ func onSessionStart(input, cfg object) {
 			rememberOpenIssues(cfg, queuePath)
 			switch {
 			case !isAutoQueue(queuePath):
-				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total))
+				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total)+humanItemsRule(snapshot))
 				touchQueueTrust(queuePath, now)
 			case snapshot.total > 0:
-				contexts = append(contexts, sessionQueueDirective(sid, queuePath, snapshot.total))
+				contexts = append(contexts, sessionQueueDirective(sid, queuePath, snapshot.total)+humanItemsRule(snapshot))
 			}
 			logInfo("queue mode for %s: %s (%d open)", sid, queuePath, snapshot.total)
 		}
@@ -572,6 +572,7 @@ func onUserPromptSubmit(input, cfg object) {
 		return
 	}
 	releaseInterruptedWait(sid, state)
+	noteUserTurn(state, sid, getString(input, "prompt"), now)
 	if !queueContinuationPrompt(getString(input, "prompt")) {
 		resetIdleGuard(state, sid)
 		if !promptFromPlugin {
@@ -1364,7 +1365,7 @@ func onSubagentBatch(input, cfg object) {
 func onPreToolUse(input, cfg object) {
 	toolName := getString(input, "tool_name")
 	if ownFileTools[toolName] {
-		if denyOwnFileWrite(input, cfg) || refuseJobsNotInPrompt(input, cfg) {
+		if denyOwnFileWrite(input, cfg) || refuseHumanTicks(input, cfg) || refuseJobsNotInPrompt(input, cfg) {
 			return
 		}
 		if toolName != "Write" {
@@ -1625,6 +1626,10 @@ func onStop(input, cfg object) {
 			emit(gated)
 			return
 		}
+		if snapshot.human > 0 {
+			stopForHumanItems(cfg, state, sid, queuePath, content, queueLabel, snapshot, now)
+			return
+		}
 		driven := getMap(getMap(state, "stopGuard"), sid) != nil || isAutoQueue(queuePath)
 		updateState(func(next object) { delete(stateMap(next, "stopGuard"), sid) })
 		left := []string{}
@@ -1647,7 +1652,19 @@ func onStop(input, cfg object) {
 		return
 	}
 	if len(snapshot.items) == 0 && snapshot.blocked > 0 {
-
+		// The last item Claude could take is ticked: its check runs before the stop, as it does when
+		// the queue is finished.
+		if queueHeldBack(cfg, state, sid, queuePath) {
+			return
+		}
+		if gated := gateQueue(cfg, input, sid, queuePath, content, queueLabel, now); gated != nil {
+			emit(gated)
+			return
+		}
+		if snapshot.human > 0 {
+			stopForHumanItems(cfg, state, sid, queuePath, content, queueLabel, snapshot, now)
+			return
+		}
 		// Every open item is blocked here: the user hears of these items once, as of a queue that
 		// stopped progressing.
 		blockedKey := fmt.Sprintf("blocked:%s:%s:%s", sid, queuePath, openEntriesDigest(content))
@@ -1802,6 +1819,7 @@ func onStop(input, cfg object) {
 	updateState(func(next object) {
 		stateMap(next, "stopGuard")[sid] = guard
 		stateMap(next, "stopDay")[sid] = object{"day": today, "continues": continuedToday + 1, "at": float64(now)}
+		delete(stateMap(next, "userTurns"), sid)
 	})
 	if !isAutoQueue(queuePath) {
 		touchQueueTrust(queuePath, now)
@@ -1822,6 +1840,7 @@ func onStop(input, cfg object) {
 	if snapshot.blocked > 0 {
 		blockedNote = fmt.Sprintf(" %d item(s) wait on unfinished dependencies and are not eligible yet.", snapshot.blocked)
 	}
+	blockedNote += humanItemsRule(snapshot)
 	if len(snapshot.items) > 0 && currentHost().agents && workflowAdvisable(cfg, result) && looksLikeFanOut(snapshot.items[0]) {
 		systemMessage = joinNotices(systemMessage, workflowNotice(cfg, "notice.workflowQueue", result.usage))
 	}
