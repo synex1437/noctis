@@ -5,7 +5,6 @@ package main
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"syscall"
 )
 
@@ -41,19 +40,4 @@ func hideConsoleWindow(command *exec.Cmd) {
 	}
 	command.SysProcAttr.HideWindow = true
 	command.SysProcAttr.CreationFlags |= createNoWindow
-}
-
-// headlessConsoleHost returns the console host a scheduled task can start the runner in without a
-// window: conhost.exe, whose --headless mode came with the pseudo consoles of Windows 10 1809, so it
-// is named only where kernel32 has CreatePseudoConsole. Elsewhere it returns "".
-func headlessConsoleHost() string {
-	root := os.Getenv("SystemRoot")
-	if root == "" || syscall.NewLazyDLL("kernel32.dll").NewProc("CreatePseudoConsole").Find() != nil {
-		return ""
-	}
-	host := filepath.Join(root, "System32", "conhost.exe")
-	if info, err := os.Stat(host); err != nil || !info.Mode().IsRegular() {
-		return ""
-	}
-	return host
 }

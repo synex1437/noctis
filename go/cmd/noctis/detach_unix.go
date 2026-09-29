@@ -21,9 +21,5 @@ func killTree(process *os.Process) {
 	_ = process.Kill()
 }
 
-// hideConsoleWindow and headlessConsoleHost matter only on Windows: a child here opens no window.
+// hideConsoleWindow matters only on Windows: a child here opens no window.
 func hideConsoleWindow(_ *exec.Cmd) {}
-
-func headlessConsoleHost() string {
-	return ""
-}

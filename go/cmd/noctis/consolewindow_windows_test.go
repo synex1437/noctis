@@ -4,9 +4,6 @@ package main
 
 import (
 	"os/exec"
-	"path/filepath"
-	"strings"
-	"syscall"
 	"testing"
 )
 
@@ -30,14 +27,5 @@ func TestAConsoleChildStartsWithoutAWindowAndKeepsItsCommandLine(t *testing.T) {
 	hideConsoleWindow(detached)
 	if detached.SysProcAttr.CreationFlags != flags {
 		t.Fatalf("a detached process got CREATE_NO_WINDOW on top of DETACHED_PROCESS: %#x", detached.SysProcAttr.CreationFlags)
-	}
-}
-
-func TestTheTaskFindsTheConsoleHostWhereWindowsHasPseudoConsoles(t *testing.T) {
-	if syscall.NewLazyDLL("kernel32.dll").NewProc("CreatePseudoConsole").Find() != nil {
-		t.Skip("this Windows has no pseudo consoles, so the task keeps its console window")
-	}
-	if host := headlessConsoleHost(); !strings.EqualFold(filepath.Base(host), "conhost.exe") {
-		t.Fatalf("no console host was found to run the task's runner without a window: %q", host)
 	}
 }
