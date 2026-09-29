@@ -19,6 +19,7 @@ var ported = map[string]commandFunc{
 	"status":           runStatus,
 	"check":            runCheck,
 	"queue":            runQueue,
+	"job":              runJob,
 	"cancel":           runCancel,
 	"off":              runOff,
 	"on":               runOn,

@@ -161,6 +161,9 @@ type parsedArgs struct {
 	flags      map[string]string
 	values     map[string][]string
 	present    map[string]bool
+	// rest is what follows a bare --, as it was given: the command noctis job run starts, whose
+	// own flags are no business of noctis.
+	rest []string
 }
 
 var switchFlags = map[string]bool{"help": true, "h": true, "json": true, "skip-task": true, "watch": true, "uninstall": true, "purge": true, "no-model": true, "no-ask": true, "no-lean": true, "all": true}
@@ -169,6 +172,10 @@ func parseArgs(argv []string) parsedArgs {
 	out := parsedArgs{flags: map[string]string{}, values: map[string][]string{}, present: map[string]bool{}}
 	for i := 0; i < len(argv); i++ {
 		arg := argv[i]
+		if arg == "--" {
+			out.rest = append([]string{}, argv[i+1:]...)
+			break
+		}
 		if !strings.HasPrefix(arg, "--") {
 			out.positional = append(out.positional, arg)
 			continue
@@ -1133,6 +1140,8 @@ func emptyState() object {
 		"typedTurns":       object{},
 		"userTurns":        object{},
 		"queueDefer":       object{},
+		"jobs":             object{},
+		"jobSeq":           float64(0),
 		"continuedBy":      object{},
 		"freshStarts":      object{},
 		// usedCheckpointsDue is when the oldest record in used-checkpoints.json expires, 0 when
@@ -1402,6 +1411,7 @@ func pruneState(state object, now int64) {
 	}
 	dropExpiredCheckpoints(stateMap(state, "checkpoints"), now, nil)
 	pruneDeferrals(state, now)
+	pruneJobs(state, now)
 
 	for name, ttl := range map[string]float64{
 		"routes":         routeTTLSeconds,

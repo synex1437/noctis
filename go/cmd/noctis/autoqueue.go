@@ -1033,16 +1033,23 @@ func deniedNoctisCommand(command string, powershell bool) *protectedCommand {
 // protected subcommand. The reader has already applied the shell's quoting,
 // escapes, expansions and here-documents, so each word is what the program
 // would receive; a word built at run time stays unknown and is not matched.
+// A noctis job runs what follows --: several words are in the segment and
+// are looked at with it, and a single one is a command line of its own.
 func namesProtected(segments [][]shellArgument, live []protectedCommand) *protectedCommand {
 	for _, words := range segments {
 		for index, word := range words {
 			if !namesNoctis(word) {
 				continue
 			}
-			positional := parseArgs(argumentWords(words[index+1:])).positional
+			parsed := parseArgs(argumentWords(words[index+1:]))
 			for i := range live {
-				if startsWithWords(positional, live[i].words) {
+				if startsWithWords(parsed.positional, live[i].words) {
 					return &live[i]
+				}
+			}
+			if len(parsed.rest) == 1 && startsWithWords(parsed.positional, []string{"job"}) {
+				if target := deniedNoctisCommand(words[len(words)-1].text, false); target != nil {
+					return target
 				}
 			}
 		}
