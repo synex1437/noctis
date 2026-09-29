@@ -361,6 +361,17 @@ Claude Code on the web installs no plugins, so a project that wants noctis there
 into `.claude/skills`, where they are typed `/noctis-pause` and so on. noctis now names those
 commands in its notices and takes them like `/noctis:pause` (X11).
 
+## A pause restored from the backup
+
+A pause is stored in one write to `state.json` and its runner is recorded in the next, and
+`state.json.bak` keeps the state as it was before the last write. When `state.json` broke right
+after a pause, the restore brought the pause back without its runner, and the repair pass left it
+alone for 30 seconds, the grace it gives a hook that is still recording one. The runner the lost
+write had named still resumed the session, but the pause no longer named that runner. A pause now
+notes the process that stored it, and the grace lasts only while that process runs: the next hook
+gives the restored pause a runner, as it does a pause whose hook was killed between the two writes.
+The 400-round monkey test found it with seed 23; 7.5.2 fails it the same way.
+
 ## Setup profiles: Sonnet 5.5
 
 Sonnet 5.5 costs $2 / $10 per million input / output tokens, against $4 / $20 for Opus 5.5, and at
@@ -423,7 +434,7 @@ read `41%`, as English prints them (U11).
 
 ## Tests
 
-207 new Go tests since 7.5.2, four of them on Windows only: 140 for the audit fixes and the
-profiles, one of them a fuzz test of the trust guard's shell reading, and 67 for the long-project
-work. The labs cover the fixes where a lab reaches them. The results of the local rounds on this
-release are in its commit message.
+209 new Go tests since 7.5.2, four of them on Windows only: 140 for the audit fixes and the
+profiles, one of them a fuzz test of the trust guard's shell reading, 67 for the long-project work
+and two for the restored pause. The labs cover the fixes where a lab reaches them. The results of
+the local rounds on this release are in its commit message.

@@ -1678,6 +1678,8 @@ func prepareWait(sid string, record object, cfg object) {
 		}
 	}
 	record["configDirEnv"] = os.Getenv(claudeConfigEnv)
+	// The process that stores a wait records its runner right after; see storerAlive.
+	record["storedBy"] = float64(os.Getpid())
 	recordProjectDir(record)
 	if cfg != nil && queueOffFor(cfg, sid) {
 		record["queueOff"] = true
@@ -2084,14 +2086,28 @@ func rearmStrandedWaits(state object) {
 	}
 }
 
+// storerAlive tells whether the process that stored a wait may still be recording its runner, which
+// it does in a second write. A wait from before noctis noted that process counts as such.
+func storerAlive(record object) bool {
+	pid, ok := getNumber(record, "storedBy")
+	return !ok || pid <= 0 || processAlive(int(pid))
+}
+
 func strandedBecause(sid string, record object, now int64, thorough bool) string {
-	if numberOr(record, "resumeAt", 0) <= 0 || float64(now)-numberOr(record, "startedAt", 0) < schedulingGraceSeconds {
+	if numberOr(record, "resumeAt", 0) <= 0 {
+		return ""
+	}
+	scheduled := getMap(record, "scheduled")
+	// A young wait is left to the process that stored it while that process may still record its
+	// runner. One with no runner whose process is gone gets one now: state.json restored from its
+	// backup can bring the wait back without the write that recorded its runner, and a hook killed
+	// between the two writes never made that write.
+	if float64(now)-numberOr(record, "startedAt", 0) < schedulingGraceSeconds && (scheduled != nil || storerAlive(record)) {
 		return ""
 	}
 	if hookSleeping(record) && float64(now)-math.Max(numberOr(record, "heartbeat", 0), numberOr(record, "waking", 0)) < heartbeatFreshSeconds {
 		return ""
 	}
-	scheduled := getMap(record, "scheduled")
 	if scheduled == nil {
 		if hookSleeping(record) {
 			return "its hook died before scheduling a runner"
