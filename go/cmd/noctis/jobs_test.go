@@ -207,8 +207,9 @@ func TestADoubleDashEndsWhatNoctisReadsAsItsOwn(t *testing.T) {
 	if rest := parseArgs([]string{"job", "run", "--"}).rest; len(rest) != 0 {
 		t.Fatalf("a -- with nothing after it gave %q", rest)
 	}
-	if shell := jobCommand([]string{"echo one && echo two"}); !strings.Contains(strings.Join(shell.Args, " "), "echo one && echo two") || len(shell.Args) < 2 {
-		t.Fatalf("a single word was not run as a command line: %q", shell.Args)
+	// Run rather than read: on Windows the line cmd.exe gets is in SysProcAttr, not in Args.
+	if output, err := jobCommand([]string{"echo one && echo two"}).Output(); err != nil || !strings.Contains(string(output), "one") || !strings.Contains(string(output), "two") {
+		t.Fatalf("a single word was not run as a command line: %v, %q", err, output)
 	}
 	if direct := jobCommand([]string{"prog", "a b", "--flag"}); strings.Join(direct.Args, "|") != "prog|a b|--flag" {
 		t.Fatalf("several words were not run as a program and its arguments: %q", direct.Args)
