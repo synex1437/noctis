@@ -228,7 +228,7 @@ func onSessionStart(input, cfg object) {
 			}
 			logInfo("queue file %s found but not trusted (%d open, %d added or changed since a trust, record from an older noctis: %t): no directive injected", queuePath, snapshot.total, len(changed), legacy)
 		} else if queueHeld(cfg, state, queuePath) {
-			logInfo("queue file %s held until %q passes: no directive injected", queuePath, queueCheckCommand(cfg))
+			logInfo("queue file %s held until %q passes: no directive injected", queuePath, queueCheckCommand(cfg, queuePath))
 		} else {
 			rememberOpenIssues(cfg, queuePath)
 			switch {

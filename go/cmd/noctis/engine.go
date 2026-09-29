@@ -2237,7 +2237,7 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 	waitCfg := section(cfg, "wait")
 	resumeAt := wait.until + math.Max(0, numberOr(waitCfg, "resetMarginSeconds", 0))
 	learnedCap := numberOr(readState(), "hookCapSeconds", 0)
-	inHook := waitsInHook(waitCfg, learnedCap, resumeAt-float64(now), queueCheckReserve(kind, cfg))
+	inHook := waitsInHook(waitCfg, learnedCap, resumeAt-float64(now), queueCheckReserve(kind, cfg, input))
 	if current := getMap(getMap(readState(), "waits"), sid); kind != "prompt" && joinableWait(current, wait.window, wait.until) {
 		return joinWait(kind, sid, cfg, wait, current, resumeAt, inHook, now)
 	}

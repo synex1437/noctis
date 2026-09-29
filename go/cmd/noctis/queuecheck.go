@@ -16,9 +16,61 @@ const (
 	queueCheckTailBytes = 8192
 )
 
-func queueCheckCommand(cfg object) string {
+// queueVerifyPattern is the line that names a queue file's own check command: noctis-verify: `command`,
+// on a line of its own.
+var queueVerifyPattern = lazyRegexp("(?i)^noctis-verify:[ \t]*`([^`]+)`$")
+
+// queueVerifyLine is the command the first noctis-verify line of content names, outside code fences.
+func queueVerifyLine(content string) string {
+	fenced := false
+	for _, raw := range strings.Split(strings.TrimPrefix(content, "\uFEFF"), "\n") {
+		line := strings.TrimSpace(raw)
+		switch {
+		case queueFence(line):
+			fenced = !fenced
+		case fenced:
+		default:
+			if match := queueVerifyPattern.FindStringSubmatch(line); match != nil {
+				return strings.TrimSpace(match[1])
+			}
+		}
+	}
+	return ""
+}
+
+// fileCheckCommand is the check command the queue file at path names for itself, or "". It counts
+// only while the user's trust (noctis queue trust) covers the file as content reads it, also with
+// queue.requireTrust off, since the command runs without a permission prompt; a checklist noctis
+// wrote never names one, and queue.fileVerify false turns the lines off. content "" reads the file.
+func fileCheckCommand(cfg object, path, content string) string {
+	if path == "" || isAutoQueue(path) || !getBool(section(cfg, "queue"), "fileVerify", true) {
+		return ""
+	}
+	if content == "" {
+		content, _ = readQueueText(path)
+	}
+	command := queueVerifyLine(content)
+	if command == "" {
+		return ""
+	}
+	if trusted, _, _ := queueTrustRecordGap(path, content); !trusted {
+		return ""
+	}
+	return command
+}
+
+// queueCheckCommandOf is the command that checks the queue at path between items: its file's own
+// (fileCheckCommand), else queue.verifyCommand.
+func queueCheckCommandOf(cfg object, path, content string) string {
+	if command := fileCheckCommand(cfg, path, content); command != "" {
+		return command
+	}
 	command, _ := section(cfg, "queue")["verifyCommand"].(string)
 	return strings.TrimSpace(command)
+}
+
+func queueCheckCommand(cfg object, path string) string {
+	return queueCheckCommandOf(cfg, path, "")
 }
 
 func queueCheckSeconds(cfg object) float64 {
@@ -42,7 +94,7 @@ func queueCheckRecord(state object, path string) object {
 }
 
 func queueHeld(cfg, state object, path string) bool {
-	return queueCheckCommand(cfg) != "" && numberOr(queueCheckRecord(state, path), "held", 0) > 0
+	return numberOr(queueCheckRecord(state, path), "held", 0) > 0 && queueCheckCommand(cfg, path) != ""
 }
 
 func queueHeldBack(cfg, state object, sid, path string) bool {
@@ -52,13 +104,14 @@ func queueHeldBack(cfg, state object, sid, path string) bool {
 	if getMap(getMap(state, "stopGuard"), sid) != nil {
 		updateState(func(next object) { delete(stateMap(next, "stopGuard"), sid) })
 	}
-	journal(sid, "Stop", "allow-stop", "queue held", object{"command": queueCheckCommand(cfg)})
-	logInfo("queue %s held until %q passes; stop allowed for %s", path, queueCheckCommand(cfg), sid)
+	command := queueCheckCommand(cfg, path)
+	journal(sid, "Stop", "allow-stop", "queue held", object{"command": command})
+	logInfo("queue %s held until %q passes; stop allowed for %s", path, command, sid)
 	return true
 }
 
 func rearmQueueCheck(cfg, input object, sid string) {
-	if queueCheckCommand(cfg) == "" {
+	if len(getMap(readState(), "queueVerify")) == 0 {
 		return
 	}
 	path := drivenQueueFile(cfg, nil, input, sid)
@@ -72,7 +125,7 @@ func rearmQueueCheck(cfg, input object, sid string) {
 			record["at"] = float64(nowSec())
 		}
 	})
-	logInfo("queue %s held: %q runs again at the next stop of %s", path, queueCheckCommand(cfg), sid)
+	logInfo("queue %s held: %q runs again at the next stop of %s", path, queueCheckCommand(cfg, path), sid)
 }
 
 func queueTicks(content string) []any {
@@ -107,7 +160,7 @@ func queueCheckDue(record object, ticked []any) bool {
 
 func queueUncheckedIssues(cfg, state object, path, content string) map[string]bool {
 	unchecked := map[string]bool{}
-	if queueCheckCommand(cfg) == "" || observing {
+	if observing || queueCheckCommandOf(cfg, path, content) == "" {
 		return unchecked
 	}
 	passed := digestSet(getList(queueCheckRecord(state, path), "ticked"))
@@ -137,8 +190,9 @@ func queueFolder(cfg, input object, sid, path string) string {
 	return filepath.Dir(path)
 }
 
-func queueCheckReserve(kind string, cfg object) float64 {
-	if kind != "stop" || queueCheckCommand(cfg) == "" {
+// queueCheckReserve is the time a wait in place in the Stop hook leaves free for the queue check.
+func queueCheckReserve(kind string, cfg, input object) float64 {
+	if kind != "stop" || queueCheckCommand(cfg, drivenQueueFile(cfg, nil, input, sessionKey(input))) == "" {
 		return 0
 	}
 	return queueCheckSeconds(cfg)
@@ -203,7 +257,7 @@ func runQueueCheck(line, folder string, limit float64) (string, string) {
 }
 
 func gateQueue(cfg, input object, sid, path, content, label string, started int64) object {
-	command := queueCheckCommand(cfg)
+	command := queueCheckCommandOf(cfg, path, content)
 	if command == "" {
 		return nil
 	}
@@ -249,6 +303,10 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 	journal(sid, "Stop", "hold-queue", outcome, facts)
 	fail("queue check %q failed %s time(s) in a row for %s (%s); %s held until it passes, stop allowed", command, formatNumber(failures), sid, outcome, path)
 	shown := truncateText(command, 120)
-	notify(cfg, pluginName, T("queue.heldNotify", int(failures), label))
+	if fileCheckCommand(cfg, path, content) == command {
+		notify(cfg, pluginName, T("queue.heldNotifyFile", int(failures), label))
+	} else {
+		notify(cfg, pluginName, T("queue.heldNotify", int(failures), label))
+	}
 	return object{"systemMessage": T("queue.heldMessage", shown, int(failures), label)}
 }

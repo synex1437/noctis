@@ -147,6 +147,7 @@
     "requireTrust": true,
     "headless": false,
     "verifyCommand": "",
+    "fileVerify": true,
     "verifyTimeoutSeconds": 900,
     "verifyAttempts": 2
   },

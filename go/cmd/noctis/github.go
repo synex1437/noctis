@@ -183,6 +183,7 @@ func runQueueTrust(cfg object, cwd, action string) {
 		view := queueSnapshot(target)
 		printUnmatchedReferences(target, view)
 		printEmptyLines(target, view)
+		printQueueCheck(cfg, target)
 	case "untrust":
 		trustQueueFile(target, false)
 		fmt.Println(T("queue.trustRevoked", target))
@@ -208,6 +209,22 @@ func runQueueTrust(cfg object, cwd, action string) {
 		}
 		printUnmatchedReferences(target, view)
 		printEmptyLines(target, view)
+		printQueueCheck(cfg, target)
+	}
+}
+
+// printQueueCheck names the command that checks the queue at target between items and where it comes
+// from: a file's own runs without a permission prompt, so trusting the file is trusting it.
+func printQueueCheck(cfg object, target string) {
+	content, _ := readQueueText(target)
+	line, command := queueVerifyLine(content), queueCheckCommandOf(cfg, target, content)
+	switch {
+	case line != "" && command == line:
+		fmt.Println(T("queue.verifyFromFile", printableItem(command)))
+	case line != "":
+		fmt.Println(T("queue.verifyWaits", printableItem(line)))
+	case command != "":
+		fmt.Println(T("queue.verifyFromConfig", printableItem(command)))
 	}
 }
 

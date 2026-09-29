@@ -834,6 +834,13 @@ func queueTrustGapOf(cfg object, path, content string) (bool, []string, bool) {
 	if !queueNeedsTrust(cfg, path) {
 		return true, nil, false
 	}
+	return queueTrustRecordGap(path, content)
+}
+
+// queueTrustRecordGap compares content with the trust the user gave path with noctis queue trust:
+// whether it still matches, the lines added or changed since, and whether the record comes from an
+// older noctis that kept no lines. It holds whatever queue.requireTrust says.
+func queueTrustRecordGap(path, content string) (bool, []string, bool) {
 	record := getMap(getMap(readState(), "queueTrust"), queueTrustKey(path))
 	if numberOr(record, "at", 0) <= 0 {
 		return false, nil, false
