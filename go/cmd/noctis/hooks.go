@@ -1712,12 +1712,19 @@ func onStop(input, cfg object) {
 		guard = object{"forced": float64(0), "idle": float64(0), "lastOpen": nil, "at": float64(now)}
 	}
 	lastOpen, hasLastOpen := getNumber(guard, "lastOpen")
-	if hasLastOpen && float64(snapshot.total) != lastOpen {
+	// A new commit is progress as well: a large item can take many turns before it is ticked. HEAD
+	// is read from the repository's files only, so a stop never waits for git.
+	head, headKnown := gitHeadFromFiles(orDefault(getString(input, "cwd"), filepath.Dir(queuePath)))
+	committed := headKnown && getString(guard, "head") != "" && head != getString(guard, "head")
+	if hasLastOpen && float64(snapshot.total) != lastOpen || committed {
 		guard["idle"] = float64(0)
 	} else if getBool(input, "stop_hook_active", false) {
 		guard["idle"] = numberOr(guard, "idle", 0) + 1
 	}
 	guard["lastOpen"] = float64(snapshot.total)
+	if headKnown {
+		guard["head"] = head
+	}
 	guard["at"] = float64(now)
 	queue := section(cfg, "queue")
 	today := localDay(now)
@@ -1845,7 +1852,8 @@ func onStop(input, cfg object) {
 	}
 	blockedNote += humanItemsRule(snapshot) + deferredRule(snapshot, queuePath)
 	if numberOr(guard, "idle", 0) > 0 {
-		// Claude stopped without ticking anything: the item may wait on something only the user has.
+		// Claude stopped without ticking or committing anything: the item may wait on something only
+		// the user has.
 		blockedNote += queueDeferHint(queuePath)
 	}
 	if len(snapshot.items) > 0 && currentHost().agents && workflowAdvisable(cfg, result) && looksLikeFanOut(snapshot.items[0]) {
