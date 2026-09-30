@@ -6,7 +6,8 @@ Stop hook waits for a deferral that ends soon, and a session that stopped on a l
 when it ends, the way noctis resumes a session after a pause. With `alarm.digestAt` set, your phone
 gets one message a day through the webhook with what each queue finished, what it takes next and
 what waits on you. Once sessions have ticked a few items, noctis also says what an item takes of the
-weekly limit and when the items left may be done. It carries everything in 8.0.0
+weekly limit and when the items left may be done, and an item can name the model it is for. It
+carries everything in 8.0.0
 ([RELEASE_NOTES_8.0.0.md](RELEASE_NOTES_8.0.0.md)).
 
 ## If you are upgrading
@@ -20,6 +21,9 @@ and `hooks.json` is unchanged.
 - **A Stop hook may now hold a stop until a deferral ends,** within `wait.maxInHookMinutes` (330 by
   default) and the hook's own timeout, as it holds one for a pause. Esc ends that wait; run
   `noctis cancel` as well if the session should not go on by itself when the deferral ends.
+- **`(opus)`, `(sonnet)`, `(haiku)` and `(fable)` in an item's text now pick the model it runs on**
+  (through a subagent, see below). Reword an item that names a model in parentheses for another
+  reason.
 
 ## A deferral with an end wakes the queue
 
@@ -108,6 +112,26 @@ lines are in the daily digest under each queue and in `noctis status` under the 
 many such items it has. Unticking items starts the notes over, and a checklist noctis wrote from a
 prompt is left out. It costs no model call, and a stop that ticked nothing only reads.
 
+## A model for each item
+
+A queue mixes hard items with easy ones, and one session runs them all on one model. Tag an item
+with the model it is for:
+
+```markdown
+- [ ] design the billing schema and its migrations (opus)
+- [ ] write the unit tests for the parser (sonnet)
+- [ ] rename the settings keys in the docs (haiku)
+```
+
+When the session that takes a tagged item runs on another model (the model its status line
+reports, else `models.primary`), the Stop hook tells Claude to hand the item to a general-purpose
+subagent with that model and a brief that stands on its own, then to check its work and tick the
+item itself; for that item this takes the place of the note that hands items to a subagent once the
+context is large. The queue instructions a session starts with say what a tag means. The session
+keeps its own model, the PreToolUse hook still puts `models.fallback` in place of a scoped model
+whose quota is out, and a host without subagents leaves the tag as text. `noctis why --json` shows
+`itemModel` on `continue-queue`.
+
 ## Known limits
 
 - **A cloud session is not woken for a deferral that ends after the Stop hook may wait.** The next
@@ -117,6 +141,9 @@ prompt is left out. It costs no model call, and a stop that ticked nothing only 
 - **The pace is the average of the last items.** For a queue whose items differ a lot in size it is
   rough; the time between two ticks counts as the item's, whatever else the session did then (a gap
   over 6 hours is left out), and so does the weekly use of other work in the same account.
+- **A model tag works through a subagent.** The item's work runs in a subagent of that model and the
+  session checks and ticks it, so the session's own turns stay on its model; on a host without
+  subagents the tag does nothing.
 - The limits in [RELEASE_NOTES_8.0.0.md](RELEASE_NOTES_8.0.0.md) still apply, but for the first one:
   a deferral whose `--until` passes now wakes the session that stopped on it.
 
@@ -138,3 +165,7 @@ unticked, the time and share of an item and the finish of the items left, the wa
 reset at the pause point (and at 100 % with the threshold off, and without a weekly reading), long
 gaps and a weekly reset left out, `queue status` (text and JSON), the digest and `noctis status`
 giving the pace, and the notes of a file dropped a month after the last one.
+
+5 new Go tests for model tags: reading a tag, the Stop hook handing a tagged item to a subagent of
+its model and not when the session runs on it, the large-context note giving way to it and staying
+for an item of the session's own model, and the queue instructions saying what a tag means.

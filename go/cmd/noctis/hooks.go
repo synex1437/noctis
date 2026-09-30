@@ -233,7 +233,7 @@ func onSessionStart(input, cfg object) {
 			rememberOpenIssues(cfg, queuePath)
 			switch {
 			case !isAutoQueue(queuePath):
-				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total)+humanItemsRule(snapshot)+deferredRule(snapshot, queuePath)+queueDeferHint(queuePath)+jobHint())
+				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total)+humanItemsRule(snapshot)+deferredRule(snapshot, queuePath)+itemModelRule(snapshot)+queueDeferHint(queuePath)+jobHint())
 				touchQueueTrust(queuePath, now)
 			case snapshot.total > 0:
 				contexts = append(contexts, sessionQueueDirective(sid, queuePath, snapshot.total)+humanItemsRule(snapshot)+deferredRule(snapshot, queuePath)+queueDeferHint(queuePath)+jobHint())
@@ -1846,6 +1846,10 @@ func onStop(input, cfg object) {
 	subagent := subagentNote(cfg, tokens, known)
 	if subagent != "" {
 		facts["subagent"], facts["contextTokens"] = true, tokens
+	}
+	if model, note := itemModelNote(cfg, state, sid, snapshot.items); note != "" {
+		// A subagent of the item's model also keeps the item out of this context.
+		subagent, facts["itemModel"] = note, model
 	}
 	journal(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), facts)
 	logInfo("queue continue #%s for %s: %d open", formatNumber(numberOr(guard, "forced", 0)), sid, snapshot.total)
