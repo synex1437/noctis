@@ -140,6 +140,8 @@
     "maxContinuesPerSession": 200,
     "maxContinuesPerDay": 600,
     "subagentAboveTokens": 100000,
+    "escalate": "auto",
+    "maxEscalationsPerDay": 5,
     "completionPromise": "",
     "github": {
       "closeOnDone": false,

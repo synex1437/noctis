@@ -229,6 +229,7 @@ func runQueueTrust(cfg object, cwd, action string) {
 		if trusted {
 			printQueueProgress(target, view)
 			printQueuePace(cfg, target, view)
+			printSetups(target)
 		}
 		printUnmatchedReferences(target, view)
 		printEmptyLines(target, view)

@@ -1153,6 +1153,11 @@ func emptyState() object {
 		// queuePace are the pace notes of queue files by queueTrustKey (noteQueuePace): the file
 		// (path), when it was noted last (at), and the notes, [at, done, used, resetsAt] each.
 		"queuePace": object{},
+		// queueModels are, by queueTrustKey, the items of a queue file that went to a stronger model
+		// (items) and what each setup finished on it (setups), for escalate.go.
+		"queueModels": object{},
+		// escalateDay counts the items that went to a stronger model on a day (day, count).
+		"escalateDay": object{},
 		// usedCheckpointsDue is when the oldest record in used-checkpoints.json expires, 0 when
 		// it holds none.
 		"usedCheckpointsDue": float64(0),
@@ -1397,9 +1402,11 @@ func pruneState(state object, now int64) {
 			delete(stateMap(state, "queueVerify"), key)
 		}
 	}
-	for key, raw := range stateMap(state, "queuePace") {
-		if float64(now)-numberOr(toObject(raw), "at", 0) > queueTrustTTLSeconds {
-			delete(stateMap(state, "queuePace"), key)
+	for _, name := range []string{"queuePace", "queueModels"} {
+		for key, raw := range stateMap(state, name) {
+			if float64(now)-numberOr(toObject(raw), "at", 0) > queueTrustTTLSeconds {
+				delete(stateMap(state, name), key)
+			}
 		}
 	}
 	for key, raw := range stateMap(state, "githubSeen") {

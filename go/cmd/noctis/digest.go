@@ -460,6 +460,13 @@ func digestQueue(cfg, state object, path string, before object, since float64, u
 	for _, line := range paceLines(paceOf(cfg, state, path, view.total+view.deferred, usage, now)) {
 		lines = append(lines, "- "+line)
 	}
+	// The items that went to a stronger model since the last digest, and what each setup finished.
+	if count, done, stuck, texts := escalationsSince(state, path, from); count > 0 {
+		lines = append(lines, "- "+T("digest.escalated", formatTime(from), count, done, stuck, digestNames(texts)))
+	}
+	for _, line := range setupLines(state, path) {
+		lines = append(lines, "- "+line)
+	}
 	if line := digestCheck(cfg, state, path, content); line != "" {
 		lines = append(lines, "- "+line)
 	}
