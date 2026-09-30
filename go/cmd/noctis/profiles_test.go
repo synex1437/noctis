@@ -109,14 +109,17 @@ func TestAHaikuEffortFromAFlagIsNotStored(t *testing.T) {
 	}
 }
 
-func TestTheShippedDefaultsAreTheSynexProfileProjected(t *testing.T) {
+func TestTheShippedDefaultsAreTheCodeProfileProjected(t *testing.T) {
 	defaults := readJSON(filepath.Join(repoRoot(), "config.default.json"))
 	roles := section(defaults, "roles")
-	profile := roleProfiles["synex"]
+	profile := roleProfiles["code"]
+	if name := getString(roles, "profile"); name != "code" {
+		t.Errorf("config.default.json names the profile %q, want code", name)
+	}
 	for _, role := range roleNames {
 		want, got := getMap(profile, role), getMap(roles, role)
 		if getString(want, "model") != getString(got, "model") || getString(want, "effort") != getString(got, "effort") {
-			t.Errorf("config.default.json %s = %v, the SYNEX profile says %v", role, got, want)
+			t.Errorf("config.default.json %s = %v, the Code profile says %v", role, got, want)
 		}
 	}
 	models := section(defaults, "models")

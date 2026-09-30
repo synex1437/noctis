@@ -231,7 +231,7 @@ func askRoles(current object, anyModel bool) object {
 		return line
 	}
 	fmt.Println(T("roles.intro"))
-	choice := profileAlias(strings.ToLower(ask(T("roles.profileQuestion"), profileTitles["synex"])))
+	choice := profileAlias(strings.ToLower(ask(T("roles.profileQuestion"), profileTitles["code"])))
 	if base, known := roleProfiles[choice]; known {
 		roles := cloneObject(base)
 		roles["profile"] = choice

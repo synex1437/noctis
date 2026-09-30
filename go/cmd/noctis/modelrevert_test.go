@@ -100,12 +100,12 @@ func TestASetupDuringAScopedSwitchIsTheNewBaseline(t *testing.T) {
 		t.Fatalf("setup failed:\n%s", run)
 	}
 	chosen := readJSON(filepath.Join(account, "settings.json"))
-	if getString(chosen, "model") != "opus" || getString(getMap(chosen, "env"), "CLAUDE_CODE_EFFORT_LEVEL") != "xhigh" {
+	if getString(chosen, "model") != "opus" || effortInEffect(chosen) != "xhigh" {
 		t.Fatalf("setup --profile code should leave opus at effort xhigh: %v", chosen)
 	}
 	note := maybeRevertDefaultModel(loadConfig(), readState(), fableWindowCleared(now), now)
 	after := readJSON(files.settings)
-	if note != "" || getString(after, "model") != "opus" || getString(getMap(after, "env"), "CLAUDE_CODE_EFFORT_LEVEL") != "xhigh" {
+	if note != "" || getString(after, "model") != "opus" || effortInEffect(after) != "xhigh" {
 		t.Fatalf("the reset of a switch made before setup undid the setup: notice %q, settings %v", note, after)
 	}
 }
@@ -155,8 +155,13 @@ func TestASetupThatKeepsTheSwitchedModelLeavesTheResetItsModel(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cleared, now := switchedThenSetUp(t, tc.settings, tc.first, tc.during)
+			// A level saved per model leaves the switch's own level for the fallback role in force
+			// until the reset; max goes in the variable itself.
+			if _, _, effort, _ := settingsModelAndEffort(); (tc.effort == "max") != (effort == "max") || (tc.effort != "max" && effort != "high") {
+				t.Fatalf("until the reset the variable should hold %s: %q", map[bool]string{true: "max", false: "the fallback role's high"}[tc.effort == "max"], effort)
+			}
 			note := maybeRevertDefaultModel(loadConfig(), readState(), cleared, now)
-			model, _, effort, _ := settingsModelAndEffort()
+			model, effort := settingsModel(), effortInEffect(readJSON(files.settings))
 			if model != tc.model || effort != tc.effort || note != T("scoped.reverted", scopedLabel(loadConfig()), tc.model) {
 				t.Fatalf("setup kept the fallback model the switch wrote, so the reset should put in %s at effort %s: got %s at %s, notice %q", tc.model, tc.effort, model, effort, note)
 			}

@@ -363,7 +363,7 @@ async function scenarioKilledHookRecovery(acc) {
   check('runner relaunched dead session', calls.length, 1);
   check('relaunch keeps account', calls[0] && calls[0].includes(`CONFIG=${acc.dir}`), true);
   check('relaunch marks handoff env', calls[0] && calls[0].includes('HANDOFF=s2'), true);
-  check('relaunch effort max', calls[0] && calls[0].includes('--effort max'), true);
+  check('relaunch passes an effort below max as a flag, not the variable that overrides subagents', calls[0] && calls[0].includes('--effort xhigh') && calls[0].includes(' EFFORT= '), true);
   check('relaunch drops the Claude session markers the runner inherited from the hook', calls[0] && calls[0].includes(' CHILD= '), true);
   check('handoff released', Object.keys(acc.state().handedOff).length, 0);
 }
@@ -1593,7 +1593,8 @@ async function scenarioMarketplaceBootstrap(acc) {
   const coding = spawnSync(shipped, ['setup', '--config-dir', rolesDir, '--profile', 'Code'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
   const codingConfig = readJson(path.join(rolesDir, PLUGIN_NAME, 'config.json'));
   check('roles: profile flag sets the roles and the working keys', coding.status === 0 && codingConfig.roles.profile === 'code' && codingConfig.models.primary === 'opus' && codingConfig.models.effort === 'xhigh' && codingConfig.models.fallback === 'opus' && codingConfig.router.subagentModels.Plan === 'opus', true);
-  check('roles: settings.json follows the code role', readJson(path.join(rolesDir, 'settings.json')).model === 'opus' && readJson(path.join(rolesDir, 'settings.json')).env.CLAUDE_CODE_EFFORT_LEVEL === 'xhigh', true);
+  const codingSettings = readJson(path.join(rolesDir, 'settings.json'));
+  check('roles: settings.json follows the code role, its effort saved for the model', codingSettings.model === 'opus' && (codingSettings.modelSettings || {})['claude-opus-5-5']?.effortLevel === 'xhigh' && !(codingSettings.env || {}).CLAUDE_CODE_EFFORT_LEVEL, true);
   const lite = fs.readFileSync(path.join(root, 'agents', 'lite.md'), 'utf8');
   const digest = fs.readFileSync(path.join(root, 'agents', 'digest.md'), 'utf8');
   check('roles: plugin agents rewritten from the profile (Code researches on Sonnet 5.5 at high)', /^model: sonnet$/m.test(lite) && /^effort: high$/m.test(lite) && /^model: haiku$/m.test(digest) && !/^effort:/m.test(digest) && lite.split('---').length === 3, true);
@@ -1633,9 +1634,10 @@ async function scenarioMarketplaceBootstrap(acc) {
   const setOnFable = readJson(path.join(switchDir, 'settings.json')).model;
   spawnSync(shipped, ['setup', '--config-dir', switchDir, '--profile', 'balanced'], { encoding: 'utf8', env: { ...env, NOCTIS_NO_TASKS: '1' } });
   const afterSwitch = readJson(path.join(switchDir, 'settings.json'));
-  check('roles: a profile switch replaces the model setup itself wrote (Balanced codes on Sonnet 5.5 at high)', setOnFable === 'fable' && afterSwitch.model === 'sonnet' && afterSwitch.env.CLAUDE_CODE_EFFORT_LEVEL === 'high', true);
+  check('roles: a profile switch replaces the model setup itself wrote (Balanced codes on Sonnet 5.5 at high)', setOnFable === 'fable' && afterSwitch.model === 'sonnet' && (afterSwitch.modelSettings || {})['claude-sonnet-5-5']?.effortLevel === 'high' && !(afterSwitch.env || {}).CLAUDE_CODE_EFFORT_LEVEL, true);
   spawnSync(shipped, ['install', '--source', root, '--config-dir', switchDir, '--uninstall'], { encoding: 'utf8', env });
-  check('uninstall: after a replaced model the person gets back what they had', 'model' in readJson(path.join(switchDir, 'settings.json')), false);
+  const afterUninstall = readJson(path.join(switchDir, 'settings.json'));
+  check('uninstall: after a replaced model the person gets back what they had', 'model' in afterUninstall || 'modelSettings' in afterUninstall || 'CLAUDE_CODE_EFFORT_LEVEL' in (afterUninstall.env || {}), false);
   const ownDir = path.join(LAB_ROOT, 'own-model-account');
   fs.mkdirSync(ownDir, { recursive: true });
   writeJson(path.join(ownDir, 'settings.json'), { model: 'fable' });
@@ -1802,7 +1804,7 @@ async function scenarioShippedProfile(acc) {
   const now = nowSec();
   const config = readJson(acc.configFile);
   const settings = readJson(path.join(acc.dir, 'settings.json'));
-  check('shipped profile: the main session runs Opus at max effort', settings.model === 'opus' && settings.env.CLAUDE_CODE_EFFORT_LEVEL === 'max' && config.models.primary === 'opus' && config.roles.profile === 'synex', true);
+  check('shipped profile: the main session runs Opus at xhigh, saved for the model', settings.model === 'opus' && (settings.modelSettings || {})['claude-opus-5-5']?.effortLevel === 'xhigh' && !(settings.env || {}).CLAUDE_CODE_EFFORT_LEVEL && config.models.primary === 'opus' && config.roles.profile === 'code', true);
   check('shipped profile: the Fable cap stays watched and leads back to the code model', config.models.scopedPattern === 'fable' && config.models.fallback === 'opus' && config.router.subagentModels.Plan === 'opus' && config.router.subagentModels.Explore === 'haiku', true);
   acc.statusline('sp1', 'claude-opus-5-5', 20, now + 7200, 10, now + 3 * 86400, 30);
   check('shipped profile: the router is off, so a research prompt stays in the main session', config.router.enabled === false && !acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'sp1', cwd: PROJECT_DIR, prompt: 'En iyi mekanik klavye 2026 araştır' }).includes('Non-code research'), true);
@@ -1812,7 +1814,7 @@ async function scenarioShippedProfile(acc) {
     config.workflow.suggest = true;
   });
   const advice = acc.hook(fanOutPrompt);
-  check('shipped profile: workflow agents get the profile models', advice.includes('🧩') && advice.includes('→ opus (effort max)') && advice.includes('→ opus (effort xhigh)') && advice.includes('→ haiku.'), true);
+  check('shipped profile: workflow agents get the profile models', advice.includes('🧩') && advice.includes('→ opus (effort xhigh)') && advice.includes('→ sonnet (effort high)') && advice.includes('→ haiku.'), true);
   acc.setConfig((config) => {
     config.workflow.suggest = false;
   });
@@ -1955,7 +1957,7 @@ async function scenarioWorkflows(acc) {
   acc.statusline('wf1', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
   const fanOut = JSON.parse(acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf1', cwd: PROJECT_DIR, prompt: 'Audit every route handler under src/routes for missing auth checks and fix what you find' }));
   const fanOutNotice = String(fanOut.systemMessage);
-  check('workflow: fan-out prompt tells you, with role models, how to ask for a workflow', fanOutNotice.startsWith('🧩') && fanOutNotice.includes('ultracode') && fanOutNotice.includes('→ fable (effort max)') && fanOutNotice.includes('→ opus (effort xhigh)'), true);
+  check('workflow: fan-out prompt tells you, with role models, how to ask for a workflow', fanOutNotice.startsWith('🧩') && fanOutNotice.includes('ultracode') && fanOutNotice.includes('→ fable (effort max)') && fanOutNotice.includes('→ sonnet (effort high)'), true);
   check('workflow: Claude is not told to start a workflow', JSON.stringify(fanOut.hookSpecificOutput || {}).includes('ultracode'), false);
   check('workflow: advisory journaled', acc.run(['why', '--last', '2']).includes('suggest-workflow'), true);
   check('workflow: explicit ultracode prompt gets no duplicate advisory', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'wf1', cwd: PROJECT_DIR, prompt: 'ultracode: audit every route handler under src/routes' }).includes('🧩'), false);

@@ -139,7 +139,7 @@ func TestDoctorFlagsALastSessionOnAClaudeCodeOlderThanTheLeanModuleNeeds(t *test
 	flagged := func() (string, string) {
 		lines := doctorLines(loadConfig())
 		for index, line := range lines {
-			if strings.Contains(line, "2.1.281") {
+			if strings.Contains(line, "2.1.281") && strings.Contains(line, "lean module") {
 				next := ""
 				if index+1 < len(lines) {
 					next = lines[index+1]

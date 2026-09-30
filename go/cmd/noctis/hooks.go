@@ -2744,6 +2744,7 @@ func runHook() {
 		}
 	}
 	activeEvent = getString(raw, "hook_event_name")
+	activeEffort = strings.ToLower(strings.TrimSpace(getString(getMap(raw, "effort"), "level")))
 	event, input := normalizeHookInput(activeHost, raw)
 	if input == nil {
 		input = object{}

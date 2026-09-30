@@ -77,10 +77,17 @@ func TestARepeatedSetupKeepsTheEffortFoundBeforeTheFirstOne(t *testing.T) {
 		recordSetup(t, account, "max", "--permissions", "keep")
 		recordSetup(t, account, "low", "--permissions", "keep")
 
-		if got, _ := recordValue(readJSON(filepath.Join(account, "settings.json")), "env", "CLAUDE_CODE_EFFORT_LEVEL"); got != "low" {
-			t.Fatalf("the second setup did not write its own effort: %q", got)
+		settings = readJSON(filepath.Join(account, "settings.json"))
+		if got, _ := savedLevel(settings, "claude-opus-5-5"); got != "low" {
+			t.Fatalf("the second setup did not save its own effort for the model: %q", got)
+		}
+		if got, present := recordValue(settings, "env", "CLAUDE_CODE_EFFORT_LEVEL"); present {
+			t.Fatalf("the second setup left the variable %q, which overrides the saved level", got)
 		}
 		after, _ := recordUninstall(t, account)
+		if saved, present := after["modelSettings"]; present {
+			t.Errorf("no modelSettings before setup: uninstall left %v", saved)
+		}
 		got, present := recordValue(after, "env", "CLAUDE_CODE_EFFORT_LEVEL")
 		if original == "" && present {
 			t.Errorf("no effort before setup, setup with max and then with low, uninstall: effort %q is left", got)
@@ -240,7 +247,7 @@ func TestASetupWithoutPermissionsLeavesTheModeAnEarlierSetupChose(t *testing.T) 
 			if c.want != "" && got != c.want {
 				t.Fatalf("a setup without --permissions made defaultMode %q; an earlier setup's choice left %q", got, c.want)
 			}
-			if effort, _ := recordValue(readJSON(settingsFile), "env", "CLAUDE_CODE_EFFORT_LEVEL"); effort != "low" {
+			if effort := effortInEffect(readJSON(settingsFile)); effort != "low" {
 				t.Fatalf("the second setup did not set its effort: %q", effort)
 			}
 		})
@@ -292,7 +299,7 @@ func TestAProfileSwitchLeavesThePermissionModeTheUserChose(t *testing.T) {
 	if mode, _ := recordValue(settings, "permissions", "defaultMode"); balanced.code != 0 || mode != "default" {
 		t.Fatalf("the user set defaultMode back to default after setup; a profile switch made it %q:\n%s", mode, balanced)
 	}
-	if effort, _ := recordValue(settings, "env", "CLAUDE_CODE_EFFORT_LEVEL"); effort != "high" {
+	if effort := effortInEffect(settings); effort != "high" {
 		t.Fatalf("the profile switch did not set the Balanced effort: %q", effort)
 	}
 

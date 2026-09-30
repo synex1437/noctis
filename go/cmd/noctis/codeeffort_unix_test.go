@@ -38,3 +38,34 @@ func TestARelaunchOnACodeRoleWithoutAnEffortPassesNone(t *testing.T) {
 		})
 	}
 }
+
+func TestARelaunchBelowMaxPassesTheLevelAsAFlagAlone(t *testing.T) {
+	for _, c := range []struct {
+		effort, variable string
+	}{
+		{"xhigh", "unset"},
+		{"max", "max"},
+	} {
+		t.Run(c.effort, func(t *testing.T) {
+			calls := takeoverSandbox(t)
+			writeScript(t, filepath.Join(filepath.Dir(calls), "claude"), "#!/bin/sh\nprintf '%s effort=%s\\n' \"$*\" \"${CLAUDE_CODE_EFFORT_LEVEL-unset}\" >> \"$NOCTIS_TEST_CALLS\"\n")
+			t.Setenv("CLAUDE_CODE_EFFORT_LEVEL", "max")
+			config := releaseConfig()
+			config["wait"] = object{"earlyResetPollMinutes": float64(5), "heartbeatGraceSeconds": float64(1)}
+			config["resume"] = object{"mode": "headless", "prompt": "carry on"}
+			config["models"] = object{"primary": "opus", "fallback": "opus", "effort": c.effort}
+			config["roles"] = object{"code": object{"model": "opus", "effort": c.effort}, "fallback": object{"model": "opus", "effort": c.effort}}
+			mustWriteJSON(files.config, config)
+			sid := "flag-effort-" + c.effort
+			parkForRelaunch(t, sid, "batch", "headless")
+			sessionRunsOn(sid, "claude-opus-5-5", getString(waitOf(sid), "cwd"))
+
+			resumeWait(sid, "")
+
+			line := relaunchLine(t, calls, sid)
+			if !strings.Contains(line, "--effort "+c.effort) || !strings.HasSuffix(line, " effort="+c.variable) {
+				t.Fatalf("a relaunch at %s should pass --effort %s and CLAUDE_CODE_EFFORT_LEVEL %s (the variable would override the effort of noctis's subagents): %s", c.effort, c.effort, c.variable, line)
+			}
+		})
+	}
+}

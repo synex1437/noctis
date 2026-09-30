@@ -599,14 +599,7 @@ func doctorLines(cfg object) []string {
 	lines = append(lines, fixLine(settings.ok, T("doctor.settings", settingsText), settingsRemedy, files.settings)...)
 	statusLine := getString(getMap(settings.data, "statusLine"), "command")
 	lines = append(lines, statusLineDoctorLines(statusLine, "doctor.fixStatusline")...)
-	effort := getString(getMap(settings.data, "env"), "CLAUDE_CODE_EFFORT_LEVEL")
-	wantEffort := getString(section(cfg, "models"), "effort")
-	effortText := T("doctor.effort", orDefault(effort, T("doctor.none")))
-	effortOK := effort == wantEffort || wantEffort == ""
-	if !effortOK {
-		effortText = T("doctor.effortMismatch", orDefault(effort, T("doctor.none")), orDefault(wantEffort, T("doctor.none")))
-	}
-	lines = append(lines, fixLine(effortOK, effortText, "doctor.fixEffort", orDefault(wantEffort, T("doctor.none")))...)
+	lines = append(lines, effortDoctorLines(cfg, settings.data)...)
 	lines = append(lines, fixLine(getString(settings.data, "model") != "", T("doctor.model", orDefault(getString(settings.data, "model"), T("doctor.none"))), "doctor.fixSetup")...)
 	if profile := retunedProfile(section(cfg, "roles")); profile != "" {
 		lines = append(lines, checkLine(false, retunedNotice(profile)))
