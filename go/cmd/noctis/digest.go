@@ -473,6 +473,10 @@ func digestQueue(cfg, state object, path string, before object, since float64, u
 	if line := unverifiedText(cfg, state, path, content); line != "" {
 		lines = append(lines, "- "+line)
 	}
+	// The test and check files Claude changed past the refusal on items that were not about tests.
+	if files := testEditsSince(state, path, from); len(files) > 0 {
+		lines = append(lines, "- "+T("digest.testEdits", formatTime(from), len(files), digestNames(files)))
+	}
 	if view.human > 0 {
 		lines = append(lines, "- "+T("digest.human", view.human, digestNames(view.humanItems)))
 	}

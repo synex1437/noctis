@@ -531,6 +531,7 @@
   "digest.checkCut": "Verifica: interrotta %s; viene rieseguita una volta alla prossima fermata",
   "digest.checkHeld": "Verifica: fallisce, la coda è in attesa da %s; %s queue verify la riesegue",
   "digest.checkNone": "Verifica: non ancora eseguita",
+  "digest.testEdits": "File di test o di verifica modificati su voci non legate ai test dalle %s: %d — %s",
   "digest.human": "Tocca a te (%d): %s",
   "digest.deferred": "Rinviati (%d): %s",
   "digest.until": "fino a %s",

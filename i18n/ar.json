@@ -531,6 +531,7 @@
   "digest.checkCut": "الفحص: قُطع %s؛ يعمل مرة أخرى عند التوقف التالي",
   "digest.checkHeld": "الفحص: يفشل، وقائمة المهام موقوفة منذ %s؛ %s queue verify يشغّله مجددًا",
   "digest.checkNone": "الفحص: لم يُشغَّل بعد",
+  "digest.testEdits": "ملفات اختبار أو فحص تغيّرت في بنود لا تخص الاختبارات منذ %s: %d — %s",
   "digest.human": "بانتظارك (%d): %s",
   "digest.deferred": "مؤجلة (%d): %s",
   "digest.until": "حتى %s",

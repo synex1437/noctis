@@ -531,6 +531,7 @@
   "digest.checkCut": "Sprawdzenie: przerwane %s; uruchomi się jeszcze raz przy następnym zatrzymaniu",
   "digest.checkHeld": "Sprawdzenie: zawodzi, kolejka jest wstrzymana od %s; %s queue verify uruchamia je ponownie",
   "digest.checkNone": "Sprawdzenie: jeszcze nie uruchomione",
+  "digest.testEdits": "Pliki testów lub sprawdzeń zmienione przy pozycjach niezwiązanych z testami od %s: %d — %s",
   "digest.human": "U ciebie (%d): %s",
   "digest.deferred": "Odłożone (%d): %s",
   "digest.until": "do %s",

@@ -531,6 +531,7 @@
   "digest.checkCut": "Controle: %s afgebroken; draait bij de volgende stop nog één keer",
   "digest.checkHeld": "Controle: mislukt, de wachtrij wordt sinds %s vastgehouden; %s queue verify draait hem opnieuw",
   "digest.checkNone": "Controle: nog niet gedraaid",
+  "digest.testEdits": "Test- of controlebestanden gewijzigd bij punten die niet over tests gaan sinds %s: %d — %s",
   "digest.human": "Bij jou (%d): %s",
   "digest.deferred": "Uitgesteld (%d): %s",
   "digest.until": "tot %s",

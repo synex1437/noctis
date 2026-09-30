@@ -531,6 +531,7 @@
   "digest.checkCut": "Denetim: %s yarıda kesildi; bir sonraki durmada bir kez daha çalışır",
   "digest.checkHeld": "Denetim: kalıyor, kuyruk %s zamanından beri bekletiliyor; %s queue verify yeniden çalıştırır",
   "digest.checkNone": "Denetim: henüz çalışmadı",
+  "digest.testEdits": "%s tarihinden beri testlerle ilgili olmayan maddelerde değiştirilen test ya da denetim dosyaları: %d — %s",
   "digest.human": "Sende bekleyen (%d): %s",
   "digest.deferred": "Ertelenen (%d): %s",
   "digest.until": "bitiş: %s",

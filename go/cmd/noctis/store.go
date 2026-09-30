@@ -1158,6 +1158,10 @@ func emptyState() object {
 		"queueModels": object{},
 		// escalateDay counts the items that went to a stronger model on a day (day, count).
 		"escalateDay": object{},
+		// testGuard is, by queueTrustKey, what testguard.go knows of a queue file's test and check
+		// files: the item whose change to one was refused (item), the ones Claude created (created),
+		// the changes that went through after a refusal (edits), and when it changed last (at).
+		"testGuard": object{},
 		// usedCheckpointsDue is when the oldest record in used-checkpoints.json expires, 0 when
 		// it holds none.
 		"usedCheckpointsDue": float64(0),
@@ -1402,7 +1406,7 @@ func pruneState(state object, now int64) {
 			delete(stateMap(state, "queueVerify"), key)
 		}
 	}
-	for _, name := range []string{"queuePace", "queueModels"} {
+	for _, name := range []string{"queuePace", "queueModels", "testGuard"} {
 		for key, raw := range stateMap(state, name) {
 			if float64(now)-numberOr(toObject(raw), "at", 0) > queueTrustTTLSeconds {
 				delete(stateMap(state, name), key)
