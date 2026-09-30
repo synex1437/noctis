@@ -22,7 +22,7 @@ Layout of `cmd/noctis`:
 | `store.go` | paths, config loading, state/usage files, PID-aware file locks, atomic JSON writes, logging |
 | `usage.go` | usage sources (statusLine capture, OAuth usage endpoint), burst/slope/projection, threshold evaluation, clock-skew correction, stale-lock sweeping |
 | `engine.go` | decisions: checkpoints, waits, in-hook waiting, scoped-model switch, daily budget, notifications |
-| `hooks.go` | hook handlers (SessionStart/End, UserPromptSubmit, PreToolUse, PostToolUse, PostToolBatch, Stop, StopFailure, Notification, PostModelSwitch, Task*) |
+| `hooks.go` | hook handlers (SessionStart/End, UserPromptSubmit, PreToolUse, PostToolUse, PostToolBatch, Stop, StopFailure, Notification, PostModelSwitch, Task*, PreCompact) |
 | `router.go` | deterministic research router (RE2-safe Unicode word boundaries), learned misroute signals |
 | `runtime.go` | status line, pace marker, hooks self-heal, resume runner, `claude` launching, sleeper |
 | `host.go` | the other AI coding tools: capability table, hook-file wiring, input/output translation, Codex rate limits, Antigravity quota, update check, coexistence notes |

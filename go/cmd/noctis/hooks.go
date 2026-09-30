@@ -238,6 +238,11 @@ func onSessionStart(input, cfg object) {
 			case snapshot.total > 0:
 				contexts = append(contexts, sessionQueueDirective(sid, queuePath, snapshot.total)+humanItemsRule(snapshot)+deferredRule(snapshot, queuePath)+queueDeferHint(queuePath)+jobHint())
 			}
+			if source == "compact" {
+				if note := compactRestoreNote(cfg, state, input, sid, queuePath); note != "" {
+					contexts = append(contexts, note)
+				}
+			}
 			logInfo("queue mode for %s: %s (%d open)", sid, queuePath, snapshot.total)
 		}
 
@@ -2775,6 +2780,7 @@ func runHook() {
 		"TaskCreated":       onTaskEvent,
 		"TaskCompleted":     onTaskEvent,
 		"PermissionRequest": onPermissionRequest,
+		"PreCompact":        onPreCompact,
 	}
 	handler, ok := handlers[event]
 	if !ok {

@@ -1,4 +1,4 @@
-export const SHIPPED = Object.freeze({ lean: true, compactAtPercent: 70, keepTurns: 6, maxToolResultChars: 2000, instructions: "" })
+export const SHIPPED = Object.freeze({ lean: true, compactAtPercent: 70, keepTurns: 6, maxToolResultChars: 2000, instructions: "Write the summary in short sections: the user's requests and intent, quoting any requirement they set; the task or queue item in hand, its acceptance criteria, what is done and what is left; each file changed or created and why; each build, test or check command run and its exit status, marking any that timed out, were killed or exited non-zero as UNVERIFIED, to be run again; errors met and how each was fixed, quoting any not fixed yet; decisions and approaches ruled out, each with its reason; open questions; the next step. Leave out file contents, tool output and search results that can be read again." })
 
 const READ_ONLY = new Set(["Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "NotebookRead"])
 const REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>\s*/g
