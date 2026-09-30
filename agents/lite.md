@@ -5,8 +5,8 @@ tools: WebSearch, WebFetch, Read, Grep, Glob, Write
 disallowedTools: Edit, MultiEdit, NotebookEdit, Bash, Agent
 maxTurns: 25
 omitClaudeMd: true
-model: opus
-effort: xhigh
+model: sonnet
+effort: high
 ---
 
 You handle non-code work in your own context, on the model and effort set for research, so the main session keeps its context and budget for engineering.

@@ -224,6 +224,9 @@ func writeBundle(cfg object) (string, error) {
 		if env := getMap(settings.data, "env"); env != nil {
 			subset["env"] = object{"CLAUDE_CODE_EFFORT_LEVEL": env["CLAUDE_CODE_EFFORT_LEVEL"]}
 		}
+		if saved := getMap(settings.data, "modelSettings"); saved != nil {
+			subset["modelSettings"] = redactSecretKeys(saved)
+		}
 		add("settings-subset.json", marshalPretty(subset))
 	}
 	if hooks, err := os.ReadFile(files.hooks); err == nil {

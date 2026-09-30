@@ -34,7 +34,7 @@ func TestSetupTurnsOnClaudeCodesFunctionHooksForLeanCompactionAndRecordsIt(t *te
 	if !strings.Contains(run.stdout, "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS") {
 		t.Fatalf("setup did not say it turned the function hooks on:\n%s", run)
 	}
-	if getString(getMap(readJSON(filepath.Join(box.account, "settings.json")), "env"), "CLAUDE_CODE_EFFORT_LEVEL") == "" {
+	if effortInEffect(readJSON(filepath.Join(box.account, "settings.json"))) == "" {
 		t.Fatalf("the effort level went missing next to the switch:\n%s", run)
 	}
 

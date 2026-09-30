@@ -190,10 +190,10 @@ func TestAPlainInstallKeepsItsProfileName(t *testing.T) {
 	defaults := readJSON(filepath.Join(repoRoot(), "config.default.json"))
 	config := cloneObject(defaults)
 	derived := derivedRoles(config, section(defaults, "roles"))
-	if got := getString(derived, "profile"); got != "synex" {
-		t.Fatalf("a setup with no flags reported the profile as %q; the shipped defaults are the SYNEX profile", got)
+	if got := getString(derived, "profile"); got != "code" {
+		t.Fatalf("a setup with no flags reported the profile as %q; the shipped defaults are the Code profile", got)
 	}
-	if got := getString(getMap(derived, "fallback"), "effort"); got != "max" {
+	if got := getString(getMap(derived, "fallback"), "effort"); got != "xhigh" {
 		t.Fatalf("the fallback effort was dropped on the way (%q); it is the one effort the scoped switch applies", got)
 	}
 	for role := range effortlessRoles {

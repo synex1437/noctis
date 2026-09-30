@@ -12,14 +12,14 @@
     "fanOutHeadroom": 25
   },
   "roles": {
-    "profile": "synex",
+    "profile": "code",
     "code": {
       "model": "opus",
-      "effort": "max"
+      "effort": "xhigh"
     },
     "research": {
-      "model": "opus",
-      "effort": "xhigh"
+      "model": "sonnet",
+      "effort": "high"
     },
     "planning": {
       "model": "opus"
@@ -32,13 +32,13 @@
     },
     "fallback": {
       "model": "opus",
-      "effort": "max"
+      "effort": "xhigh"
     }
   },
   "models": {
     "primary": "opus",
     "fallback": "opus",
-    "effort": "max",
+    "effort": "xhigh",
     "scopedPattern": "fable",
     "scopedLabel": "Fable"
   },

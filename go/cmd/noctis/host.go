@@ -40,6 +40,9 @@ var hostOrder = []string{"claude", "codex", "antigravity", "droid", "copilot"}
 var (
 	activeHost  = "claude"
 	activeEvent = ""
+	// activeEffort is the effort level the running hook's input reports (effort.level): the level in effect,
+	// or the one Claude Code actually ran when the configured one is not supported.
+	activeEffort = ""
 )
 
 const hookMarker = pluginName

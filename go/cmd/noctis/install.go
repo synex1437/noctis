@@ -614,28 +614,6 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		chained = previous
 	}
 	data["statusLine"] = statusLineOver(getMap(data, "statusLine"), binary)
-	effort, chosen := section(config, "models")["effort"].(string)
-	if !chosen {
-		effort = getString(section(defaults, "models"), "effort")
-	}
-	env := getMap(data, "env")
-	if env == nil {
-		env = object{}
-	}
-	effortRecord := getMap(config, "managedEffort")
-	if effort != "" {
-		config["managedEffort"] = object{"previous": valueSetupFound(env, "CLAUDE_CODE_EFFORT_LEVEL", effortRecord["previous"], effortRecord != nil), "set": effort}
-		env["CLAUDE_CODE_EFFORT_LEVEL"] = effort
-	} else {
-		takeBackEffort(env, effortRecord)
-		delete(config, "managedEffort")
-	}
-	leanNote := wireLeanSwitch(config, env)
-	if len(env) > 0 {
-		placeSetupObject(data, config, "env", env)
-	} else if _, had := data["env"]; had {
-		data["env"] = env
-	}
 	current := getString(data, "model")
 	managed := getMap(config, "managedModel")
 	ours := managed != nil && current != "" && current == getString(managed, "set")
@@ -654,6 +632,70 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 			config["managedModel"] = object{"previous": previous, "set": primary}
 		}
 		data["model"] = primary
+	}
+	effort, chosen := section(config, "models")["effort"].(string)
+	if !chosen {
+		effort = getString(section(defaults, "models"), "effort")
+	}
+	env := getMap(data, "env")
+	if env == nil {
+		env = object{}
+	}
+	// The level is saved for the model sessions run on once a scoped-model switch in force gives its
+	// model back at the reset; until then the switch's own level for the fallback role stays in force.
+	effortModel, switched := getString(data, "model"), accountModelSwitch(configDir)
+	switchStays := false
+	if switched != nil {
+		back := switchGivesBack(switched, managed, primary, wroteModel, effortModel)
+		switchStays = noModel || back != ""
+		switch {
+		case noModel && getBool(switched, "modelAbsent", false):
+			effortModel = ""
+		case noModel:
+			effortModel = orDefault(getString(switched, "from"), primary)
+		case back != "":
+			effortModel = back
+		}
+	}
+	savedIn := effortModelFor(configDir, effortModel, effort)
+	if savedIn != "" && !modelEffortPlaceable(data, savedIn) {
+		savedIn = ""
+	}
+	takeBackModelEfforts(data, getMap(config, "managedModelEffort"), savedIn)
+	if holder, isObject := data["modelSettings"].(object); savedIn == "" && isObject && len(holder) == 0 && getMap(config, "managedCreated")["modelSettings"] == true {
+		delete(data, "modelSettings")
+	}
+	effortRecord := getMap(config, "managedEffort")
+	switchEffort := false
+	switch {
+	case savedIn != "":
+		placeModelEffort(data, config, savedIn, effort)
+		// The variable would override the saved level: setup takes it away and keeps what it held
+		// before the first setup, for uninstall to put back.
+		if previous := valueSetupFound(env, "CLAUDE_CODE_EFFORT_LEVEL", effortRecord["previous"], effortRecord != nil); previous != nil && previous != "" {
+			config["managedEffort"] = object{"previous": previous, "set": ""}
+		} else {
+			delete(config, "managedEffort")
+		}
+		if set := getString(switched, "effortSet"); switchStays && set != "" && getString(env, "CLAUDE_CODE_EFFORT_LEVEL") == set {
+			switchEffort = true
+		} else {
+			delete(env, "CLAUDE_CODE_EFFORT_LEVEL")
+		}
+	case effort != "":
+		delete(config, "managedModelEffort")
+		config["managedEffort"] = object{"previous": valueSetupFound(env, "CLAUDE_CODE_EFFORT_LEVEL", effortRecord["previous"], effortRecord != nil), "set": effort}
+		env["CLAUDE_CODE_EFFORT_LEVEL"] = effort
+	default:
+		delete(config, "managedModelEffort")
+		takeBackEffort(env, effortRecord)
+		delete(config, "managedEffort")
+	}
+	leanNote := wireLeanSwitch(config, env)
+	if len(env) > 0 {
+		placeSetupObject(data, config, "env", env)
+	} else if _, had := data["env"]; had {
+		data["env"] = env
 	}
 	permissionNote := ""
 	modeFound, modeFoundRecorded := config["managedPermissionPrevious"]
@@ -690,19 +732,8 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		return errors.New(T("install.settingsUnsaved", settingsFile, failed))
 	}
 	model := getString(data, "model")
-	settleModelSwitch(configDir, noModel, func(switched object) string {
-		before := getString(switched, "from")
-		if getBool(switched, "modelAbsent", false) {
-			before = ""
-		}
-		target := before
-		if (before != "" && before == getString(managed, "set")) || !keepModelPattern.MatchString(before) {
-			target = primary
-		}
-		if wroteModel || model == primary || target == model {
-			return ""
-		}
-		return target
+	settleModelSwitch(configDir, noModel, switchEffort, func(switched object) string {
+		return switchGivesBack(switched, managed, primary, wroteModel, model)
 	})
 	if chained != "" {
 		fmt.Println(T("install.chained", chained))
@@ -714,9 +745,12 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	if backup != "" {
 		backupText = T("install.backup", filepath.Base(backup))
 	}
-	if effort != "" {
+	switch {
+	case savedIn != "":
+		fmt.Println(T("install.settingsModel", backupText, savedIn, effort, getString(data, "model")))
+	case effort != "":
 		fmt.Println(T("install.settings", backupText, effort, getString(data, "model")))
-	} else {
+	default:
 		fmt.Println(T("install.settingsNoEffort", backupText, getString(data, "model"), orDefault(getString(getMap(data, "env"), "CLAUDE_CODE_EFFORT_LEVEL"), T("doctor.none"))))
 	}
 	fmt.Println(leanNote)
@@ -770,7 +804,37 @@ func valueSetupFound(holder object, key string, found any, recorded bool) any {
 	return holder[key]
 }
 
-func settleModelSwitch(configDir string, noModel bool, giveBackAfterSetup func(switched object) string) {
+// accountModelSwitch is the scoped-model switch in force for the account in configDir, or nil.
+func accountModelSwitch(configDir string) object {
+	previous := files
+	defer func() { files = previous }()
+	files = pathsFor(configDir, files.pluginRoot)
+	return getMap(readState(), "modelSwitched")
+}
+
+// switchGivesBack is the model a scoped-model switch in force puts back at its reset after a setup that
+// left settings.json on model, or "" when the switch no longer owns the model: setup wrote it, or it is
+// the one the switch would give back.
+func switchGivesBack(switched, managed object, primary string, wroteModel bool, model string) string {
+	before := getString(switched, "from")
+	if getBool(switched, "modelAbsent", false) {
+		before = ""
+	}
+	target := before
+	if (before != "" && before == getString(managed, "set")) || !keepModelPattern.MatchString(before) {
+		target = primary
+	}
+	if wroteModel || model == primary || target == model {
+		return ""
+	}
+	return target
+}
+
+// settleModelSwitch tells a scoped-model switch in force what setup changed. The switch then gives
+// back at its reset the model setup would have written, and no effort level, since setup set one;
+// with keepEffort the variable still holds the switch's level for the fallback role, and the reset
+// takes it away, as setup saved the level where the variable must not override it.
+func settleModelSwitch(configDir string, noModel, keepEffort bool, giveBackAfterSetup func(switched object) string) {
 	previous := files
 	defer func() { files = previous }()
 	files = pathsFor(configDir, files.pluginRoot)
@@ -793,7 +857,12 @@ func settleModelSwitch(configDir string, noModel bool, giveBackAfterSetup func(s
 			delete(switched, "modelAbsent")
 		}
 		for _, key := range switchedEffortKeys {
-			delete(switched, key)
+			if !keepEffort || key != "effortSet" {
+				delete(switched, key)
+			}
+		}
+		if keepEffort {
+			switched["effortAbsent"] = true
 		}
 	})
 	switch outcome {
@@ -948,7 +1017,7 @@ func settleStateDir(configDir string) {
 	fmt.Println(T("install.purged", guardDir))
 }
 
-var setupRecords = []string{"managedModel", "managedEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep", "managedFunctionHooks", "managedAutoUpdate", "managedCreated"}
+var setupRecords = []string{"managedModel", "managedEffort", "managedModelEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep", "managedFunctionHooks", "managedAutoUpdate", "managedCreated"}
 
 func forgetSetupRecords(configFile string, config object) {
 	forgotten := false
@@ -985,6 +1054,7 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 	if env := getMap(data, "env"); env != nil {
 		takeBackEffort(env, getMap(guardConfig, "managedEffort"))
 	}
+	takeBackModelEfforts(data, getMap(guardConfig, "managedModelEffort"), "")
 	if env := getMap(data, "env"); env != nil {
 		takeBackLeanSwitch(guardConfig, env)
 	}

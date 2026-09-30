@@ -261,6 +261,22 @@ func TestTheSessionEffortComesFromTheSessionThenTheSettingsThenTheConfig(t *test
 	if effort := sessionEffort(cfg); effort != "xhigh" {
 		t.Fatalf("an effort that is no level is read as %q, want the settings' xhigh", effort)
 	}
+	t.Setenv("CLAUDE_CODE_EFFORT_LEVEL", "")
+	section(cfg, "models")["primary"] = "opus"
+	mustWriteJSON(files.settings, object{"modelSettings": object{"claude-opus-5-5": object{"effortLevel": "low"}, "claude-sonnet-5-5": object{"effortLevel": "max"}}})
+	if effort := sessionEffort(cfg); effort != "low" {
+		t.Fatalf("the level saved for the code model is read as %q, want low", effort)
+	}
+	t.Setenv("CLAUDE_EFFORT", "medium")
+	if effort := sessionEffort(cfg); effort != "medium" {
+		t.Fatalf("the level Claude Code hands its hooks is read as %q, want medium", effort)
+	}
+	previous := activeEffort
+	t.Cleanup(func() { activeEffort = previous })
+	activeEffort = "max"
+	if effort := sessionEffort(cfg); effort != "max" {
+		t.Fatalf("the level the hook input reports is read as %q, want max", effort)
+	}
 }
 
 func TestSetupTitlesNameTheProfile(t *testing.T) {

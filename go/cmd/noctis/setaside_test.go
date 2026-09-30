@@ -8,6 +8,7 @@ import (
 func TestTheLastContinuationBeforeTheQueueGivesUpAsksToSetTheStuckItemAside(t *testing.T) {
 	cfg, project, frontend, _ := deferSandbox(t)
 	section(cfg, "queue")["maxIdleContinues"] = float64(3)
+	section(cfg, "queue")["escalate"] = "off"
 	stopHookOutput(t, stopInput("sa1", frontend), cfg)
 	if reason := getString(stopHookOutput(t, stopAgain("sa1", frontend), cfg), "reason"); !strings.Contains(reason, "Take the next eligible item") || strings.Contains(reason, "is still the next item") {
 		t.Fatalf("a continuation before the last one already asked Claude to set the item aside:\n%s", reason)
@@ -36,6 +37,7 @@ func TestTheLastContinuationBeforeTheQueueGivesUpAsksToSetTheStuckItemAside(t *t
 func TestAStuckItemNotSetAsideStillEndsTheQueueAtTheIdleLimit(t *testing.T) {
 	cfg, _, frontend, _ := deferSandbox(t)
 	section(cfg, "queue")["maxIdleContinues"] = float64(3)
+	section(cfg, "queue")["escalate"] = "off"
 	stopHookOutput(t, stopInput("sa2", frontend), cfg)
 	stopHookOutput(t, stopAgain("sa2", frontend), cfg)
 	stopHookOutput(t, stopAgain("sa2", frontend), cfg)

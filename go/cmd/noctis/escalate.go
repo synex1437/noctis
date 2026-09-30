@@ -37,20 +37,26 @@ const (
 	setupHintMargin = 0.15
 )
 
-// sessionEffort is the effort a session runs at: CLAUDE_CODE_EFFORT_LEVEL as the session has it, else
-// as the settings set it, else the effort noctis set up for the code role.
+// sessionEffort is the effort a session runs at: the level Claude Code hands the running hook (effort.level
+// in its input, else $CLAUDE_EFFORT), else CLAUDE_CODE_EFFORT_LEVEL as the session has it, else as the
+// settings set it (that variable, the level saved for the code model, effortLevel), else the effort noctis
+// set up for the code role.
 func sessionEffort(cfg object) string {
-	if effort := strings.ToLower(strings.TrimSpace(os.Getenv("CLAUDE_CODE_EFFORT_LEVEL"))); validEfforts[effort] {
-		return effort
+	for _, effort := range []string{activeEffort, os.Getenv("CLAUDE_EFFORT"), os.Getenv("CLAUDE_CODE_EFFORT_LEVEL")} {
+		if effort = strings.ToLower(strings.TrimSpace(effort)); validEfforts[effort] {
+			return effort
+		}
 	}
+	models := section(cfg, "models")
 	if settings := readJSONStrict(files.settings); settings.ok {
-		for _, effort := range []string{getString(getMap(settings.data, "env"), "CLAUDE_CODE_EFFORT_LEVEL"), getString(settings.data, "effortLevel")} {
+		saved := getMap(getMap(settings.data, "modelSettings"), savedEffortModel(getString(models, "primary")))
+		for _, effort := range []string{getString(getMap(settings.data, "env"), "CLAUDE_CODE_EFFORT_LEVEL"), getString(saved, "effortLevel"), getString(settings.data, "effortLevel")} {
 			if effort = strings.ToLower(strings.TrimSpace(effort)); validEfforts[effort] {
 				return effort
 			}
 		}
 	}
-	return strings.ToLower(getString(section(cfg, "models"), "effort"))
+	return strings.ToLower(getString(models, "effort"))
 }
 
 // sessionSetup names the model family and effort a session runs on, as "sonnet/high", or is "" when

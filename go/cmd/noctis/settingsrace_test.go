@@ -122,7 +122,7 @@ func TestSetupAndUninstallWaitForTheSettingsLockAnotherProcessHolds(t *testing.T
 	settingsRaceHeld(t, account, func(settings object) { settings["outputStyle"] = "Explanatory" }, func() error {
 		return wireSettings(account, filepath.Join(account, "bin", binaryFileName()), cloneObject(defaults), configFile, defaults, false)
 	})
-	if settings := readJSON(settingsFile); getString(settings, "outputStyle") != "Explanatory" || getString(getMap(settings, "env"), "CLAUDE_CODE_EFFORT_LEVEL") != "max" {
+	if settings := readJSON(settingsFile); getString(settings, "outputStyle") != "Explanatory" || effortInEffect(settings) != "xhigh" {
 		t.Fatalf("setup, held back by the settings lock, lost the holder's change or its own: %v", settings)
 	}
 

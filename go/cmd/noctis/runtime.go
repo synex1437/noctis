@@ -626,16 +626,22 @@ func launchClaude(cfg object, launch launchSpec) launchResult {
 		effort = ""
 	}
 	claudeArgs := hostLaunchArgs("claude", cfg, launch, effort, permissionMode)
-	env := relaunchEnv(launch, effort)
+	// --effort sets the level of the session and leaves a subagent's own effort in force; the variable
+	// overrides both, so it gets max alone, the one level setup puts there too.
+	envEffort := ""
+	if effort == "max" {
+		envEffort = effort
+	}
+	env := relaunchEnv(launch, envEffort)
 	logInfo("launching claude (%s) model=%s mode=%s cwd=%s", mode, launch.model, permissionMode, launch.cwd)
 	closePreviousLaunch(cfg, launch.sid, getMap(getMap(readState(), "waits"), launch.sid))
 	if mode == "window" {
 		switch {
 		case isWindows && files.launchScript != "":
-			return launchResult{started: launchInWindowsTerminal(cfg, launch, claudePath, claudeArgs, env, effort), window: true}
+			return launchResult{started: launchInWindowsTerminal(cfg, launch, claudePath, claudeArgs, env, envEffort), window: true}
 		case isWindows:
 			warn("relaunch of %s runs headless: %s is not the plugin folder of this binary, so its scripts\\launch.ps1 is not run", launch.sid, files.pluginRoot)
-		case launchInDesktopTerminal(cfg, launch, claudePath, claudeArgs, effort):
+		case launchInDesktopTerminal(cfg, launch, claudePath, claudeArgs, envEffort):
 			return launchResult{started: true, window: true}
 		}
 	}
