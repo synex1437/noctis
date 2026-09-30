@@ -184,6 +184,8 @@ func runQueueTrust(cfg object, cwd, action string) {
 	switch action {
 	case "defer", "undefer":
 		runQueueDefer(target, action)
+	case "note":
+		runQueueNote(target)
 	case "verify":
 		if status := verifyQueueNow(cfg, cwd, target); status != 0 {
 			os.Exit(status)
@@ -232,6 +234,7 @@ func runQueueTrust(cfg object, cwd, action string) {
 		printEmptyLines(target, view)
 		printHumanItems(target, view)
 		printDeferrals(target, view)
+		printQueueNotes(target)
 		printQueueCheck(cfg, target)
 		printQueueHold(cfg, target)
 	}
@@ -291,7 +294,7 @@ func printUnmatchedReferences(target string, view queueView) {
 
 func runQueue() {
 	action := positional(1)
-	if action != "import" && action != "trust" && action != "untrust" && action != "status" && action != "verify" && action != "defer" && action != "undefer" {
+	if action != "import" && action != "trust" && action != "untrust" && action != "status" && action != "verify" && action != "defer" && action != "undefer" && action != "note" {
 		fmt.Fprintln(os.Stderr, T("queue.usage"))
 		os.Exit(2)
 	}

@@ -439,6 +439,15 @@ func digestQueue(cfg, state object, path string, before object, since float64, u
 			lines = append(lines, "- "+T("digest.doneSince", formatTime(since), len(newly), digestNames(newly)))
 		}
 	}
+	// The decisions Claude noted on its own since the last digest, or over the last day before the
+	// first one.
+	from := since
+	if from <= 0 {
+		from = float64(now) - 86400
+	}
+	if decided := queueNotesSince(readJSON(queueNotesFile()), path, from); len(decided) > 0 {
+		lines = append(lines, "- "+T("digest.decided", formatTime(from), len(decided), digestNames(decided)))
+	}
 	if trusted, changed, _ := queueTrustGapOf(cfg, path, content); !trusted {
 		lines = append(lines, "- "+T("digest.untrusted", len(changed), pluginName))
 	}

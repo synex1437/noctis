@@ -233,7 +233,7 @@ func onSessionStart(input, cfg object) {
 			rememberOpenIssues(cfg, queuePath)
 			switch {
 			case !isAutoQueue(queuePath):
-				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total)+humanItemsRule(snapshot)+deferredRule(snapshot, queuePath)+itemModelRule(snapshot)+queueDeferHint(queuePath)+jobHint())
+				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total)+humanItemsRule(snapshot)+deferredRule(snapshot, queuePath)+itemModelRule(snapshot)+queueDeferHint(queuePath)+queueNotesRule(queuePath)+jobHint())
 				touchQueueTrust(queuePath, now)
 			case snapshot.total > 0:
 				contexts = append(contexts, sessionQueueDirective(sid, queuePath, snapshot.total)+humanItemsRule(snapshot)+deferredRule(snapshot, queuePath)+queueDeferHint(queuePath)+jobHint())

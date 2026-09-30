@@ -98,6 +98,7 @@ func queueStatusFacts(cfg object, target string, view queueView) object {
 	check["failures"] = numberOr(record, "failures", 0)
 	facts["check"] = check
 	facts["pace"] = paceFacts(queuePaceNow(cfg, state, target, view))
+	facts["decisions"] = queueNotesFacts(target)
 	return facts
 }
 

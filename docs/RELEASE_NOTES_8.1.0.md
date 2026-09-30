@@ -6,8 +6,9 @@ Stop hook waits for a deferral that ends soon, and a session that stopped on a l
 when it ends, the way noctis resumes a session after a pause. With `alarm.digestAt` set, your phone
 gets one message a day through the webhook with what each queue finished, what it takes next and
 what waits on you. Once sessions have ticked a few items, noctis also says what an item takes of the
-weekly limit and when the items left may be done, an item can name the model it is for, and an item
-Claude cannot get past is set aside instead of ending the queue. It carries everything in 8.0.0
+weekly limit and when the items left may be done, an item can name the model it is for, an item
+Claude cannot get past is set aside instead of ending the queue, and the decisions Claude takes
+without asking reach you. It carries everything in 8.0.0
 ([RELEASE_NOTES_8.0.0.md](RELEASE_NOTES_8.0.0.md)).
 
 ## If you are upgrading
@@ -146,6 +147,21 @@ branch or in a stash), leave it unticked and defer it, so the check passes again
 deferred item and its reason show in `noctis queue status` and in the digest, and `noctis queue
 undefer` takes it up again.
 
+## The decisions Claude took without asking
+
+A queue tells Claude to decide rather than ask, so the choices it makes overnight are easy to miss.
+The queue instructions a session starts with now ask Claude to note each decision you may want to
+revisit, in one line:
+
+```bash
+noctis queue note "kept the old API next to the new one: two clients still call it" --file TASKS.md
+```
+
+`noctis queue status` gives the last 5 and how many in all (`decisions` in `--json`), the daily
+digest the ones noted since the digest before, and the next session's queue instructions the last 5,
+so a fresh context keeps to them instead of deciding again. A file keeps its last 50 decisions in
+`queue-notes.json`. It costs no model call.
+
 ## Known limits
 
 - **A cloud session is not woken for a deferral that ends after the Stop hook may wait.** The next
@@ -161,6 +177,8 @@ undefer` takes it up again.
 - **Setting an item aside is Claude's call.** noctis asks at the last continue; when Claude keeps
   trying instead, the queue gives up as before. A check that fails for a reason outside the item (a
   service that is down) is not helped by deferring it, and the queue is held as before.
+- **Claude notes the decisions it sees as worth it.** Nothing checks that every choice is noted, and a
+  note is as good as its line.
 - The limits in [RELEASE_NOTES_8.0.0.md](RELEASE_NOTES_8.0.0.md) still apply, but for the first one:
   a deferral whose `--until` passes now wakes the session that stopped on it.
 
@@ -191,3 +209,8 @@ for an item of the session's own model, and the queue instructions saying what a
 the queue going on with the next item once it is deferred, the queue giving up as before when it is
 not, no set-aside at the first continue, and the last send-back of a failing check saying how to set
 the item aside.
+
+5 new Go tests for decisions: `queue note` and `queue status` (text and JSON), a note kept without
+control characters and within 300 characters, the last 50 kept and a file left for a month dropped,
+the queue instructions asking for decisions and giving the last ones, and the digest naming the ones
+noted since the digest before.
