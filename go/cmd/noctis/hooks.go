@@ -1370,7 +1370,7 @@ func onSubagentBatch(input, cfg object) {
 func onPreToolUse(input, cfg object) {
 	toolName := getString(input, "tool_name")
 	if ownFileTools[toolName] {
-		if denyOwnFileWrite(input, cfg) || refuseHumanTicks(input, cfg) || refuseJobsNotInPrompt(input, cfg) {
+		if denyOwnFileWrite(input, cfg) || refuseHumanTicks(input, cfg) || refuseJobsNotInPrompt(input, cfg) || refuseTestEdits(input, cfg) {
 			return
 		}
 		if toolName != "Write" {

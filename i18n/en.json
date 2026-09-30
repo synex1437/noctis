@@ -531,6 +531,7 @@
   "digest.checkCut": "Check: cut short %s; it runs once more at the next stop",
   "digest.checkHeld": "Check: failing, the queue is held since %s; %s queue verify runs it again",
   "digest.checkNone": "Check: not run yet",
+  "digest.testEdits": "Test or check files changed on items not about tests since %s: %d — %s",
   "digest.human": "Yours (%d): %s",
   "digest.deferred": "Deferred (%d): %s",
   "digest.until": "until %s",

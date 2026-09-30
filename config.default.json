@@ -152,7 +152,8 @@
     "verifyCommand": "",
     "fileVerify": true,
     "verifyTimeoutSeconds": 900,
-    "verifyAttempts": 2
+    "verifyAttempts": 2,
+    "guardTests": true
   },
   "update": {
     "check": true,

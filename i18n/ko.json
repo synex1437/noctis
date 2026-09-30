@@ -531,6 +531,7 @@
   "digest.checkCut": "검사: %s에 중단됨. 다음 정지 때 한 번 더 실행됩니다",
   "digest.checkHeld": "검사: 실패 중, 큐는 %s부터 멈춰 있습니다. %s queue verify 로 다시 실행",
   "digest.checkNone": "검사: 아직 실행 안 됨",
+  "digest.testEdits": "%s 이후 테스트와 관계없는 항목에서 바뀐 테스트나 검사 파일: %d — %s",
   "digest.human": "직접 할 일 (%d): %s",
   "digest.deferred": "보류 (%d): %s",
   "digest.until": "%s 까지",

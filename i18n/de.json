@@ -531,6 +531,7 @@
   "digest.checkCut": "Prüfung: %s abgebrochen; sie läuft beim nächsten Stopp noch einmal",
   "digest.checkHeld": "Prüfung: schlägt fehl, die Warteschlange ist seit %s angehalten; %s queue verify führt sie erneut aus",
   "digest.checkNone": "Prüfung: noch nicht gelaufen",
+  "digest.testEdits": "Test- oder Prüfdateien, seit %s bei Punkten ohne Testbezug geändert: %d — %s",
   "digest.human": "Bei dir (%d): %s",
   "digest.deferred": "Zurückgestellt (%d): %s",
   "digest.until": "bis %s",

@@ -531,6 +531,7 @@
   "digest.checkCut": "Verificação: interrompida %s; roda mais uma vez na próxima parada",
   "digest.checkHeld": "Verificação: falhando, a fila está retida desde %s; %s queue verify roda de novo",
   "digest.checkNone": "Verificação: ainda não rodou",
+  "digest.testEdits": "Arquivos de teste ou de verificação alterados em itens que não tratam de testes desde %s: %d — %s",
   "digest.human": "Com você (%d): %s",
   "digest.deferred": "Adiados (%d): %s",
   "digest.until": "até %s",

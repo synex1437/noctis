@@ -531,6 +531,7 @@
   "digest.checkCut": "检查：%s 被中断；下次停止时会再运行一次",
   "digest.checkHeld": "检查：失败中，队列自 %s 起暂停；%s queue verify 会重新运行",
   "digest.checkNone": "检查：还没运行",
+  "digest.testEdits": "自 %s 以来在与测试无关的条目上更改的测试或检查文件：%d — %s",
   "digest.human": "等你处理（%d）：%s",
   "digest.deferred": "已推迟（%d）：%s",
   "digest.until": "至 %s",

@@ -531,6 +531,7 @@
   "digest.checkCut": "Vérification : interrompue %s ; elle est relancée une fois au prochain arrêt",
   "digest.checkHeld": "Vérification : en échec, la file est en attente depuis %s ; %s queue verify la relance",
   "digest.checkNone": "Vérification : pas encore lancée",
+  "digest.testEdits": "Fichiers de test ou de vérification modifiés sur des éléments sans rapport avec les tests depuis %s : %d — %s",
   "digest.human": "À toi (%d) : %s",
   "digest.deferred": "Reportés (%d) : %s",
   "digest.until": "jusqu'à %s",

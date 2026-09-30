@@ -531,6 +531,7 @@
   "digest.checkCut": "チェック: %s に中断されました。次の停止時にもう一度実行されます",
   "digest.checkHeld": "チェック: 失敗中。キューは %s から止まっています。%s queue verify で再実行",
   "digest.checkNone": "チェック: まだ実行されていません",
+  "digest.testEdits": "%s 以降、テストと関係のない項目で変更されたテストやチェックのファイル: %d — %s",
   "digest.human": "あなた待ち（%d）: %s",
   "digest.deferred": "保留（%d）: %s",
   "digest.until": "%s まで",
