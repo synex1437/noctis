@@ -64,6 +64,7 @@
   "session.typedHint": " Yazdığın prompt'lar yine de devam eder.",
   "queue.stuckNotify": "Kuyruk ilerlemiyor: %d açık madde, oturum durdu (%s).",
   "queue.stuckMessage": "⛔ Kuyruk ilerlemiyor (%d açık); bir madde işaretlenene, eklenene ya da düzenlenene veya sen bir istem yazana kadar otomatik devam kapalı — errors.log'a bak.",
+  "queue.setAsideMessage": "⚠ Art arda %[1]d devamda ne madde işaretlendi ne commit yapıldı: Claude'dan, \"%[2]s\" maddesini tıkayan şeyi şimdi çözemiyorsa onu ertelemesi isteniyor; kuyruk onsuz devam eder.",
   "queue.doneNotify": "Kuyruk bitti: %s içinde açık madde kalmadı.",
   "queue.doneMessage": "✔ Kuyruk bitti — %s içinde açık madde kalmadı; temiz duruluyor.",
   "queue.blockedNotify": "Kuyruk tıkalı: %[2]s içindeki %[1]d açık madde tamamlanmamış bağımlılıkları bekliyor.",

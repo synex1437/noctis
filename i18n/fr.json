@@ -64,6 +64,7 @@
   "session.typedHint": " Les prompts que tu tapes passent quand même.",
   "queue.stuckNotify": "La file n'avance plus : %d éléments ouverts, session arrêtée (%s).",
   "queue.stuckMessage": "⛔ La file n'avance plus (%d ouverts) ; la poursuite automatique reste arrêtée jusqu'à ce qu'un élément soit coché, ajouté ou modifié, ou que tu écrives un prompt — voir errors.log.",
+  "queue.setAsideMessage": "⚠ %[1]d relances d'affilée sans élément coché ni commit : Claude doit reporter \"%[2]s\" s'il ne peut pas lever maintenant ce qui le bloque, pour que la file continue sans lui.",
   "queue.doneNotify": "File terminée : %s n'a plus d'éléments ouverts.",
   "queue.doneMessage": "✔ File terminée — %s n'a plus d'éléments ouverts ; arrêt propre.",
   "queue.blockedNotify": "File bloquée : %d éléments ouverts dans %s attendent des dépendances non terminées.",

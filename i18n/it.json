@@ -64,6 +64,7 @@
   "session.typedHint": " I prompt che scrivi vanno avanti comunque.",
   "queue.stuckNotify": "La coda non avanza: %d elementi aperti, sessione fermata (%s).",
   "queue.stuckMessage": "⛔ La coda non avanza (%d aperti); la continuazione automatica resta ferma finché un elemento non viene spuntato, aggiunto o modificato, o finché non scrivi un prompt — vedi errors.log.",
+  "queue.setAsideMessage": "⚠ %[1]d continuazioni di fila senza voci spuntate né commit: a Claude si chiede di rinviare \"%[2]s\" se non riesce a risolvere ora ciò che la blocca, così la coda prosegue senza di essa.",
   "queue.doneNotify": "Coda completata: %s non ha elementi aperti.",
   "queue.doneMessage": "✔ Coda completata — %s non ha elementi aperti; arresto pulito.",
   "queue.blockedNotify": "Coda bloccata: %d elementi aperti in %s aspettano dipendenze non completate.",

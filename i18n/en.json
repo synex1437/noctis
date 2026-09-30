@@ -64,6 +64,7 @@
   "session.typedHint": " Prompts you type still go ahead.",
   "queue.stuckNotify": "Queue not progressing: %d open items, session stopped (%s).",
   "queue.stuckMessage": "⛔ Queue not progressing (%d open); auto-continue stays off until an item is ticked, added or edited, or you type a prompt — see errors.log.",
+  "queue.setAsideMessage": "⚠ %[1]d continuations in a row without a ticked item or a commit: Claude is asked to defer \"%[2]s\" unless it can resolve what holds it up now, so the queue goes on without it.",
   "queue.doneNotify": "Queue finished: %s has no open items.",
   "queue.doneMessage": "✔ Queue finished — %s has no open items; stopping cleanly.",
   "queue.blockedNotify": "Queue blocked: %d open items in %s wait on dependencies that are not done.",

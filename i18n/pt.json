@@ -64,6 +64,7 @@
   "session.typedHint": " Os prompts que você digita seguem em frente mesmo assim.",
   "queue.stuckNotify": "A fila não avança: %d itens abertos, sessão parada (%s).",
   "queue.stuckMessage": "⛔ A fila não avança (%d abertos); a continuação automática fica parada até que um item seja marcado, adicionado ou editado, ou você escreva um prompt — veja errors.log.",
+  "queue.setAsideMessage": "⚠ %[1]d continuações seguidas sem item marcado nem commit: pede-se ao Claude que adie \"%[2]s\" se não conseguir resolver agora o que o trava, para que a fila siga sem ele.",
   "queue.doneNotify": "Fila concluída: %s não tem itens abertos.",
   "queue.doneMessage": "✔ Fila concluída — %s não tem itens abertos; parada limpa.",
   "queue.blockedNotify": "Fila bloqueada: %d itens abertos em %s aguardam dependências não concluídas.",

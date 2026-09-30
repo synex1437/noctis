@@ -64,6 +64,7 @@
   "session.typedHint": " Prompts die je zelf typt gaan toch door.",
   "queue.stuckNotify": "Wachtrij komt niet vooruit: %d open items, sessie gestopt (%s).",
   "queue.stuckMessage": "⛔ Wachtrij komt niet vooruit (%d open); automatisch doorgaan blijft uit tot een item wordt afgevinkt, toegevoegd of aangepast, of je een prompt typt — zie errors.log.",
+  "queue.setAsideMessage": "⚠ %[1]d voortzettingen op rij zonder afgevinkt item of commit: Claude wordt gevraagd \"%[2]s\" uit te stellen als het niet nu kan oplossen wat het tegenhoudt, zodat de wachtrij zonder verdergaat.",
   "queue.doneNotify": "Wachtrij klaar: %s heeft geen open items meer.",
   "queue.doneMessage": "✔ Wachtrij klaar — %s heeft geen open items meer; netjes gestopt.",
   "queue.blockedNotify": "Wachtrij geblokkeerd: %d open items in %s wachten op onvoltooide afhankelijkheden.",

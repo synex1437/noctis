@@ -297,7 +297,11 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 		if tail != "" {
 			output = "The end of its output:\n" + tail
 		}
-		return object{"decision": "block", "reason": fmt.Sprintf("[noctis] Queue check failed: `%s` %s (run in %s). Fix the failure before you start another item, and leave the item you were on unticked until the command passes (untick it if you already marked it done); it runs again when you stop. Do not ask for confirmation; decide yourself. %s", command, outcome, folder, output)}
+		last := ""
+		if failures+1 >= queueCheckAttempts(cfg) {
+			last = queueCheckLastRule(path)
+		}
+		return object{"decision": "block", "reason": fmt.Sprintf("[noctis] Queue check failed: `%s` %s (run in %s). Fix the failure before you start another item, and leave the item you were on unticked until the command passes (untick it if you already marked it done); it runs again when you stop.%s Do not ask for confirmation; decide yourself. %s", command, outcome, folder, last, output)}
 	}
 	stored["held"] = now
 	updateState(func(next object) {

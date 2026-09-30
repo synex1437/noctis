@@ -6,8 +6,8 @@ Stop hook waits for a deferral that ends soon, and a session that stopped on a l
 when it ends, the way noctis resumes a session after a pause. With `alarm.digestAt` set, your phone
 gets one message a day through the webhook with what each queue finished, what it takes next and
 what waits on you. Once sessions have ticked a few items, noctis also says what an item takes of the
-weekly limit and when the items left may be done, and an item can name the model it is for. It
-carries everything in 8.0.0
+weekly limit and when the items left may be done, an item can name the model it is for, and an item
+Claude cannot get past is set aside instead of ending the queue. It carries everything in 8.0.0
 ([RELEASE_NOTES_8.0.0.md](RELEASE_NOTES_8.0.0.md)).
 
 ## If you are upgrading
@@ -132,6 +132,20 @@ keeps its own model, the PreToolUse hook still puts `models.fallback` in place o
 whose quota is out, and a host without subagents leaves the tag as text. `noctis why --json` shows
 `itemModel` on `continue-queue`.
 
+## A stuck item is set aside, the queue goes on
+
+A session that keeps stopping without ticking an item or committing used to end the queue after
+`queue.maxIdleContinues` continues (4), with every item after the stuck one left for the morning.
+Now the last of those continues asks Claude to find what holds the item up and, if that cannot be
+resolved now, to defer it with the root cause as the reason and go on with the next item; you see a
+notice, and `noctis why --json` shows `setAside` on that `continue-queue`. The deferral counts as
+progress, so the queue goes on; when Claude does not defer the item, the queue gives up at the next
+stop as before. The check between items works the same way: the last send-back before the queue is
+held tells Claude, when it cannot fix the failure now, to undo the item's changes (keeping them on a
+branch or in a stash), leave it unticked and defer it, so the check passes again without it. The
+deferred item and its reason show in `noctis queue status` and in the digest, and `noctis queue
+undefer` takes it up again.
+
 ## Known limits
 
 - **A cloud session is not woken for a deferral that ends after the Stop hook may wait.** The next
@@ -144,6 +158,9 @@ whose quota is out, and a host without subagents leaves the tag as text. `noctis
 - **A model tag works through a subagent.** The item's work runs in a subagent of that model and the
   session checks and ticks it, so the session's own turns stay on its model; on a host without
   subagents the tag does nothing.
+- **Setting an item aside is Claude's call.** noctis asks at the last continue; when Claude keeps
+  trying instead, the queue gives up as before. A check that fails for a reason outside the item (a
+  service that is down) is not helped by deferring it, and the queue is held as before.
 - The limits in [RELEASE_NOTES_8.0.0.md](RELEASE_NOTES_8.0.0.md) still apply, but for the first one:
   a deferral whose `--until` passes now wakes the session that stopped on it.
 
@@ -169,3 +186,8 @@ giving the pace, and the notes of a file dropped a month after the last one.
 5 new Go tests for model tags: reading a tag, the Stop hook handing a tagged item to a subagent of
 its model and not when the session runs on it, the large-context note giving way to it and staying
 for an item of the session's own model, and the queue instructions saying what a tag means.
+
+4 new Go tests for a stuck item: the last continue before the idle limit asking to set it aside and
+the queue going on with the next item once it is deferred, the queue giving up as before when it is
+not, no set-aside at the first continue, and the last send-back of a failing check saying how to set
+the item aside.
