@@ -5,7 +5,8 @@ An item deferred with `--until` no longer waits for your next prompt once its ti
 Stop hook waits for a deferral that ends soon, and a session that stopped on a later one is resumed
 when it ends, the way noctis resumes a session after a pause. With `alarm.digestAt` set, your phone
 gets one message a day through the webhook with what each queue finished, what it takes next and
-what waits on you. It carries everything in 8.0.0
+what waits on you. Once sessions have ticked a few items, noctis also says what an item takes of the
+weekly limit and when the items left may be done. It carries everything in 8.0.0
 ([RELEASE_NOTES_8.0.0.md](RELEASE_NOTES_8.0.0.md)).
 
 ## If you are upgrading
@@ -84,12 +85,38 @@ reason the last one did not go out, or why the digest is off (the time is not `H
 `alarm.enabled` is false or no webhook is set). `noctis why` shows `start-runner`, `arm`, `sent`,
 `failed` and `drop`.
 
+## Whether this week's limit covers the rest
+
+The digest says what a queue did, not whether the week will cover what is left. noctis now notes the
+pace of each queue file a session drives: when a session stops with another number of items done
+than noctis noted last, it notes the time, the items done and how much of the weekly limit is used
+then (the last 25 changes of each file, kept 30 days). From the items ticked within 6 hours of the
+note before it works out the time an item takes, and from the ones ticked between two readings of
+the same weekly window the share of the weekly limit an item takes. Once there are 3 such items,
+`noctis queue status` says, for example:
+
+```
+  Pace: 1h 10m an item over the last 6; a whole weekly limit covers about 40 items
+  At this pace the 18 left need about 45% of the weekly limit (32% is left before its pause point) and are done around Sat 04.10 09:20
+```
+
+The finish counts the items left one after the other (the deferred ones too, not the `(human)`
+ones), each taking its time and its share, and when the next one would pass the pause point
+(`thresholds.weeklyAll`, or 100 % while that is off) it starts after the weekly reset. The same
+lines are in the daily digest under each queue and in `noctis status` under the queue's name, and
+`noctis queue status --json` gives them as `pace`. Until the pace is known, `queue status` says how
+many such items it has. Unticking items starts the notes over, and a checklist noctis wrote from a
+prompt is left out. It costs no model call, and a stop that ticked nothing only reads.
+
 ## Known limits
 
 - **A cloud session is not woken for a deferral that ends after the Stop hook may wait.** The next
   prompt, relaunch or session start goes on with the item.
 - **The digest goes out from the machine noctis runs on.** While it is off, none goes out; the one
   missed goes out when a session next starts or stops there.
+- **The pace is the average of the last items.** For a queue whose items differ a lot in size it is
+  rough; the time between two ticks counts as the item's, whatever else the session did then (a gap
+  over 6 hours is left out), and so does the weekly use of other work in the same account.
 - The limits in [RELEASE_NOTES_8.0.0.md](RELEASE_NOTES_8.0.0.md) still apply, but for the first one:
   a deferral whose `--until` passes now wakes the session that stopped on it.
 
@@ -105,3 +132,9 @@ digest that goes out and the next one naming what was ticked since, a failed del
 the baseline, the runner that sends a due digest once and sets up the next day's, the session that
 starts the runner when none is set or it is late, the next time of day, a digest turned off and its
 runner dropped, uninstall dropping the runner, and `noctis digest` with and without `--send`.
+
+6 new Go tests for the pace: the notes the Stop hook takes and their restart when items are
+unticked, the time and share of an item and the finish of the items left, the wait for the weekly
+reset at the pause point (and at 100 % with the threshold off, and without a weekly reading), long
+gaps and a weekly reset left out, `queue status` (text and JSON), the digest and `noctis status`
+giving the pace, and the notes of a file dropped a month after the last one.

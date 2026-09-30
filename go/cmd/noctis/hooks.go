@@ -1622,6 +1622,7 @@ func onStop(input, cfg object) {
 	}
 	snapshot := queueSnapshotOf(queuePath, content)
 	syncDoneIssues(cfg, queuePath, content, getString(input, "cwd"))
+	noteQueuePace(state, queuePath, content, now)
 	if snapshot.total == 0 {
 		if isAutoQueue(queuePath) && numberOr(getMap(getMap(state, "autoQueues"), sid), "items", 0) == 0 {
 			endAutoQueue(sid, true)
