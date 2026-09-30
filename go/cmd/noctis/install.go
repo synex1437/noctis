@@ -921,6 +921,7 @@ func cancelAccountRelaunches(configDir string) (int, error) {
 	if len(sids) > 0 && !cancelSessions(sids, state) {
 		return 0, errors.New(T("install.cancelFailed", files.errors))
 	}
+	dropDigest()
 	return len(sids), nil
 }
 

@@ -233,7 +233,23 @@ func ownSchedule(scheduled object) bool {
 // scheduleQueueWakeRunner schedules noctis queue-wake for the session at at, as scheduleRunnerLocked
 // schedules the runner of a pause, and cancels the runner previous names.
 func scheduleQueueWakeRunner(cfg object, sid string, at float64, previous object) object {
-	key := queueWakeKey(sid)
+	scheduled := scheduleTimedRunner(cfg, queueWakeKey(sid), "the queue wake of "+sid, at, previous, func(account string, extra ...string) []string {
+		return runnerArgs("queue-wake", sid, account, extra...)
+	})
+	if scheduled == nil {
+		scheduled = object{"method": "manual", "at": at}
+		fail("no scheduler available for the queue wake of %s; its queue goes on when a prompt is typed in it after %s", sid, localISO(at))
+	}
+	logInfo("queue wake for %s scheduled at %s via %s", sid, localISO(at), getString(scheduled, "method"))
+	return scheduled
+}
+
+// scheduleTimedRunner has the runner argv(account) started at at for key: a Windows task, a launchd
+// or systemd job, or else a detached sleeper, which argv is given --at <epoch> for. It cancels the
+// schedule previous unless this process is it, and returns how the runner is set up, method
+// "manual" under NOCTIS_NO_SCHEDULE, or nil when nothing could start it. what names the runner in
+// the log.
+func scheduleTimedRunner(cfg object, key, what string, at float64, previous object, argv func(account string, extra ...string) []string) object {
 	nativeAllowed := os.Getenv("NOCTIS_NO_TASKS") == ""
 	backend := ""
 	if nativeAllowed {
@@ -244,34 +260,27 @@ func scheduleQueueWakeRunner(cfg object, sid string, at float64, previous object
 		cancelScheduledKeepingTask(key, previous, replacingTask)
 	}
 	wake := getBool(section(cfg, "alarm"), "wakePc", true)
-	var scheduled object
 	if replacingTask {
 		keepEnvironmentForRunner(key, slices.Concat(carriedEnvNames, proxyEnvNames))
-		if result := scheduleWindowsTask(taskName(key), at, runnerArgs("queue-wake", sid, `"`+files.configDir+`"`), wake); result.ok {
-			scheduled = object{"method": "task", "taskName": taskName(key), "at": at}
-		} else {
-			removeScheduledTask(taskName(key))
-			dropProxiesForRunner(key)
-			warn("task scheduling for the queue wake of %s failed, falling back to a sleeper: %s", sid, orDefault(result.err, result.stderr))
+		result := scheduleWindowsTask(taskName(key), at, argv(`"`+files.configDir+`"`), wake)
+		if result.ok {
+			return object{"method": "task", "taskName": taskName(key), "at": at}
 		}
+		removeScheduledTask(taskName(key))
+		dropProxiesForRunner(key)
+		warn("task scheduling for %s failed, falling back to a sleeper: %s", what, orDefault(result.err, result.stderr))
 	} else if nativeAllowed {
-		if native, ok := scheduleNative(backend, key, at, runnerArgs("queue-wake", sid, files.configDir), wake); ok {
-			scheduled = native
+		if native, ok := scheduleNative(backend, key, at, argv(files.configDir), wake); ok {
+			return native
 		}
 	}
-	if scheduled == nil && os.Getenv("NOCTIS_NO_SCHEDULE") != "" {
-		scheduled = object{"method": "manual", "at": at}
+	if os.Getenv("NOCTIS_NO_SCHEDULE") != "" {
+		return object{"method": "manual", "at": at}
 	}
-	if scheduled == nil {
-		if pid := detachedSelf(runnerArgs("queue-wake", sid, files.configDir, "--at", formatNumber(at))); pid > 0 {
-			scheduled = object{"method": "sleeper", "pid": float64(pid), "at": at}
-		} else {
-			scheduled = object{"method": "manual", "at": at}
-			fail("no scheduler available for the queue wake of %s; its queue goes on when a prompt is typed in it after %s", sid, localISO(at))
-		}
+	if pid := detachedSelf(argv(files.configDir, "--at", formatNumber(at))); pid > 0 {
+		return object{"method": "sleeper", "pid": float64(pid), "at": at}
 	}
-	logInfo("queue wake for %s scheduled at %s via %s", sid, localISO(at), getString(scheduled, "method"))
-	return scheduled
+	return nil
 }
 
 // dropQueueWake drops the session's queue wake and cancels its runner, when holder is "" or holds

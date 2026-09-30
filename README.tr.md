@@ -119,7 +119,7 @@ Siz izin verene kadar hayır. Bir `TASKS.md`, siz `!noctis queue trust` yazana k
 <details>
 <summary><b>Büyük bir projeyi sunucuda günlerce yürütebilir mi?</b></summary>
 
-Kuyruk bunun için var. Sunucuda `claude`'u tmux içinde çalıştırın, planı öncelikleri, bağımlılıkları ve bir `noctis-verify` denetim satırı olan bir `TASKS.md` olarak yazın, yalnızca sizin yapabileceğiniz adımları `(insan)` ile işaretleyin ve dosyayı okuduktan sonra ona bir kez güvenin. Claude onu yürütür ve yol boyunca commit atar, uzun derlemeleri `noctis job` işleri olarak çalıştırır, oturum dışındaki bir şeyi bekleyeni kenara alır ve başka iş kalmayınca sizde olanların listesiyle durur; uzun bir beklemeden sonraki yeniden başlatma tmux'ta yeni bir pencere olarak açılır, `noctis queue status --json` de bir izleme betiğine kuyruğun nerede olduğunu söyler. [Sunucuda büyük projeler](docs/GUIDE.tr.md#sunucuda-büyük-projeler).
+Kuyruk bunun için var. Sunucuda `claude`'u tmux içinde çalıştırın, planı öncelikleri, bağımlılıkları ve bir `noctis-verify` denetim satırı olan bir `TASKS.md` olarak yazın, yalnızca sizin yapabileceğiniz adımları `(insan)` ile işaretleyin ve dosyayı okuduktan sonra ona bir kez güvenin. Claude onu yürütür ve yol boyunca commit atar, uzun derlemeleri `noctis job` işleri olarak çalıştırır, oturum dışındaki bir şeyi bekleyeni kenara alır ve başka iş kalmayınca sizde olanların listesiyle durur; uzun bir beklemeden sonraki yeniden başlatma tmux'ta yeni bir pencere olarak açılır, `noctis queue status --json` bir izleme betiğine kuyruğun nerede olduğunu söyler, `alarm.digestAt` ayarlıysa webhook'unuz her gün size kuyruğun özetini gönderir. [Sunucuda büyük projeler](docs/GUIDE.tr.md#sunucuda-büyük-projeler).
 </details>
 
 <details>

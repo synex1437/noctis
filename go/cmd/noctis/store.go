@@ -1147,6 +1147,9 @@ func emptyState() object {
 		// queueWakes are the runners set to resume a stopped session when a deferral of its queue
 		// ends (armQueueWake), by session.
 		"queueWakes": object{},
+		// digest is the daily digest's runner: the time of day it was set up for (time), when it
+		// goes out next (at), the one sent last (sent, sentAt) and why that failed (failed).
+		"digest": object{},
 		// usedCheckpointsDue is when the oldest record in used-checkpoints.json expires, 0 when
 		// it holds none.
 		"usedCheckpointsDue": float64(0),
@@ -1471,7 +1474,7 @@ func pruneState(state object, now int64) {
 
 func lockQueueMs() time.Duration {
 	switch command {
-	case "sleeper", "resume", "queue-wake":
+	case "sleeper", "resume", "queue-wake", "digest-run":
 		return lockQueueBackgroundMs
 	default:
 		return lockLiveHolderMs
@@ -1492,7 +1495,7 @@ func lockPollDelay(waited time.Duration) time.Duration {
 
 func lockNoProgressMs() time.Duration {
 	switch command {
-	case "sleeper", "resume", "queue-wake":
+	case "sleeper", "resume", "queue-wake", "digest-run":
 		return lockLiveHolderMs
 	default:
 		return lockWaitForegroundMs
