@@ -1162,6 +1162,9 @@ func emptyState() object {
 		// files: the item whose change to one was refused (item), the ones Claude created (created),
 		// the changes that went through after a refusal (edits), and when it changed last (at).
 		"testGuard": object{},
+		// queueCompactions is, by queueTrustKey, how many compactions the item in hand of a queue file
+		// has seen (item, count), and when the last one came (at), for compactnote.go.
+		"queueCompactions": object{},
 		// usedCheckpointsDue is when the oldest record in used-checkpoints.json expires, 0 when
 		// it holds none.
 		"usedCheckpointsDue": float64(0),
@@ -1406,7 +1409,7 @@ func pruneState(state object, now int64) {
 			delete(stateMap(state, "queueVerify"), key)
 		}
 	}
-	for _, name := range []string{"queuePace", "queueModels", "testGuard"} {
+	for _, name := range []string{"queuePace", "queueModels", "testGuard", "queueCompactions"} {
 		for key, raw := range stateMap(state, name) {
 			if float64(now)-numberOr(toObject(raw), "at", 0) > queueTrustTTLSeconds {
 				delete(stateMap(state, name), key)

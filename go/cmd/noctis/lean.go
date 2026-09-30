@@ -10,7 +10,11 @@ import (
 	"strings"
 )
 
-var builtinLean = object{"lean": true, "compactAtPercent": float64(70), "keepTurns": float64(6), "maxToolResultChars": float64(2000), "instructions": ""}
+// compactionInstructions are what the summary of a compaction is to keep: what the work needs to go on
+// and what a summary tends to drop, such as whether a check ran to the end.
+const compactionInstructions = "Write the summary in short sections: the user's requests and intent, quoting any requirement they set; the task or queue item in hand, its acceptance criteria, what is done and what is left; each file changed or created and why; each build, test or check command run and its exit status, marking any that timed out, were killed or exited non-zero as UNVERIFIED, to be run again; errors met and how each was fixed, quoting any not fixed yet; decisions and approaches ruled out, each with its reason; open questions; the next step. Leave out file contents, tool output and search results that can be read again."
+
+var builtinLean = object{"lean": true, "compactAtPercent": float64(70), "keepTurns": float64(6), "maxToolResultChars": float64(2000), "instructions": compactionInstructions}
 
 var leanKeys = []string{"lean", "compactAtPercent", "keepTurns", "maxToolResultChars", "instructions"}
 

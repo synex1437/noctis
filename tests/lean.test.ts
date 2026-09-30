@@ -186,7 +186,7 @@ describe("measure", () => {
 describe("policyOf", () => {
   test("the shipped values when the account has none", () => {
     expect(policyOf(undefined, undefined)).toEqual(SHIPPED)
-    expect(policyOf({ lean: true, compactAtPercent: 70, keepTurns: 6, maxToolResultChars: 2000, instructions: "" }, {})).toEqual(SHIPPED)
+    expect(policyOf({ lean: true, compactAtPercent: 70, keepTurns: 6, maxToolResultChars: 2000, instructions: SHIPPED.instructions }, {})).toEqual(SHIPPED)
   })
 
   test("a wrong type or range falls back to the shipped value", () => {

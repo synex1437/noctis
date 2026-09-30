@@ -2288,7 +2288,7 @@ var hookBudgets = map[string]map[string]float64{
 	"claude": {
 		"SessionStart": 20, "SessionEnd": 10, "UserPromptSubmit": 21600, "PreToolUse": 21600, "PostToolBatch": 21600, "StopFailure": 21600,
 		"Notification": 20, "PostModelSwitch": 10, "TaskCreated": 10, "TaskCompleted": 10, "PostToolUse": 15, "Stop": 21600,
-		"PermissionRequest": 10,
+		"PermissionRequest": 10, "PreCompact": 10,
 	},
 	"codex":       {"SessionStart": 20, "SessionEnd": 3, "UserPromptSubmit": 21600, "PreToolUse": 20, "PostToolUse": 21600, "Stop": 60},
 	"droid":       {"SessionStart": 20, "SessionEnd": 10, "UserPromptSubmit": 21600, "PreToolUse": 20, "PostToolUse": 21600, "Stop": 60},

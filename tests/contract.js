@@ -55,6 +55,8 @@ function payloadFor(event, sid, lab, account) {
       return { ...base, task: { id: 't1', subject: 'write the parser' } };
     case 'TaskCompleted':
       return { ...base, task: { id: 't1', subject: 'write the parser', status: 'completed' } };
+    case 'PreCompact':
+      return { ...base, trigger: 'auto', custom_instructions: '' };
     default:
       return base;
   }
