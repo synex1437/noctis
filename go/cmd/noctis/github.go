@@ -256,6 +256,13 @@ func printQueueCheck(cfg object, target string) {
 		}
 	case command != "":
 		fmt.Println(T("queue.verifyFromConfig", printableItem(command)))
+	default:
+		if suggested := suggestedCheck(cfg, target, content); suggested != "" {
+			fmt.Println(T("queue.verifySuggest", suggested, suggested, filepath.Base(target), pluginName))
+		}
+	}
+	if text := unverifiedText(cfg, readState(), target, content); text != "" {
+		fmt.Println("  " + text)
 	}
 }
 

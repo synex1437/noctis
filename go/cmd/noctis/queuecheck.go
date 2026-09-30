@@ -237,7 +237,11 @@ func (tail *tailBuffer) text() string {
 	return strings.Join(lines, "\n")
 }
 
-func runQueueCheck(line, folder string, limit float64) (string, string) {
+// runQueueCheck runs the check line in folder for at most limit seconds. It returns how the check
+// failed ("" when it passed), the end of its output, and whether it was cut short rather than failed:
+// stopped at the limit, killed by a signal, or ended with the status of a timeout (124) or of a kill
+// (137, as when the system runs out of memory).
+func runQueueCheck(line, folder string, limit float64) (string, string, bool) {
 	command := platformShell(line)
 	command.Dir = folder
 	tail := &tailBuffer{}
@@ -247,13 +251,16 @@ func runQueueCheck(line, folder string, limit float64) (string, string) {
 	var exit *exec.ExitError
 	switch {
 	case err == nil:
-		return "", tail.text()
+		return "", tail.text(), false
 	case errors.Is(err, errTimedOut):
-		return fmt.Sprintf("did not finish within %s s and was stopped", formatNumber(limit)), tail.text()
+		return fmt.Sprintf("did not finish within %s s and was stopped", formatNumber(limit)), tail.text(), true
 	case errors.As(err, &exit) && exit.ExitCode() >= 0:
-		return fmt.Sprintf("exited with status %d", exit.ExitCode()), tail.text()
+		status := exit.ExitCode()
+		return fmt.Sprintf("exited with status %d", status), tail.text(), status == 124 || status == 137
+	case errors.As(err, &exit):
+		return "failed: " + err.Error(), tail.text(), true
 	}
-	return "failed: " + err.Error(), tail.text()
+	return "failed: " + err.Error(), tail.text(), false
 }
 
 func gateQueue(cfg, input object, sid, path, content, label string, started int64) object {
@@ -268,9 +275,40 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 	}
 	folder := queueFolder(cfg, input, sid, path)
 	began := time.Now()
-	outcome, tail := runQueueCheck(command, folder, queueCheckLimit(cfg, started))
+	outcome, tail, cut := runQueueCheck(command, folder, queueCheckLimit(cfg, started))
 	facts := object{"command": command, "seconds": math.Round(time.Since(began).Seconds())}
 	now, key := float64(nowSec()), queueTrustKey(path)
+	if cut && numberOr(record, "failures", 0) == 0 && numberOr(record, "held", 0) == 0 && numberOr(record, "retried", 0) == 0 {
+		// A check cut short says nothing about the code, so the first run of a streak that is cut short
+		// runs once more before it counts as a failed attempt: here when the hook has the time for a
+		// second run as long as the first, else at the next stop while Claude goes on with the next
+		// item. With no item to go on with, the queue would end unchecked, so the run counts.
+		took := time.Since(began).Seconds()
+		switch {
+		case queueCheckLimit(cfg, started) >= took+1:
+			journal(sid, "Stop", "verify-queue", "cut short: "+outcome, facts)
+			logInfo("queue check %q for %s %s; it runs once more now, not counted as a failed attempt", command, sid, outcome)
+			again := time.Now()
+			outcome, tail, _ = runQueueCheck(command, folder, queueCheckLimit(cfg, started))
+			facts["seconds"] = math.Round(time.Since(again).Seconds())
+		case len(queueSnapshotOf(path, content).items) > 0:
+			updateState(func(next object) {
+				stored := object{}
+				for name, value := range queueCheckRecord(next, path) {
+					stored[name] = value
+				}
+				// at dates the last pass, and keeps a new record from being pruned.
+				if numberOr(stored, "at", 0) == 0 {
+					stored["at"] = now
+				}
+				stored["retried"], stored["rerun"] = now, now
+				stateMap(next, "queueVerify")[key] = stored
+			})
+			journal(sid, "Stop", "verify-queue", "cut short: "+outcome, facts)
+			logInfo("queue check %q for %s %s; it runs once more at the next stop, not counted as a failed attempt", command, sid, outcome)
+			return nil
+		}
+	}
 	if outcome == "" {
 		updateState(func(next object) { stateMap(next, "queueVerify")[key] = object{"ticked": ticked, "at": now} })
 		journal(sid, "Stop", "verify-queue", "passed", facts)
@@ -317,4 +355,41 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 		notify(cfg, pluginName, T("queue.heldNotify", int(failures), label))
 	}
 	return object{"systemMessage": T("queue.heldMessage", shown, int(failures), label)}
+}
+
+// queueUnverified counts the ticked items of the queue at path that passed no check: all of them when
+// nothing checks the queue, else those ticked since its check last passed.
+func queueUnverified(cfg, state object, path, content string) (unverified, ticked int) {
+	passed := map[string]bool{}
+	if queueCheckCommandOf(cfg, path, content) != "" {
+		passed = digestSet(getList(queueCheckRecord(state, path), "ticked"))
+	}
+	for _, digest := range queueTicks(content) {
+		ticked++
+		if text, _ := digest.(string); !passed[text] {
+			unverified++
+		}
+	}
+	return unverified, ticked
+}
+
+// unverifiedText says how many ticked items of the queue at path passed no check, or "" when all did.
+func unverifiedText(cfg, state object, path, content string) string {
+	unverified, ticked := queueUnverified(cfg, state, path, content)
+	switch {
+	case unverified == 0:
+		return ""
+	case queueCheckCommandOf(cfg, path, content) == "":
+		return T("queue.unverifiedNone", unverified)
+	}
+	return T("queue.unverifiedWait", unverified, ticked, pluginName)
+}
+
+// suggestedCheck is the command the project of the queue at path seems to check itself with, when
+// nothing checks the queue yet and its file could name one, or "".
+func suggestedCheck(cfg object, path, content string) string {
+	if isAutoQueue(path) || queueVerifyLine(content) != "" || queueCheckCommandOf(cfg, path, content) != "" || !getBool(section(cfg, "queue"), "fileVerify", true) {
+		return ""
+	}
+	return projectCheckCommand(filepath.Dir(path))
 }

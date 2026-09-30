@@ -96,6 +96,11 @@ func queueStatusFacts(cfg object, target string, view queueView) object {
 		check["heldAt"] = held
 	}
 	check["failures"] = numberOr(record, "failures", 0)
+	unverified, ticked := queueUnverified(cfg, state, target, content)
+	check["unverified"], check["ticked"] = unverified, ticked
+	if suggested := suggestedCheck(cfg, target, content); suggested != "" {
+		check["suggested"] = suggested
+	}
 	facts["check"] = check
 	facts["pace"] = paceFacts(queuePaceNow(cfg, state, target, view))
 	facts["models"] = setupFacts(state, target)
@@ -125,7 +130,7 @@ func verifyQueueNow(cfg object, cwd, target string) int {
 	folder := queueFolder(cfg, object{"cwd": cwd}, "", target)
 	shown := printableItem(truncateText(command, 120))
 	began := time.Now()
-	outcome, tail := runQueueCheck(command, folder, queueCheckSeconds(cfg))
+	outcome, tail, _ := runQueueCheck(command, folder, queueCheckSeconds(cfg))
 	if outcome != "" {
 		fmt.Println(T("queue.verifyFailed", shown, outcome, folder))
 		if tail != "" {
