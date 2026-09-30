@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-var plumbingForTest = []string{"hook", "statusline", "resume", "sleeper", "release-check", "selftest-mark", "state-write"}
+var plumbingForTest = []string{"hook", "statusline", "resume", "sleeper", "queue-wake", "digest-run", "release-check", "selftest-mark", "state-write"}
 
 func listedCommands(t *testing.T, stderr string) map[string]bool {
 	t.Helper()

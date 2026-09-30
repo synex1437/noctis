@@ -135,6 +135,9 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	if observing {
 		lines = append(lines, T("status.observe"))
 	}
+	if line := digestStatus(cfg, state); line != "" {
+		lines = append(lines, line)
+	}
 	waits, wakes := getMap(state, "waits"), getMap(state, "queueWakes")
 	waitHeader := T("status.waits")
 	if len(waits) == 0 && len(wakes) == 0 {

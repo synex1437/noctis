@@ -119,7 +119,7 @@ Not until you trust it. A `TASKS.md` drives nothing until you type `!noctis queu
 <details>
 <summary><b>Can it carry a large project on a server for days?</b></summary>
 
-That is what the queue is for. Run `claude` inside tmux on the server, write the plan as a `TASKS.md` with priorities, dependencies and a `noctis-verify` check line, mark the steps only you can do `(human)`, and trust the file once you have read it. Claude works through it and commits as it goes, runs long builds as `noctis job` jobs, sets aside what waits on something outside the session, and stops with the list of what is yours once nothing else is left; a relaunch after a long wait opens as a new tmux window, and `noctis queue status --json` tells a monitoring script where the queue stands. [Large projects on a server](docs/GUIDE.md#large-projects-on-a-server).
+That is what the queue is for. Run `claude` inside tmux on the server, write the plan as a `TASKS.md` with priorities, dependencies and a `noctis-verify` check line, mark the steps only you can do `(human)`, and trust the file once you have read it. Claude works through it and commits as it goes, runs long builds as `noctis job` jobs, sets aside what waits on something outside the session, and stops with the list of what is yours once nothing else is left; a relaunch after a long wait opens as a new tmux window, `noctis queue status --json` tells a monitoring script where the queue stands, and with `alarm.digestAt` set your webhook sends you a digest of it every day. [Large projects on a server](docs/GUIDE.md#large-projects-on-a-server).
 </details>
 
 <details>

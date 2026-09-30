@@ -115,7 +115,8 @@
       "url": "",
       "preset": "generic",
       "chatId": ""
-    }
+    },
+    "digestAt": ""
   },
   "statusline": {
     "chainCommand": "",

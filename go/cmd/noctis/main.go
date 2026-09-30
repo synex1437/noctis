@@ -17,6 +17,7 @@ var ported = map[string]commandFunc{
 	"resume":           runResume,
 	"sleeper":          runSleeper,
 	"queue-wake":       runQueueWake,
+	"digest-run":       runDigestRunner,
 	"status":           runStatus,
 	"check":            runCheck,
 	"queue":            runQueue,
@@ -38,6 +39,7 @@ var ported = map[string]commandFunc{
 	"ensure":           runEnsure,
 	"why":              runWhy,
 	"webhook":          runWebhookCommand,
+	"digest":           runDigest,
 	"schedule-preview": runSchedulePreview,
 	"release-check":    runReleaseCheck,
 	"version":          runVersion,
@@ -73,7 +75,7 @@ func dispatchCommand() string {
 	return "hook"
 }
 
-var plumbingCommands = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "queue-wake": true, "release-check": true, "selftest-mark": true, "state-write": true, "refresh": true}
+var plumbingCommands = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "queue-wake": true, "digest-run": true, "release-check": true, "selftest-mark": true, "state-write": true, "refresh": true}
 
 func userCommands() []string {
 	names := []string{}
@@ -223,7 +225,7 @@ func crashed(recovered any) int {
 	return 1
 }
 
-var startedByHost = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "queue-wake": true, "ensure": true, "release-check": true, "webhook": true, "selftest-mark": true, "state-write": true, "refresh": true}
+var startedByHost = map[string]bool{"hook": true, "statusline": true, "resume": true, "sleeper": true, "queue-wake": true, "digest-run": true, "ensure": true, "release-check": true, "webhook": true, "selftest-mark": true, "state-write": true, "refresh": true}
 
 var answersTheCaller = map[string]bool{"webhook": true}
 

@@ -256,6 +256,7 @@ func onSessionStart(input, cfg object) {
 			output["systemMessage"] = joinNotices(getString(output, "systemMessage"), T("selfcheck.message", pluginName, strings.Join(issues, "; ")))
 		}
 	}
+	maybeDigest(cfg, state, now)
 	if source == "startup" {
 		if notice := restartNotice(cfg, state, now); notice != "" {
 			output["systemMessage"] = joinNotices(getString(output, "systemMessage"), notice)
@@ -1581,6 +1582,7 @@ func onStop(input, cfg object) {
 	sid := sessionKey(input)
 	state := readState()
 	endTypedTurn(state, sid)
+	maybeDigest(cfg, state, now)
 	if guardPaused(cfg, state, now) {
 		pausedHookPulse(sid, state, now)
 		return
