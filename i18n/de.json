@@ -64,6 +64,7 @@
   "session.typedHint": " Prompts, die du tippst, laufen trotzdem weiter.",
   "queue.stuckNotify": "Warteschlange kommt nicht voran: %d offene Punkte, Sitzung gestoppt (%s).",
   "queue.stuckMessage": "⛔ Warteschlange kommt nicht voran (%d offen); automatisches Weitermachen bleibt aus, bis ein Punkt abgehakt, hinzugefügt oder geändert wird oder du einen Prompt schreibst — siehe errors.log.",
+  "queue.setAsideMessage": "⚠ %[1]d Fortsetzungen in Folge ohne abgehakten Punkt oder Commit: Claude soll \"%[2]s\" zurückstellen, wenn es nicht jetzt lösen kann, was ihn aufhält, damit die Warteschlange ohne ihn weitergeht.",
   "queue.doneNotify": "Warteschlange erledigt: %s hat keine offenen Punkte mehr.",
   "queue.doneMessage": "✔ Warteschlange erledigt — %s hat keine offenen Punkte mehr; sauberer Stopp.",
   "queue.blockedNotify": "Warteschlange blockiert: %d offene Punkte in %s warten auf unerledigte Abhängigkeiten.",

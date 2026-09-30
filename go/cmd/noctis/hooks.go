@@ -1851,6 +1851,12 @@ func onStop(input, cfg object) {
 		// A subagent of the item's model also keeps the item out of this context.
 		subagent, facts["itemModel"] = note, model
 	}
+	// The last continuation before the queue gives up on a session that stops without progress asks
+	// Claude to set the item it is stuck on aside, so the queue goes on without it.
+	setAside := ""
+	if idle := numberOr(guard, "idle", 0); idle > 0 && idle+1 >= maxIdle && len(snapshot.items) > 0 {
+		setAside, facts["setAside"] = snapshot.items[0], true
+	}
 	journal(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), facts)
 	logInfo("queue continue #%s for %s: %d open", formatNumber(numberOr(guard, "forced", 0)), sid, snapshot.total)
 	nextItem := ""
@@ -1862,7 +1868,7 @@ func onStop(input, cfg object) {
 		blockedNote = fmt.Sprintf(" %d item(s) wait on unfinished dependencies and are not eligible yet.", snapshot.blocked)
 	}
 	blockedNote += endedDeferralRule() + humanItemsRule(snapshot) + deferredRule(snapshot, queuePath)
-	if numberOr(guard, "idle", 0) > 0 {
+	if setAside == "" && numberOr(guard, "idle", 0) > 0 {
 		// Claude stopped without ticking or committing anything: the item may wait on something only
 		// the user has.
 		blockedNote += queueDeferHint(queuePath)
@@ -1896,7 +1902,12 @@ func onStop(input, cfg object) {
 	if isAutoQueue(queuePath) {
 		where = queuePath
 	}
-	reason := fmt.Sprintf(queueContinuesPrefix+": %d open in %s. Take the next eligible item%s (priority and (after …) dependencies already applied), finish it completely, mark it done in the file, then move to the following one.%s%s%s Do not stop or ask for confirmation; decide yourself.", snapshot.total, where, nextItem, blockedNote, queueEditRule(cfg, queuePath), subagent)
+	lead := fmt.Sprintf("Take the next eligible item%s (priority and (after …) dependencies already applied), finish it completely, mark it done in the file, then move to the following one.", nextItem)
+	if setAside != "" {
+		lead = queueSetAsideRule(setAside, queuePath)
+		systemMessage = joinNotices(systemMessage, T("queue.setAsideMessage", int(numberOr(guard, "idle", 0)), truncateText(setAside, 100)))
+	}
+	reason := fmt.Sprintf(queueContinuesPrefix+": %d open in %s. %s%s%s%s Do not stop or ask for confirmation; decide yourself.", snapshot.total, where, lead, blockedNote, queueEditRule(cfg, queuePath), subagent)
 	if waitContext != "" {
 		reason = waitContext + "\n" + reason
 	}

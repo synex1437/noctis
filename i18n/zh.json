@@ -64,6 +64,7 @@
   "session.typedHint": "你自己输入的提示仍会继续执行。",
   "queue.stuckNotify": "队列没有进展：%d 个未完成项，会话已停止（%s）。",
   "queue.stuckMessage": "⛔ 队列没有进展（%d 个未完成）；在有条目被勾选、添加或修改，或你输入提示之前，自动继续保持停止 — 请查看 errors.log。",
+  "queue.setAsideMessage": "⚠ 连续 %[1]d 次继续都没有勾选条目或提交：如果 Claude 现在无法解决阻碍 \"%[2]s\" 的问题，就请它推迟这一项，队列会在没有它的情况下继续。",
   "queue.doneNotify": "队列已完成：%s 没有未完成项。",
   "queue.doneMessage": "✔ 队列已完成 — %s 没有未完成项；正常停止。",
   "queue.blockedNotify": "队列被阻塞：%[2]s 中的 %[1]d 个未完成项在等待未完成的依赖。",

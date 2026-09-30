@@ -94,6 +94,7 @@ func baseCatalog() map[string]map[string]string {
 
 			"queue.stuckNotify":         "Queue not progressing: %d open items, session stopped (%s).",
 			"queue.stuckMessage":        "⛔ Queue not progressing (%d open); auto-continue stays off until an item is ticked, added or edited, or you type a prompt — see errors.log.",
+			"queue.setAsideMessage":     "⚠ %[1]d continuations in a row without a ticked item or a commit: Claude is asked to defer \"%[2]s\" unless it can resolve what holds it up now, so the queue goes on without it.",
 			"queue.doneNotify":          "Queue finished: %s has no open items.",
 			"queue.doneMessage":         "✔ Queue finished — %s has no open items; stopping cleanly.",
 			"queue.blockedNotify":       "Queue blocked: %d open items in %s wait on dependencies that are not done.",
@@ -695,6 +696,7 @@ func baseCatalog() map[string]map[string]string {
 
 			"queue.stuckNotify":         "Kuyruk ilerlemiyor: %d açık madde, oturum durdu (%s).",
 			"queue.stuckMessage":        "⛔ Kuyruk ilerlemiyor (%d açık); bir madde işaretlenene, eklenene ya da düzenlenene veya sen bir istem yazana kadar otomatik devam kapalı — errors.log'a bak.",
+			"queue.setAsideMessage":     "⚠ Art arda %[1]d devamda ne madde işaretlendi ne commit yapıldı: Claude'dan, \"%[2]s\" maddesini tıkayan şeyi şimdi çözemiyorsa onu ertelemesi isteniyor; kuyruk onsuz devam eder.",
 			"queue.doneNotify":          "Kuyruk bitti: %s içinde açık madde kalmadı.",
 			"queue.doneMessage":         "✔ Kuyruk bitti — %s içinde açık madde kalmadı; temiz duruluyor.",
 			"queue.blockedNotify":       "Kuyruk tıkalı: %[2]s içindeki %[1]d açık madde tamamlanmamış bağımlılıkları bekliyor.",

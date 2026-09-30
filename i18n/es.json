@@ -64,6 +64,7 @@
   "session.typedHint": " Los prompts que escribes siguen adelante igualmente.",
   "queue.stuckNotify": "La cola no avanza: %d elementos abiertos, sesión detenida (%s).",
   "queue.stuckMessage": "⛔ La cola no avanza (%d abiertos); la continuación automática sigue detenida hasta que se marque, añada o edite un elemento, o escribas un prompt — ver errors.log.",
+  "queue.setAsideMessage": "⚠ %[1]d continuaciones seguidas sin ningún elemento marcado ni commit: se pide a Claude que aplace \"%[2]s\" si no puede resolver ahora lo que lo frena, para que la cola siga sin él.",
   "queue.doneNotify": "Cola terminada: %s no tiene elementos abiertos.",
   "queue.doneMessage": "✔ Cola terminada — %s no tiene elementos abiertos; parada limpia.",
   "queue.blockedNotify": "Cola bloqueada: %d elementos abiertos en %s esperan dependencias sin terminar.",

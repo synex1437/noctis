@@ -64,6 +64,7 @@
   "session.typedHint": " Prompty, które wpisujesz, i tak idą dalej.",
   "queue.stuckNotify": "Kolejka nie posuwa się: %d otwartych pozycji, sesja zatrzymana (%s).",
   "queue.stuckMessage": "⛔ Kolejka nie posuwa się (%d otwartych); automatyczna kontynuacja pozostaje wyłączona, dopóki jakiś punkt nie zostanie odhaczony, dodany lub zmieniony albo nie wpiszesz polecenia — zobacz errors.log.",
+  "queue.setAsideMessage": "⚠ %[1]d kontynuacji z rzędu bez odhaczonej pozycji ani commita: Claude ma odłożyć \"%[2]s\", jeśli nie może teraz usunąć tego, co ją blokuje, aby kolejka szła dalej bez niej.",
   "queue.doneNotify": "Kolejka ukończona: %s nie ma otwartych pozycji.",
   "queue.doneMessage": "✔ Kolejka ukończona — %s nie ma otwartych pozycji; czyste zatrzymanie.",
   "queue.blockedNotify": "Kolejka zablokowana: %d otwartych pozycji w %s czeka na nieukończone zależności.",

@@ -64,6 +64,7 @@
   "session.typedHint": " 직접 입력한 프롬프트는 그대로 진행됩니다.",
   "queue.stuckNotify": "큐가 진행되지 않음: 미완료 %d개, 세션 정지 (%s).",
   "queue.stuckMessage": "⛔ 큐가 진행되지 않음 (미완료 %d개); 항목이 체크·추가·수정되거나 프롬프트를 입력할 때까지 자동 계속이 멈춘 상태로 유지됩니다 — errors.log 확인.",
+  "queue.setAsideMessage": "⚠ 항목 체크나 커밋 없이 %[1]d번 연속 계속했습니다. 막고 있는 원인을 지금 해결할 수 없다면 \"%[2]s\" 항목을 보류하도록 Claude에게 요청합니다. 큐는 그 항목 없이 계속됩니다.",
   "queue.doneNotify": "큐 완료: %s에 미완료 항목이 없습니다.",
   "queue.doneMessage": "✔ 큐 완료 — %s에 미완료 항목이 없습니다. 정상 종료합니다.",
   "queue.blockedNotify": "큐 차단됨: %[2]s의 미완료 %[1]d개가 끝나지 않은 의존성을 기다립니다.",

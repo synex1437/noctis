@@ -308,3 +308,17 @@ func pruneDeferrals(state object, now int64) {
 		}
 	}
 }
+
+// queueSetAsideRule is the word of the last continuation before the queue gives up on a session
+// that stops without ticking an item or committing: find what holds the item up, and set it aside
+// when that cannot be resolved now, so the queue goes on without it.
+func queueSetAsideRule(item, path string) string {
+	return fmt.Sprintf(`The session keeps stopping without ticking an item or committing, and "%s" is still the next item. Find the root cause of what holds it up. If you can resolve it now, finish the item and mark it done. If not, run %s queue defer <a unique part of its text> --reason "<the root cause, and what would unblock it>" --file %s, leave the item unticked and go on with the next eligible item; otherwise the queue gives up at the next stop.`, item, pluginName, shellQuote(path))
+}
+
+// queueCheckLastRule is the word of the last send-back before a failing check holds the queue: an
+// item whose failure cannot be fixed now is set aside with its changes undone, so the check passes
+// again and the queue goes on without it.
+func queueCheckLastRule(path string) string {
+	return fmt.Sprintf(` If the command fails again, the queue is held until it passes. So if you cannot fix the failure now, undo the changes of the item you were on (keep them on a branch or in a stash if they are worth keeping), leave the item unticked, run %s queue defer <a unique part of its text> --reason "<the failure, its root cause, and what would unblock it>" --file %s and go on with the next eligible item.`, pluginName, shellQuote(path))
+}
