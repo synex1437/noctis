@@ -55,8 +55,9 @@ func paceNotesOf(record object) []paceNote {
 
 // noteQueuePace notes the pace of the queue file at path when the items done in content are not the
 // number noted last. Unticked or removed items start the notes over, since the ones kept no longer
-// describe the list. A checklist noctis wrote from a prompt is left out.
-func noteQueuePace(state object, path, content string, now int64) {
+// describe the list. The items ticked since the note before are credited to the setup session sid
+// runs on (noteFinished). A checklist noctis wrote from a prompt is left out.
+func noteQueuePace(cfg, state object, sid, path, content string, now int64) {
 	if isAutoQueue(path) {
 		return
 	}
@@ -68,6 +69,7 @@ func noteQueuePace(state object, path, content string, now int64) {
 	if week := currentUsage(now).sevenDay; week != nil {
 		used, resetsAt = week.used, week.resetsAt
 	}
+	setup := sessionSetup(cfg, state, sid)
 	updateState(func(next object) {
 		paces := stateMap(next, "queuePace")
 		kept := paceNotesOf(toObject(paces[key]))
@@ -77,7 +79,11 @@ func noteQueuePace(state object, path, content string, now int64) {
 		if len(kept) > 0 && kept[len(kept)-1].done > done {
 			kept = nil
 		}
-		kept = append(kept, paceNote{at: float64(now), done: done, used: used, resetsAt: resetsAt})
+		latest := paceNote{at: float64(now), done: done, used: used, resetsAt: resetsAt}
+		if len(kept) > 0 {
+			noteFinished(next, path, content, kept[len(kept)-1], latest, setup, now)
+		}
+		kept = append(kept, latest)
 		notes := []any{}
 		for _, note := range kept[max(0, len(kept)-paceNotes):] {
 			notes = append(notes, []any{note.at, note.done, note.used, note.resetsAt})
@@ -227,13 +233,13 @@ func printQueuePace(cfg object, target string, view queueView) {
 }
 
 // queuePaceStatus is the pace of each queue file the digest reports on, for noctis status: a line
-// naming the file and its pace lines under it, for the files whose pace is known.
+// naming the file and its pace and setup lines under it, for the files with either.
 func queuePaceStatus(cfg, state object, usage usageView, now int64) []string {
 	lines := []string{}
 	for _, path := range digestQueueFiles(state, now) {
 		content, _ := readQueueText(path)
 		view := queueSnapshotOf(path, content)
-		pace := paceLines(paceOf(cfg, state, path, view.total+view.deferred, usage, now))
+		pace := append(paceLines(paceOf(cfg, state, path, view.total+view.deferred, usage, now)), setupLines(state, path)...)
 		if len(pace) == 0 {
 			continue
 		}

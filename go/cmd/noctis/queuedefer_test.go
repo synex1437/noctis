@@ -15,6 +15,8 @@ const deferReason = "waits for the provider's API key"
 func deferSandbox(t *testing.T) (object, string, string, string) {
 	t.Helper()
 	cfg, project, frontend := queueCheckSandbox(t, "")
+	// The session's effort comes from the config, not from the shell the tests run in.
+	t.Setenv("CLAUDE_CODE_EFFORT_LEVEL", "")
 	path := writeQueueFile(t, project, deferQueue)
 	trustQueueFile(path, true)
 	return cfg, project, frontend, path

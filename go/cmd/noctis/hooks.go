@@ -1622,7 +1622,7 @@ func onStop(input, cfg object) {
 	}
 	snapshot := queueSnapshotOf(queuePath, content)
 	syncDoneIssues(cfg, queuePath, content, getString(input, "cwd"))
-	noteQueuePace(state, queuePath, content, now)
+	noteQueuePace(cfg, state, sid, queuePath, content, now)
 	if snapshot.total == 0 {
 		if isAutoQueue(queuePath) && numberOr(getMap(getMap(state, "autoQueues"), sid), "items", 0) == 0 {
 			endAutoQueue(sid, true)
@@ -1832,10 +1832,20 @@ func onStop(input, cfg object) {
 	} else {
 		delete(guard, "empty")
 	}
+	// The last continuation before the queue gives up on a session that stops without progress hands
+	// the item it is stuck on to a stronger model once, or asks Claude to set it aside, so the queue
+	// goes on without it (stuckItemStep).
+	stuck := stuckItemStep(cfg, state, sid, queuePath, numberOr(guard, "idle", 0), maxIdle, snapshot.items, result.wait != nil, now)
+	if stuck.escalate {
+		// The stronger model gets this one continuation: the next stop without progress asks Claude
+		// to set the item aside, and the one after gives up, as for an item that never went up.
+		guard["idle"] = math.Max(0, maxIdle-2)
+	}
 	guard["forced"] = numberOr(guard, "forced", 0) + 1
 	updateState(func(next object) {
 		stateMap(next, "stopGuard")[sid] = guard
 		stateMap(next, "stopDay")[sid] = object{"day": today, "continues": continuedToday + 1, "at": float64(now)}
+		noteStuckItem(next, stuck, now)
 		delete(stateMap(next, "userTurns"), sid)
 	})
 	if !isAutoQueue(queuePath) {
@@ -1851,11 +1861,16 @@ func onStop(input, cfg object) {
 		// A subagent of the item's model also keeps the item out of this context.
 		subagent, facts["itemModel"] = note, model
 	}
-	// The last continuation before the queue gives up on a session that stops without progress asks
-	// Claude to set the item it is stuck on aside, so the queue goes on without it.
 	setAside := ""
-	if idle := numberOr(guard, "idle", 0); idle > 0 && idle+1 >= maxIdle && len(snapshot.items) > 0 {
-		setAside, facts["setAside"] = snapshot.items[0], true
+	if stuck.setAside {
+		setAside, facts["setAside"] = stuck.item, true
+	}
+	if stuck.escalate || stuck.escalated {
+		// The item's stronger model keeps it out of this context as well.
+		subagent, facts["escalateTo"], facts["escalated"] = stuck.note(), stuck.model, stuck.escalate
+	}
+	if stuck.capped {
+		facts["escalateCapped"] = true
 	}
 	journal(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), facts)
 	logInfo("queue continue #%s for %s: %d open", formatNumber(numberOr(guard, "forced", 0)), sid, snapshot.total)
@@ -1868,7 +1883,7 @@ func onStop(input, cfg object) {
 		blockedNote = fmt.Sprintf(" %d item(s) wait on unfinished dependencies and are not eligible yet.", snapshot.blocked)
 	}
 	blockedNote += endedDeferralRule() + humanItemsRule(snapshot) + deferredRule(snapshot, queuePath)
-	if setAside == "" && numberOr(guard, "idle", 0) > 0 {
+	if setAside == "" && stuck.idle > 0 {
 		// Claude stopped without ticking or committing anything: the item may wait on something only
 		// the user has.
 		blockedNote += queueDeferHint(queuePath)
@@ -1903,9 +1918,9 @@ func onStop(input, cfg object) {
 		where = queuePath
 	}
 	lead := fmt.Sprintf("Take the next eligible item%s (priority and (after …) dependencies already applied), finish it completely, mark it done in the file, then move to the following one.", nextItem)
-	if setAside != "" {
-		lead = queueSetAsideRule(setAside, queuePath)
-		systemMessage = joinNotices(systemMessage, T("queue.setAsideMessage", int(numberOr(guard, "idle", 0)), truncateText(setAside, 100)))
+	if rule, notice := stuck.lead(queuePath); rule != "" {
+		lead = rule
+		systemMessage = joinNotices(systemMessage, notice)
 	}
 	reason := fmt.Sprintf(queueContinuesPrefix+": %d open in %s. %s%s%s%s Do not stop or ask for confirmation; decide yourself.", snapshot.total, where, lead, blockedNote, queueEditRule(cfg, queuePath), subagent)
 	if waitContext != "" {
