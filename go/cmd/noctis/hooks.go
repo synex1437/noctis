@@ -2260,6 +2260,11 @@ func onStopFailure(input, cfg object) {
 			return
 		}
 	}
+	// git status runs while the hook reads the limits, which can mean a request to the usage
+	// endpoint; the checkpoint and the tree fingerprint read it after. The hook does not end
+	// before that run has.
+	gitSettled := gitStatusAhead(getString(input, "cwd"))
+	defer gitSettled()
 	result := decide(cfg, state, input, now, decideOptions{force: true, noProbe: true})
 	usage := result.usage
 	cloud := cloudSession()

@@ -814,9 +814,18 @@ type gitStatusCacheEntry struct {
 var (
 	gitStatusCache     = map[string]gitStatusCacheEntry{}
 	gitStatusCacheLock sync.Mutex
+	// gitStatusRunning holds, by folder, the git status runs gitStatusAhead started that have not
+	// ended; each channel is closed when its run has.
+	gitStatusRunning = map[string]chan struct{}{}
 )
 
 func gitStatusRaw(cwd string) (string, bool) {
+	gitStatusCacheLock.Lock()
+	running := gitStatusRunning[cwd]
+	gitStatusCacheLock.Unlock()
+	if running != nil {
+		<-running
+	}
 	gitStatusCacheLock.Lock()
 	cached, seen := gitStatusCache[cwd]
 	gitStatusCacheLock.Unlock()
@@ -828,6 +837,35 @@ func gitStatusRaw(cwd string) (string, bool) {
 	gitStatusCache[cwd] = gitStatusCacheEntry{raw: raw, ok: ok, takenAt: time.Now()}
 	gitStatusCacheLock.Unlock()
 	return raw, ok
+}
+
+// gitStatusAhead starts git status in cwd in the background, for a hook that reads it only after
+// work of its own (the checkpoint and the tree fingerprint of a wait): gitStatusRaw then waits for
+// that run instead of starting another. The function it returns waits for the run to end, so that
+// none outlives the hook that started it.
+func gitStatusAhead(cwd string) func() {
+	if !insideGitRepo(cwd) {
+		return func() {}
+	}
+	gitStatusCacheLock.Lock()
+	defer gitStatusCacheLock.Unlock()
+	if running := gitStatusRunning[cwd]; running != nil {
+		return func() { <-running }
+	}
+	if cached, seen := gitStatusCache[cwd]; seen && time.Since(cached.takenAt) < gitStatusCacheTTL {
+		return func() {}
+	}
+	done := make(chan struct{})
+	gitStatusRunning[cwd] = done
+	go func() {
+		defer close(done)
+		raw, ok := gitStatusUncached(cwd)
+		gitStatusCacheLock.Lock()
+		gitStatusCache[cwd] = gitStatusCacheEntry{raw: raw, ok: ok, takenAt: time.Now()}
+		delete(gitStatusRunning, cwd)
+		gitStatusCacheLock.Unlock()
+	}()
+	return func() { <-done }
 }
 
 func gitStatusUncached(cwd string) (string, bool) {
@@ -1040,6 +1078,8 @@ func waitUntil(command *exec.Cmd, timeout time.Duration, stop func()) error {
 func buildCheckpoint(input object, reasonLine, model string, cfg object) string {
 	sid := sessionKey(input)
 	cwd := getString(input, "cwd")
+	// git status runs while the transcript and the queue file are read; gitStatus below waits for it.
+	gitStatusAhead(cwd)
 	summary := summarizeTranscript(getString(input, "transcript_path"))
 	tracked := openTasks(readState(), sid)
 	if len(tracked) > queueMaxItems {
