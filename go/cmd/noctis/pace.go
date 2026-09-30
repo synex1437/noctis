@@ -240,6 +240,9 @@ func queuePaceStatus(cfg, state object, usage usageView, now int64) []string {
 		content, _ := readQueueText(path)
 		view := queueSnapshotOf(path, content)
 		pace := append(paceLines(paceOf(cfg, state, path, view.total+view.deferred, usage, now)), setupLines(state, path)...)
+		if text := unverifiedText(cfg, state, path, content); text != "" {
+			pace = append(pace, text)
+		}
 		if len(pace) == 0 {
 			continue
 		}

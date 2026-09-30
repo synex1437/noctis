@@ -470,6 +470,9 @@ func digestQueue(cfg, state object, path string, before object, since float64, u
 	if line := digestCheck(cfg, state, path, content); line != "" {
 		lines = append(lines, "- "+line)
 	}
+	if line := unverifiedText(cfg, state, path, content); line != "" {
+		lines = append(lines, "- "+line)
+	}
 	if view.human > 0 {
 		lines = append(lines, "- "+T("digest.human", view.human, digestNames(view.humanItems)))
 	}
@@ -505,6 +508,8 @@ func digestCheck(cfg, state object, path, content string) string {
 		return T("digest.checkHeld", formatTime(numberOr(record, "held", 0)), pluginName)
 	case numberOr(record, "failures", 0) > 0:
 		return T("digest.checkFailing", int(numberOr(record, "failures", 0)), formatTime(numberOr(record, "at", 0)))
+	case numberOr(record, "retried", 0) > 0:
+		return T("digest.checkCut", formatTime(numberOr(record, "retried", 0)))
 	case numberOr(record, "at", 0) > 0:
 		return T("digest.checkPassed", formatTime(numberOr(record, "at", 0)))
 	}

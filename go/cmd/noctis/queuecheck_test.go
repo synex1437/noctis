@@ -38,6 +38,13 @@ func tickFirstQueueItem(t *testing.T, project string) {
 	writeQueueFile(t, project, "# q\n- [x] migrate the users table\n- [ ] write the release notes\n")
 }
 
+// tickEveryQueueItem ticks both items: with no item left to go on with, a check cut short counts at
+// once rather than running again at the next stop.
+func tickEveryQueueItem(t *testing.T, project string) {
+	t.Helper()
+	writeQueueFile(t, project, "# q\n- [x] migrate the users table\n- [x] write the release notes\n")
+}
+
 func queueCheckRuns(project string) int {
 	content, err := os.ReadFile(filepath.Join(project, "runs.txt"))
 	if err != nil {
@@ -234,7 +241,7 @@ func TestObserveModeJournalsADueQueueCheckAndRunsNothing(t *testing.T) {
 func TestAQueueCheckThatOutlivesItsTimeoutIsStoppedWithWhatItStarted(t *testing.T) {
 	cfg, project, frontend := queueCheckSandbox(t, shellFor("sleep 30 & echo $! > sleeper.pid; wait", "ping -n 31 127.0.0.1 > nul"))
 	section(cfg, "queue")["verifyTimeoutSeconds"] = float64(1)
-	tickFirstQueueItem(t, project)
+	tickEveryQueueItem(t, project)
 	started := time.Now()
 	output := stopHookOutput(t, stopInput("qc7", frontend), cfg)
 	if elapsed := time.Since(started); elapsed > 15*time.Second {
@@ -266,7 +273,7 @@ func TestAQueueCheckNeverRunsPastTheStopHooksOwnTimeout(t *testing.T) {
 	previousBudget, previousEvent := budgets["Stop"], activeEvent
 	t.Cleanup(func() { budgets["Stop"], activeEvent = previousBudget, previousEvent })
 	budgets["Stop"], activeEvent = hookBudgetSlackSeconds+1, "Stop"
-	tickFirstQueueItem(t, project)
+	tickEveryQueueItem(t, project)
 	started := time.Now()
 	output := stopHookOutput(t, stopInput("qc8", frontend), cfg)
 	if elapsed := time.Since(started); elapsed > 15*time.Second {
@@ -309,7 +316,7 @@ func TestUntickingAfterAFailedCheckIsNotAStopWithoutProgress(t *testing.T) {
 func TestAQueueCheckStaysInsideTheHookTimeCapNoctisLearned(t *testing.T) {
 	cfg, project, frontend := queueCheckSandbox(t, shellFor("sleep 30", "ping -n 31 127.0.0.1 > nul"))
 	updateState(func(next object) { next["hookCapSeconds"] = float64(61) })
-	tickFirstQueueItem(t, project)
+	tickEveryQueueItem(t, project)
 	started := time.Now()
 	output := stopHookOutput(t, stopInput("qc10", frontend), cfg)
 	if elapsed := time.Since(started); elapsed > 15*time.Second {
