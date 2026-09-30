@@ -8,7 +8,8 @@ gets one message a day through the webhook with what each queue finished, what i
 what waits on you. Once sessions have ticked a few items, noctis also says what an item takes of the
 weekly limit and when the items left may be done, an item can name the model it is for, an item
 Claude cannot get past is set aside instead of ending the queue, and the decisions Claude takes
-without asking reach you. It carries everything in 8.0.0
+without asking reach you. The hook of a failed turn also runs `git status` while it reads the
+limits instead of after. It carries everything in 8.0.0
 ([RELEASE_NOTES_8.0.0.md](RELEASE_NOTES_8.0.0.md)).
 
 ## If you are upgrading
@@ -162,6 +163,19 @@ digest the ones noted since the digest before, and the next session's queue inst
 so a fresh context keeps to them instead of deciding again. A file keeps its last 50 decisions in
 `queue-notes.json`. It costs no model call.
 
+## A failed turn's hook reads `git status` while it reads the limits
+
+When a turn fails on a limit, an overload or a server error, the StopFailure hook reads the limits,
+which can mean a request to the usage endpoint, and then writes a checkpoint that lists `git status`
+and fingerprints the working tree with it. The two ran one after the other. Now `git status` starts
+first and runs while the hook reads the limits; the checkpoint and the fingerprint use that run's
+output while it is under 2 seconds old, and the hook does not end before the run has. Every
+checkpoint, a pause's too, also runs `git status` while it reads the transcript. In the lab's small
+repository, where `git status` takes about 4 ms, the hook's median went from 28.3 ms to 25.2 ms
+(four runs of 40 calls, the two builds taking turns); outside a repository nothing changed. In a
+large tree, where `git status` takes longer, the hook saves up to the time it spends reading the
+limits.
+
 ## Known limits
 
 - **A cloud session is not woken for a deferral that ends after the Stop hook may wait.** The next
@@ -179,6 +193,9 @@ so a fresh context keeps to them instead of deciding again. A file keeps its las
   service that is down) is not helped by deferring it, and the queue is held as before.
 - **Claude notes the decisions it sees as worth it.** Nothing checks that every choice is noted, and a
   note is as good as its line.
+- **A failed turn that writes no checkpoint waits for its `git status` too.** When its retries are
+  spent, or it repeats a failure the hook just handled, the run started ahead is still waited for
+  before the hook ends: in a repository where `git status` is slow, up to its 3-second limit.
 - The limits in [RELEASE_NOTES_8.0.0.md](RELEASE_NOTES_8.0.0.md) still apply, but for the first one:
   a deferral whose `--until` passes now wakes the session that stopped on it.
 
@@ -214,3 +231,8 @@ the item aside.
 control characters and within 300 characters, the last 50 kept and a file left for a month dropped,
 the queue instructions asking for decisions and giving the last ones, and the digest naming the ones
 noted since the digest before.
+
+4 new Go tests for the failed turn's `git status`: the status a hook reads is the run started ahead,
+a status asked for while that run is under way waits for it instead of starting another, a fresh
+status is not run again ahead and none is started outside a repository, and a failed turn that
+gives up leaves no run behind.
