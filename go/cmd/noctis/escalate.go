@@ -10,8 +10,8 @@ import (
 
 // A queue item a session keeps stopping on goes once to a stronger model before it is set aside. At
 // the continuation that would ask Claude to set the item aside, the Stop hook asks it instead to
-// hand the item to a fresh subagent one step up: Opus for a session on Sonnet or Haiku, noctis's
-// deep agent (Opus at max effort) for one on Opus below max. The session's own model stays as it is,
+// hand the item to a fresh subagent one step up: noctis's worker agent on Opus for a session on
+// Sonnet or Haiku, noctis's deep agent (Opus at max effort) for one on Opus below max. The session's own model stays as it is,
 // and so does its prompt cache. The escalation lives in noctis's state, not in the queue file, so
 // the file and its trust stay as they are. When the stronger model gets stuck on the item as well,
 // the next continuation asks Claude to set it aside as before, and the reason Claude gives reaches
@@ -25,6 +25,9 @@ import (
 const (
 	// deepAgentName is noctis's agent for an item escalated from Opus below max effort.
 	deepAgentName = "deep"
+	// workerAgentName is noctis's agent for a queue item handed to a subagent: a fresh context of its
+	// own, never a fork of the session's, on the model the hand-off names or else the session's.
+	workerAgentName = "worker"
 	// escalationsKept bounds the escalated items a queue file keeps.
 	escalationsKept = 50
 	// setupHintItems is how many items with a reading of the weekly limit a setup needs before the
@@ -129,7 +132,7 @@ func escalationTarget(cfg, state object, sid, item string) (model, agent string)
 		return "", ""
 	}
 	if target != from {
-		return target, "general-purpose"
+		return target, pluginName + ":" + workerAgentName
 	}
 	if target == "opus" && sessionEffort(cfg) != "max" {
 		return target, pluginName + ":" + deepAgentName
@@ -220,12 +223,13 @@ func stuckItemStep(cfg, state object, sid, path string, idle, maxIdle float64, i
 	return step
 }
 
-// agentText names the subagent a step hands its item to, for Claude.
+// agentText names the subagent a step hands its item to, for Claude. An item that went up before 8.3.0
+// went to a general-purpose subagent, and stays with the model it went to.
 func (step stuckStep) agentText() string {
 	if step.agent == pluginName+":"+deepAgentName {
-		return fmt.Sprintf("the %s subagent (Opus at max effort)", step.agent)
+		return fmt.Sprintf(`the %s subagent (subagent_type "%s", Opus at max effort)`, step.agent, step.agent)
 	}
-	return fmt.Sprintf("a general-purpose subagent with model \"%s\"", step.model)
+	return workerText(step.model)
 }
 
 // modelTitle names the model a step hands its item to, for the user.
@@ -241,7 +245,7 @@ func (step stuckStep) modelTitle() string {
 func (step stuckStep) lead(path string) (rule, notice string) {
 	switch {
 	case step.escalate:
-		rule = fmt.Sprintf(`The session keeps stopping without ticking an item or committing, and "%s" is still the next item. Hand it once to %s, in the foreground so you get its result, with a brief that stands on its own: the goal and what done means, what you tried, where and why it failed (the errors verbatim), and the files and decisions it needs, so it does not repeat your attempts. Then check its work and tick the item yourself. If it cannot finish the item either, the next stop asks you to set it aside.`, step.item, step.agentText())
+		rule = fmt.Sprintf(`The session keeps stopping without ticking an item or committing, and "%s" is still the next item. Hand it once to %s with a brief that stands on its own: the goal and what done means, what you tried, where and why it failed (the errors verbatim), and the files and decisions it needs, so it does not repeat your attempts. Wait for its result and start no other item meanwhile; then check its work and tick the item yourself. If it cannot finish the item either, the next stop asks you to set it aside.`, step.item, step.agentText())
 		return rule, T("queue.escalateMessage", int(step.idle), truncateText(step.item, 100), step.modelTitle())
 	case step.setAside && step.escalated:
 		rule = queueSetAsideRule(step.item, path) + fmt.Sprintf(" It already went to a stronger model (%s), which did not finish it either: give the root cause it found as the reason.", step.modelTitle())
@@ -257,7 +261,7 @@ func (step stuckStep) note() string {
 	if !step.escalated || step.setAside {
 		return ""
 	}
-	return fmt.Sprintf(" The next item went to a stronger model after a session got stuck on it: keep it with %s in the foreground, give it what the last attempt found, then check its work and tick the item yourself.", step.agentText())
+	return fmt.Sprintf(" The next item went to a stronger model after a session got stuck on it: keep it with %s, give it what the last attempt found and wait for its result, then check its work and tick the item yourself.", step.agentText())
 }
 
 // queueModelsRecord is the record of the queue file at path in state, made when there is none.

@@ -1072,19 +1072,19 @@ async function scenarioQueueContinuation(acc) {
   const afterCd = acc.hook({ hook_event_name: 'Stop', session_id: 'qcd', cwd: subfolder, transcript_path: TRANSCRIPT, stop_hook_active: false }, { CLAUDE_PROJECT_DIR: PROJECT_DIR });
   check('stop after cd into a subfolder still continues the project queue', afterCd.includes('"decision":"block"') && afterCd.includes('Queue continues: 4 open'), true);
   fs.rmSync(subfolder, { recursive: true, force: true });
-  for (let i = 0; i < 3; i += 1) acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
-  check('idle continues tracked', acc.state().stopGuard.qc1.idle, 3);
+  for (let i = 0; i < 2; i += 1) acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
+  check('idle continues tracked', acc.state().stopGuard.qc1.idle, 2);
   writeQueue(3);
   const progressed = acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
   check('progress resets idle counter and continues', progressed.includes('"decision":"block"') && acc.state().stopGuard.qc1.idle === 0, true);
   let stuck = '';
-  for (let i = 0; i < 4; i += 1) stuck = acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
+  for (let i = 0; i < 3; i += 1) stuck = acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
   check('stuck queue stops forcing and warns', !stuck.includes('"decision":"block"') && stuck.includes('Kuyruk ilerlemiyor'), true);
   check('stuck queue: counters reset, and the give-up holds while nothing changes', acc.state().stopGuard.qc1.idle === 0 && acc.state().stopGuard.qc1.forced === 0 && acc.state().stopGuard.qc1.cycles === 1 && !acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false }).includes('"decision":"block"'), true);
   check('stuck queue: the held give-up is journaled', acc.run(['why', '--last', '1']).includes('queue gave up earlier and is unchanged'), true);
   acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'keep going with the queue' });
   check('stuck queue: a typed prompt lifts the give-up, and the next cycle continues', acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false }).includes('"decision":"block"'), true);
-  for (let i = 0; i < 4; i += 1) stuck = acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
+  for (let i = 0; i < 3; i += 1) stuck = acc.hook({ hook_event_name: 'Stop', session_id: 'qc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: true });
   check('stuck queue: the warning is not repeated for the same file', !stuck.includes('"decision":"block"') && !stuck.includes('Kuyruk ilerlemiyor'), true);
   acc.setConfig((config) => {
     config.queue.maxContinuesPerDay = 2;
@@ -2267,7 +2267,7 @@ async function scenarioFreshContext(acc) {
   acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'fc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: `/noctis:start ${jobs}` });
   check('fresh context: /noctis:start runs the job file', (acc.state().autoQueues.fc1 || {}).items, 3);
   const stop = acc.hook({ hook_event_name: 'Stop', session_id: 'fc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
-  check('fresh context: with 142k tokens of context the next item goes to a fresh subagent', stop.includes('"decision":"block"') && stop.includes('add a login page') && stop.includes('fresh general-purpose subagent') && stop.includes('142k tokens'), true);
+  check('fresh context: with 142k tokens of context the next item goes to a fresh subagent', stop.includes('"decision":"block"') && stop.includes('add a login page') && stop.includes('hand it to the noctis:worker subagent') && stop.includes('a fresh context, with a brief') && stop.includes('142k tokens'), true);
   reading(95, now + 2 * 86400);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'fc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('fresh context: the pause keeps how big the context was', (acc.state().waits.fc1 || {}).contextTokens, 142200);

@@ -145,3 +145,59 @@ func TestQueueTrustAndStatusSuggestTheProjectsOwnCheck(t *testing.T) {
 		t.Fatalf("with queue.fileVerify off, queue status suggests a line it would never run:\n%s", status)
 	}
 }
+
+func TestAFailureIsKnownAgainWhateverItsTimingsAndTemporaryPaths(t *testing.T) {
+	outcome := "exited with status 1"
+	first := checkFailure(outcome, "--- FAIL: TestMigrate (0.01s)\n    users_test.go:42: got 3 rows, want 2\nFAIL\texample.com/users\t0.123s\n12:03:44 wrote /tmp/TestMigrate123/001/out.json at 0xc000123456")
+	again := checkFailure(outcome, "--- FAIL: TestMigrate (0.03s)\n    users_test.go:42: got 3 rows, want 2\nFAIL\texample.com/users\t0.456s\n12:04:10 wrote /tmp/TestMigrate987/001/out.json at 0xc000abcdef")
+	if first == "" || first != again {
+		t.Fatalf("two runs that fail the same way, apart from timings, clock times, addresses and temporary folders, gave %q and %q", first, again)
+	}
+	if other := checkFailure(outcome, "--- FAIL: TestMigrate (0.01s)\n    users_test.go:42: got 4 rows, want 2\nFAIL\texample.com/users\t0.123s"); other == first {
+		t.Fatal("a failure with another count is known as the same one")
+	}
+	if status := checkFailure("exited with status 2", "--- FAIL: TestMigrate (0.01s)\n    users_test.go:42: got 3 rows, want 2\nFAIL\texample.com/users\t0.123s\n12:03:44 wrote /tmp/TestMigrate123/001/out.json at 0xc000123456"); status == first {
+		t.Fatal("a failure with another exit status is known as the same one")
+	}
+	if silent := checkFailure(outcome, " \n"); silent != "" {
+		t.Fatalf("a check that printed nothing has a failure to compare: %q", silent)
+	}
+}
+
+func TestACheckThatFailsTheSameWayTwiceHoldsTheQueueBeforeItsAttemptsRunOut(t *testing.T) {
+	command := shellFor(`echo run >> runs.txt; echo "FAIL TestMigrate in $$ms"; exit 1`, "echo run>> runs.txt & echo FAIL TestMigrate in %RANDOM%ms & exit 1")
+	cfg, project, frontend := queueCheckSandbox(t, command)
+	section(cfg, "queue")["verifyAttempts"] = float64(3)
+	tickFirstQueueItem(t, project)
+	first := stopHookOutput(t, stopInput("qs1", frontend), cfg)
+	if getString(first, "decision") != "block" || !strings.Contains(getString(first, "reason"), "Queue check failed") {
+		t.Fatalf("the first failed run did not send Claude back to fix it: %v", first)
+	}
+	second := stopHookOutput(t, stopAgain("qs1", frontend), cfg)
+	if want := T("queue.heldMessage", command, 2, "TASKS.md") + " " + T("queue.heldSame"); getString(second, "systemMessage") != want {
+		t.Fatalf("a second run that failed the same way did not hold the queue with a word on why (want %q): %v", want, second)
+	}
+	if record := queueCheckRecord(readState(), filepath.Join(project, "TASKS.md")); numberOr(record, "held", 0) == 0 || numberOr(record, "failures", 0) != 2 {
+		t.Fatalf("the hold after the same failure twice is not recorded: %v", record)
+	}
+}
+
+func TestACheckThatFailsAnotherWayEachTimeKeepsItsAttempts(t *testing.T) {
+	command := shellFor(`echo run >> runs.txt; echo "FAIL TestStep$(wc -l < runs.txt)"; exit 1`, "echo run>> runs.txt & echo FAIL TestStep%RANDOM% & exit 1")
+	cfg, project, frontend := queueCheckSandbox(t, command)
+	section(cfg, "queue")["verifyAttempts"] = float64(3)
+	tickFirstQueueItem(t, project)
+	for round := 1; round <= 2; round++ {
+		input := stopAgain("qs2", frontend)
+		if round == 1 {
+			input = stopInput("qs2", frontend)
+		}
+		if output := stopHookOutput(t, input, cfg); getString(output, "decision") != "block" || !strings.Contains(getString(output, "reason"), "Queue check failed") {
+			t.Fatalf("failed run %d, each failing another way, did not send Claude back: %v", round, output)
+		}
+	}
+	third := stopHookOutput(t, stopAgain("qs2", frontend), cfg)
+	if want := T("queue.heldMessage", command, 3, "TASKS.md"); getString(third, "systemMessage") != want {
+		t.Fatalf("the third failed run did not hold the queue as queue.verifyAttempts says: %v", third)
+	}
+}

@@ -126,6 +126,7 @@
   "queue.heldNotify": "Wachtrij aangehouden: `queue.verifyCommand` is %[1]d keer achter elkaar mislukt; %[2]s wacht tot het commando slaagt.",
   "queue.heldNotifyFile": "Wachtrij aangehouden: het controlecommando dat %[2]s noemt, faalde %[1]d keer op rij; de wachtrij wacht tot het slaagt.",
   "queue.heldMessage": "⛔ Wachtrij aangehouden: `%[1]s` is %[2]d keer achter elkaar mislukt, dus %[3]s gaat pas verder als het commando slaagt. Het draait opnieuw bij de eerste stop nadat je een prompt hebt getypt.",
+  "queue.heldSame": "De laatste twee runs faalden met dezelfde uitvoer: de fix ertussen veranderde niets wat de controle ziet.",
   "queue.unmatched": "⚠ (after …) genegeerd in %s — geen tag, issue of puntnummer komt overeen: %s. Controleer de spelling.",
   "queue.unmatchedMore": "%s en nog %d",
   "queue.emptyLines": "☰ %s: %d lege checklistregel(s) genegeerd (regel %s); een lege \"- [ ]\" is geen taak.",

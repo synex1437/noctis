@@ -126,6 +126,7 @@
   "queue.heldNotify": "Kolejka wstrzymana: komenda `queue.verifyCommand` nie powiodła się %[1]d raz(y) z rzędu; %[2]s czeka, aż komenda przejdzie.",
   "queue.heldNotifyFile": "Kolejka wstrzymana: polecenie sprawdzające wskazane w %[2]s zawiodło %[1]d raz(y) z rzędu; kolejka czeka, aż przejdzie.",
   "queue.heldMessage": "⛔ Kolejka wstrzymana: komenda `%[1]s` nie powiodła się %[2]d raz(y) z rzędu, więc %[3]s nie idzie dalej, dopóki komenda nie przejdzie. Uruchomi się ponownie przy pierwszym zatrzymaniu po tym, jak wpiszesz prompt.",
+  "queue.heldSame": "Dwa ostatnie uruchomienia zakończyły się tym samym wynikiem: poprawka między nimi nie zmieniła niczego, co widzi sprawdzenie.",
   "queue.unmatched": "⚠ (after …) pominięte w %s — żaden tag, zgłoszenie ani numer pozycji nie pasuje: %s. Sprawdź pisownię.",
   "queue.unmatchedMore": "%s i jeszcze %d",
   "queue.emptyLines": "☰ %s: pominięte puste wiersze listy kontrolnej: %d (wiersz %s); puste \"- [ ]\" nie jest zadaniem.",

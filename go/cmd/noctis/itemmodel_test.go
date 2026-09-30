@@ -58,7 +58,7 @@ func TestTheStopHookHandsAnItemTaggedForAnotherModelToASubagentOfIt(t *testing.T
 	cfg, _, frontend := modelQueueSandbox(t, "sonnet")
 	runsOn("im1", "claude-opus-5-5", 20000)
 	reason := getString(stopHookOutput(t, stopInput("im1", frontend), cfg), "reason")
-	if want := `The next item is tagged (sonnet) and this session runs on opus: hand it to a general-purpose subagent with model "sonnet"`; !strings.Contains(reason, want) {
+	if want := `The next item is tagged (sonnet) and this session runs on opus: hand it to the noctis:worker subagent (subagent_type "noctis:worker", model "sonnet") with a brief`; !strings.Contains(reason, want) {
 		t.Fatalf("the continuation does not hand the (sonnet) item to a sonnet subagent:\n%s", reason)
 	}
 	if model := getString(journaledEntry("im1", "continue-queue"), "itemModel"); model != "sonnet" {
@@ -74,7 +74,7 @@ func TestTheModelNoteTakesThePlaceOfTheLargeContextNote(t *testing.T) {
 	cfg, _, frontend := modelQueueSandbox(t, "haiku")
 	runsOn("im2", "claude-opus-5-5", 150000)
 	reason := getString(stopHookOutput(t, stopInput("im2", frontend), cfg), "reason")
-	if !strings.Contains(reason, `subagent with model "haiku"`) || strings.Contains(reason, "context already holds") {
+	if !strings.Contains(reason, `(subagent_type "noctis:worker", model "haiku")`) || strings.Contains(reason, "context already holds") {
 		t.Fatalf("with a large context the continuation should name the item's model once, and not a subagent of the session's own:\n%s", reason)
 	}
 }

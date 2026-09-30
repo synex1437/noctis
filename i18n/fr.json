@@ -126,6 +126,7 @@
   "queue.heldNotify": "File en attente : `queue.verifyCommand` a échoué %[1]d fois de suite ; %[2]s attend que la commande passe.",
   "queue.heldNotifyFile": "File en attente : la commande de vérification que nomme %[2]s a échoué %[1]d fois de suite ; la file attend qu'elle passe.",
   "queue.heldMessage": "⛔ File en attente : `%[1]s` a échoué %[2]d fois de suite, donc %[3]s ne reprend pas tant que la commande ne passe pas. Elle est relancée au premier arrêt après que tu as tapé un prompt.",
+  "queue.heldSame": "Ses deux dernières exécutions ont échoué avec la même sortie : la correction entre les deux n'a rien changé de ce que la vérification voit.",
   "queue.unmatched": "⚠ (after …) ignoré dans %s — aucun tag, ticket ou numéro d'élément ne correspond : %s. Vérifie l'orthographe.",
   "queue.unmatchedMore": "%s et %d autres",
   "queue.emptyLines": "☰ %s : %d ligne(s) vide(s) de la checklist ignorée(s) (ligne %s) ; un \"- [ ]\" vide n'est pas une tâche.",

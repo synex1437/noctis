@@ -126,6 +126,7 @@
   "queue.heldNotify": "Fila em espera: `queue.verifyCommand` falhou em %[1]d tentativa(s) seguidas; %[2]s espera até o comando passar.",
   "queue.heldNotifyFile": "Fila em espera: o comando de verificação que %[2]s nomeia falhou %[1]d vez(es) seguidas; a fila espera até ele passar.",
   "queue.heldMessage": "⛔ Fila em espera: `%[1]s` falhou em %[2]d tentativa(s) seguidas, então %[3]s não avança até o comando passar. Ele roda de novo na primeira parada depois que você digitar um prompt.",
+  "queue.heldSame": "As duas últimas execuções falharam com a mesma saída: a correção entre elas não mudou nada do que a verificação vê.",
   "queue.unmatched": "⚠ (after …) ignorado em %s — nenhuma tag, issue ou número de item corresponde: %s. Confira a grafia.",
   "queue.unmatchedMore": "%s e mais %d",
   "queue.emptyLines": "☰ %s: %d linha(s) vazia(s) da checklist ignorada(s) (linha %s); um \"- [ ]\" vazio não é uma tarefa.",
