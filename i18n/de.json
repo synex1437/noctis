@@ -126,6 +126,7 @@
   "queue.heldNotify": "Warteschlange angehalten: `queue.verifyCommand` ist %[1]d Mal in Folge fehlgeschlagen; %[2]s wartet, bis der Befehl durchläuft.",
   "queue.heldNotifyFile": "Warteschlange angehalten: Der Prüfbefehl, den %[2]s nennt, ist %[1]d Mal in Folge fehlgeschlagen; die Warteschlange wartet, bis er durchläuft.",
   "queue.heldMessage": "⛔ Warteschlange angehalten: `%[1]s` ist %[2]d Mal in Folge fehlgeschlagen, deshalb geht %[3]s erst weiter, wenn der Befehl durchläuft. Er läuft wieder beim ersten Stopp, nachdem du einen Prompt eingegeben hast.",
+  "queue.heldSame": "Seine letzten zwei Läufe schlugen mit derselben Ausgabe fehl: Die Korrektur dazwischen hat nichts geändert, was die Prüfung sieht.",
   "queue.unmatched": "⚠ (after …) in %s ignoriert — kein Tag, kein Issue und keine Punktnummer passt: %s. Prüf die Schreibweise.",
   "queue.unmatchedMore": "%s und %d weitere",
   "queue.emptyLines": "☰ %s: %d leere Checklisten-Zeile(n) werden ignoriert (Zeile %s); ein leeres \"- [ ]\" ist keine Aufgabe.",

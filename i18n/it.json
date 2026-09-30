@@ -126,6 +126,7 @@
   "queue.heldNotify": "Coda in attesa: `queue.verifyCommand` è fallito %[1]d volta/e di fila; %[2]s aspetta finché il comando non passa.",
   "queue.heldNotifyFile": "Coda in attesa: il comando di verifica indicato da %[2]s è fallito %[1]d volta/e di fila; la coda aspetta finché non passa.",
   "queue.heldMessage": "⛔ Coda in attesa: `%[1]s` è fallito %[2]d volta/e di fila, quindi %[3]s non va avanti finché il comando non passa. Viene rieseguito al primo arresto dopo che hai scritto un prompt.",
+  "queue.heldSame": "Le ultime due esecuzioni sono fallite con lo stesso output: la correzione nel mezzo non ha cambiato nulla di ciò che il controllo vede.",
   "queue.unmatched": "⚠ (after …) ignorato in %s — nessun tag, issue o numero di elemento corrisponde: %s. Controlla come è scritto.",
   "queue.unmatchedMore": "%s e altri %d",
   "queue.emptyLines": "☰ %s: righe vuote della checklist ignorate: %d (riga %s); un \"- [ ]\" vuoto non è un'attività.",

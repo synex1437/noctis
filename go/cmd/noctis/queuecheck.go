@@ -16,6 +16,19 @@ const (
 	queueCheckTailBytes = 8192
 )
 
+// checkNoise matches what differs between two runs of a check that fail the same way: durations, clock
+// times and dates, memory addresses and temporary folders.
+var checkNoise = lazyRegexp(`\d+(\.\d+)?\s?(ns|µs|us|ms|s|sec|secs|seconds)\b|\d{4}-\d{2}-\d{2}[T ]?|\b\d{1,2}:\d{2}(:\d{2})?(\.\d+)?\b|0x[0-9a-fA-F]+|(/tmp/|/var/folders/|\\Temp\\)\S*`)
+
+// checkFailure is a digest of how a check failed and of the end of its output, with what differs from
+// run to run left out, or "" when the check printed nothing to compare.
+func checkFailure(outcome, tail string) string {
+	if strings.TrimSpace(tail) == "" {
+		return ""
+	}
+	return queueItemDigest(outcome + "\n" + checkNoise.ReplaceAllString(tail, "~"))
+}
+
 // queueVerifyPattern is the line that names a queue file's own check command: noctis-verify: `command`,
 // on a line of its own.
 var queueVerifyPattern = lazyRegexp("(?i)^noctis-verify:[ \t]*`([^`]+)`$")
@@ -289,7 +302,7 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 			journal(sid, "Stop", "verify-queue", "cut short: "+outcome, facts)
 			logInfo("queue check %q for %s %s; it runs once more now, not counted as a failed attempt", command, sid, outcome)
 			again := time.Now()
-			outcome, tail, _ = runQueueCheck(command, folder, queueCheckLimit(cfg, started))
+			outcome, tail, cut = runQueueCheck(command, folder, queueCheckLimit(cfg, started))
 			facts["seconds"] = math.Round(time.Since(again).Seconds())
 		case len(queueSnapshotOf(path, content).items) > 0:
 			updateState(func(next object) {
@@ -323,7 +336,18 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 		kept = []any{}
 	}
 	stored := object{"ticked": kept, "failures": failures, "at": now}
-	if failures < queueCheckAttempts(cfg) {
+	// A run that fails as the one before it did, output and all, shows the fix in between changed
+	// nothing the check sees: the queue is held now rather than after queue.verifyAttempts. A run cut
+	// short says nothing of the kind.
+	same := false
+	if failed := checkFailure(outcome, tail); failed != "" && !cut {
+		stored["failed"] = failed
+		same = failures > 1 && failures < queueCheckAttempts(cfg) && getString(record, "failed") == failed
+	}
+	if same {
+		facts["same"] = true
+	}
+	if !same && failures < queueCheckAttempts(cfg) {
 		// Claude goes back to work on noctis's word, not the user's: see noteUserTurn.
 		updateState(func(next object) {
 			stateMap(next, "queueVerify")[key] = stored
@@ -348,13 +372,20 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 	})
 	journal(sid, "Stop", "hold-queue", outcome, facts)
 	fail("queue check %q failed %s time(s) in a row for %s (%s); %s held until it passes, stop allowed", command, formatNumber(failures), sid, outcome, path)
+	if same {
+		logInfo("queue check %q for %s failed with the same output as its last run; held before queue.verifyAttempts (%s)", command, sid, formatNumber(queueCheckAttempts(cfg)))
+	}
 	shown := truncateText(command, 120)
 	if fileCheckCommand(cfg, path, content) == command {
 		notify(cfg, pluginName, T("queue.heldNotifyFile", int(failures), label))
 	} else {
 		notify(cfg, pluginName, T("queue.heldNotify", int(failures), label))
 	}
-	return object{"systemMessage": T("queue.heldMessage", shown, int(failures), label)}
+	message := T("queue.heldMessage", shown, int(failures), label)
+	if same {
+		message += " " + T("queue.heldSame")
+	}
+	return object{"systemMessage": message}
 }
 
 // queueUnverified counts the ticked items of the queue at path that passed no check: all of them when

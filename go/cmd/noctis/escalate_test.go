@@ -32,7 +32,7 @@ func TestAStuckItemGoesOnceToAStrongerModelBeforeItIsSetAside(t *testing.T) {
 	cfg, _, frontend, path := escalationSandbox(t, "es1", "claude-sonnet-5-5", "high")
 	up := stopsWithoutProgress(t, "es1", frontend, cfg)
 	reason := getString(up, "reason")
-	if getString(up, "decision") != "block" || !strings.Contains(reason, `"migrate the users table" is still the next item. Hand it once to a general-purpose subagent with model "opus", in the foreground`) || strings.Contains(reason, "Take the next eligible item") {
+	if getString(up, "decision") != "block" || !strings.Contains(reason, `"migrate the users table" is still the next item. Hand it once to the noctis:worker subagent (subagent_type "noctis:worker", model "opus") with a brief that stands on its own`) || strings.Contains(reason, "Take the next eligible item") {
 		t.Fatalf("the last continuation before the queue gives up did not hand the stuck item to Opus: %v", up)
 	}
 	if !strings.Contains(reason, "what you tried, where and why it failed (the errors verbatim)") || !strings.Contains(reason, "the next stop asks you to set it aside") {
@@ -50,7 +50,7 @@ func TestAStuckItemGoesOnceToAStrongerModelBeforeItIsSetAside(t *testing.T) {
 	}
 	state := readState()
 	record := escalationRecord(state, path, "migrate the users table")
-	if getString(record, "model") != "opus" || getString(record, "agent") != "general-purpose" || getString(record, "setup") != "sonnet/high" || getString(record, "outcome") != "" {
+	if getString(record, "model") != "opus" || getString(record, "agent") != "noctis:worker" || getString(record, "setup") != "sonnet/high" || getString(record, "outcome") != "" {
 		t.Fatalf("the item that went up is recorded as %v", record)
 	}
 	if escalationsToday(state, nowSec()) != 1 {
@@ -84,12 +84,12 @@ func TestAStuckItemGoesOnceToAStrongerModelBeforeItIsSetAside(t *testing.T) {
 	// Another session keeps the item with its stronger model.
 	runsOn("es1b", "claude-sonnet-5-5", 20000)
 	reason = getString(stopHookOutput(t, stopInput("es1b", frontend), cfg), "reason")
-	if !strings.Contains(reason, "Take the next eligible item") || !strings.Contains(reason, `keep it with a general-purpose subagent with model "opus" in the foreground`) {
+	if !strings.Contains(reason, "Take the next eligible item") || !strings.Contains(reason, `keep it with the noctis:worker subagent (subagent_type "noctis:worker", model "opus"), give it what the last attempt found and wait for its result`) {
 		t.Fatalf("a later session does not keep the item with its stronger model:\n%s", reason)
 	}
 	// There it has the continuations of any item before it is set aside.
 	reason = getString(stopHookOutput(t, stopAgain("es1b", frontend), cfg), "reason")
-	if !strings.Contains(reason, `keep it with a general-purpose subagent with model "opus" in the foreground`) || strings.Contains(reason, "Find the root cause") {
+	if !strings.Contains(reason, `keep it with the noctis:worker subagent (subagent_type "noctis:worker", model "opus"), give it what the last attempt found and wait for its result`) || strings.Contains(reason, "Find the root cause") {
 		t.Fatalf("a later session set the item aside at its first stop without progress:\n%s", reason)
 	}
 	if reason = getString(stopHookOutput(t, stopAgain("es1b", frontend), cfg), "reason"); !strings.Contains(reason, "It already went to a stronger model (Opus)") {
@@ -111,7 +111,7 @@ func TestAQueueFileKeepsTheLastItemsThatWentUp(t *testing.T) {
 func TestAStuckItemOnOpusBelowMaxGoesToTheDeepAgent(t *testing.T) {
 	cfg, _, frontend, path := escalationSandbox(t, "es2", "claude-opus-5-5", "xhigh")
 	up := stopsWithoutProgress(t, "es2", frontend, cfg)
-	if reason := getString(up, "reason"); !strings.Contains(reason, "Hand it once to the "+pluginName+":deep subagent (Opus at max effort)") {
+	if reason := getString(up, "reason"); !strings.Contains(reason, `Hand it once to the `+pluginName+`:deep subagent (subagent_type "`+pluginName+`:deep", Opus at max effort) with a brief`) {
 		t.Fatalf("an Opus session at xhigh did not hand the stuck item to the deep agent:\n%s", reason)
 	}
 	if want := T("queue.escalateMessage", 2, "migrate the users table", "Opus · max"); !strings.Contains(getString(up, "systemMessage"), want) {
@@ -194,16 +194,16 @@ func TestEscalationTargetIsOneStepUp(t *testing.T) {
 		switched                             bool
 		model, agent                         string
 	}{
-		{"sonnet session", "auto", "claude-sonnet-5-5", "high", "migrate the users table", false, "opus", "general-purpose"},
-		{"haiku session", "auto", "claude-haiku-4-5-20251001", "", "migrate the users table", false, "opus", "general-purpose"},
+		{"sonnet session", "auto", "claude-sonnet-5-5", "high", "migrate the users table", false, "opus", "noctis:worker"},
+		{"haiku session", "auto", "claude-haiku-4-5-20251001", "", "migrate the users table", false, "opus", "noctis:worker"},
 		{"opus below max", "auto", "claude-opus-5-5", "high", "migrate the users table", false, "opus", pluginName + ":deep"},
 		{"opus at max", "auto", "claude-opus-5-5", "max", "migrate the users table", false, "", ""},
 		{"fable session", "auto", "claude-fable-5-1", "max", "migrate the users table", false, "", ""},
-		{"an item tagged for sonnet", "auto", "claude-opus-5-5", "max", "migrate the users table (sonnet)", false, "opus", "general-purpose"},
+		{"an item tagged for sonnet", "auto", "claude-opus-5-5", "max", "migrate the users table (sonnet)", false, "opus", "noctis:worker"},
 		{"an item tagged for opus on sonnet", "auto", "claude-sonnet-5-5", "high", "migrate the users table (opus)", false, "opus", pluginName + ":deep"},
 		{"off", "off", "claude-sonnet-5-5", "high", "migrate the users table", false, "", ""},
-		{"a named model", "fable", "claude-opus-5-5", "max", "migrate the users table", false, "fable", "general-purpose"},
-		{"fable out of quota", "fable", "claude-sonnet-5-5", "high", "migrate the users table", true, "opus", "general-purpose"},
+		{"a named model", "fable", "claude-opus-5-5", "max", "migrate the users table", false, "fable", "noctis:worker"},
+		{"fable out of quota", "fable", "claude-sonnet-5-5", "high", "migrate the users table", true, "opus", "noctis:worker"},
 		{"an unknown setting", "gpt", "claude-sonnet-5-5", "high", "migrate the users table", false, "", ""},
 	}
 	for _, c := range cases {
@@ -406,5 +406,24 @@ func TestTheDeepAgentRunsOnOpusAtMaxAndMayEdit(t *testing.T) {
 	}
 	if strings.Contains(text, "disallowedTools") || strings.Contains(text, "\ntools:") {
 		t.Fatalf("agents/deep.md limits the tools of the agent that finishes a stuck item:\n%s", text)
+	}
+}
+
+func TestTheWorkerAgentStartsFreshOnTheSessionsModelAndMayEdit(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join(repoRoot(), "agents", workerAgentName+".md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	for _, want := range []string{"\nname: " + workerAgentName + "\n", "\nmodel: inherit\n", "Do not tick the item and do not edit the queue file", "fix the code it checks", "with its exit status"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("agents/worker.md does not say %q:\n%s", strings.TrimSpace(want), text)
+		}
+	}
+	// The worker keeps the project's CLAUDE.md, runs at the session's effort and may use every tool.
+	for _, unwanted := range []string{"disallowedTools", "\ntools:", "omitClaudeMd", "\neffort:", "\nbackground:"} {
+		if strings.Contains(text, unwanted) {
+			t.Fatalf("agents/worker.md sets %q:\n%s", strings.TrimSpace(unwanted), text)
+		}
 	}
 }

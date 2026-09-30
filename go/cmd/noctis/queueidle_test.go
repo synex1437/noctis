@@ -8,7 +8,7 @@ import (
 func TestTheQueueReasonSentBackAsAPromptDoesNotResetTheIdleCount(t *testing.T) {
 	cfg, project := copilotSandbox(t)
 	sid := "cp-idle"
-	maxIdle := int(numberOr(section(cfg, "queue"), "maxIdleContinues", 4))
+	maxIdle := int(numberOr(section(cfg, "queue"), "maxIdleContinues", 3))
 	blocked := 0
 	for round := 0; round < 3*maxIdle; round++ {
 		stop := hostHook(t, "copilot", copilotPayload(sid, project, object{"transcriptPath": filepath.Join(project, "events.jsonl"), "stopReason": "end_turn", "stop_hook_active": round > 0}))

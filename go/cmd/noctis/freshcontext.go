@@ -37,7 +37,18 @@ func subagentNote(cfg object, tokens float64, known bool) string {
 	if !known || above <= 0 || tokens < above || !currentHost().agents {
 		return ""
 	}
-	return fmt.Sprintf(" This session's context already holds about %s tokens: unless the item is a quick edit, hand it to a fresh general-purpose subagent with a brief that stands on its own (the goal, the files and decisions it needs, what done means), then check its work and tick the item yourself.", approxCount(tokens))
+	return fmt.Sprintf(" This session's context already holds about %s tokens: unless the item is a quick edit, hand it to %s, a fresh context, with a brief that stands on its own (the goal, the files and decisions it needs, what done means); wait for its result, then check its work and tick the item yourself.", approxCount(tokens), workerText(""))
+}
+
+// workerText names noctis's worker agent for a hand-off, and the model the call is to name when model is
+// not "". Named, the agent starts in a fresh context of its own, where a fork of the session would carry
+// the session's whole context along, and it needs no general-purpose agent, which a session may lack.
+func workerText(model string) string {
+	agent := pluginName + ":" + workerAgentName
+	if model == "" {
+		return fmt.Sprintf(`the %s subagent (subagent_type "%s")`, agent, agent)
+	}
+	return fmt.Sprintf(`the %s subagent (subagent_type "%s", model "%s")`, agent, agent, model)
 }
 
 type freshPlan struct {

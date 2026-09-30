@@ -50,7 +50,7 @@ func TestAQueueItemGoesToAFreshSubagentOnceTheContextIsBig(t *testing.T) {
 	if getString(output, "decision") != "block" || !strings.Contains(reason, "add a login page") {
 		t.Fatalf("the Stop hook did not continue the queue: %v", output)
 	}
-	if !strings.Contains(reason, "fresh general-purpose subagent") || !strings.Contains(reason, "142k tokens") {
+	if !strings.Contains(reason, `hand it to the noctis:worker subagent (subagent_type "noctis:worker"), a fresh context`) || !strings.Contains(reason, "142k tokens") {
 		t.Fatalf("with 142k tokens of context the next item was not handed to a fresh subagent: %q", reason)
 	}
 }
@@ -78,7 +78,7 @@ func TestASmallContextOrTheSwitchOffKeepsQueueItemsInTheSession(t *testing.T) {
 				contextReading(sid, tc.window)
 			}
 			output := stopHookOutput(t, stopInput(sid, project), cfg)
-			if reason := getString(output, "reason"); !strings.Contains(reason, "add a login page") || strings.Contains(reason, "fresh general-purpose subagent") {
+			if reason := getString(output, "reason"); !strings.Contains(reason, "add a login page") || strings.Contains(reason, `hand it to the noctis:worker subagent (subagent_type "noctis:worker"), a fresh context`) {
 				t.Fatalf("want the item continued in the session itself, got %q", reason)
 			}
 		})

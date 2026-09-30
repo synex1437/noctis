@@ -96,7 +96,7 @@ func TestALongPauseOfABigSessionRelaunchesItFreshWithItsHandoffNote(t *testing.T
 			t.Fatalf("the fresh session's prompt does not name %q: %q", part, prompt)
 		}
 	}
-	if strings.Contains(prompt, "fresh general-purpose subagent") {
+	if strings.Contains(prompt, `hand it to the noctis:worker subagent (subagent_type "noctis:worker"), a fresh context`) {
 		t.Fatalf("a fresh session with a clean context was told to hand its items to subagents: %q", prompt)
 	}
 	state := readState()
@@ -238,7 +238,7 @@ func TestAResumedBigSessionIsToldToGiveQueueItemsToSubagents(t *testing.T) {
 			if !strings.Contains(prompt, "add a login page") {
 				t.Fatalf("the resume prompt does not carry the checklist: %q", prompt)
 			}
-			if strings.Contains(prompt, "fresh general-purpose subagent") != tc.subagent {
+			if strings.Contains(prompt, `hand it to the noctis:worker subagent (subagent_type "noctis:worker"), a fresh context`) != tc.subagent {
 				t.Fatalf("subagent advice = %t, want %t: %q", !tc.subagent, tc.subagent, prompt)
 			}
 		})

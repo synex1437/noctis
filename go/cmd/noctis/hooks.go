@@ -1628,6 +1628,9 @@ func onStop(input, cfg object) {
 	snapshot := queueSnapshotOf(queuePath, content)
 	syncDoneIssues(cfg, queuePath, content, getString(input, "cwd"))
 	noteQueuePace(cfg, state, sid, queuePath, content, now)
+	if waitsOnBackgroundWork(input, sid, snapshot.total) {
+		return
+	}
 	if snapshot.total == 0 {
 		if isAutoQueue(queuePath) && numberOr(getMap(getMap(state, "autoQueues"), sid), "items", 0) == 0 {
 			endAutoQueue(sid, true)
@@ -1755,7 +1758,7 @@ func onStop(input, cfg object) {
 		emit(object{"systemMessage": T("queue.dayLimitMessage", formatNumber(continuedToday), snapshot.total)})
 		return
 	}
-	maxIdle := math.Max(1, numberOr(queue, "maxIdleContinues", 4))
+	maxIdle := math.Max(1, numberOr(queue, "maxIdleContinues", 3))
 	if limit := stopBlockCap(); limit > 0 {
 		maxIdle = math.Max(1, math.Min(maxIdle, math.Floor(limit)))
 	}

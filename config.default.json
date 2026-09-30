@@ -136,7 +136,7 @@
       ".claude/TASKS.md",
       "docs/TASKS.md"
     ],
-    "maxIdleContinues": 4,
+    "maxIdleContinues": 3,
     "maxContinuesPerSession": 200,
     "maxContinuesPerDay": 600,
     "subagentAboveTokens": 100000,

@@ -197,6 +197,8 @@ func TestTheStopHookTellsTwoLongAfterReferencesApartAndNamesOnlyNewOnesPastTheFi
 	queuePath := writeQueueFile(t, project, "# q\n- [ ] (P0) fix the login redirect #auth\n- [ ] roll out (after "+east+", "+west+")\n")
 	trustQueueFile(queuePath, true)
 	again := object{"hook_event_name": "Stop", "session_id": "st11", "cwd": project, "stop_hook_active": true}
+	// None of these stops ticks an item: the queue is not to give up before the last one.
+	section(cfg, "queue")["maxIdleContinues"] = float64(10)
 
 	shown := truncateText(east, 40)
 	first := stopHookOutput(t, stopInput("st11", project), cfg)

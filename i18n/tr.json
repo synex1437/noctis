@@ -126,6 +126,7 @@
   "queue.heldNotify": "Kuyruk bekletiliyor: `queue.verifyCommand` art arda %[1]d kez başarısız oldu; %[2]s komut geçene kadar bekliyor.",
   "queue.heldNotifyFile": "Kuyruk bekletiliyor: %[2]s dosyasının adını verdiği denetim komutu art arda %[1]d kez başarısız oldu; kuyruk komut geçene kadar bekliyor.",
   "queue.heldMessage": "⛔ Kuyruk bekletiliyor: `%[1]s` art arda %[2]d kez başarısız oldu, bu yüzden %[3]s komut geçene kadar ilerlemiyor. Bir prompt yazdıktan sonra Claude ilk kez durduğunda komut yeniden çalışır.",
+  "queue.heldSame": "Son iki çalıştırması aynı çıktıyla başarısız oldu: aradaki düzeltme, denetimin gördüğü hiçbir şeyi değiştirmedi.",
   "queue.unmatched": "⚠ %s içinde (after …) yok sayıldı — hiçbir etiket, issue ya da madde numarası eşleşmiyor: %s. Yazımı kontrol et.",
   "queue.unmatchedMore": "%s ve %d tane daha",
   "queue.emptyLines": "☰ %s: %d boş checklist satırı yok sayılıyor (satır %s); boş bir \"- [ ]\" iş değildir.",

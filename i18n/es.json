@@ -126,6 +126,7 @@
   "queue.heldNotify": "Cola en espera: `queue.verifyCommand` falló en %[1]d intento(s) seguidos; %[2]s espera hasta que el comando pase.",
   "queue.heldNotifyFile": "Cola en espera: el comando de verificación que nombra %[2]s falló %[1]d vez/veces seguidas; la cola espera hasta que pase.",
   "queue.heldMessage": "⛔ Cola en espera: `%[1]s` falló en %[2]d intento(s) seguidos, así que %[3]s no sigue hasta que el comando pase. Se vuelve a ejecutar en la primera parada después de que escribas un prompt.",
+  "queue.heldSame": "Sus dos últimas ejecuciones fallaron con la misma salida: el arreglo entre ambas no cambió nada de lo que ve la comprobación.",
   "queue.unmatched": "⚠ (after …) ignorado en %s — ninguna etiqueta, incidencia o número de elemento coincide: %s. Revisa la ortografía.",
   "queue.unmatchedMore": "%s y %d más",
   "queue.emptyLines": "☰ %s: se ignoran %d línea(s) vacía(s) de la lista de comprobación (línea %s); un \"- [ ]\" vacío no es una tarea.",
