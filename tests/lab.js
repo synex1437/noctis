@@ -1870,6 +1870,8 @@ async function scenarioQueuePriorities(acc) {
   check('queue: Claude running noctis queue trust itself is denied and the user is told', (byClaude.hookSpecificOutput || {}).permissionDecision === 'deny' && String(byClaude.systemMessage).includes('!noctis queue trust'), true);
   check('queue: any other shell call gets no answer', acc.hook({ hook_event_name: 'PreToolUse', session_id: 'qp2', cwd: PROJECT_DIR, tool_name: 'Bash', tool_input: { command: `noctis queue status --file ${queueFile}` } }), '');
   acc.run(['queue', 'trust', '--file', queueFile]);
+  const noted = acc.run(['queue', 'note', 'kept the sloppy boxes as written: the checklist is the user\'s', '--file', queueFile]);
+  check('queue: noctis queue note keeps a decision and queue status gives it back', noted.includes('✎') && acc.run(['queue', 'status', '--file', queueFile]).includes('kept the sloppy boxes as written'), true);
   const sloppy = JSON.parse(acc.hook({ hook_event_name: 'Stop', session_id: 'qp2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false })).reason;
   check('queue: sloppy boxes, bare boxes and TODO markers all count; notes do not', sloppy.includes('Queue continues: 4 open'), true);
   check('queue: a multi-line item is one item and P1 comes first', sloppy.includes('("bare box without a bullet (P1)")'), true);

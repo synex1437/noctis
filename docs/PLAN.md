@@ -77,6 +77,8 @@ Checkpoint model çağrısı yapmadan transcript'ten üretilir; `--resume` tam b
 
 **K. Takılan madde.** Oturum art arda ilerlemeden (işaretlenen madde ya da yeni commit olmadan) duruyorsa `queue.maxIdleContinues`'tan önceki son devamda Stop'un metni Claude'a sıradaki maddeyi neyin tıkadığını bulmasını, şimdi çözülemiyorsa maddeyi `noctis queue defer … --reason` ile kök nedeni ve neyin açacağıyla ertelemesini ve sıradaki uygun maddeye geçmesini söyler (kullanıcıya bir uyarı; `noctis why --json`'da `continue-queue` kaydında `setAside`). Erteleme açık madde sayısını değiştirdiği için ilerleme sayılır ve kuyruk sürer; madde ertelenmezse bir sonraki durakta kuyruk eskisi gibi vazgeçer. Maddeler arası denetimde de bekletmeden önceki son geri gönderme aynı yolu söyler: hata şimdi düzeltilemiyorsa maddenin değişiklikleri geri alınır (bir dalda ya da stash'te saklanabilir), madde işaretsiz bırakılıp ertelenir; denetim yeniden geçer ve kuyruk onsuz sürer. Model çağrısı yok.
 
+**L. Karar özeti.** Oturum başındaki kuyruk talimatı Claude'a, kullanıcının dönüp bakmak isteyebileceği bir kararı (bir yolu ötekine yeğlemek, belirsiz bir maddede bir varsayım, bir şeyi dışarıda bırakmak ya da başka türlü yapmak) tek satırla `noctis queue note "<karar ve nedeni>" --file <dosya>` ile not etmesini söyler; not edilmiş karar varsa son 5'ini de verir, böylece yeni bir bağlam onlara uyar. Notlar `queue-notes.json`'da dosya başına son 50 (30 gün not düşmeyen dosyanınkiler bir sonraki notta silinir). `noctis queue status` son 5'ini ve toplamı (`--json`'da `decisions`), günlük özet bir öncekinden beri not edilenleri (ilk özette son 24 saat) verir. Model çağrısı yok.
+
 ## 5. Hata senaryoları ve alınan önlemler
 
 | # | Senaryo | Önlem |
