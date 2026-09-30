@@ -321,7 +321,7 @@ func buildDigest(cfg, state object, usage usageView, baseline object, now int64)
 	queues := digestQueueFiles(state, now)
 	for _, path := range queues {
 		key := queueTrustKey(path)
-		block, seen := digestQueue(cfg, state, path, getMap(previous, key), numberOr(baseline, "at", 0))
+		block, seen := digestQueue(cfg, state, path, getMap(previous, key), numberOr(baseline, "at", 0), usage, now)
 		lines = append(lines, "")
 		lines = append(lines, block...)
 		done[key] = object{"path": path, "done": seen}
@@ -404,9 +404,9 @@ func digestQueueFiles(state object, now int64) []string {
 }
 
 // digestQueue reports on the queue file at path: how many items are done and open, which were done
-// since the last digest (before holds the items that one saw done), the item it takes next, its
-// check, and what waits on the user. It returns the lines and the items it sees done now.
-func digestQueue(cfg, state object, path string, before object, since float64) ([]string, []any) {
+// since the last digest (before holds the items that one saw done), the item it takes next, its pace,
+// its check, and what waits on the user. It returns the lines and the items it sees done now.
+func digestQueue(cfg, state object, path string, before object, since float64, usage usageView, now int64) ([]string, []any) {
 	content, _ := readQueueText(path)
 	entries, _ := parseQueueEntries(content)
 	view := queueSnapshotOf(path, content)
@@ -447,6 +447,9 @@ func digestQueue(cfg, state object, path string, before object, since float64) (
 		lines = append(lines, "- "+T("digest.next", digestItem(view.items[0])))
 	case view.total > 0:
 		lines = append(lines, "- "+T("digest.nextBlocked", view.total))
+	}
+	for _, line := range paceLines(paceOf(cfg, state, path, view.total+view.deferred, usage, now)) {
+		lines = append(lines, "- "+line)
 	}
 	if line := digestCheck(cfg, state, path, content); line != "" {
 		lines = append(lines, "- "+line)

@@ -1150,6 +1150,9 @@ func emptyState() object {
 		// digest is the daily digest's runner: the time of day it was set up for (time), when it
 		// goes out next (at), the one sent last (sent, sentAt) and why that failed (failed).
 		"digest": object{},
+		// queuePace are the pace notes of queue files by queueTrustKey (noteQueuePace): the file
+		// (path), when it was noted last (at), and the notes, [at, done, used, resetsAt] each.
+		"queuePace": object{},
 		// usedCheckpointsDue is when the oldest record in used-checkpoints.json expires, 0 when
 		// it holds none.
 		"usedCheckpointsDue": float64(0),
@@ -1392,6 +1395,11 @@ func pruneState(state object, now int64) {
 	for key, raw := range stateMap(state, "queueVerify") {
 		if float64(now)-numberOr(toObject(raw), "at", 0) > queueTrustTTLSeconds {
 			delete(stateMap(state, "queueVerify"), key)
+		}
+	}
+	for key, raw := range stateMap(state, "queuePace") {
+		if float64(now)-numberOr(toObject(raw), "at", 0) > queueTrustTTLSeconds {
+			delete(stateMap(state, "queuePace"), key)
 		}
 	}
 	for key, raw := range stateMap(state, "githubSeen") {
