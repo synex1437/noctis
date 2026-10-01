@@ -82,6 +82,10 @@ func whyLines(count int) []whyLine {
 const whyMaxLast = 1e6
 
 func runWhy() {
+	if args.present["stats"] {
+		runWhyStats()
+		return
+	}
 	count := 20
 	if value, ok := toNumber(flagString("last")); ok && value >= 1 && !math.IsInf(value, 1) {
 		count = int(math.Min(value, whyMaxLast))

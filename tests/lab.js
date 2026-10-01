@@ -3230,6 +3230,47 @@ async function scenarioChannelBudget(acc) {
   check('an unpinned subagent is not echoed back at all', acc.hook({ hook_event_name: 'PreToolUse', session_id: 'c1', cwd: PROJECT_DIR, tool_name: 'Agent', tool_input: { subagent_type: 'general-purpose', prompt: 'x' } }), '');
 }
 
+async function scenarioWhyStats(acc) {
+  const journalText = () => ['decisions.jsonl.1', 'decisions.jsonl'].map((name) => {
+    const file = path.join(acc.guardDir, name);
+    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  }).join('\n');
+  const tally = (text, since) => {
+    const counts = { decisions: 0, observed: 0, pauses: 0, checks: 0, continues: 0, limitHits: 0 };
+    for (const line of text.split('\n')) {
+      let entry;
+      try {
+        entry = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (!entry || !(entry.at >= since)) continue;
+      const action = String(entry.action || '');
+      if (action.startsWith('would-')) {
+        counts.observed += 1;
+        continue;
+      }
+      counts.decisions += 1;
+      if (action === 'pause') counts.pauses += 1;
+      if ((action === 'verify-queue' && entry.skipped !== true) || action === 'hold-queue') counts.checks += 1;
+      if (action === 'continue-queue') counts.continues += 1;
+      if (action === 'schedule-resume') counts.limitHits += 1;
+    }
+    return counts;
+  };
+  const before = journalText();
+  const report = JSON.parse(acc.run(['why', '--stats', '--days', '1', '--json']));
+  const after = journalText();
+  const since = report.to - 86400;
+  const counted = { decisions: report.decisions, observed: report.observed, pauses: report.pauses.count, checks: report.checks.runs, continues: report.continues.count, limitHits: report.limitHits };
+  const low = tally(before, since);
+  const high = tally(after, since);
+  const outside = Object.keys(counted).filter((key) => counted[key] < low[key] || counted[key] > high[key]);
+  check('why --stats: each count matches the journal of the last day', [report.days, report.decisions > 0, outside], [1, true, []]);
+  const text = acc.run(['why', '--stats', '--days', '1']);
+  check('why --stats: the report is written in the configured language', [/ arasındaki kararlar: \d+\n/.test(text), /\nDuraklamalar: \d+\n/.test(text)], [true, true]);
+}
+
 async function scenarioHousekeeping(acc) {
   const now = nowSec();
   writeTranscript();
@@ -3355,6 +3396,7 @@ async function main() {
     ['silent failures: wiring, unwritable wait, recycled pid, doctor gate', () => scenarioSilentFailures(accA)],
     ['channel: what the plugin hands Claude, and how often', () => scenarioChannelBudget(accA)],
     ['lean compaction: the installed module, claude plugin validate and claude plugin test', () => scenarioLeanModule(accA)],
+    ['why --stats: the decision health report', () => scenarioWhyStats(accA)],
     ['housekeeping', () => scenarioHousekeeping(accA)],
   ];
   const only = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
