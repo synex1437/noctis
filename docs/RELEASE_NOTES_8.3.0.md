@@ -195,6 +195,11 @@ and are not counted again. Nothing leaves the machine.
   the reading it took of an item that reads more than one way, beside the approaches it chose and
   what it left out.
 - **The goal, written down.** The README, the guide and the plan now state noctis's second goal.
+- **A run of stars in a command.** The `PreToolUse` check that keeps Claude from trusting a queue or
+  writing noctis's own files through the shell matched a word with unquoted stars against `noctis`
+  by trying every way to share the name among the stars, and the tool call waited: some 20 seconds
+  for 31 stars, far longer for more. It now answers at once, however many stars there are. 8.2.0
+  had the same fault.
 
 ## Known limits
 
@@ -222,7 +227,7 @@ and are not counted again. Nothing leaves the machine.
 
 ## Tests
 
-33 new Go tests, and the test of the shipped defaults now expects the Code profile:
+35 new Go tests, and the test of the shipped defaults now expects the Code profile:
 
 - setup saving a level below max for the model and taking the variable away, max going back to the
   variable, an older Claude Code getting the variable, the canonical model ids, uninstall putting
@@ -243,7 +248,8 @@ and are not counted again. Nothing leaves the machine.
   subagent runs in the background, and the worker agent's frontmatter;
 - each tick noting what its item took, and the summary waiting for three notes and doing without the
   context;
-- the doctor's line while fast mode is on.
+- the doctor's line while fast mode is on;
+- the glob match giving the answers it gave before, and a run of stars before a name read at once.
 
 The contract and monkey suites send `PreCompact` as well, and the lab follows the Code default, the
 level saved per model and the three stops. The Go tests and the lab no longer take the effort, the
