@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -913,17 +912,18 @@ func readStdinJSON() object {
 	}
 	stdinLoaded = true
 	stdinCache = object{}
-	content, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		warn("stdin read failed: %v", err)
+	read := readHookInput
+	if os.Getenv("NOCTIS_DEBUG_HOOKS") != "" {
+		// hooks-debug.log keeps the whole payload, the outputs of a batch's tools included.
+		read = readWholeJSON
+	}
+	raw, readErr, parseErr := read(os.Stdin)
+	if readErr != nil {
+		warn("stdin read failed: %v", readErr)
 		return stdinCache
 	}
-	if len(bytes.TrimSpace(content)) == 0 {
-		return stdinCache
-	}
-	raw, err := decodeJSON(content)
-	if err != nil {
-		warn("stdin parse failed: %v", err)
+	if parseErr != nil {
+		warn("stdin parse failed: %v", parseErr)
 		return stdinCache
 	}
 	if data, ok := raw.(object); ok {
