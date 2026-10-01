@@ -2474,8 +2474,9 @@ func wakeSameSession(cfg object, sid string, record object, resumeAt float64) {
 		return
 	}
 	if watch.early {
-		journal(sid, "StopFailure", "early-reset", getString(record, "label"), nil)
-		logInfo("wake %s: window cleared ahead of schedule; waking now", sid)
+		action, facts := resetSeen(record, resumeAt)
+		journal(sid, "StopFailure", action, getString(record, "label"), facts)
+		logInfo("wake %s: %s seen; waking now", sid, action)
 	}
 	auto := getMap(getMap(state, "autoResume"), sid)
 	if getString(auto, "type") == "quota_auto_resume_fired" && numberOr(auto, "at", 0) >= startedAt {

@@ -48,6 +48,18 @@ func TestWindowClearedAt(t *testing.T) {
 	if windowClearedAt(usageView{hasAny: true, updatedAt: now}, "five_hour", 92, now-600, 660, now-10) {
 		t.Error("an empty payload must never count as a reset")
 	}
+	readBefore := usageView{hasAny: true, updatedAt: now - 20, sevenDay: &window{used: 20, resetsAt: now + 86400}}
+	if windowClearedAt(readBefore, "five_hour", 92, now-600, 660, now-10) {
+		t.Error("a reading taken before the reset says nothing about it")
+	}
+	stillShown := usageView{hasAny: true, updatedAt: now, sevenDay: &window{used: 20, resetsAt: now + 86400}, lapsedAt: map[string]float64{"five_hour": now}}
+	if windowClearedAt(stillShown, "five_hour", 92, now-600, 660, now-10) {
+		t.Error("a reading since the reset that still shows the window at its old reset must not count as reset")
+	}
+	shownBefore := usageView{hasAny: true, updatedAt: now, sevenDay: &window{used: 20, resetsAt: now + 86400}, lapsedAt: map[string]float64{"five_hour": now - 20}}
+	if !windowClearedAt(shownBefore, "five_hour", 92, now-600, 660, now-10) {
+		t.Error("a window last shown before its reset and gone from a reading since should count as reset")
+	}
 }
 
 func TestToWindowClamps(t *testing.T) {

@@ -29,7 +29,7 @@ func TestAUsageAnswerOfAnUnknownShapeKeepsTheLastReading(t *testing.T) {
 	usageAnswers(t, `{"rate_limit_windows":[{"name":"session","percent":40}]}`)
 
 	for round := int64(0); round < 2; round++ {
-		next := refreshFable(cfg, now+round, "probe", 0, true)
+		next := refreshFableWaiting(cfg, now+round, "probe", 0, true, 0)
 		if win := getMap(next, "five_hour"); win == nil || numberOr(win, "used", 0) != 91 {
 			t.Fatalf("an answer in a shape noctis does not know wiped the last five-hour reading: %v", next)
 		}
@@ -46,7 +46,7 @@ func TestAUsageAnswerOfAnUnknownShapeKeepsTheLastReading(t *testing.T) {
 	}
 
 	usageAnswers(t, `{"five_hour":null,"seven_day":null,"seven_day_fable":null}`)
-	next := refreshFable(cfg, now+2, "probe", 0, true)
+	next := refreshFableWaiting(cfg, now+2, "probe", 0, true, 0)
 	if getMap(next, "five_hour") != nil || numberOr(next, "fetchedAt", 0) != float64(now+2) || getString(next, "error") != "" {
 		t.Fatalf("an answer with the known keys and no windows (an idle account) must still replace the reading: %v", next)
 	}

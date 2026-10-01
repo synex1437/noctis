@@ -1262,8 +1262,13 @@ func runSleeper() {
 		return
 	}
 	if watch.early {
-		journal(sid, "sleeper", "early-reset", "window cleared ahead of schedule", nil)
-		logInfo("sleeper %s: window cleared ahead of schedule; resuming now", sid)
+		action, facts := resetSeen(watch.record, at)
+		seen := "window cleared ahead of schedule"
+		if action == "reset-confirmed" {
+			seen = "the reset is confirmed before its margin ran out"
+		}
+		journal(sid, "sleeper", action, seen, facts)
+		logInfo("sleeper %s: %s; resuming now", sid, seen)
 		resumeWait(sid, "reset")
 		return
 	}

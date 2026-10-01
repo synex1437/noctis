@@ -73,7 +73,7 @@ func TestAPlanWithoutTheScopedBucketIsNotLoggedAsAnError(t *testing.T) {
 	t.Setenv("NOCTIS_USAGE_URL", server.URL)
 	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "token")
 
-	next := refreshFable(object{"fable": object{"source": "oauth"}}, nowSec(), "test", 0, true)
+	next := refreshFableWaiting(object{"fable": object{"source": "oauth"}}, nowSec(), "test", 0, true, 0)
 
 	if getString(next, "note") != "no-scoped-bucket-in-response" {
 		t.Fatalf("the answer did not take the no-bucket path: %v", next)

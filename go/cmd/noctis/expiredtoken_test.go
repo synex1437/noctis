@@ -30,12 +30,12 @@ func TestAnExpiredSignInIsAskedAgainSoonAndNamedAsExpired(t *testing.T) {
 	cfg := releaseConfig()
 	cfg["fable"] = object{"source": "oauth"}
 
-	refreshFable(cfg, now, "u5-expired", -1, false)
+	refreshFableWaiting(cfg, now, "u5-expired", -1, false, 0)
 	statusLine := scopedDataLine(t, cfg)
 
 	mustWriteJSON(files.credentials, object{"claudeAiOauth": object{"accessToken": "renewed", "expiresAt": float64(nowSec()+3600) * 1000}})
 	later := now + 5*60
-	fresh := refreshFable(cfg, later, "u5-renewed", -1, false)
+	fresh := refreshFableWaiting(cfg, later, "u5-renewed", -1, false, 0)
 	if fetches.Load() != 1 || numberOr(fresh, "fetchedAt", 0) != float64(later) {
 		t.Fatalf("Claude Code renewed the expired sign-in, and five minutes later noctis had asked the usage endpoint %d times: %v", fetches.Load(), fresh)
 	}

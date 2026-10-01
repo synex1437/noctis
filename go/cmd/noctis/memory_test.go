@@ -138,5 +138,5 @@ func TestARefreshCycleDoesNotRetain(t *testing.T) {
 	t.Cleanup(server.Close)
 	t.Setenv("NOCTIS_USAGE_URL", server.URL)
 	mustWriteJSON(files.credentials, object{"claudeAiOauth": object{"accessToken": "t", "expiresAt": float64(nowSec()+86400) * 1000}})
-	growth(t, "refreshFable", 10, 200, func() { refreshFable(cfg, nowSec(), "probe", 0, true) })
+	growth(t, "refreshFableWaiting", 10, 200, func() { refreshFableWaiting(cfg, nowSec(), "probe", 0, true, 0) })
 }

@@ -107,7 +107,7 @@ func TestARateLimitBacksOffAsLongAsTheRetryAfterHeaderAsks(t *testing.T) {
 		now := nowSec()
 		recordingUsageEndpoint(t, tc.header(now), "")
 		mustWriteJSON(files.fable, object{"fetchedAt": float64(now - 3600)})
-		next := refreshFable(cfg, now, "probe", 0, false)
+		next := refreshFableWaiting(cfg, now, "probe", 0, false, 0)
 		got := int64(numberOr(next, "backoffUntil", 0)) - now
 		if !strings.HasPrefix(getString(next, "error"), "http-429") || got < tc.want-1 || got > tc.want+1 {
 			t.Fatalf("%s: a 429 backed off %d s (error %q), want %d s", tc.name, got, getString(next, "error"), tc.want)

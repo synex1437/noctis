@@ -32,6 +32,7 @@ type usageView struct {
 	fiveHour    *window
 	sevenDay    *window
 	fable       *window
+	lapsedAt    map[string]float64
 	hasAny      bool
 	updatedAt   float64
 	clockOffset float64
@@ -300,6 +301,12 @@ func currentUsageIn(now int64, guardDir string) usageView {
 	offset := liveClockOffset(fable, now)
 	oauthHistory := getMap(fable, "history")
 	statusHistory := getMap(usage, "history")
+	lapsedAt := map[string]float64{}
+	noteLapse := func(key string, raw object, at float64) {
+		if _, resetsAt, ok := storedWindow(raw); ok && resetsAt-offset <= float64(now) {
+			lapsedAt[key] = math.Max(lapsedAt[key], at)
+		}
+	}
 	build := func(key string) *window {
 		fromStatus := getMap(usage, key)
 		fromOauth := getMap(fable, key)
@@ -307,6 +314,8 @@ func currentUsageIn(now int64, guardDir string) usageView {
 		if reported := numberOr(fromStatus, "at", 0); reported > 0 {
 			statusAt = math.Min(usageAt, reported)
 		}
+		noteLapse(key, fromStatus, statusAt)
+		noteLapse(key, fromOauth, fetchedAt)
 		var raw object
 		var at float64
 		useOauth := false
@@ -347,11 +356,13 @@ func currentUsageIn(now int64, guardDir string) usageView {
 	if raw := getMap(fable, "fable"); raw != nil {
 		used, resetsAt, ok := storedWindow(raw)
 		fableWindow = activeWindow(used, resetsAt-offset, ok, now)
+		noteLapse("fable", raw, fetchedAt)
 	}
 	return usageView{
 		fiveHour:    build("five_hour"),
 		sevenDay:    build("seven_day"),
 		fable:       fableWindow,
+		lapsedAt:    lapsedAt,
 		hasAny:      usageAt > 0 || fetchedAt > 0,
 		updatedAt:   math.Max(usageAt, fetchedAt),
 		clockOffset: offset,
@@ -820,16 +831,6 @@ func liveClockOffset(fable object, now int64) float64 {
 	return numberOr(fable, "clockOffset", 0)
 }
 
-// refreshFable brings fable.json up to date when its reading is older than maxAge (the poll
-// interval when maxAge is negative) and no backoff holds (ignoreBackoff skips that check). In a
-// process the host waits on, the fetch goes to a detached refresher (refreshAside); anywhere
-// else it runs here.
-func refreshFable(cfg object, now int64, reason string, maxAge float64, ignoreBackoff bool) object {
-	return refreshFableWaiting(cfg, now, reason, maxAge, ignoreBackoff, 0)
-}
-
-// refreshFableWaiting is refreshFable for a caller that makes a one-time choice on the answer:
-// a hook waits up to wait for the fetch it hands off.
 func refreshFableWaiting(cfg object, now int64, reason string, maxAge float64, ignoreBackoff bool, wait time.Duration) object {
 	cached, due := fableRefreshDue(cfg, now, maxAge, ignoreBackoff)
 	if !due {
