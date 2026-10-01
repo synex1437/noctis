@@ -10,7 +10,7 @@ const MESSAGES = path.join(ROOT, 'go', 'cmd', 'noctis', 'messages.go');
 const LANG = path.join(ROOT, 'go', 'cmd', 'noctis', 'lang.go');
 
 const REFERENCE = ['en', 'tr'];
-const LANGUAGES = ['de', 'fr', 'es', 'pt', 'it', 'nl', 'pl', 'ru', 'ja', 'zh', 'ko', 'ar'];
+const LANGUAGES = ['de', 'fr', 'es', 'pt', 'it', 'nl', 'pl', 'ru', 'ja', 'zh', 'ko', 'ar', 'id'];
 
 function blockBody(source, language, from = 0) {
   const marker = new RegExp(`"${language}":\\s*\\{`, 'g');

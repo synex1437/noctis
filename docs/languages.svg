@@ -52,7 +52,7 @@
     <rect x="0" y="497" width="1200" height="3" fill="url(#rule)"/>
   </g>
   <rect x="0.5" y="0.5" width="1199" height="499" rx="18" fill="none" stroke="#24242b"/>
-  <text x="48" y="58" class="sans eyebrow"><tspan fill="#ff3347">14 LANGUAGES</tspan> · ZERO TOKENS</text>
+  <text x="48" y="58" class="sans eyebrow"><tspan fill="#ff3347">15 LANGUAGES</tspan> · ZERO TOKENS</text>
   <text x="48" y="98" class="sans title">Speaks the language you type in.</text>
   <text x="48" y="126" class="sans sub">Detected from what you type — no model call, no tokens — per session. Notices, status line, toasts. Pin one with <tspan class="mono" fill="#f5f5f7">locale</tspan> if you prefer.</text>
 
@@ -150,5 +150,5 @@
     </g>
   </g>
 
-  <text x="1152" y="485" class="sans foot" text-anchor="end">also fr · pt · it · nl · pl · zh · ko · ar — the short [noctis] instructions given to Claude stay in English</text>
+  <text x="1152" y="485" class="sans foot" text-anchor="end">also fr · pt · it · nl · pl · zh · ko · ar · id — the short [noctis] instructions given to Claude stay in English</text>
 </svg>

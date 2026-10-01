@@ -27,7 +27,7 @@ You queued forty tasks, went to bed, and woke up to *"You've hit your session li
     <td align="center" width="25%"><b>~5 ms</b><br><sub>per hook on Linux</sub></td>
     <td align="center" width="25%"><b>0 tokens</b><br><sub>per decision</sub></td>
     <td align="center" width="25%"><b>1 binary</b><br><sub>no Node, no Git Bash</sub></td>
-    <td align="center" width="25%"><b>14 languages</b><br><sub>the one you type in</sub></td>
+    <td align="center" width="25%"><b>15 languages</b><br><sub>the one you type in</sub></td>
   </tr>
 </table>
 
@@ -40,7 +40,7 @@ You queued forty tasks, went to bed, and woke up to *"You've hit your session li
 - **Never spends paid usage credits.** It stops at 100 % of a window even when the thresholds are off, and refuses a fan-out workflow that would not fit in what is left.
 - **Zero tokens per decision.** Fixed rules over your usage data, and every decision logged (`noctis why`). One self-contained Go binary, about 5 ms per hook on Linux; no Node, Git Bash or compiler.
 - **The right model for each job.** Code on Opus 5.5 · xhigh by default (the Code profile), or on Sonnet 5.5 · high to spend less (Balanced), file search and output digests on Haiku 4.5, and, with the router on, research and writing in a subagent of their own.
-- **Lean compaction, a status line and 14 languages.** It compacts between turns at 70 % context, draws a status line with both usage windows and their reset times, and speaks the language you type in.
+- **Lean compaction, a status line and 15 languages.** It compacts between turns at 70 % context, draws a status line with both usage windows and their reset times, and speaks the language you type in.
 - **Also runs in** OpenAI Codex CLI, Antigravity CLI, Factory Droid and GitHub Copilot CLI, with fewer features.
 
 ## Install

@@ -944,6 +944,16 @@ var heldForbidPhrases = []string{
 	"لا تنفذ أي", "لا تنفّذ أي", "لا تنفذ شيئ", "لا تنفذ الآن", "لا تنفذها", "لا تطبق أي", "لا تطبق شيئ", "لا تقم بتنفيذ", "لا تقم بأي",
 	"لا تلمس أي", "لا تلمس الملفات", "لا تلمس الكود", "لا تعدل أي", "لا تعدّل أي", "لا تعدل الملفات", "لا تعدل الكود", "لا تغير أي",
 	"لا تغيّر أي", "لا تغير شيئ", "لا تكتب أي كود", "لا تكتب كود", "لا تكتب أي شيفرة", "لا تبدأ بعد", "لا تبدأ الآن",
+	"jangan implementasikan", "jangan diimplementasikan", "jangan mengimplementasikan", "jangan implementasi dulu", "belum perlu diimplementasikan",
+	"belum usah diimplementasikan", "tidak usah diimplementasikan", "tidak perlu diimplementasikan", "jangan lakukan apa pun", "jangan lakukan apa-apa",
+	"jangan lakukan apapun", "jangan lakukan dulu", "jangan dilakukan dulu", "jangan kerjakan dulu", "jangan dikerjakan dulu", "jangan kerjakan apa pun",
+	"jangan kerjakan apa-apa", "jangan kerjakan apapun", "jangan dulu dikerjakan", "belum usah dikerjakan", "tidak usah dikerjakan", "tidak perlu dikerjakan",
+	"jangan ubah apa pun", "jangan ubah apa-apa", "jangan ubah apapun", "jangan ubah dulu", "jangan ubah file", "jangan ubah kode", "jangan diubah dulu",
+	"jangan mengubah apa pun", "jangan mengubah apa-apa", "jangan mengubah apapun", "jangan mengubah file", "jangan mengubah kode", "tidak usah diubah",
+	"tidak perlu diubah", "jangan sentuh apa pun", "jangan sentuh apa-apa", "jangan sentuh apapun", "jangan sentuh file", "jangan sentuh kode",
+	"jangan menyentuh apa pun", "jangan menyentuh file", "jangan menyentuh kode", "jangan modifikasi", "jangan memodifikasi", "jangan edit file",
+	"jangan mengedit file", "jangan tulis kode", "jangan menulis kode", "jangan buat kode", "jangan membuat kode", "jangan mulai dulu", "jangan dimulai dulu",
+	"jangan mulai sekarang", "belum usah dimulai", "jangan dieksekusi", "jangan eksekusi dulu",
 }
 
 var heldAskPhrases = []string{
@@ -981,12 +991,19 @@ var heldAskPhrases = []string{
 	"견적만", "추정만", "계획만", "예상 시간만", "검토만", "설명만", "구현하지 않고", "구현 없이", "코드 변경 없이",
 	"تقدير فقط", "فقط تقدير", "فقط قدر", "فقط قدّر", "قدر فقط", "قدّر فقط", "خطة فقط", "فقط خطة", "دون تنفيذ", "بدون تنفيذ",
 	"دون أي تعديل", "بدون أي تعديل", "دون كتابة كود", "بدون كتابة كود",
+	"hanya perkirakan", "perkirakan saja", "cukup perkirakan", "hanya perkiraan", "perkiraan saja", "cukup perkiraan", "beri perkiraan saja",
+	"berikan perkiraan saja", "hanya estimasi", "estimasi saja", "cukup estimasi", "beri estimasi saja", "berikan estimasi saja", "hanya rencanakan",
+	"rencanakan saja", "cukup rencanakan", "hanya rencana", "rencana saja", "cukup rencana", "hanya buat rencana", "buat rencana saja",
+	"cukup buat rencana", "hanya buatkan rencana", "buatkan rencana saja", "hanya jelaskan", "jelaskan saja", "cukup jelaskan", "hanya tinjau",
+	"tinjau saja", "cukup tinjau", "hanya review", "review saja", "cukup review", "hanya nilai", "nilai saja", "tanpa mengimplementasikan",
+	"tanpa implementasi", "tanpa mengubah apa pun", "tanpa mengubah apa-apa", "tanpa mengubah apapun", "tanpa mengubah kode", "tanpa mengubah file",
+	"tanpa menyentuh kode", "tanpa menyentuh file", "tanpa menyentuh apa pun", "tanpa menulis kode", "tanpa mengerjakan", "tanpa perubahan kode",
 }
 
 var heldElseMarkers = []string{
 	"d'autre", "autre", "más", "otro", "otra", "otros", "otras", "outro", "outra", "altro", "altri", "altra", "nient'altro", "anderes",
 	"andere", "anders", "weiter", "więcej", "innego", "innych", "inne", "больше", "друг", "他の", "ほかの", "其他", "别的", "其它", "다른",
-	"آخر", "أخرى", "غير",
+	"آخر", "أخرى", "غير", "lain", "lainnya", "selain", "selebihnya",
 }
 
 func latinOrCyrillic(r rune) bool {
