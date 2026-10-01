@@ -100,7 +100,7 @@ Status lines such as ccstatusline and claude-powerline keep running behind nocti
 | `/noctis:stop` | Ends this session's queue |
 | `/noctis:pause [minutes]` | No limit pauses, routing or queue continuation for a while (60 minutes by default); the stop at 100 % still applies |
 | `/noctis:resume` | Ends a pause early |
-| `!noctis why` | The decisions noctis made, and why |
+| `!noctis why` | The decisions noctis made, and why; `--stats` sums up the last week of them |
 | `!noctis doctor` | Checks the install and lists the neighbours it can see |
 
 `/noctis:setup`, `/noctis:pause`, `/noctis:start` and `/noctis:stop` run only when you type them. The `noctis` command itself runs inside Claude Code with a leading `!` (`!noctis status`, `!noctis queue trust`, `!noctis off 30`), because the plugin's `bin/` folder is on the PATH of Claude Code's shell; in a terminal, use the full path setup prints. Every command and flag: [REFERENCE.md](docs/REFERENCE.md#commands).
