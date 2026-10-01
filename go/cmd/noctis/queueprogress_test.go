@@ -8,6 +8,8 @@ import (
 func TestACommitCountsAsProgressOnALongItem(t *testing.T) {
 	cfg, project := stopCapSandbox(t, "claude", 2, 3)
 	t.Setenv("CLAUDE_CODE_STOP_HOOK_BLOCK_CAP", "")
+	// The count here is of stops without progress; the stronger model's stop on top is escalate_test.go's.
+	section(cfg, "queue")["escalate"] = "off"
 	gitIn(t, project, "init", "-q")
 	writeRepoFile(t, project, "work/0.txt", "0\n")
 	gitIn(t, project, "add", "-A")

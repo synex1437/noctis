@@ -404,8 +404,11 @@ class Account {
     const inherited = { ...process.env };
     delete inherited.LC_ALL;
     delete inherited.LC_MESSAGES;
-    delete inherited.CLAUDE_CODE_ENTRYPOINT;
-    delete inherited.CLAUDE_CODE_REMOTE;
+    // A Claude Code session that runs the suite hands it its own kind, effort, compaction point, stop block cap and id.
+    for (const name of ['CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_REMOTE', 'CLAUDE_EFFORT', 'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_AUTOCOMPACT_PCT_OVERRIDE',
+      'CLAUDE_CODE_STOP_HOOK_BLOCK_CAP', 'CLAUDE_CODE_SESSION_ID']) {
+      delete inherited[name];
+    }
     const env = {
       ...inherited,
       PATH: `${this.lab.binDir}${path.delimiter}${process.env.PATH}`,

@@ -89,6 +89,32 @@ func TestAnUnreadableStopBlockCapCountsAsClaudeCodesDefault(t *testing.T) {
 	}
 }
 
+func TestAStuckItemGoesUpOnlyWhenTheStopBlockCapLeavesRoomForItsTurn(t *testing.T) {
+	for _, c := range []struct {
+		value  string
+		blocks int
+		wentUp float64
+	}{
+		// With queue.maxIdleContinues 3 the third block asks Claude to set the item aside. The stronger
+		// model's turn would take a fourth, which Claude Code overrides under a cap of 3.
+		{"3", 3, 0},
+		{"4", 4, 1},
+	} {
+		cfg, project := stopCapSandbox(t, "claude", 3, 3)
+		t.Setenv("CLAUDE_CODE_STOP_HOOK_BLOCK_CAP", c.value)
+		sid := "up" + c.value
+		// A session on Sonnet has Opus to go up to at any effort.
+		runsOn(sid, "claude-sonnet-5-5", 20000)
+		blocked, last := stopsInARow(t, cfg, sid, project, 6, nil)
+		if wentUp := escalationsToday(readState(), nowSec()); blocked != c.blocks || !gaveUpOn(sid) || wentUp != c.wentUp {
+			t.Fatalf("with CLAUDE_CODE_STOP_HOOK_BLOCK_CAP=%s and queue.maxIdleContinues 3 noctis blocked %d stops in a row (want %d), gave up: %v, items that went up: %v (want %v); last output %v", c.value, blocked, c.blocks, gaveUpOn(sid), wentUp, c.wentUp, last)
+		}
+		if entry := journaledEntry(sid, "continue-queue"); !getBool(entry, "setAside", false) {
+			t.Fatalf("with CLAUDE_CODE_STOP_HOOK_BLOCK_CAP=%s the last continuation did not ask Claude to set the item aside: %v", c.value, entry)
+		}
+	}
+}
+
 func TestAQueueThatProgressesIsNotHeldToTheStopBlockCap(t *testing.T) {
 	cfg, project := stopCapSandbox(t, "claude", 4, 14)
 	t.Setenv("CLAUDE_CODE_STOP_HOOK_BLOCK_CAP", "")
