@@ -1353,44 +1353,51 @@ func boolInt(b bool) int {
 }
 
 // globMatch matches name against a pattern of shellArgument. A bracket
-// expression stands for any one character.
+// expression stands for any one character. Everything but a star takes one
+// character, so on a mismatch only the last star needs to take one more, and a
+// run of stars no longer multiplies the tries: trying every way to share the
+// name among the stars took some 20 seconds for 31 stars before
+// "noctis.exe".
 func globMatch(pattern, name string) bool {
 	p, n := []rune(pattern), []rune(name)
-	var match func(i, j int) bool
-	match = func(i, j int) bool {
-		for i < len(p) {
+	i, j := 0, 0
+	star, from := -1, 0
+	for j < len(n) {
+		if i < len(p) {
 			switch p[i] {
 			case globAny:
-				for k := j; k <= len(n); k++ {
-					if match(i+1, k) {
-						return true
-					}
-				}
-				return false
+				star, from = i, j
+				i++
+				continue
 			case globOne:
-				if j >= len(n) {
-					return false
-				}
+				i, j = i+1, j+1
+				continue
 			case globSet:
 				if end := bracketEnd(p, i); end >= 0 {
-					if j >= len(n) {
-						return false
-					}
-					i = end
-				} else if j >= len(n) || n[j] != '[' {
-					return false
+					i, j = end+1, j+1
+					continue
+				}
+				if n[j] == '[' {
+					i, j = i+1, j+1
+					continue
 				}
 			default:
-				if j >= len(n) || p[i] != n[j] {
-					return false
+				if p[i] == n[j] {
+					i, j = i+1, j+1
+					continue
 				}
 			}
-			i++
-			j++
 		}
-		return j == len(n)
+		if star < 0 {
+			return false
+		}
+		from++
+		i, j = star+1, from
 	}
-	return match(0, 0)
+	for i < len(p) && p[i] == globAny {
+		i++
+	}
+	return i == len(p)
 }
 
 func bracketEnd(p []rune, open int) int {
