@@ -48,6 +48,7 @@ var descriptiveStarters = map[string]func(string) bool{
 	"nl": lazyWordSet(`ik wij we ons onze mijn het die dit dat er hier momenteel opmerking omdat als maar en`),
 	"pl": lazyWordSet(`ja my nasz nasza mój moja to ten ta tu tutaj obecnie uwaga kontekst bo ponieważ jeśli ale i`),
 	"ru": lazyWordSet(`я мы наш наша мой моя это этот эта тут здесь сейчас примечание контекст потому если но и`),
+	"id": lazyWordSet(`saya kami kita aku ini itu tersebut yang ada di saat sekarang catatan konteks karena jika kalau tapi tetapi namun dan jadi`),
 }
 
 func descriptiveStarter(lang, word string) bool {
@@ -79,7 +80,12 @@ var imperativeWords = lazyWordSet(`add build create write fix update refactor im
 	ajoute crée écris corrige implémente supprime mets construis teste vérifie configure installe remplace améliore
 	añade agrega crea escribe corrige implementa elimina actualiza construye prueba verifica configura instala reemplaza mejora
 	adicione crie escreva corrija implemente remova atualize construa teste verifique configure instale substitua melhore
-	aggiungi crea scrivi correggi implementa rimuovi aggiorna costruisci testa verifica configura installa sostituisci migliora`)
+	aggiungi crea scrivi correggi implementa rimuovi aggiorna costruisci testa verifica configura installa sostituisci migliora
+	tambahkan tambah buat bikin buatkan tulis tuliskan perbaiki benahi betulkan ubah ganti hapus pindahkan jalankan uji periksa cek
+	perbarui pasang instal konfigurasikan dokumentasikan gabungkan pisahkan optimalkan bersihkan rapikan terjemahkan rilis terbitkan
+	selidiki ukur validasi siapkan rancang implementasikan terapkan migrasikan aktifkan nonaktifkan tangani dukung tingkatkan
+	sederhanakan susun atur simpan muat ekspor impor sinkronkan catat pantau kirim jadwalkan urutkan saring kelompokkan kompilasi
+	bungkus kemas sambungkan hubungkan daftarkan definisikan sesuaikan selesaikan lengkapi tinjau`)
 
 var leadIns = lazyWordSet(`please lütfen bitte veuillez merci por favor per favore alsjeblieft proszę пожалуйста
 	first firstly then next finally lastly afterwards after that also and now
@@ -91,7 +97,8 @@ var leadIns = lazyWordSet(`please lütfen bitte veuillez merci por favor per fav
 	prima poi dopo infine anche
 	eerst daarna vervolgens ook en
 	najpierw potem następnie także i
-	сначала затем потом наконец также и`)
+	сначала затем потом наконец также и
+	tolong mohon silakan coba pertama lalu kemudian setelah itu terakhir akhirnya selanjutnya juga dan sekarang`)
 
 func imperativeLike(unit string) bool {
 	fields := wordSplit.Split(strings.TrimSpace(unit), -1)
@@ -223,6 +230,7 @@ var sequenceMarkers = []string{
 	" daarna", " vervolgens", " ten slotte",
 	" potem", " następnie", " na koniec",
 	" затем", " потом", " наконец",
+	" lalu ", " kemudian", " setelah itu", " akhirnya", " selanjutnya",
 	"それから", "次に", "最後に", "然后", "接着", "最后", "그다음", "그런 다음", "마지막으로", "ثم ", "بعد ذلك", "أخيرا",
 }
 

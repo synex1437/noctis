@@ -27,7 +27,7 @@ Kuyruğa kırk iş koyup yattınız; sabah sizi 01:40'ta düşmüş bir *"You've
     <td align="center" width="25%"><b>~5 ms</b><br><sub>Linux'ta hook başına</sub></td>
     <td align="center" width="25%"><b>0 token</b><br><sub>karar başına</sub></td>
     <td align="center" width="25%"><b>1 binary</b><br><sub>Node yok, Git Bash yok</sub></td>
-    <td align="center" width="25%"><b>14 dil</b><br><sub>hangisini yazıyorsanız</sub></td>
+    <td align="center" width="25%"><b>15 dil</b><br><sub>hangisini yazıyorsanız</sub></td>
   </tr>
 </table>
 
@@ -40,7 +40,7 @@ Kuyruğa kırk iş koyup yattınız; sabah sizi 01:40'ta düşmüş bir *"You've
 - **Ücretli kullanım kredisi harcamaz.** Eşikler kapalı olsa bile bir pencerenin %100'ünde durur ve kalan paya sığmayacak çok parçalı bir workflow'u reddeder.
 - **Karar başına sıfır token.** Kullanım verileriniz üzerinde sabit kurallar işler ve her karar kaydedilir (`noctis why`). Kendi başına çalışan tek bir Go binary'si, Linux'ta hook başına yaklaşık 5 ms; Node, Git Bash, derleyici gerekmez.
 - **Her işe uygun model.** Varsayılan olarak kod Opus 5.5 · xhigh'ta (Code profili), daha az harcamak için Sonnet 5.5 · high'da (Balanced), dosya arama ve çıktı özetleri Haiku 4.5'te; yönlendirici açıkken araştırma ve yazı kendi alt-ajanında.
-- **Yalın sıkıştırma, durum çubuğu ve 14 dil.** Bağlam %70'e varınca turlar arasında sıkıştırır, iki kullanım penceresini ve sıfırlanma zamanlarını gösteren bir durum çubuğu çizer ve yazdığınız dilde konuşur.
+- **Yalın sıkıştırma, durum çubuğu ve 15 dil.** Bağlam %70'e varınca turlar arasında sıkıştırır, iki kullanım penceresini ve sıfırlanma zamanlarını gösteren bir durum çubuğu çizer ve yazdığınız dilde konuşur.
 - **Ayrıca** OpenAI Codex CLI, Antigravity CLI, Factory Droid ve GitHub Copilot CLI içinde de, daha az özellikle çalışır.
 
 ## Kurulum

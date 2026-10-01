@@ -40,7 +40,7 @@ The soak invariant is the contract: no model call above 100 %, no leaked locks o
 ## Rules of the engine
 
 - Decisions are deterministic. No LLM calls, nothing on the hot path that costs tokens or waits on the network (the OAuth poll is single-flight and rate-limited).
-- Everything user-facing goes through the message catalog (`messages.go`: `en` and `tr` with identical keys and format verbs; `lang.go`: the other twelve languages, each complete, generated from `i18n/*.json`). Directives sent to Claude stay English.
+- Everything user-facing goes through the message catalog (`messages.go`: `en` and `tr` with identical keys and format verbs; `lang.go`: the other thirteen languages, each complete, generated from `i18n/*.json`). Directives sent to Claude stay English.
 - Every enforcement path must have an `observe`-mode `would-*` journal entry and a `noctis why` reason. (Three paths do not follow this yet: the lite/digest write limits apply in observe mode too and are not journaled, and the `model` reset after `model_not_found` and the issue closing of `queue.github.closeOnDone` still act in observe mode, journaled as `model-unavailable` and `close-issue`.)
 - Nothing may make Claude Code install packages into the plugin: `tests/hygiene.js` fails on a `package.json` at the root next to a `package-lock.json`, `npm-shrinkwrap.json`, `bun.lock` or `bun.lockb`.
 - Every job of a workflow that runs the suites sets `timeout-minutes`, so a suite that hangs cannot hold a runner for six hours; `tests/hygiene.js` checks it.
@@ -57,7 +57,7 @@ Keep the description to what changed and why; include the lab/soak result lines.
 
 Message catalogs live in `i18n/<code>.json`, one file per language, keyed the same as the English
 one. English and Turkish are the reference pair and live in `go/cmd/noctis/messages.go`; the other
-twelve are generated into `go/cmd/noctis/lang.go`:
+thirteen are generated into `go/cmd/noctis/lang.go`:
 
 ```
 node scripts/i18n.js check      # (the default) verify lang.go matches i18n/*.json

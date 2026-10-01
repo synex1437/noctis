@@ -27,7 +27,7 @@ var testFolders = map[string]bool{"test": true, "tests": true, "__tests__": true
 var testFileName = lazyRegexp(`^(.+_test\.(go|py|rb|exs|rs|dart)|test_.+\.py|.+_spec\.rb|.+\.(test|spec)\.[cm]?[jt]sx?|.+(Test|Tests|Spec)\.(java|kt|scala|groovy|cs|fs|swift|php)|.+[a-z0-9]IT\.(java|kt|scala|groovy)|conftest\.py|pytest\.ini|tox\.ini|\.coveragerc|(jest|vitest|playwright|cypress|karma|mocha|wdio)\.conf(ig)?\.[cm]?[jt]s|\.mocharc(\.[a-z]+)?|\.nycrc(\.[a-z]+)?|phpunit\.xml(\.dist)?|codecov\.ya?ml|\.golangci\.(ya?ml|toml|json)|\.eslintrc(\.[a-z]+)?|eslint\.config\.[cm]?[jt]s|ruff\.toml|\.flake8|\.pylintrc|\.rubocop\.yml|\.gitlab-ci\.yml|\.travis\.yml|azure-pipelines\.ya?ml|Jenkinsfile|bitbucket-pipelines\.yml)$`)
 
 // testItemWords matches an item about tests, checks or CI, whose work may well change them.
-var testItemWords = lazyRegexp(`(?i)(\btest|\bspecs?\b|\be2e\b|\bci\b|coverage|fixture|snapshot|\blint|\bflak(y|iness)\b|\bmock(s|ing)?\b|jest|vitest|mocha|pytest|rspec|junit|phpunit|playwright|cypress|тест|テスト|测试|測試|테스트|prueba|اختبار)`)
+var testItemWords = lazyRegexp(`(?i)(\btest|\bspecs?\b|\be2e\b|\bci\b|coverage|fixture|snapshot|\blint|\bflak(y|iness)\b|\bmock(s|ing)?\b|jest|vitest|mocha|pytest|rspec|junit|phpunit|playwright|cypress|тест|テスト|测试|測試|테스트|prueba|اختبار|\btes-?nya\b|\btes unit\b|\bunit tes\b|\bmengetes\b|\bngetes\b|pengetesan|\b(?:meng|peng|di|ter)?uji)`)
 
 // isCheckFile tells whether path names a test or check file: by its name, by a test folder on the
 // way to it, or as a CI service's configuration.

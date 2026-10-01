@@ -16,7 +16,7 @@ const (
 	splitQueueMaxWords = 1000
 )
 
-var clauseBreak = lazyRegexp(`[.!;:,]\s+|(?i:\s+(?:and|then|plus|ve|sonra|ardından|und|dann|et|puis|y|luego|e|poi|en|daarna|i|potem|и|затем)\s+)`)
+var clauseBreak = lazyRegexp(`[.!;:,]\s+|(?i:\s+(?:and|then|plus|ve|sonra|ardından|und|dann|et|puis|y|luego|e|poi|en|daarna|i|potem|и|затем|dan|lalu|kemudian|terus|serta)\s+)`)
 
 var verbFinalImperatives = lazyWordSet(verbFinalImperativeWords)
 
