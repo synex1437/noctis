@@ -34,6 +34,7 @@ func TestATrustedQueueFileRunsTheCheckItNames(t *testing.T) {
 func TestAFailingFileCheckSendsClaudeBackWithItsCommand(t *testing.T) {
 	command := shellFor("echo broken; exit 4", "echo broken & exit 4")
 	cfg, _, frontend := fileVerifySandbox(t, command)
+	section(cfg, "queue")["escalate"] = "off"
 	output := stopHookOutput(t, stopInput("fv2", frontend), cfg)
 	reason := getString(output, "reason")
 	if getString(output, "decision") != "block" || !strings.Contains(reason, "`"+command+"`") || !strings.Contains(reason, "exited with status 4") || strings.Contains(reason, "write the release notes") {
@@ -138,7 +139,7 @@ func TestQueueTrustAndStatusNameTheFilesCheck(t *testing.T) {
 	writeQueueFile(t, project, "# q\n"+fileVerifyItems)
 	trustQueueFile(path, true)
 	status = capturedStdout(t, func() { runQueueTrust(cfg, project, "status") })
-	if !strings.Contains(status, T("queue.verifyFromConfig", "go test ./...")) {
+	if !strings.Contains(status, T("queue.verifyFromConfig", "go test ./...", "queue.verifyCommand")) {
 		t.Fatalf("queue status does not name queue.verifyCommand as the check:\n%s", status)
 	}
 }

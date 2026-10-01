@@ -164,6 +164,43 @@ func escalationsToday(state object, now int64) float64 {
 	return numberOr(record, "count", 0)
 }
 
+func countEscalation(state object, now int64) {
+	day := localDay(now)
+	if getString(getMap(state, "escalateDay"), "day") != day {
+		state["escalateDay"] = object{"day": day, "count": float64(0)}
+	}
+	addNumber(stateMap(state, "escalateDay"), "count", 1)
+}
+
+func checkFixEscalation(cfg, record object, sid string, now int64) (model, agent string) {
+	perDay := numberOr(section(cfg, "queue"), "maxEscalationsPerDay", 5)
+	if numberOr(record, "escalated", 0) > 0 || perDay <= 0 {
+		return "", ""
+	}
+	if limit := stopBlockCap(); limit > 0 && queueCheckAttempts(cfg) >= math.Floor(limit) {
+		return "", ""
+	}
+	state := readState()
+	if escalationsToday(state, now) >= perDay {
+		return "", ""
+	}
+	return escalationTarget(cfg, state, sid, "")
+}
+
+func escalationAgentText(model, agent string) string {
+	if agent == pluginName+":"+deepAgentName {
+		return fmt.Sprintf(`the %s subagent (subagent_type "%s", Opus at max effort)`, agent, agent)
+	}
+	return workerText(model)
+}
+
+func escalationModelTitle(model, agent string) string {
+	if agent == pluginName+":"+deepAgentName {
+		return setupTitle("opus/max")
+	}
+	return setupTitle(model)
+}
+
 // stuckStep is what a continuation does about the item a session keeps stopping on.
 type stuckStep struct {
 	item, path, sid string
@@ -231,45 +268,26 @@ func stuckItemStep(cfg, state object, sid, path string, idle, maxIdle float64, i
 	return step
 }
 
-// agentText names the subagent a step hands its item to, for Claude. An item that went up before 8.3.0
-// went to a general-purpose subagent, and stays with the model it went to.
-func (step stuckStep) agentText() string {
-	if step.agent == pluginName+":"+deepAgentName {
-		return fmt.Sprintf(`the %s subagent (subagent_type "%s", Opus at max effort)`, step.agent, step.agent)
-	}
-	return workerText(step.model)
-}
-
-// modelTitle names the model a step hands its item to, for the user.
-func (step stuckStep) modelTitle() string {
-	if step.agent == pluginName+":"+deepAgentName {
-		return setupTitle("opus/max")
-	}
-	return setupTitle(step.model)
-}
-
-// lead is what the continuation asks of Claude in place of taking the next item, and what the user
-// is told, or "" when the step asks nothing else.
 func (step stuckStep) lead(path string) (rule, notice string) {
 	switch {
 	case step.escalate:
-		rule = fmt.Sprintf(`The session keeps stopping without ticking an item or committing, and "%s" is still the next item. Hand it once to %s If it cannot finish the item either, the next stop asks you to set it aside.`, step.item, handOff(step.agentText(), "the goal and what done means, what you tried, where and why it failed with the errors verbatim, the files and decisions it needs, so it does not repeat your attempts"))
-		return rule, T("queue.escalateMessage", int(step.idle), truncateText(step.item, 100), step.modelTitle())
+		rule = fmt.Sprintf(`The session keeps stopping without ticking an item or committing, and "%s" is still the next item. Hand it once to %s If it cannot finish the item either, the next stop asks you to set it aside.`, step.item, handOff(escalationAgentText(step.model, step.agent), "the goal and what done means, what you tried, where and why it failed with the errors verbatim, the files and decisions it needs, so it does not repeat your attempts"))
+		return rule, T("queue.escalateMessage", int(step.idle), truncateText(step.item, 100), escalationModelTitle(step.model, step.agent))
 	case step.setAside && step.escalated:
-		rule = queueSetAsideRule(step.item, path) + fmt.Sprintf(" It already went to a stronger model (%s), which did not finish it either: give the root cause it found as the reason.", step.modelTitle())
-		return rule, T("queue.escalatedStuck", truncateText(step.item, 100), step.modelTitle())
+		title := escalationModelTitle(step.model, step.agent)
+		rule = queueSetAsideRule(step.item, path) + fmt.Sprintf(" It already went to a stronger model (%s), which did not finish it either: give the root cause it found as the reason.", title)
+		return rule, T("queue.escalatedStuck", truncateText(step.item, 100), title)
 	case step.setAside:
 		return queueSetAsideRule(step.item, path), T("queue.setAsideMessage", int(step.idle), truncateText(step.item, 100))
 	}
 	return "", ""
 }
 
-// note keeps an item that went up with its stronger model on the continuations after, or is "".
 func (step stuckStep) note() string {
 	if !step.escalated || step.setAside {
 		return ""
 	}
-	return " The next item went to a stronger model after a session got stuck on it: keep it with " + handOff(step.agentText(), "what the last attempt found, "+handOffBrief)
+	return " The next item went to a stronger model after a session got stuck on it: keep it with " + handOff(escalationAgentText(step.model, step.agent), "what the last attempt found, "+handOffBrief)
 }
 
 // queueModelsRecord is the record of the queue file at path in state, made when there is none.
@@ -289,9 +307,6 @@ func addNumber(record object, key string, amount float64) {
 	record[key] = math.Round((numberOr(record, key, 0)+amount)*100) / 100
 }
 
-// noteStuckItem records a continuation's step on a stuck item in state: the item that went up and
-// the day's count of them, an item that got stuck on its stronger model as well, and the stuck items
-// of a setup.
 func noteStuckItem(state object, step stuckStep, now int64) {
 	if !step.escalate && !step.setAside {
 		return
@@ -306,11 +321,7 @@ func noteStuckItem(state object, step stuckStep, now int64) {
 		if step.setup != "" {
 			addNumber(stateMap(stateMap(record, "setups"), step.setup), "escalated", 1)
 		}
-		day := localDay(now)
-		if getString(getMap(state, "escalateDay"), "day") != day {
-			state["escalateDay"] = object{"day": day, "count": float64(0)}
-		}
-		addNumber(stateMap(state, "escalateDay"), "count", 1)
+		countEscalation(state, now)
 	case step.escalated:
 		if entry := getMap(items, key); entry != nil && getString(entry, "outcome") == "" {
 			entry["outcome"], entry["closedAt"] = "stuck", float64(now)
@@ -514,8 +525,7 @@ func openEscalations(state object, path string) []string {
 		if getString(record, "outcome") != "" || !unticked[key] {
 			continue
 		}
-		step := stuckStep{model: getString(record, "model"), agent: getString(record, "agent")}
-		found = append(found, open{text: digestItem(getString(record, "text")) + " → " + step.modelTitle(), at: numberOr(record, "at", 0)})
+		found = append(found, open{text: digestItem(getString(record, "text")) + " → " + escalationModelTitle(getString(record, "model"), getString(record, "agent")), at: numberOr(record, "at", 0)})
 	}
 	sort.Slice(found, func(a, b int) bool { return found[a].at < found[b].at })
 	texts := []string{}

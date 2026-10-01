@@ -48,6 +48,7 @@ func TestABundleRedactsTheQueueCheckCommandAndPasswordsInAnyURL(t *testing.T) {
 func TestAHeldQueueKeepsTheCheckCommandOutOfTheNotification(t *testing.T) {
 	command := shellFor("DATABASE_URL=postgres://app:x2Hunter2pass@db.internal/app sh -c 'exit 3'", "set DATABASE_URL=postgres://app:x2Hunter2pass@db.internal/app& exit 3")
 	cfg, project, frontend := queueCheckSandbox(t, command)
+	section(cfg, "queue")["escalate"] = "off"
 	tickFirstQueueItem(t, project)
 	stopHookOutput(t, stopInput("x2held", frontend), cfg)
 	held := stopHookOutput(t, stopAgain("x2held", frontend), cfg)
@@ -64,7 +65,7 @@ func TestAHeldQueueKeepsTheCheckCommandOutOfTheNotification(t *testing.T) {
 			t.Errorf("the notification, which a webhook sends on as it is, carries the check command: %s", line)
 		}
 	}
-	if want := "notify: " + pluginName + " — " + T("queue.heldNotify", 2, "TASKS.md"); notices != 1 || loggedTimes(want) != 1 {
+	if want := "notify: " + pluginName + " — " + T("queue.heldNotify", 2, "TASKS.md", "queue.verifyCommand"); notices != 1 || loggedTimes(want) != 1 {
 		t.Errorf("the hold must go through the notify path once as %q (%d notification(s))", want, notices)
 	}
 }

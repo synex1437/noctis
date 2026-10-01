@@ -228,7 +228,7 @@ func onSessionStart(input, cfg object) {
 			}
 			logInfo("queue file %s found but not trusted (%d open, %d added or changed since a trust, record from an older noctis: %t): no directive injected", queuePath, snapshot.total, len(changed), legacy)
 		} else if queueHeld(cfg, state, queuePath) {
-			logInfo("queue file %s held until %q passes: no directive injected", queuePath, queueCheckCommand(cfg, queuePath))
+			logInfo("queue file %s held until %q passes: no directive injected", queuePath, recordedCheckCommand(cfg, queueCheckRecord(state, queuePath), queuePath, ""))
 		} else {
 			rememberOpenIssues(cfg, queuePath)
 			switch {
@@ -1487,11 +1487,9 @@ func queueContinuationPrompt(prompt string) bool {
 	return false
 }
 
-// resetIdleGuard also lifts a give-up, so a new prompt drives a stuck queue
-// again.
 func resetIdleGuard(state object, sid string) {
 	guard := getMap(getMap(state, "stopGuard"), sid)
-	if guard == nil || (numberOr(guard, "idle", 0) == 0 && guard["gaveUpPath"] == nil) {
+	if guard == nil || (numberOr(guard, "idle", 0) == 0 && guard["gaveUpPath"] == nil && guard["trees"] == nil) {
 		return
 	}
 	updateState(func(next object) {
@@ -1499,6 +1497,7 @@ func resetIdleGuard(state object, sid string) {
 			record["idle"] = float64(0)
 			delete(record, "gaveUpPath")
 			delete(record, "gaveUpOpen")
+			forgetTreeProgress(record)
 		}
 	})
 }
@@ -1596,8 +1595,6 @@ func onStop(input, cfg object) {
 		return
 	}
 	if wait := getMap(getMap(state, "waits"), sid); wait != nil && !getBool(wait, "inHook", false) && !resumedByThisSession(state, sid, wait) {
-		// The turn a same-session wake woke has run to this stop: the wake took, and its wait is
-		// retired as the runner retires it, so this stop and the next ones go on to the queue.
 		if numberOr(wait, "wakeAttemptedAt", 0) <= 0 || !takeWait(sid, wait, "wake", true) {
 			return
 		}
@@ -1640,7 +1637,7 @@ func onStop(input, cfg object) {
 		if queueHeldBack(cfg, state, sid, queuePath) {
 			return
 		}
-		if gated := gateQueue(cfg, input, sid, queuePath, content, queueLabel, now); gated != nil {
+		if gated := gateQueue(cfg, input, sid, queuePath, content, queueLabel, snapshot, now); gated != nil {
 			emit(gated)
 			return
 		}
@@ -1657,7 +1654,6 @@ func onStop(input, cfg object) {
 		}
 		logInfo("queue empty for %s; stop allowed", sid)
 		if driven {
-
 			journal(sid, "Stop", "allow-stop", "queue finished", nil)
 			notify(cfg, pluginName, T("queue.doneNotify", queueLabel))
 			message := T("queue.doneMessage", queueLabel)
@@ -1670,12 +1666,10 @@ func onStop(input, cfg object) {
 		return
 	}
 	if len(snapshot.items) == 0 && snapshot.blocked > 0 {
-		// The last item Claude could take is ticked: its check runs before the stop, as it does when
-		// the queue is finished.
 		if queueHeldBack(cfg, state, sid, queuePath) {
 			return
 		}
-		if gated := gateQueue(cfg, input, sid, queuePath, content, queueLabel, now); gated != nil {
+		if gated := gateQueue(cfg, input, sid, queuePath, content, queueLabel, snapshot, now); gated != nil {
 			emit(gated)
 			return
 		}
@@ -1683,8 +1677,6 @@ func onStop(input, cfg object) {
 			stopForWaitingItems(cfg, state, input, sid, queuePath, content, queueLabel, snapshot, now)
 			return
 		}
-		// Every open item is blocked here: the user hears of these items once, as of a queue that
-		// stopped progressing.
 		blockedKey := fmt.Sprintf("blocked:%s:%s:%s", sid, queuePath, openEntriesDigest(content))
 		alreadyTold := getMap(state, "notified")[blockedKey] != nil
 		updateState(func(next object) {
@@ -1727,14 +1719,18 @@ func onStop(input, cfg object) {
 		guard = object{"forced": float64(0), "idle": float64(0), "lastOpen": nil, "at": float64(now)}
 	}
 	lastOpen, hasLastOpen := getNumber(guard, "lastOpen")
-	// A new commit is progress as well: a large item can take many turns before it is ticked. HEAD
-	// is read from the repository's files only, so a stop never waits for git.
-	head, headKnown := gitHeadFromFiles(orDefault(getString(input, "cwd"), filepath.Dir(queuePath)))
+	cwd := orDefault(getString(input, "cwd"), filepath.Dir(queuePath))
+	head, headKnown := gitHeadFromFiles(cwd)
 	committed := headKnown && getString(guard, "head") != "" && head != getString(guard, "head")
+	maxIdle := queueIdleLimit(cfg)
+	treeMoved := false
 	if hasLastOpen && float64(snapshot.total) != lastOpen || committed {
 		guard["idle"] = float64(0)
+		forgetTreeProgress(guard)
 	} else if getBool(input, "stop_hook_active", false) {
-		guard["idle"] = numberOr(guard, "idle", 0) + 1
+		if treeMoved = treeProgress(guard, cwd, queuePath, maxIdle); !treeMoved {
+			guard["idle"] = numberOr(guard, "idle", 0) + 1
+		}
 	}
 	guard["lastOpen"] = float64(snapshot.total)
 	if headKnown {
@@ -1758,13 +1754,8 @@ func onStop(input, cfg object) {
 		emit(object{"systemMessage": T("queue.dayLimitMessage", formatNumber(continuedToday), snapshot.total)})
 		return
 	}
-	maxIdle := math.Max(1, numberOr(queue, "maxIdleContinues", 3))
-	if limit := stopBlockCap(); limit > 0 {
-		maxIdle = math.Max(1, math.Min(maxIdle, math.Floor(limit)))
-	}
 	maxForced := math.Max(1, numberOr(queue, "maxContinuesPerSession", 200))
 	if numberOr(guard, "idle", 0) >= maxIdle || numberOr(guard, "forced", 0) >= maxForced {
-
 		stuckKey := fmt.Sprintf("stuck:%s:%s", sid, queuePath)
 		alreadyTold := getMap(state, "notified")[stuckKey] != nil
 		updateState(func(next object) {
@@ -1800,7 +1791,7 @@ func onStop(input, cfg object) {
 		}
 		systemMessage, waitContext = outcome.notice, withCutOffNote(sid, outcome.context)
 	}
-	if gated := gateQueue(cfg, input, sid, queuePath, content, queueLabel, now); gated != nil {
+	if gated := gateQueue(cfg, input, sid, queuePath, content, queueLabel, snapshot, now); gated != nil {
 		if reason := getString(gated, "reason"); reason != "" {
 			updateState(func(next object) { stateMap(next, "stopGuard")[sid] = guard })
 			if waitContext != "" {
@@ -1840,14 +1831,9 @@ func onStop(input, cfg object) {
 	} else {
 		delete(guard, "empty")
 	}
-	// The last continuation before the queue gives up on a session that stops without progress hands
-	// the item it is stuck on to a stronger model once, or asks Claude to set it aside, so the queue
-	// goes on without it (stuckItemStep).
 	stuck := stuckItemStep(cfg, state, sid, queuePath, numberOr(guard, "idle", 0), maxIdle, snapshot.items, result.wait != nil, now)
 	if stuck.escalate {
-		// The stronger model gets this one continuation: the next stop without progress asks Claude
-		// to set the item aside, and the one after gives up, as for an item that never went up.
-		guard["idle"] = math.Max(0, maxIdle-2)
+		guard["idle"] = math.Max(0, maxIdle-stopsLeftAfterEscalation)
 	}
 	guard["forced"] = numberOr(guard, "forced", 0) + 1
 	updateState(func(next object) {
@@ -1860,13 +1846,17 @@ func onStop(input, cfg object) {
 		touchQueueTrust(queuePath, now)
 	}
 	facts := object{"forced": numberOr(guard, "forced", 0), "today": continuedToday + 1}
+	why := fmt.Sprintf("%d open", snapshot.total)
+	if treeMoved {
+		facts["treeMoved"] = true
+		why += ", working tree changed"
+	}
 	tokens, known := sessionContextTokens(sid)
 	subagent := subagentNote(cfg, tokens, known)
 	if subagent != "" {
 		facts["subagent"], facts["contextTokens"] = true, tokens
 	}
 	if model, note := itemModelNote(cfg, state, sid, snapshot.items); note != "" {
-		// A subagent of the item's model also keeps the item out of this context.
 		subagent, facts["itemModel"] = note, model
 	}
 	setAside := ""
@@ -1874,13 +1864,12 @@ func onStop(input, cfg object) {
 		setAside, facts["setAside"] = stuck.item, true
 	}
 	if stuck.escalate || stuck.escalated {
-		// The item's stronger model keeps it out of this context as well.
 		subagent, facts["escalateTo"], facts["escalated"] = stuck.note(), stuck.model, stuck.escalate
 	}
 	if stuck.capped {
 		facts["escalateCapped"] = true
 	}
-	journal(sid, "Stop", "continue-queue", fmt.Sprintf("%d open", snapshot.total), facts)
+	journal(sid, "Stop", "continue-queue", why, facts)
 	logInfo("queue continue #%s for %s: %d open", formatNumber(numberOr(guard, "forced", 0)), sid, snapshot.total)
 	nextItem := ""
 	if len(snapshot.items) > 0 {
@@ -1892,8 +1881,6 @@ func onStop(input, cfg object) {
 	}
 	blockedNote += endedDeferralRule() + humanItemsRule(snapshot) + deferredRule(snapshot, queuePath)
 	if setAside == "" && stuck.idle > 0 {
-		// Claude stopped without ticking or committing anything: the item may wait on something only
-		// the user has.
 		blockedNote += queueDeferHint(queuePath)
 	}
 	if len(snapshot.items) > 0 && currentHost().agents && workflowAdvisable(cfg, result) && looksLikeFanOut(snapshot.items[0]) {
@@ -1916,7 +1903,6 @@ func onStop(input, cfg object) {
 	emptyNotice := ""
 	if emptyNew {
 		blockedNote += fmt.Sprintf(" The empty checklist line(s) at line %s are not items; leave them as they are.", emptyLines)
-		// /noctis:start named them by their line in the file it copied.
 		if !isAutoQueue(queuePath) {
 			emptyNotice = T("queue.emptyLines", queueLabel, len(snapshot.empty), emptyLines)
 		}

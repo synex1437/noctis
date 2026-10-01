@@ -49,6 +49,7 @@ func TestAStuckItemNotSetAsideStillEndsTheQueueAtTheIdleLimit(t *testing.T) {
 
 func TestTheLastSendBackOfAFailingQueueCheckSaysHowToSetTheItemAside(t *testing.T) {
 	cfg, project, frontend := queueCheckSandbox(t, shellFor("exit 3", "exit 3"))
+	section(cfg, "queue")["escalate"] = "off"
 	section(cfg, "queue")["verifyAttempts"] = float64(3)
 	tickFirstQueueItem(t, project)
 	first := getString(stopHookOutput(t, stopInput("sa3", frontend), cfg), "reason")

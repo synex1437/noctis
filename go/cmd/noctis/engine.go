@@ -925,19 +925,22 @@ func gitHead(cwd string) string {
 func statusPaths(raw string) []string {
 	paths := []string{}
 	for _, line := range strings.Split(raw, "\n") {
-		if len(line) < 4 {
-			continue
-		}
-		rest := line[3:]
-		if strings.ContainsAny(line[:2], "RC") {
-			if from, to, ok := splitStatusRename(rest); ok {
-				paths = append(paths, from, to)
-				continue
-			}
-		}
-		paths = append(paths, unquoteStatusPath(rest))
+		paths = append(paths, statusLinePaths(line)...)
 	}
 	return paths
+}
+
+func statusLinePaths(line string) []string {
+	if len(line) < 4 {
+		return nil
+	}
+	rest := line[3:]
+	if strings.ContainsAny(line[:2], "RC") {
+		if from, to, ok := splitStatusRename(rest); ok {
+			return []string{from, to}
+		}
+	}
+	return []string{unquoteStatusPath(rest)}
 }
 
 func splitStatusRename(rest string) (string, string, bool) {

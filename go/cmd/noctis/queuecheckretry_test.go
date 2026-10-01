@@ -27,6 +27,7 @@ func TestACheckKilledOnceRunsAgainAtOnceAndItsPassCounts(t *testing.T) {
 func TestACheckKilledOnEveryRunCountsOnceItRanTwice(t *testing.T) {
 	command := shellFor("echo run >> runs.txt; exit 137", "echo run>> runs.txt & exit 137")
 	cfg, project, frontend := queueCheckSandbox(t, command)
+	section(cfg, "queue")["escalate"] = "off"
 	tickFirstQueueItem(t, project)
 	first := stopHookOutput(t, stopInput("qr2", frontend), cfg)
 	if reason := getString(first, "reason"); getString(first, "decision") != "block" || !strings.Contains(reason, "Queue check failed") || !strings.Contains(reason, "exited with status 137") {
@@ -167,6 +168,7 @@ func TestAFailureIsKnownAgainWhateverItsTimingsAndTemporaryPaths(t *testing.T) {
 func TestACheckThatFailsTheSameWayTwiceHoldsTheQueueBeforeItsAttemptsRunOut(t *testing.T) {
 	command := shellFor(`echo run >> runs.txt; echo "FAIL TestMigrate in $$ms"; exit 1`, "echo run>> runs.txt & echo FAIL TestMigrate in %RANDOM%ms & exit 1")
 	cfg, project, frontend := queueCheckSandbox(t, command)
+	section(cfg, "queue")["escalate"] = "off"
 	section(cfg, "queue")["verifyAttempts"] = float64(3)
 	tickFirstQueueItem(t, project)
 	first := stopHookOutput(t, stopInput("qs1", frontend), cfg)
@@ -187,6 +189,7 @@ func TestACheckThatFailsAnotherWayEachTimeKeepsItsAttempts(t *testing.T) {
 	// the clock in seconds, so two runs started within the same second print the same number.
 	command := shellFor(`echo run >> runs.txt; echo "FAIL TestStep$(wc -l < runs.txt)"; exit 1`, "echo run>> runs.txt & type runs.txt & echo FAIL TestStep & exit 1")
 	cfg, project, frontend := queueCheckSandbox(t, command)
+	section(cfg, "queue")["escalate"] = "off"
 	section(cfg, "queue")["verifyAttempts"] = float64(3)
 	tickFirstQueueItem(t, project)
 	for round := 1; round <= 2; round++ {
@@ -201,5 +204,18 @@ func TestACheckThatFailsAnotherWayEachTimeKeepsItsAttempts(t *testing.T) {
 	third := stopHookOutput(t, stopAgain("qs2", frontend), cfg)
 	if want := T("queue.heldMessage", command, 3, "TASKS.md"); getString(third, "systemMessage") != want {
 		t.Fatalf("the third failed run did not hold the queue as queue.verifyAttempts says: %v", third)
+	}
+}
+
+func TestAPerItemCheckCutShortIsTheOneNamedUntilItRunsAgain(t *testing.T) {
+	cfg, project, frontend := queueCheckSandbox(t, "make check")
+	each := shellFor("sleep 30", "ping -n 31 127.0.0.1 > nul")
+	section(cfg, "queue")["verifyEachCommand"] = each
+	section(cfg, "queue")["verifyTimeoutSeconds"] = float64(1)
+	tickFirstQueueItem(t, project)
+	continues(t, stopHookOutput(t, stopInput("qr6", frontend), cfg), 1)
+	path := filepath.Join(project, "TASKS.md")
+	if command := recordedCheckCommand(cfg, queueCheckRecord(readState(), path), path, ""); command != each {
+		t.Fatalf("after the per-item check was cut short the record names %q, want the per-item check", command)
 	}
 }

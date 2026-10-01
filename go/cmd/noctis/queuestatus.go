@@ -43,18 +43,15 @@ func printQueueProgress(target string, view queueView) {
 	}
 }
 
-// printQueueHold says that a failing check holds the queue at target, since when, and how to lift it.
 func printQueueHold(cfg object, target string) {
 	state := readState()
 	if !queueHeld(cfg, state, target) {
 		return
 	}
 	record := queueCheckRecord(state, target)
-	fmt.Println(T("queue.statusHeld", formatTime(numberOr(record, "held", 0)), printableItem(truncateText(queueCheckCommand(cfg, target), 120)), int(numberOr(record, "failures", 0))))
+	fmt.Println(T("queue.statusHeld", formatTime(numberOr(record, "held", 0)), printableItem(truncateText(recordedCheckCommand(cfg, record, target, ""), 120)), int(numberOr(record, "failures", 0))))
 }
 
-// queueStatusFacts is noctis queue status --json: what the text form says, for a script that watches
-// an unattended run.
 func queueStatusFacts(cfg object, target string, view queueView) object {
 	content, _ := readQueueText(target)
 	trusted, changed, legacy := queueTrustGap(cfg, target)
@@ -81,15 +78,12 @@ func queueStatusFacts(cfg object, target string, view queueView) object {
 	facts["emptyLines"] = empty
 	facts["unmatched"] = orEmpty(view.unmatched)
 	state := readState()
-	line, command := queueVerifyLine(content), queueCheckCommandOf(cfg, target, content)
-	check := object{"command": command, "fileLine": line, "held": queueHeld(cfg, state, target)}
-	switch {
-	case command == "":
-		check["from"] = ""
-	case command == line:
-		check["from"] = "file"
-	default:
-		check["from"] = "config"
+	full, each := queueCheckCommandsOf(cfg, target, content)
+	fileFull, fileEach := fileCheckCommands(cfg, target, content)
+	check := object{"command": full, "fileLine": queueVerifyLine(content), "from": checkOrigin(full, fileFull, fileEach), "held": queueHeld(cfg, state, target)}
+	check["eachCommand"], check["eachFileLine"], check["eachFrom"] = each, queueVerifyEachLine(content), checkOrigin(each, fileEach)
+	if each != "" {
+		check["fullEvery"] = queueFullCheckEvery(cfg)
 	}
 	record := queueCheckRecord(state, target)
 	if held := numberOr(record, "held", 0); held > 0 && check["held"] == true {
@@ -115,11 +109,6 @@ func orEmpty(values []string) []string {
 	return values
 }
 
-// verifyQueueNow runs the check of the queue at target now, in the folder the Stop hook runs it in,
-// and on a pass records the ticked items as checked and lifts a hold: the user sees a fix work
-// without a turn of Claude's, and the next session to start or stop is driven again. A failure
-// changes nothing, so it does not count toward queue.verifyAttempts. It returns the exit status of
-// noctis queue verify.
 func verifyQueueNow(cfg object, cwd, target string) int {
 	content, _ := readQueueText(target)
 	command := queueCheckCommandOf(cfg, target, content)
@@ -129,6 +118,7 @@ func verifyQueueNow(cfg object, cwd, target string) int {
 	}
 	folder := queueFolder(cfg, object{"cwd": cwd}, "", target)
 	shown := printableItem(truncateText(command, 120))
+	tree := queueCheckTree(cfg, folder, target)
 	began := time.Now()
 	outcome, tail, _ := runQueueCheck(command, folder, queueCheckSeconds(cfg))
 	if outcome != "" {
@@ -141,7 +131,7 @@ func verifyQueueNow(cfg object, cwd, target string) int {
 	fmt.Println(T("queue.verifyPassed", shown, folder, formatNumber(math.Round(time.Since(began).Seconds()))))
 	held, key, ticked := queueHeld(cfg, readState(), target), queueTrustKey(target), queueTicks(content)
 	updateState(func(next object) {
-		stateMap(next, "queueVerify")[key] = object{"ticked": ticked, "at": float64(nowSec())}
+		stateMap(next, "queueVerify")[key] = queueCheckPass(nil, fullQueueCheck, ticked, tree, float64(nowSec()))
 	})
 	syncDoneIssues(cfg, target, content, cwd)
 	if held {

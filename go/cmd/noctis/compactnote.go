@@ -54,9 +54,6 @@ func itemCompactions(state object, path, item string) int {
 	return int(numberOr(record, "count", 0))
 }
 
-// compactRestoreNote is the note that picks the queue at path up after a compaction: the item in
-// hand, the files changed since the last commit, how the check stands, and, from the second one on,
-// how many compactions this item has gone through. It is "" when the queue has no item to take.
 func compactRestoreNote(cfg, state, input object, sid, path string) string {
 	content, _ := readQueueText(path)
 	items := queueSnapshotOf(path, content).items
@@ -80,7 +77,8 @@ func compactRestoreNote(cfg, state, input object, sid, path string) string {
 			parts = append(parts, fmt.Sprintf("Changed since the last commit: %s.", strings.Join(shown, ", ")))
 		}
 	}
-	command, record := queueCheckCommandOf(cfg, path, content), queueCheckRecord(state, path)
+	record := queueCheckRecord(state, path)
+	command := recordedCheckCommand(cfg, record, path, content)
 	switch shown := "`" + truncateText(command, 120) + "`"; {
 	case command == "":
 		parts = append(parts, "Nothing checks this queue between items, so run the project's tests yourself before you tick the item.")
