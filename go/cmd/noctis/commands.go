@@ -613,6 +613,11 @@ func doctorLines(cfg object) []string {
 	lines = append(lines, leanDoctorLines(cfg)...)
 	lines = append(lines, fixLine(!paidCreditsAllowed(cfg), T("doctor.credits", creditsText(cfg)), "doctor.fixCredits")...)
 	lines = append(lines, "    "+T("doctor.creditsNote"))
+	// Fast mode draws from usage credits from its first request, where no pause point of noctis's
+	// reaches: /fast saves it in settings.json, so it stays on in every session after.
+	if fast, _ := settings.data["fastMode"].(bool); fast {
+		lines = append(lines, fixLine(false, T("doctor.fastMode"), "doctor.fixFastMode")...)
+	}
 	if isWindows {
 		result := runPowershell("$PSVersionTable.PSVersion.ToString()", 15*time.Second)
 		psText := T("doctor.present")

@@ -37,7 +37,17 @@ func subagentNote(cfg object, tokens float64, known bool) string {
 	if !known || above <= 0 || tokens < above || !currentHost().agents {
 		return ""
 	}
-	return fmt.Sprintf(" This session's context already holds about %s tokens: unless the item is a quick edit, hand it to %s, a fresh context, with a brief that stands on its own (the goal, the files and decisions it needs, what done means); wait for its result, then check its work and tick the item yourself.", approxCount(tokens), workerText(""))
+	return fmt.Sprintf(" This session's context already holds about %s tokens: unless the item is a quick edit, hand it to %s", approxCount(tokens), handOff(workerText("")+", a fresh context,", handOffBrief))
+}
+
+// handOffBrief is what the brief of a subagent that takes a queue item holds.
+const handOffBrief = "the goal, the files and decisions it needs, what done means"
+
+// handOff is the one wording of every hand-off of a queue item to a subagent, after "hand it to": the
+// agent, a brief that holds brief, and what Claude does meanwhile and after. A hand-off is a small
+// directive and whatever asks for it (a large context, a model tag, a stuck item) says why in front.
+func handOff(agent, brief string) string {
+	return fmt.Sprintf("%s with a brief that stands on its own (%s); wait for its result and start no other item meanwhile, then check its work and tick the item yourself.", agent, brief)
 }
 
 // workerText names noctis's worker agent for a hand-off, and the model the call is to name when model is

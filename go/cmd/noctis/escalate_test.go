@@ -35,7 +35,7 @@ func TestAStuckItemGoesOnceToAStrongerModelBeforeItIsSetAside(t *testing.T) {
 	if getString(up, "decision") != "block" || !strings.Contains(reason, `"migrate the users table" is still the next item. Hand it once to the noctis:worker subagent (subagent_type "noctis:worker", model "opus") with a brief that stands on its own`) || strings.Contains(reason, "Take the next eligible item") {
 		t.Fatalf("the last continuation before the queue gives up did not hand the stuck item to Opus: %v", up)
 	}
-	if !strings.Contains(reason, "what you tried, where and why it failed (the errors verbatim)") || !strings.Contains(reason, "the next stop asks you to set it aside") {
+	if !strings.Contains(reason, "what you tried, where and why it failed with the errors verbatim") || !strings.Contains(reason, "the next stop asks you to set it aside") {
 		t.Fatalf("the hand-over does not ask for a brief that stands on its own:\n%s", reason)
 	}
 	// An item that waits on the user needs no stronger model: the continuation still says how to set it aside.
@@ -84,12 +84,12 @@ func TestAStuckItemGoesOnceToAStrongerModelBeforeItIsSetAside(t *testing.T) {
 	// Another session keeps the item with its stronger model.
 	runsOn("es1b", "claude-sonnet-5-5", 20000)
 	reason = getString(stopHookOutput(t, stopInput("es1b", frontend), cfg), "reason")
-	if !strings.Contains(reason, "Take the next eligible item") || !strings.Contains(reason, `keep it with the noctis:worker subagent (subagent_type "noctis:worker", model "opus"), give it what the last attempt found and wait for its result`) {
+	if !strings.Contains(reason, "Take the next eligible item") || !strings.Contains(reason, `keep it with the noctis:worker subagent (subagent_type "noctis:worker", model "opus") with a brief that stands on its own (what the last attempt found, the goal`) || !strings.Contains(reason, "wait for its result and start no other item meanwhile") {
 		t.Fatalf("a later session does not keep the item with its stronger model:\n%s", reason)
 	}
 	// There it has the continuations of any item before it is set aside.
 	reason = getString(stopHookOutput(t, stopAgain("es1b", frontend), cfg), "reason")
-	if !strings.Contains(reason, `keep it with the noctis:worker subagent (subagent_type "noctis:worker", model "opus"), give it what the last attempt found and wait for its result`) || strings.Contains(reason, "Find the root cause") {
+	if !strings.Contains(reason, `keep it with the noctis:worker subagent (subagent_type "noctis:worker", model "opus") with a brief that stands on its own (what the last attempt found, the goal`) || strings.Contains(reason, "Find the root cause") {
 		t.Fatalf("a later session set the item aside at its first stop without progress:\n%s", reason)
 	}
 	if reason = getString(stopHookOutput(t, stopAgain("es1b", frontend), cfg), "reason"); !strings.Contains(reason, "It already went to a stronger model (Opus)") {
