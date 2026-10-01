@@ -146,7 +146,9 @@ func TestShellQuoting(t *testing.T) {
 	values := []string{"plain", "with space", "it's", `double"quote`, "semi;colon", "dollar$sign", "back`tick`", "new\nline", "%PATH%", "*"}
 	for _, value := range values {
 		quoted := shellQuote(value)
-		out, err := runWithTimeout(execCommand("sh", "-c", "printf '%s' "+quoted), 5*time.Second)
+		// A minute, as for the other shells the tests start: on a Windows runner busy with the other
+		// shards, Git's sh has taken more than 5 seconds to print one word.
+		out, err := runWithTimeout(execCommand("sh", "-c", "printf '%s' "+quoted), time.Minute)
 		if err != nil {
 			t.Fatalf("sh rejected %q as %s: %v", value, quoted, err)
 		}
