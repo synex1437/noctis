@@ -13,16 +13,22 @@ import (
 )
 
 const (
-	lingerEnv = "NOCTIS_TEST_LINGER"
-	lingerFor = 5 * time.Second
+	lingerEnv  = "NOCTIS_TEST_LINGER"
+	lingerFor  = 30 * time.Second
+	lingerBeat = 100 * time.Millisecond
 )
 
 const testAsNoctis = "NOCTIS_TEST_AS_NOCTIS"
 
 func TestMain(m *testing.M) {
 	if marker := os.Getenv(lingerEnv); marker != "" {
-		time.Sleep(lingerFor)
-		_ = os.WriteFile(marker, []byte("outlived the chain"), 0o644)
+		// While it runs, one byte more in the marker every lingerBeat.
+		for end := time.Now().Add(lingerFor); time.Now().Before(end); time.Sleep(lingerBeat) {
+			if file, err := os.OpenFile(marker, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); err == nil {
+				_, _ = file.Write([]byte{'.'})
+				_ = file.Close()
+			}
+		}
 		os.Exit(0)
 	}
 	if os.Getenv("NOCTIS_TEST_APP_SERVER_NOISE") != "" {
