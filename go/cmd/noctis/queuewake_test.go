@@ -120,18 +120,24 @@ func queueWakeRecordOf(t *testing.T, path string) object {
 
 func TestAPauseWhileTheStopHookWaitsForADeferralLetsTheSessionStop(t *testing.T) {
 	cfg, project, frontend, _ := queueWakeSandbox(t)
-	deferPayUntil(t, cfg, project, "2s")
-	paused := make(chan struct{})
+	// The deferral lasts a minute so the pause lands while the hook still waits for it. One of 2s
+	// ends one to two seconds on, counted from the whole second, and on a busy Windows runner the
+	// pause landed after that.
+	deferPayUntil(t, cfg, project, "1m")
+	answered, paused := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(paused)
-		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
-			if slices.Contains(journaledFor("qw2"), "wait-deferral") {
-				break
+		for !slices.Contains(journaledFor("qw2"), "wait-deferral") {
+			select {
+			case <-answered:
+				return
+			case <-time.After(10 * time.Millisecond):
 			}
 		}
 		updateState(func(next object) { next["disabledUntil"] = float64(nowSec() + 3600) })
 	}()
 	output := stopHookOutput(t, stopInput("qw2", frontend), cfg)
+	close(answered)
 	<-paused
 	if getString(output, "decision") == "block" {
 		t.Fatalf("the queue went on although noctis was paused while it waited: %v", output)
