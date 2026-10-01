@@ -28,7 +28,7 @@
   <line x1="44" y1="142" x2="1156" y2="142" stroke="#232c3b"/>
   <!-- the status line exactly as noctis prints it: one plain line, no colours;
        textLength keeps the callout positions right in narrower monospace fonts -->
-  <text x="44" y="176" class="mono st" textLength="1041" lengthAdjust="spacing">∞ 5h 41%→14:35 · Wk 60%▼→Mon 28.09 09:00 · ⌛ weekly threshold ~14h 27m · Opus 5.5/max · ctx 37%</text>
+  <text x="44" y="176" class="mono st" textLength="1041" lengthAdjust="spacing">∞ 5h 41%→14:35 · Wk 60%▼→Mon 28.09 09:00 · ⌛ weekly threshold ~14h 27m · Opus 5.5/xhigh · ctx 37%</text>
   <g class="conn">
     <path d="M131 192 V244"/>
     <path d="M662 192 V244"/>
