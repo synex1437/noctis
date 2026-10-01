@@ -100,7 +100,7 @@ ccstatusline ve claude-powerline gibi durum çubukları noctis'inkinin arkasınd
 | `/noctis:stop` | Bu oturumun kuyruğunu bitirir |
 | `/noctis:pause [dakika]` | Bir süre limit duraklaması, yönlendirme ya da kuyruk devamı olmaz (varsayılan 60 dakika); %100'deki durdurma yine geçerlidir |
 | `/noctis:resume` | Duraklatmayı erken bitirir |
-| `!noctis why` | noctis'in verdiği kararlar ve nedenleri |
+| `!noctis why` | noctis'in verdiği kararlar ve nedenleri; `--stats` son haftanınkileri özetler |
 | `!noctis doctor` | Kurulumu denetler ve görebildiği komşuları listeler |
 
 `/noctis:setup`, `/noctis:pause`, `/noctis:start` ve `/noctis:stop` yalnızca siz yazınca çalışır. `noctis` komutunun kendisi Claude Code içinde başına `!` koyarak çalışır (`!noctis status`, `!noctis queue trust`, `!noctis off 30`), çünkü eklentinin `bin/` klasörü Claude Code'un kabuğunun PATH'indedir; terminalde setup'ın yazdığı tam yolu kullanın. Her komut ve bayrak: [REFERENCE.md](docs/REFERENCE.md#commands) (İngilizce).
