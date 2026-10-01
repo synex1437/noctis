@@ -2,49 +2,84 @@
   <title>One tool turn through the guard</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b0f17"/>
-      <stop offset="1" stop-color="#121a27"/>
+      <stop offset="0" stop-color="#0d0d10"/>
+      <stop offset="1" stop-color="#050506"/>
     </linearGradient>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#4a5568"/>
+    <radialGradient id="glow" cx="0.56" cy="0.5" r="0.45">
+      <stop offset="0" stop-color="#ff1f3d" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#ff1f3d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="box" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#121216"/>
+      <stop offset="1" stop-color="#0c0c0f"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16090c"/>
+      <stop offset="1" stop-color="#0c0c0f"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff2a40" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#ff2a40" stop-opacity="0.8"/>
+      <stop offset="0.75" stop-color="#ff2a40" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#ff2a40" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.03"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#ff3347"/>
     </marker>
+    <marker id="arrowDim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#4a4a52"/>
+    </marker>
+    <clipPath id="frame">
+      <rect x="0.5" y="0.5" width="1279" height="649" rx="16"/>
+    </clipPath>
     <style>
       .sans { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif; }
       .mono { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace; }
-      .cap { font-size: 15px; fill: #8b95a5; }
-      .col { font-size: 13px; fill: #8b95a5; letter-spacing: 1.5px; font-weight: 700; }
-      .box { fill: #111722; stroke: #26303f; }
-      .t { font-size: 16px; font-weight: 700; fill: #eef2f7; }
-      .s { font-size: 13px; fill: #8b95a5; }
-      .n { font-size: 14px; font-weight: 700; fill: #eef2f7; }
-      .d { font-size: 13px; fill: #8b95a5; }
-      .f { font-size: 13px; fill: #5b9bff; }
-      .o { font-size: 15px; font-weight: 700; }
-      .od { font-size: 13px; fill: #9aa5b6; }
-      .a { stroke: #4a5568; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+      .cap { font-size: 15px; fill: #a3a3ad; }
+      .col { font-size: 13px; fill: #6f6f79; letter-spacing: 1.8px; font-weight: 700; }
+      .box { fill: url(#box); stroke: #24242b; }
+      .t { font-size: 16px; font-weight: 700; fill: #f5f5f7; }
+      .s { font-size: 13px; fill: #8f8f99; }
+      .n { font-size: 14px; font-weight: 700; fill: #f5f5f7; }
+      .d { font-size: 13px; fill: #8f8f99; }
+      .f { font-size: 13px; fill: #ff3347; font-weight: 600; }
+      .o { font-size: 15px; font-weight: 700; fill: #f5f5f7; }
+      .od { font-size: 13px; fill: #8f8f99; }
+      .a { stroke: #4a4a52; stroke-width: 1.5; fill: none; marker-end: url(#arrowDim); }
+      .ar { stroke: #ff3347; stroke-opacity: 0.75; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+      .ic { fill: none; stroke: #ff3347; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     </style>
   </defs>
-  <rect x="0.5" y="0.5" width="1279" height="649" rx="16" fill="url(#bg)" stroke="#232c3b"/>
-  <text x="30" y="38" class="sans cap">One tool turn through the guard — deterministic rules, no LLM calls, 5–11 ms per hook</text>
+  <g clip-path="url(#frame)">
+    <rect width="1280" height="650" fill="url(#bg)"/>
+    <rect width="1280" height="650" fill="url(#grid)"/>
+    <rect width="1280" height="650" fill="url(#glow)"/>
+    <rect x="0" y="647" width="1280" height="3" fill="url(#rule)"/>
+  </g>
+  <rect x="0.5" y="0.5" width="1279" height="649" rx="16" fill="none" stroke="#24242b"/>
+  <text x="30" y="38" class="sans cap">One tool turn through the guard — <tspan fill="#f5f5f7" font-weight="600">deterministic rules, no LLM calls, 5–11 ms per hook</tspan></text>
   <text x="30" y="70" class="sans col">SIGNALS</text>
   <text x="326" y="70" class="sans col">HOOKS</text>
-  <text x="646" y="70" class="sans col">DECIDE</text>
+  <text x="646" y="70" class="sans col"><tspan fill="#ff3347">DECIDE</tspan></text>
   <text x="962" y="70" class="sans col">OUTCOME</text>
 
   <g class="sans">
-    <rect x="30" y="84" width="268" height="66" rx="10" class="box"/>
+    <rect x="30.5" y="84.5" width="267" height="65" rx="10" class="box"/>
     <text x="44" y="110" class="t">statusLine payload</text>
     <text x="44" y="132" class="s">rate_limits 5h · 7d, model, context %</text>
-    <rect x="30" y="186" width="268" height="66" rx="10" class="box"/>
+    <rect x="30.5" y="186.5" width="267" height="65" rx="10" class="box"/>
     <text x="44" y="212" class="t">OAuth usage endpoint</text>
     <text x="44" y="234" class="s">5h · weekly · Fable, when needed</text>
-    <rect x="30" y="288" width="268" height="66" rx="10" class="box"/>
+    <rect x="30.5" y="288.5" width="267" height="65" rx="10" class="box"/>
     <text x="44" y="314" class="t">Transcript</text>
     <text x="44" y="336" class="s">request, todos, compaction summary</text>
-    <rect x="30" y="390" width="268" height="66" rx="10" class="box"/>
+    <rect x="30.5" y="390.5" width="267" height="65" rx="10" class="box"/>
     <text x="44" y="416" class="t">Project</text>
-    <text x="44" y="438" class="s">TASKS.md, git status, touched files</text>
-    <rect x="30" y="492" width="268" height="66" rx="10" class="box"/>
+    <text x="44" y="438" class="s">TASKS.md, git status, the check</text>
+    <rect x="30.5" y="492.5" width="267" height="65" rx="10" class="box"/>
     <text x="44" y="518" class="t">Config</text>
     <text x="44" y="540" class="s">thresholds, roles, observe / enforce</text>
   </g>
@@ -58,31 +93,34 @@
   </g>
 
   <g class="sans">
-    <rect x="326" y="84" width="292" height="474" rx="10" class="box"/>
+    <rect x="326.5" y="84.5" width="291" height="473" rx="10" class="box"/>
     <text x="340" y="110" class="t">Hook events</text>
-    <text x="340" y="146" class="n">UserPromptSubmit</text>
-    <text x="340" y="163" class="d">limit check, router, auto-queue</text>
-    <text x="340" y="196" class="n">PreToolUse</text>
-    <text x="340" y="213" class="d">subagent gate, model pin, workflow gate</text>
-    <text x="340" y="246" class="n">PostToolBatch</text>
-    <text x="340" y="263" class="d">before every model call</text>
-    <text x="340" y="296" class="n">Stop</text>
-    <text x="340" y="313" class="d">queue continuation</text>
-    <text x="340" y="346" class="n">StopFailure</text>
-    <text x="340" y="363" class="d">429 / 5xx → wait, wake or relaunch</text>
-    <text x="340" y="396" class="n">SessionStart / SessionEnd</text>
-    <text x="340" y="413" class="d">self-check, checkpoint hand-off</text>
-    <text x="340" y="446" class="n">PostToolUse · Task events</text>
-    <text x="340" y="463" class="d">router learning, open tasks</text>
-    <text x="340" y="496" class="n">PostModelSwitch · Notification</text>
-    <text x="340" y="513" class="d">live model, built-in continue</text>
+    <text x="340" y="142" class="n">UserPromptSubmit</text>
+    <text x="340" y="159" class="d">limit check, router, auto-queue</text>
+    <text x="340" y="186" class="n">PreToolUse</text>
+    <text x="340" y="203" class="d">subagent gate, model pin, test guard</text>
+    <text x="340" y="230" class="n">PostToolBatch</text>
+    <text x="340" y="247" class="d">before every model call</text>
+    <text x="340" y="274" class="n">Stop</text>
+    <text x="340" y="291" class="d">queue continuation</text>
+    <text x="340" y="318" class="n">StopFailure</text>
+    <text x="340" y="335" class="d">429 / 5xx → wait, wake or relaunch</text>
+    <text x="340" y="362" class="n">SessionStart / SessionEnd</text>
+    <text x="340" y="379" class="d">self-check, hand-off, note after compaction</text>
+    <text x="340" y="406" class="n">PreCompact · PermissionRequest</text>
+    <text x="340" y="423" class="d">compactions per item, checklist access</text>
+    <text x="340" y="450" class="n">PostToolUse · Task events</text>
+    <text x="340" y="467" class="d">router learning, open tasks</text>
+    <text x="340" y="494" class="n">PostModelSwitch · Notification</text>
+    <text x="340" y="511" class="d">live model, built-in continue</text>
     <text x="340" y="544" class="f">5–11 ms per hook · no model calls</text>
   </g>
 
-  <path d="M618 321 H644" class="a"/>
+  <path d="M618 321 H644" class="ar"/>
 
   <g class="sans">
-    <rect x="646" y="84" width="278" height="474" rx="10" class="box"/>
+    <rect x="646" y="84" width="278" height="474" rx="10" fill="#ff1f3d" opacity="0.08"/>
+    <rect x="646.5" y="84.5" width="277" height="473" rx="10" fill="url(#core)" stroke="#ff3347" stroke-opacity="0.55"/>
     <text x="660" y="110" class="t">Decision rules</text>
     <text x="660" y="146" class="n">Thresholds</text>
     <text x="660" y="163" class="d">5h 92 · weekly 95 · Fable 97 (on Fable)</text>
@@ -105,7 +143,7 @@
     <text x="660" y="544" class="f">every decision journaled → noctis why</text>
   </g>
 
-  <g class="a">
+  <g class="ar">
     <path d="M924 321 C943 321 943 110 960 110"/>
     <path d="M924 321 C943 321 943 170 960 170"/>
     <path d="M924 321 C943 321 943 230 960 230"/>
@@ -117,47 +155,77 @@
   </g>
 
   <g class="sans">
-    <rect x="962" y="84" width="288" height="52" rx="10" class="box"/>
-    <rect x="962" y="94" width="4" height="32" rx="2" fill="#3ecf8e"/>
-    <text x="980" y="106" class="o" fill="#3ecf8e">✓ Continue</text>
+    <rect x="962.5" y="84.5" width="287" height="51" rx="10" class="box"/>
+    <rect x="962" y="94" width="3" height="32" rx="1.5" fill="#6f6f79"/>
+    <path class="ic" stroke="#a3a3ad" transform="translate(988 101)" d="M -6 0.5 L -2 4.5 L 6 -4"/>
+    <text x="1004" y="106" class="o">Continue</text>
     <text x="980" y="125" class="od">below every threshold · nothing to do</text>
 
-    <rect x="962" y="144" width="288" height="52" rx="10" class="box"/>
-    <rect x="962" y="154" width="4" height="32" rx="2" fill="#f5b544"/>
-    <text x="980" y="166" class="o" fill="#f5b544">⚠ Warn band</text>
+    <rect x="962.5" y="144.5" width="287" height="51" rx="10" class="box"/>
+    <rect x="962" y="154" width="3" height="32" rx="1.5" fill="#ff8a95"/>
+    <g transform="translate(988 161)">
+      <path class="ic" stroke="#ff8a95" d="M 0 -6.5 L 7 6 L -7 6 Z"/>
+      <path d="M 0 -1.8 V 1.8" stroke="#ff8a95" stroke-width="1.8" stroke-linecap="round"/>
+      <circle cx="0" cy="4" r="0.9" fill="#ff8a95"/>
+    </g>
+    <text x="1004" y="166" class="o">Warn band</text>
     <text x="980" y="185" class="od">one line: finish the step cleanly</text>
 
-    <rect x="962" y="204" width="288" height="52" rx="10" class="box"/>
-    <rect x="962" y="214" width="4" height="32" rx="2" fill="#4f8ff7"/>
-    <text x="980" y="226" class="o" fill="#5b9bff">⏸️ Checkpoint + wait in place</text>
+    <rect x="962.5" y="204.5" width="287" height="51" rx="10" class="box"/>
+    <rect x="962" y="214" width="3" height="32" rx="1.5" fill="#ff3347"/>
+    <g transform="translate(988 221)" fill="#ff3347">
+      <rect x="-5.5" y="-6.5" width="4" height="13" rx="1"/>
+      <rect x="1.5" y="-6.5" width="4" height="13" rx="1"/>
+    </g>
+    <text x="1004" y="226" class="o">Checkpoint + wait in place</text>
     <text x="980" y="245" class="od">resumes after reset · context kept</text>
 
-    <rect x="962" y="264" width="288" height="52" rx="10" class="box"/>
-    <rect x="962" y="274" width="4" height="32" rx="2" fill="#4f8ff7"/>
-    <text x="980" y="286" class="o" fill="#5b9bff">⏰ Save + schedule + relaunch</text>
+    <rect x="962.5" y="264.5" width="287" height="51" rx="10" class="box"/>
+    <rect x="962" y="274" width="3" height="32" rx="1.5" fill="#ff3347"/>
+    <g transform="translate(988 281)">
+      <circle r="7" class="ic"/>
+      <path class="ic" d="M 0 -3.8 V 0 L 2.8 2"/>
+    </g>
+    <text x="1004" y="286" class="o">Save + schedule + relaunch</text>
     <text x="980" y="305" class="od">scheduled task → claude --resume</text>
 
-    <rect x="962" y="324" width="288" height="52" rx="10" class="box"/>
-    <rect x="962" y="334" width="4" height="32" rx="2" fill="#a78bfa"/>
-    <text x="980" y="346" class="o" fill="#a78bfa">🔁 Fable cap out</text>
+    <rect x="962.5" y="324.5" width="287" height="51" rx="10" class="box"/>
+    <rect x="962" y="334" width="3" height="32" rx="1.5" fill="#ff3347"/>
+    <g transform="translate(988 341)">
+      <path class="ic" d="M -6 -1 A 6 6 0 0 1 5 -3.5"/>
+      <path class="ic" d="M 6 1 A 6 6 0 0 1 -5 3.5"/>
+      <path class="ic" d="M 5.5 -7 L 5.2 -3.2 L 1.6 -3.8"/>
+      <path class="ic" d="M -5.5 7 L -5.2 3.2 L -1.6 3.8"/>
+    </g>
+    <text x="1004" y="346" class="o">Fable cap out</text>
     <text x="980" y="365" class="od">fallback model until reset (Fable only)</text>
 
-    <rect x="962" y="384" width="288" height="52" rx="10" class="box"/>
-    <rect x="962" y="394" width="4" height="32" rx="2" fill="#38c7d9"/>
-    <text x="980" y="406" class="o" fill="#38c7d9">▶ Queue continues</text>
+    <rect x="962.5" y="384.5" width="287" height="51" rx="10" class="box"/>
+    <rect x="962" y="394" width="3" height="32" rx="1.5" fill="#ff3347"/>
+    <path transform="translate(988 401)" d="M -4.5 -6.5 L 6.5 0 L -4.5 6.5 Z" fill="#ff3347"/>
+    <text x="1004" y="406" class="o">Queue continues</text>
     <text x="980" y="425" class="od">Stop hook → next - [ ] item, no prompt</text>
 
-    <rect x="962" y="444" width="288" height="52" rx="10" class="box"/>
-    <rect x="962" y="454" width="4" height="32" rx="2" fill="#8b95a5"/>
-    <text x="980" y="466" class="o" fill="#c7cfda">🔀 Research routed</text>
+    <rect x="962.5" y="444.5" width="287" height="51" rx="10" class="box"/>
+    <rect x="962" y="454" width="3" height="32" rx="1.5" fill="#a3a3ad"/>
+    <g transform="translate(988 461)">
+      <path class="ic" stroke="#a3a3ad" d="M -7 0 H -2 L 5 -5.5 M -2 0 L 5 5.5"/>
+      <path class="ic" stroke="#a3a3ad" d="M 2 -6.5 L 5.5 -5.5 L 4.5 -2"/>
+      <path class="ic" stroke="#a3a3ad" d="M 2 6.5 L 5.5 5.5 L 4.5 2"/>
+    </g>
+    <text x="1004" y="466" class="o">Research routed</text>
     <text x="980" y="485" class="od">the noctis:lite subagent handles it</text>
 
-    <rect x="962" y="504" width="288" height="52" rx="10" class="box"/>
-    <rect x="962" y="514" width="4" height="32" rx="2" fill="#f0605d"/>
-    <text x="980" y="526" class="o" fill="#f0605d">⛔ Workflow refused</text>
+    <rect x="962.5" y="504.5" width="287" height="51" rx="10" class="box"/>
+    <rect x="962" y="514" width="3" height="32" rx="1.5" fill="#b30f26"/>
+    <g transform="translate(988 521)">
+      <circle r="7" class="ic"/>
+      <path d="M -4.2 0 H 4.2" stroke="#ff3347" stroke-width="2.4" stroke-linecap="round"/>
+    </g>
+    <text x="1004" y="526" class="o">Workflow refused</text>
     <text x="980" y="545" class="od">not enough room before the limit</text>
   </g>
 
   <text x="30" y="594" class="sans cap">Notifications when work resumes, after API errors and when the queue ends: desktop toast · webhook (Telegram, Discord, Slack, ntfy)</text>
-  <text x="1250" y="624" class="mono" font-size="13" fill="#8b95a5" text-anchor="end">state.json · usage.json · decisions.jsonl</text>
+  <text x="1250" y="624" class="mono" font-size="13" fill="#6f6f79" text-anchor="end">state.json · usage.json · decisions.jsonl</text>
 </svg>

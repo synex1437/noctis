@@ -2,92 +2,150 @@
   <title>Speaks the language you type in</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b0f17"/>
-      <stop offset="1" stop-color="#121a27"/>
+      <stop offset="0" stop-color="#0d0d10"/>
+      <stop offset="1" stop-color="#050506"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#4f8ff7"/>
-      <stop offset="1" stop-color="#38c7d9"/>
+    <radialGradient id="glow" cx="0.05" cy="0" r="0.55">
+      <stop offset="0" stop-color="#ff1f3d" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#ff1f3d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ember" cx="1" cy="1.05" r="0.55">
+      <stop offset="0" stop-color="#ff1f3d" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#ff1f3d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="badge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff6b78"/>
+      <stop offset="0.5" stop-color="#ff2a40"/>
+      <stop offset="1" stop-color="#b30f26"/>
     </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#121216"/>
+      <stop offset="1" stop-color="#0b0b0e"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff2a40" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#ff2a40" stop-opacity="0.8"/>
+      <stop offset="0.75" stop-color="#ff2a40" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#ff2a40" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="frame">
+      <rect x="0.5" y="0.5" width="1199" height="499" rx="18"/>
+    </clipPath>
     <style>
       .sans { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif; }
       .mono { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono CJK JP", monospace; font-size: 14.5px; }
-      .eyebrow { font-size: 14px; font-weight: 700; fill: #7f8ea3; letter-spacing: 2.4px; }
-      .title { font-size: 30px; font-weight: 800; fill: #f2f5f9; letter-spacing: -0.4px; }
-      .sub { font-size: 16px; fill: #a9b3c2; }
-      .lang { font-size: 13px; font-weight: 800; fill: #0b0f17; letter-spacing: 1px; }
-      .you { fill: #f2f5f9; }
-      .pause { fill: #f5b544; font-size: 13px; }
-      .done { fill: #3ecf8e; font-size: 13px; }
-      .foot { font-size: 13px; fill: #8b95a5; }
+      .eyebrow { font-size: 14px; font-weight: 700; fill: #6f6f79; letter-spacing: 2.4px; }
+      .title { font-size: 30px; font-weight: 800; fill: #f5f5f7; letter-spacing: -0.4px; }
+      .sub { font-size: 16px; fill: #a3a3ad; }
+      .lang { font-size: 12px; font-weight: 800; fill: #ffffff; letter-spacing: 1px; }
+      .you { fill: #f5f5f7; }
+      .pause { fill: #ff3347; font-size: 13px; }
+      .done { fill: #d7d7dd; font-size: 13px; }
+      .foot { font-size: 13px; fill: #6f6f79; }
     </style>
   </defs>
 
-  <rect x="0.5" y="0.5" width="1199" height="499" rx="18" fill="url(#bg)" stroke="#232c3b"/>
-  <text x="48" y="58" class="sans eyebrow">14 LANGUAGES · ZERO TOKENS</text>
+  <g clip-path="url(#frame)">
+    <rect width="1200" height="500" fill="url(#bg)"/>
+    <rect width="1200" height="500" fill="url(#glow)"/>
+    <rect width="1200" height="500" fill="url(#ember)"/>
+    <rect x="0" y="497" width="1200" height="3" fill="url(#rule)"/>
+  </g>
+  <rect x="0.5" y="0.5" width="1199" height="499" rx="18" fill="none" stroke="#24242b"/>
+  <text x="48" y="58" class="sans eyebrow"><tspan fill="#ff3347">14 LANGUAGES</tspan> · ZERO TOKENS</text>
   <text x="48" y="98" class="sans title">Speaks the language you type in.</text>
-  <text x="48" y="126" class="sans sub">Detected from what you type — no model call, no tokens — per session. Notices, status line, toasts. Pin one with <tspan class="mono" fill="#dbe2ec">locale</tspan> if you prefer.</text>
+  <text x="48" y="126" class="sans sub">Detected from what you type — no model call, no tokens — per session. Notices, status line, toasts. Pin one with <tspan class="mono" fill="#f5f5f7">locale</tspan> if you prefer.</text>
 
   <!-- six cards, two columns; every line below is the plugin's own catalog text -->
   <g class="mono">
     <!-- EN -->
     <g transform="translate(48 152)">
-      <rect x="0" y="0" width="548" height="96" rx="12" fill="#0d1320" stroke="#26303f"/>
-      <rect x="14" y="14" width="42" height="18" rx="9" fill="url(#accent)"/>
+      <rect x="0.5" y="0.5" width="547" height="95" rx="12" fill="url(#card)" stroke="#24242b"/>
+      <rect x="14" y="14" width="42" height="18" rx="9" fill="url(#badge)"/>
       <text x="35" y="23" class="sans lang" text-anchor="middle" dominant-baseline="central">EN</text>
-      <text x="68" y="28" class="you">› keep going with the refactor of the module</text>
-      <text x="68" y="50" class="pause">⏸️ 5h limit 92%: waited 56m, continuing.</text>
-      <text x="68" y="68" class="done">✔ Queue finished — TASKS.md has no open items;</text>
+      <text x="68" y="28" class="you"><tspan fill="#ff3347">›</tspan> keep going with the refactor of the module</text>
+      <g transform="translate(68 45.5)" fill="#ff3347">
+        <rect x="0" y="-5" width="3" height="10" rx="0.8"/>
+        <rect x="5" y="-5" width="3" height="10" rx="0.8"/>
+      </g>
+      <text x="84" y="50" class="pause">5h limit 92%: waited 56m, continuing.</text>
+      <path transform="translate(72 63.5)" d="M -4 0.4 L -1.2 3.2 L 4.2 -3" fill="none" stroke="#ff3347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="84" y="68" class="done">Queue finished — TASKS.md has no open items;</text>
       <text x="84" y="85" class="done">stopping cleanly.</text>
     </g>
     <!-- TR -->
     <g transform="translate(604 152)">
-      <rect x="0" y="0" width="548" height="96" rx="12" fill="#0d1320" stroke="#26303f"/>
-      <rect x="14" y="14" width="42" height="18" rx="9" fill="url(#accent)"/>
+      <rect x="0.5" y="0.5" width="547" height="95" rx="12" fill="url(#card)" stroke="#24242b"/>
+      <rect x="14" y="14" width="42" height="18" rx="9" fill="url(#badge)"/>
       <text x="35" y="23" class="sans lang" text-anchor="middle" dominant-baseline="central">TR</text>
-      <text x="68" y="28" class="you">› modülü düzelt ve devam et lütfen</text>
-      <text x="68" y="50" class="pause">⏸️ 5sa limit %92: 56dk beklendi, devam ediliyor.</text>
-      <text x="68" y="68" class="done">✔ Kuyruk bitti — TASKS.md içinde açık madde kalmadı;</text>
+      <text x="68" y="28" class="you"><tspan fill="#ff3347">›</tspan> modülü düzelt ve devam et lütfen</text>
+      <g transform="translate(68 45.5)" fill="#ff3347">
+        <rect x="0" y="-5" width="3" height="10" rx="0.8"/>
+        <rect x="5" y="-5" width="3" height="10" rx="0.8"/>
+      </g>
+      <text x="84" y="50" class="pause">5sa limit %92: 56dk beklendi, devam ediliyor.</text>
+      <path transform="translate(72 63.5)" d="M -4 0.4 L -1.2 3.2 L 4.2 -3" fill="none" stroke="#ff3347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="84" y="68" class="done">Kuyruk bitti — TASKS.md içinde açık madde kalmadı;</text>
       <text x="84" y="85" class="done">temiz duruluyor.</text>
     </g>
     <!-- DE -->
     <g transform="translate(48 258)">
-      <rect x="0" y="0" width="548" height="96" rx="12" fill="#0d1320" stroke="#26303f"/>
-      <rect x="14" y="14" width="42" height="18" rx="9" fill="url(#accent)"/>
+      <rect x="0.5" y="0.5" width="547" height="95" rx="12" fill="url(#card)" stroke="#24242b"/>
+      <rect x="14" y="14" width="42" height="18" rx="9" fill="url(#badge)"/>
       <text x="35" y="23" class="sans lang" text-anchor="middle" dominant-baseline="central">DE</text>
-      <text x="68" y="28" class="you">› bitte mach mit dem Refactoring weiter</text>
-      <text x="68" y="50" class="pause">⏸️ 5h-Limit 92%: 56min gewartet, weiter geht's.</text>
-      <text x="68" y="68" class="done">✔ Warteschlange erledigt — TASKS.md hat keine offenen</text>
+      <text x="68" y="28" class="you"><tspan fill="#ff3347">›</tspan> bitte mach mit dem Refactoring weiter</text>
+      <g transform="translate(68 45.5)" fill="#ff3347">
+        <rect x="0" y="-5" width="3" height="10" rx="0.8"/>
+        <rect x="5" y="-5" width="3" height="10" rx="0.8"/>
+      </g>
+      <text x="84" y="50" class="pause">5h-Limit 92%: 56min gewartet, weiter geht's.</text>
+      <path transform="translate(72 63.5)" d="M -4 0.4 L -1.2 3.2 L 4.2 -3" fill="none" stroke="#ff3347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="84" y="68" class="done">Warteschlange erledigt — TASKS.md hat keine offenen</text>
       <text x="84" y="85" class="done">Punkte mehr; sauberer Stopp.</text>
     </g>
     <!-- ES -->
     <g transform="translate(604 258)">
-      <rect x="0" y="0" width="548" height="96" rx="12" fill="#0d1320" stroke="#26303f"/>
-      <rect x="14" y="14" width="42" height="18" rx="9" fill="url(#accent)"/>
+      <rect x="0.5" y="0.5" width="547" height="95" rx="12" fill="url(#card)" stroke="#24242b"/>
+      <rect x="14" y="14" width="42" height="18" rx="9" fill="url(#badge)"/>
       <text x="35" y="23" class="sans lang" text-anchor="middle" dominant-baseline="central">ES</text>
-      <text x="68" y="28" class="you">› por favor sigue con el refactor del módulo</text>
-      <text x="68" y="50" class="pause">⏸️ límite 5h 92%: esperé 56min, continúo.</text>
-      <text x="68" y="68" class="done">✔ Cola terminada — TASKS.md no tiene elementos abiertos;</text>
+      <text x="68" y="28" class="you"><tspan fill="#ff3347">›</tspan> por favor sigue con el refactor del módulo</text>
+      <g transform="translate(68 45.5)" fill="#ff3347">
+        <rect x="0" y="-5" width="3" height="10" rx="0.8"/>
+        <rect x="5" y="-5" width="3" height="10" rx="0.8"/>
+      </g>
+      <text x="84" y="50" class="pause">límite 5h 92%: esperé 56min, continúo.</text>
+      <path transform="translate(72 63.5)" d="M -4 0.4 L -1.2 3.2 L 4.2 -3" fill="none" stroke="#ff3347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="84" y="68" class="done">Cola terminada — TASKS.md no tiene elementos abiertos;</text>
       <text x="84" y="85" class="done">parada limpia.</text>
     </g>
     <!-- JA -->
     <g transform="translate(48 364)">
-      <rect x="0" y="0" width="548" height="96" rx="12" fill="#0d1320" stroke="#26303f"/>
-      <rect x="14" y="14" width="42" height="18" rx="9" fill="url(#accent)"/>
+      <rect x="0.5" y="0.5" width="547" height="95" rx="12" fill="url(#card)" stroke="#24242b"/>
+      <rect x="14" y="14" width="42" height="18" rx="9" fill="url(#badge)"/>
       <text x="35" y="23" class="sans lang" text-anchor="middle" dominant-baseline="central">JA</text>
-      <text x="68" y="28" class="you">› モジュールのリファクタリングを続けてください</text>
-      <text x="68" y="50" class="pause">⏸️ 5時間上限 92%: 56分待機して再開します。</text>
-      <text x="68" y="68" class="done">✔ キュー完了 — TASKS.md に未完了項目はありません。</text>
+      <text x="68" y="28" class="you"><tspan fill="#ff3347">›</tspan> モジュールのリファクタリングを続けてください</text>
+      <g transform="translate(68 45.5)" fill="#ff3347">
+        <rect x="0" y="-5" width="3" height="10" rx="0.8"/>
+        <rect x="5" y="-5" width="3" height="10" rx="0.8"/>
+      </g>
+      <text x="84" y="50" class="pause">5時間上限 92%: 56分待機して再開します。</text>
+      <path transform="translate(72 63.5)" d="M -4 0.4 L -1.2 3.2 L 4.2 -3" fill="none" stroke="#ff3347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="84" y="68" class="done">キュー完了 — TASKS.md に未完了項目はありません。</text>
       <text x="84" y="85" class="done">正常に停止します。</text>
     </g>
     <!-- RU -->
     <g transform="translate(604 364)">
-      <rect x="0" y="0" width="548" height="96" rx="12" fill="#0d1320" stroke="#26303f"/>
-      <rect x="14" y="14" width="42" height="18" rx="9" fill="url(#accent)"/>
+      <rect x="0.5" y="0.5" width="547" height="95" rx="12" fill="url(#card)" stroke="#24242b"/>
+      <rect x="14" y="14" width="42" height="18" rx="9" fill="url(#badge)"/>
       <text x="35" y="23" class="sans lang" text-anchor="middle" dominant-baseline="central">RU</text>
-      <text x="68" y="28" class="you">› продолжай рефакторинг модуля, пожалуйста</text>
-      <text x="68" y="50" class="pause">⏸️ лимит 5ч 92%: ждал 56мин, продолжаю.</text>
-      <text x="68" y="68" class="done">✔ Очередь завершена — в TASKS.md нет открытых пунктов;</text>
+      <text x="68" y="28" class="you"><tspan fill="#ff3347">›</tspan> продолжай рефакторинг модуля, пожалуйста</text>
+      <g transform="translate(68 45.5)" fill="#ff3347">
+        <rect x="0" y="-5" width="3" height="10" rx="0.8"/>
+        <rect x="5" y="-5" width="3" height="10" rx="0.8"/>
+      </g>
+      <text x="84" y="50" class="pause">лимит 5ч 92%: ждал 56мин, продолжаю.</text>
+      <path transform="translate(72 63.5)" d="M -4 0.4 L -1.2 3.2 L 4.2 -3" fill="none" stroke="#ff3347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="84" y="68" class="done">Очередь завершена — в TASKS.md нет открытых пунктов;</text>
       <text x="84" y="85" class="done">корректная остановка.</text>
     </g>
   </g>
