@@ -71,11 +71,12 @@ func TestMain(m *testing.M) {
 	}
 	// The suite runs the same wherever it is started: a Claude Code session
 	// that runs it (in the cloud, or through claude -p) must not turn every
-	// test into one about that kind of session.
-	_ = os.Unsetenv("CLAUDE_CODE_REMOTE")
-	_ = os.Unsetenv("CLAUDE_CODE_ENTRYPOINT")
-	_ = os.Unsetenv("CLAUDE_EFFORT")
-	_ = os.Unsetenv(queueEnv)
+	// test into one about that kind of session, its effort, its compaction
+	// point, its stop block cap or its id.
+	for _, name := range []string{"CLAUDE_CODE_REMOTE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_EFFORT", "CLAUDE_CODE_EFFORT_LEVEL",
+		"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "CLAUDE_CODE_STOP_HOOK_BLOCK_CAP", "CLAUDE_CODE_SESSION_ID", queueEnv} {
+		_ = os.Unsetenv(name)
+	}
 	os.Exit(m.Run())
 }
 

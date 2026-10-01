@@ -98,24 +98,46 @@ func TestTheQueueCheckWaitsForBackgroundWorkBeforeItRuns(t *testing.T) {
 }
 
 func TestAQueueGivesUpAfterThreeStopsWithoutProgressByDefault(t *testing.T) {
-	cfg, _, frontend := queueCheckSandbox(t, "")
-	if maxIdle := numberOr(section(cfg, "queue"), "maxIdleContinues", 0); maxIdle != 3 {
-		t.Fatalf("config.default.json ships queue.maxIdleContinues %v, want 3", maxIdle)
-	}
-	delete(section(cfg, "queue"), "maxIdleContinues")
-	outputs := []object{stopHookOutput(t, stopInput("bw3", frontend), cfg)}
-	for range 3 {
-		outputs = append(outputs, stopHookOutput(t, stopAgain("bw3", frontend), cfg))
-	}
-	for index, output := range outputs[:3] {
-		if getString(output, "decision") != "block" {
-			t.Fatalf("stop %d of 4 was not continued: %v", index+1, output)
-		}
-	}
-	if !strings.Contains(getString(outputs[2], "reason"), "Find the root cause") {
-		t.Fatalf("the third stop, the last continuation, did not ask Claude to set the item aside: %v", outputs[2])
-	}
-	if last := outputs[3]; getString(last, "decision") == "block" || getString(last, "systemMessage") != T("queue.stuckMessage", 2) {
-		t.Fatalf("the fourth stop, the third without progress, did not end the queue's continuations: %v", last)
+	for _, c := range []struct {
+		name     string
+		escalate any
+		stops    int
+	}{
+		// The third stop, the second without progress, is the last continuation and asks Claude to set
+		// the item aside; the fourth gives up.
+		{"with nothing to go up to", "off", 4},
+		// As shipped the session codes on Opus at xhigh: the last continuation hands the item to Opus at
+		// max effort, and setting it aside and giving up each come one stop later.
+		{"as shipped", nil, 5},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			cfg, _, frontend := queueCheckSandbox(t, "")
+			queue := section(cfg, "queue")
+			if maxIdle := numberOr(queue, "maxIdleContinues", 0); maxIdle != 3 {
+				t.Fatalf("config.default.json ships queue.maxIdleContinues %v, want 3", maxIdle)
+			}
+			delete(queue, "maxIdleContinues")
+			if c.escalate != nil {
+				queue["escalate"] = c.escalate
+			}
+			outputs := []object{stopHookOutput(t, stopInput("bw3", frontend), cfg)}
+			for len(outputs) < c.stops {
+				outputs = append(outputs, stopHookOutput(t, stopAgain("bw3", frontend), cfg))
+			}
+			for index, output := range outputs[:c.stops-1] {
+				if getString(output, "decision") != "block" {
+					t.Fatalf("stop %d of %d was not continued: %v", index+1, c.stops, output)
+				}
+			}
+			if c.stops == 5 && !strings.Contains(getString(outputs[2], "reason"), "Hand it once to the noctis:deep subagent") {
+				t.Fatalf("the third stop, the last continuation, did not hand the item to Opus at max effort: %v", outputs[2])
+			}
+			if setAside := outputs[c.stops-2]; !strings.Contains(getString(setAside, "reason"), "Find the root cause") {
+				t.Fatalf("stop %d did not ask Claude to set the item aside: %v", c.stops-1, setAside)
+			}
+			if last := outputs[c.stops-1]; getString(last, "decision") == "block" || getString(last, "systemMessage") != T("queue.stuckMessage", 2) {
+				t.Fatalf("stop %d did not end the queue's continuations: %v", c.stops, last)
+			}
+		})
 	}
 }

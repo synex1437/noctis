@@ -184,8 +184,9 @@ type stuckStep struct {
 
 // stuckItemStep decides what the continuation after a stop without progress does about the next
 // item. At the last continuation before the queue would give up, the item goes to a stronger model
-// once when there is one and no pause is due; otherwise Claude is asked to set it aside. An item that
-// went up stays with its stronger model, and is set aside at that same last continuation.
+// once when there is one, no pause is due and Claude Code's stop block cap leaves room for the one
+// continuation more that this takes; otherwise Claude is asked to set it aside. An item that went up
+// stays with its stronger model, and is set aside at that same last continuation.
 func stuckItemStep(cfg, state object, sid, path string, idle, maxIdle float64, items []string, pausing bool, now int64) stuckStep {
 	step := stuckStep{path: path, sid: sid, idle: idle}
 	if len(items) == 0 {
@@ -211,6 +212,13 @@ func stuckItemStep(cfg, state object, sid, path string, idle, maxIdle float64, i
 	model, agent := escalationTarget(cfg, state, sid, step.item)
 	perDay := numberOr(section(cfg, "queue"), "maxEscalationsPerDay", 5)
 	if model == "" || perDay <= 0 {
+		return step
+	}
+	if limit := stopBlockCap(); limit > 0 && math.Ceil(maxIdle) >= math.Floor(limit) {
+		// The stronger model's turn comes on top of the continuations maxIdle allows, and Claude Code
+		// would end the turn itself at the block after its cap, before the queue gives up with its own
+		// notice.
+		logInfo("queue item not escalated for %s: Claude Code's stop block cap (%s) leaves no room for one more continuation; set aside instead", sid, formatNumber(math.Floor(limit)))
 		return step
 	}
 	if escalationsToday(state, now) >= perDay {
