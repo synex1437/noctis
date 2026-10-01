@@ -81,7 +81,7 @@ jobs:
             done
           done
           echo "found:$found"
-          for target in FuzzNormalizeHookInput FuzzAutoQueueItems FuzzDetectLanguage FuzzParseUsagePayload FuzzQueueSnapshot FuzzJSONFastDecode FuzzJSONFastEncode; do
+          for target in FuzzNormalizeHookInput FuzzAutoQueueItems FuzzDetectLanguage FuzzParseUsagePayload FuzzQueueSnapshot FuzzJSONFastDecode FuzzJSONFastEncode FuzzJSONFastHookInput; do
             case "$found " in
               *":$target "*) ;;
               *) echo "::error::go test -list no longer finds $target"; exit 1 ;;
