@@ -82,3 +82,23 @@ func TestNoCompactionIsCountedOrNotedForAQueueNobodyTrusted(t *testing.T) {
 		t.Fatalf("a queue nobody trusted got the note after a compaction:\n%s", context)
 	}
 }
+
+func TestTheNoteAfterACompactionNamesTheCheckThatRanLast(t *testing.T) {
+	cfg, project, frontend := queueCheckSandbox(t, "make check")
+	section(cfg, "queue")["verifyEachCommand"] = "make quick"
+	key := queueTrustKey(filepath.Join(project, "TASKS.md"))
+	for _, setting := range []struct {
+		record object
+		want   string
+	}{
+		{object{"failures": float64(1), "tier": eachQueueCheck}, "The queue's check (`make quick`) failed at its last run"},
+		{object{"failures": float64(1)}, "The queue's check (`make check`) failed at its last run"},
+		{object{"retried": float64(nowSec()), "rerun": float64(nowSec()), "tier": eachQueueCheck}, "The queue's check (`make quick`) was cut short at its last run"},
+	} {
+		setting.record["at"] = float64(nowSec() - 60)
+		updateState(func(next object) { stateMap(next, "queueVerify")[key] = setting.record })
+		if context := sessionContext(t, compactStart("cn5", frontend), cfg); !strings.Contains(context, setting.want) {
+			t.Fatalf("with the check record %v the note after a compaction lacks %q:\n%s", setting.record, setting.want, context)
+		}
+	}
+}

@@ -241,24 +241,34 @@ func runQueueTrust(cfg object, cwd, action string) {
 	}
 }
 
-// printQueueCheck names the command that checks the queue at target between items and where it comes
-// from: a file's own runs without a permission prompt, so trusting the file is trusting it.
 func printQueueCheck(cfg object, target string) {
 	content, _ := readQueueText(target)
-	line, command := queueVerifyLine(content), queueCheckCommandOf(cfg, target, content)
-	switch {
-	case line != "" && command == line:
-		fmt.Println(T("queue.verifyFromFile", printableItem(command)))
-	case line != "":
-		fmt.Println(T("queue.verifyWaits", printableItem(line)))
-		if command != "" {
-			fmt.Println(T("queue.verifyFromConfig", printableItem(command)))
+	full, each := queueCheckCommandsOf(cfg, target, content)
+	fileFull, fileEach := fileCheckCommands(cfg, target, content)
+	for _, line := range []string{queueVerifyLine(content), queueVerifyEachLine(content)} {
+		if line != "" && line != fileFull && line != fileEach {
+			fmt.Println(T("queue.verifyWaits", printableItem(line)))
 		}
-	case command != "":
-		fmt.Println(T("queue.verifyFromConfig", printableItem(command)))
-	default:
+	}
+	switch {
+	case full == "":
 		if suggested := suggestedCheck(cfg, target, content); suggested != "" {
 			fmt.Println(T("queue.verifySuggest", suggested, suggested, filepath.Base(target), pluginName))
+		}
+	case checkOrigin(full, fileFull, fileEach) == "file":
+		fmt.Println(T("queue.verifyFromFile", printableItem(full)))
+	default:
+		fmt.Println(T("queue.verifyFromConfig", printableItem(full), checkCommandSetting(cfg, full)))
+	}
+	if each != "" {
+		source := "queue.verifyEachCommand"
+		if checkOrigin(each, fileEach) == "file" {
+			source = "noctis-verify-each"
+		}
+		if every := queueFullCheckEvery(cfg); every > 0 {
+			fmt.Println(T("queue.verifyEach", printableItem(each), source, int(every)))
+		} else {
+			fmt.Println(T("queue.verifyEachAtEnd", printableItem(each), source))
 		}
 	}
 	if text := unverifiedText(cfg, readState(), target, content); text != "" {

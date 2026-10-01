@@ -108,6 +108,7 @@ func TestAFailingQueueCheckBlocksWithItsOutputTailAndNoNextItem(t *testing.T) {
 func TestExhaustedQueueCheckAttemptsAllowTheStopTellTheUserAndHoldTheQueue(t *testing.T) {
 	command := shellFor("echo run >> runs.txt; cat fixed.txt", "echo run>> runs.txt & type fixed.txt")
 	cfg, project, frontend := queueCheckSandbox(t, command)
+	section(cfg, "queue")["escalate"] = "off"
 	tickFirstQueueItem(t, project)
 	if first := stopHookOutput(t, stopInput("qc3", frontend), cfg); getString(first, "decision") != "block" || strings.Contains(getString(first, "reason"), queueContinuesPrefix) {
 		t.Fatalf("the first failure of the queue check did not send Claude back to fix it: %v", first)
@@ -119,7 +120,7 @@ func TestExhaustedQueueCheckAttemptsAllowTheStopTellTheUserAndHoldTheQueue(t *te
 	if want := T("queue.heldMessage", command, 2, "TASKS.md"); getString(second, "systemMessage") != want {
 		t.Fatalf("the user was not told the queue is held:\n got %q\nwant %q", getString(second, "systemMessage"), want)
 	}
-	if told := loggedTimes("notify: " + pluginName + " — " + T("queue.heldNotify", 2, "TASKS.md")); told != 1 {
+	if told := loggedTimes("notify: " + pluginName + " — " + T("queue.heldNotify", 2, "TASKS.md", "queue.verifyCommand")); told != 1 {
 		t.Fatalf("the hold went through the notify path %d times, want once", told)
 	}
 	if runs := queueCheckRuns(project); runs != 2 {

@@ -85,7 +85,7 @@ func TestQueueVerifyLiftsAHoldOnceTheCheckPasses(t *testing.T) {
 		t.Fatal("the queue is still held after its check passed")
 	}
 	record := queueCheckRecord(readState(), queuePath)
-	if numberOr(record, "failures", 0) != 0 || len(getList(record, "ticked")) != 1 || queueCheckDue(record, queueTicks(mustReadText(t, queuePath))) {
+	if numberOr(record, "failures", 0) != 0 || len(getList(record, "ticked")) != 1 || queueCheckDue(record, queueTicks(mustReadText(t, queuePath)), true) {
 		t.Fatalf("a passing noctis queue verify did not record the ticked item as checked: %v", record)
 	}
 	if status := queueCommand(t, cfg, project, "status", "--file", queuePath); strings.Contains(status, "⏸") {

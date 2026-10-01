@@ -7,6 +7,7 @@ import (
 	"math"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -29,12 +30,25 @@ func checkFailure(outcome, tail string) string {
 	return queueItemDigest(outcome + "\n" + checkNoise.ReplaceAllString(tail, "~"))
 }
 
-// queueVerifyPattern is the line that names a queue file's own check command: noctis-verify: `command`,
-// on a line of its own.
-var queueVerifyPattern = lazyRegexp("(?i)^noctis-verify:[ \t]*`([^`]+)`$")
+var (
+	queueVerifyPattern     = lazyRegexp("(?i)^noctis-verify:[ \t]*`([^`]+)`$")
+	queueVerifyEachPattern = lazyRegexp("(?i)^noctis-verify-each:[ \t]*`([^`]+)`$")
+)
 
-// queueVerifyLine is the command the first noctis-verify line of content names, outside code fences.
+const (
+	fullQueueCheck = "full"
+	eachQueueCheck = "each"
+)
+
 func queueVerifyLine(content string) string {
+	return queueCommandLine(content, queueVerifyPattern)
+}
+
+func queueVerifyEachLine(content string) string {
+	return queueCommandLine(content, queueVerifyEachPattern)
+}
+
+func queueCommandLine(content string, pattern *lazyRe) string {
 	fenced := false
 	for _, raw := range strings.Split(strings.TrimPrefix(content, "\uFEFF"), "\n") {
 		line := strings.TrimSpace(raw)
@@ -43,7 +57,7 @@ func queueVerifyLine(content string) string {
 			fenced = !fenced
 		case fenced:
 		default:
-			if match := queueVerifyPattern.FindStringSubmatch(line); match != nil {
+			if match := pattern.FindStringSubmatch(line); match != nil {
 				return strings.TrimSpace(match[1])
 			}
 		}
@@ -51,35 +65,62 @@ func queueVerifyLine(content string) string {
 	return ""
 }
 
-// fileCheckCommand is the check command the queue file at path names for itself, or "". It counts
-// only while the user's trust (noctis queue trust) covers the file as content reads it, also with
-// queue.requireTrust off, since the command runs without a permission prompt; a checklist noctis
-// wrote never names one, and queue.fileVerify false turns the lines off. content "" reads the file.
-func fileCheckCommand(cfg object, path, content string) string {
+func fileCheckCommands(cfg object, path, content string) (full, each string) {
 	if path == "" || isAutoQueue(path) || !getBool(section(cfg, "queue"), "fileVerify", true) {
-		return ""
+		return "", ""
 	}
 	if content == "" {
 		content, _ = readQueueText(path)
 	}
-	command := queueVerifyLine(content)
-	if command == "" {
-		return ""
+	full, each = queueVerifyLine(content), queueVerifyEachLine(content)
+	if full == "" && each == "" {
+		return "", ""
 	}
 	if trusted, _, _ := queueTrustRecordGap(path, content); !trusted {
-		return ""
+		return "", ""
 	}
-	return command
+	return full, each
 }
 
-// queueCheckCommandOf is the command that checks the queue at path between items: its file's own
-// (fileCheckCommand), else queue.verifyCommand.
-func queueCheckCommandOf(cfg object, path, content string) string {
-	if command := fileCheckCommand(cfg, path, content); command != "" {
-		return command
-	}
-	command, _ := section(cfg, "queue")["verifyCommand"].(string)
+func configuredCheckCommand(cfg object, key string) string {
+	command, _ := section(cfg, "queue")[key].(string)
 	return strings.TrimSpace(command)
+}
+
+func queueCheckCommandsOf(cfg object, path, content string) (full, each string) {
+	full, each = fileCheckCommands(cfg, path, content)
+	if full == "" {
+		full = configuredCheckCommand(cfg, "verifyCommand")
+	}
+	if each == "" {
+		each = configuredCheckCommand(cfg, "verifyEachCommand")
+	}
+	if full == "" || full == each {
+		return each, ""
+	}
+	return full, each
+}
+
+func checkOrigin(command string, fileCommands ...string) string {
+	switch {
+	case command == "":
+		return ""
+	case slices.Contains(fileCommands, command):
+		return "file"
+	}
+	return "config"
+}
+
+func checkCommandSetting(cfg object, command string) string {
+	if configuredCheckCommand(cfg, "verifyCommand") == command {
+		return "queue.verifyCommand"
+	}
+	return "queue.verifyEachCommand"
+}
+
+func queueCheckCommandOf(cfg object, path, content string) string {
+	full, _ := queueCheckCommandsOf(cfg, path, content)
+	return full
 }
 
 func queueCheckCommand(cfg object, path string) string {
@@ -110,14 +151,23 @@ func queueHeld(cfg, state object, path string) bool {
 	return numberOr(queueCheckRecord(state, path), "held", 0) > 0 && queueCheckCommand(cfg, path) != ""
 }
 
+func recordedCheckCommand(cfg, record object, path, content string) string {
+	full, each := queueCheckCommandsOf(cfg, path, content)
+	if each != "" && getString(record, "tier") == eachQueueCheck {
+		return each
+	}
+	return full
+}
+
 func queueHeldBack(cfg, state object, sid, path string) bool {
-	if !queueHeld(cfg, state, path) || numberOr(queueCheckRecord(state, path), "rerun", 0) > 0 {
+	record := queueCheckRecord(state, path)
+	if !queueHeld(cfg, state, path) || numberOr(record, "rerun", 0) > 0 {
 		return false
 	}
 	if getMap(getMap(state, "stopGuard"), sid) != nil {
 		updateState(func(next object) { delete(stateMap(next, "stopGuard"), sid) })
 	}
-	command := queueCheckCommand(cfg, path)
+	command := recordedCheckCommand(cfg, record, path, "")
 	journal(sid, "Stop", "allow-stop", "queue held", object{"command": command})
 	logInfo("queue %s held until %q passes; stop allowed for %s", path, command, sid)
 	return true
@@ -138,7 +188,7 @@ func rearmQueueCheck(cfg, input object, sid string) {
 			record["at"] = float64(nowSec())
 		}
 	})
-	logInfo("queue %s held: %q runs again at the next stop of %s", path, queueCheckCommand(cfg, path), sid)
+	logInfo("queue %s held: %q runs again at the next stop of %s", path, recordedCheckCommand(cfg, queueCheckRecord(readState(), path), path, ""), sid)
 }
 
 func queueTicks(content string) []any {
@@ -153,22 +203,123 @@ func queueTicks(content string) []any {
 	return ticked
 }
 
-func queueCheckDue(record object, ticked []any) bool {
+func queueCheckDue(record object, ticked []any, ending bool) bool {
 	if numberOr(record, "failures", 0) > 0 || numberOr(record, "rerun", 0) > 0 {
 		return true
 	}
-	known := map[string]bool{}
-	for _, digest := range getList(record, "ticked") {
-		if text, ok := digest.(string); ok {
-			known[text] = true
-		}
-	}
+	checked, eachChecked := digestSet(getList(record, "ticked")), digestSet(getList(record, "eachTicked"))
+	waitingForFullCheck := false
 	for _, digest := range ticked {
-		if text, _ := digest.(string); !known[text] {
+		text, _ := digest.(string)
+		if !checked[text] && !eachChecked[text] {
 			return true
 		}
+		waitingForFullCheck = waitingForFullCheck || !checked[text]
 	}
-	return false
+	return ending && waitingForFullCheck
+}
+
+func queueChecksPending(record object, ticked []any) []any {
+	checked := digestSet(getList(record, "ticked"))
+	pending := []any{}
+	for _, digest := range ticked {
+		if text, _ := digest.(string); !checked[text] {
+			pending = append(pending, digest)
+		}
+	}
+	return pending
+}
+
+func queueCheckTier(cfg, record object, ticked []any, hasEach, ending bool) string {
+	switch {
+	case !hasEach || ending:
+		return fullQueueCheck
+	case numberOr(record, "failures", 0) > 0:
+		if getString(record, "tier") == eachQueueCheck {
+			return eachQueueCheck
+		}
+		return fullQueueCheck
+	}
+	if every := queueFullCheckEvery(cfg); every > 0 && float64(len(queueChecksPending(record, ticked))) >= every {
+		return fullQueueCheck
+	}
+	return eachQueueCheck
+}
+
+func queueFullCheckEvery(cfg object) float64 {
+	return numberOr(section(cfg, "queue"), "verifyFullEvery", 5)
+}
+
+func markEachTier(fields object, tier string) {
+	if tier == eachQueueCheck {
+		fields["tier"] = eachQueueCheck
+	}
+}
+
+func queueCheckTree(cfg object, folder, path string) string {
+	if !getBool(section(cfg, "queue"), "verifySkipUnchanged", true) {
+		return ""
+	}
+	return worktreeFingerprint(folder, path)
+}
+
+func queueCheckPassedOn(record object, tier, tree string) bool {
+	if numberOr(record, "failures", 0) > 0 || numberOr(record, "rerun", 0) > 0 {
+		return false
+	}
+	if tier == eachQueueCheck {
+		return getString(record, "eachTree") == tree
+	}
+	return getString(record, "tree") == tree
+}
+
+func queueCheckPass(record object, tier string, ticked []any, tree string, now float64) object {
+	if tier == fullQueueCheck {
+		passed := object{"ticked": ticked, "at": now}
+		if tree != "" {
+			passed["tree"] = tree
+		}
+		return passed
+	}
+	checked := getList(record, "ticked")
+	if checked == nil {
+		checked = []any{}
+	}
+	passed := object{"ticked": checked, "eachTicked": queueChecksPending(record, ticked), "at": now}
+	if tree != "" {
+		passed["eachTree"] = tree
+	}
+	if fullTree := getString(record, "tree"); fullTree != "" {
+		passed["tree"] = fullTree
+	}
+	return passed
+}
+
+func rememberPassedTree(key, tree string) {
+	updateState(func(next object) {
+		if record := getMap(getMap(next, "queueVerify"), key); record != nil {
+			record["tree"] = tree
+		}
+	})
+}
+
+func storeEscalatedCheck(key, sid string, record object, now int64) {
+	updateState(func(next object) {
+		stateMap(next, "queueVerify")[key] = record
+		delete(stateMap(next, "userTurns"), sid)
+		countEscalation(next, now)
+	})
+}
+
+func storeQueueCheck(key string, record object) {
+	updateState(func(next object) { stateMap(next, "queueVerify")[key] = record })
+}
+
+func checkOutputText(tail string) string {
+	if tail == "" {
+		return "It printed nothing."
+	}
+	return "The end of its output:\n" + tail
 }
 
 func queueUncheckedIssues(cfg, state object, path, content string) map[string]bool {
@@ -276,26 +427,44 @@ func runQueueCheck(line, folder string, limit float64) (string, string, bool) {
 	return "failed: " + err.Error(), tail.text(), false
 }
 
-func gateQueue(cfg, input object, sid, path, content, label string, started int64) object {
-	command := queueCheckCommandOf(cfg, path, content)
-	if command == "" {
+func gateQueue(cfg, input object, sid, path, content, label string, snapshot queueView, started int64) object {
+	full, each := queueCheckCommandsOf(cfg, path, content)
+	if full == "" {
 		return nil
 	}
 	record := queueCheckRecord(readState(), path)
 	ticked := queueTicks(content)
-	if !queueCheckDue(record, ticked) || observed(sid, "Stop", "verify-queue", command, nil) {
+	ending := len(snapshot.items) == 0
+	if !queueCheckDue(record, ticked, ending) {
+		return nil
+	}
+	tier := queueCheckTier(cfg, record, ticked, each != "", ending)
+	command := full
+	if tier == eachQueueCheck {
+		command = each
+	}
+	if observed(sid, "Stop", "verify-queue", command, nil) {
 		return nil
 	}
 	folder := queueFolder(cfg, input, sid, path)
+	now, key := float64(nowSec()), queueTrustKey(path)
+	facts := object{"command": command}
+	markEachTier(facts, tier)
+	tree := queueCheckTree(cfg, folder, path)
+	if tree != "" && queueCheckPassedOn(record, tier, tree) {
+		storeQueueCheck(key, queueCheckPass(record, tier, ticked, tree, now))
+		facts["skipped"] = true
+		journal(sid, "Stop", "verify-queue", "skipped: the working tree is as it was when it last passed", facts)
+		logInfo("queue check %q for %s skipped: the working tree is as it was when it last passed", command, sid)
+		if tier == fullQueueCheck {
+			syncDoneIssues(cfg, path, content, getString(input, "cwd"))
+		}
+		return nil
+	}
 	began := time.Now()
 	outcome, tail, cut := runQueueCheck(command, folder, queueCheckLimit(cfg, started))
-	facts := object{"command": command, "seconds": math.Round(time.Since(began).Seconds())}
-	now, key := float64(nowSec()), queueTrustKey(path)
+	facts["seconds"] = math.Round(time.Since(began).Seconds())
 	if cut && numberOr(record, "failures", 0) == 0 && numberOr(record, "held", 0) == 0 && numberOr(record, "retried", 0) == 0 {
-		// A check cut short says nothing about the code, so the first run of a streak that is cut short
-		// runs once more before it counts as a failed attempt: here when the hook has the time for a
-		// second run as long as the first, else at the next stop while Claude goes on with the next
-		// item. With no item to go on with, the queue would end unchecked, so the run counts.
 		took := time.Since(began).Seconds()
 		switch {
 		case queueCheckLimit(cfg, started) >= took+1:
@@ -304,17 +473,17 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 			again := time.Now()
 			outcome, tail, cut = runQueueCheck(command, folder, queueCheckLimit(cfg, started))
 			facts["seconds"] = math.Round(time.Since(again).Seconds())
-		case len(queueSnapshotOf(path, content).items) > 0:
+		case !ending:
 			updateState(func(next object) {
 				stored := object{}
 				for name, value := range queueCheckRecord(next, path) {
 					stored[name] = value
 				}
-				// at dates the last pass, and keeps a new record from being pruned.
 				if numberOr(stored, "at", 0) == 0 {
 					stored["at"] = now
 				}
 				stored["retried"], stored["rerun"] = now, now
+				markEachTier(stored, tier)
 				stateMap(next, "queueVerify")[key] = stored
 			})
 			journal(sid, "Stop", "verify-queue", "cut short: "+outcome, facts)
@@ -322,8 +491,17 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 			return nil
 		}
 	}
+	if outcome == "" && tier == eachQueueCheck {
+		storeQueueCheck(key, queueCheckPass(record, tier, ticked, tree, now))
+		journal(sid, "Stop", "verify-queue", "passed", facts)
+		logInfo("queue check %q passed for %s in %s", command, sid, folder)
+		return nil
+	}
 	if outcome == "" {
 		updateState(func(next object) { stateMap(next, "queueVerify")[key] = object{"ticked": ticked, "at": now} })
+		if tree != "" {
+			rememberPassedTree(key, tree)
+		}
 		journal(sid, "Stop", "verify-queue", "passed", facts)
 		logInfo("queue check %q passed for %s in %s", command, sid, folder)
 		syncDoneIssues(cfg, path, content, getString(input, "cwd"))
@@ -336,9 +514,10 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 		kept = []any{}
 	}
 	stored := object{"ticked": kept, "failures": failures, "at": now}
-	// A run that fails as the one before it did, output and all, shows the fix in between changed
-	// nothing the check sees: the queue is held now rather than after queue.verifyAttempts. A run cut
-	// short says nothing of the kind.
+	markEachTier(stored, tier)
+	if escalated := numberOr(record, "escalated", 0); escalated > 0 {
+		stored["escalated"] = escalated
+	}
 	same := false
 	if failed := checkFailure(outcome, tail); failed != "" && !cut {
 		stored["failed"] = failed
@@ -348,22 +527,30 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 		facts["same"] = true
 	}
 	if !same && failures < queueCheckAttempts(cfg) {
-		// Claude goes back to work on noctis's word, not the user's: see noteUserTurn.
 		updateState(func(next object) {
 			stateMap(next, "queueVerify")[key] = stored
 			delete(stateMap(next, "userTurns"), sid)
 		})
 		journal(sid, "Stop", "verify-queue", outcome, facts)
 		logInfo("queue check %q for %s %s (%s in a row); Claude is sent back to fix it", command, sid, outcome, formatNumber(failures))
-		output := "It printed nothing."
-		if tail != "" {
-			output = "The end of its output:\n" + tail
-		}
 		last := ""
-		if failures+1 >= queueCheckAttempts(cfg) {
+		if model, _ := checkFixEscalation(cfg, record, sid, int64(now)); model == "" && failures+1 >= queueCheckAttempts(cfg) {
 			last = queueCheckLastRule(path)
 		}
-		return object{"decision": "block", "reason": fmt.Sprintf("[noctis] Queue check failed: `%s` %s (run in %s). Fix the failure before you start another item, and leave the item you were on unticked until the command passes (untick it if you already marked it done); it runs again when you stop.%s Do not ask for confirmation; decide yourself. %s", command, outcome, folder, last, output)}
+		return object{"decision": "block", "reason": fmt.Sprintf("[noctis] Queue check failed: `%s` %s (run in %s). Fix the failure before you start another item, and leave the item you were on unticked until the command passes (untick it if you already marked it done); it runs again when you stop.%s Do not ask for confirmation; decide yourself. %s", command, outcome, folder, last, checkOutputText(tail))}
+	}
+	if model, agent := checkFixEscalation(cfg, record, sid, int64(now)); model != "" {
+		stored["escalated"] = now
+		storeEscalatedCheck(key, sid, stored, int64(now))
+		facts["escalateTo"], facts["escalated"] = model, true
+		journal(sid, "Stop", "verify-queue", outcome+"; the fix goes once to "+model, facts)
+		logInfo("queue check %q for %s %s (%s in a row); the fix goes once to %s (%s) before the queue is held", command, sid, outcome, formatNumber(failures), model, agent)
+		repeated := ""
+		if same {
+			repeated = " Its last two runs failed with the same output: the fixes so far changed nothing the check sees."
+		}
+		reason := fmt.Sprintf("[noctis] Queue check failed again: `%s` %s (run in %s), %s time(s) in a row.%s Hand the fix once to %s It runs again when you stop.%s Do not ask for confirmation; decide yourself. %s", command, outcome, folder, formatNumber(failures), repeated, handOff(escalationAgentText(model, agent), "the command, its output verbatim, what you changed and tried and why it did not work, the files involved"), queueCheckLastRule(path), checkOutputText(tail))
+		return object{"decision": "block", "reason": reason, "systemMessage": T("queue.escalateCheck", truncateText(command, 120), int(failures), escalationModelTitle(model, agent))}
 	}
 	stored["held"] = now
 	updateState(func(next object) {
@@ -376,10 +563,10 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 		logInfo("queue check %q for %s failed with the same output as its last run; held before queue.verifyAttempts (%s)", command, sid, formatNumber(queueCheckAttempts(cfg)))
 	}
 	shown := truncateText(command, 120)
-	if fileCheckCommand(cfg, path, content) == command {
+	if fileFull, fileEach := fileCheckCommands(cfg, path, content); checkOrigin(command, fileFull, fileEach) == "file" {
 		notify(cfg, pluginName, T("queue.heldNotifyFile", int(failures), label))
 	} else {
-		notify(cfg, pluginName, T("queue.heldNotify", int(failures), label))
+		notify(cfg, pluginName, T("queue.heldNotify", int(failures), label, checkCommandSetting(cfg, command)))
 	}
 	message := T("queue.heldMessage", shown, int(failures), label)
 	if same {
@@ -388,16 +575,15 @@ func gateQueue(cfg, input object, sid, path, content, label string, started int6
 	return object{"systemMessage": message}
 }
 
-// queueUnverified counts the ticked items of the queue at path that passed no check: all of them when
-// nothing checks the queue, else those ticked since its check last passed.
 func queueUnverified(cfg, state object, path, content string) (unverified, ticked int) {
-	passed := map[string]bool{}
+	passed, passedEach := map[string]bool{}, map[string]bool{}
 	if queueCheckCommandOf(cfg, path, content) != "" {
-		passed = digestSet(getList(queueCheckRecord(state, path), "ticked"))
+		record := queueCheckRecord(state, path)
+		passed, passedEach = digestSet(getList(record, "ticked")), digestSet(getList(record, "eachTicked"))
 	}
 	for _, digest := range queueTicks(content) {
 		ticked++
-		if text, _ := digest.(string); !passed[text] {
+		if text, _ := digest.(string); !passed[text] && !passedEach[text] {
 			unverified++
 		}
 	}
@@ -416,10 +602,8 @@ func unverifiedText(cfg, state object, path, content string) string {
 	return T("queue.unverifiedWait", unverified, ticked, pluginName)
 }
 
-// suggestedCheck is the command the project of the queue at path seems to check itself with, when
-// nothing checks the queue yet and its file could name one, or "".
 func suggestedCheck(cfg object, path, content string) string {
-	if isAutoQueue(path) || queueVerifyLine(content) != "" || queueCheckCommandOf(cfg, path, content) != "" || !getBool(section(cfg, "queue"), "fileVerify", true) {
+	if isAutoQueue(path) || queueVerifyLine(content) != "" || queueVerifyEachLine(content) != "" || queueCheckCommandOf(cfg, path, content) != "" || !getBool(section(cfg, "queue"), "fileVerify", true) {
 		return ""
 	}
 	return projectCheckCommand(filepath.Dir(path))

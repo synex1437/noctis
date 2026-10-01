@@ -79,6 +79,18 @@ function resetCalls() {
   lab.resetCalls();
 }
 
+function labRepository(name, files) {
+  const repo = path.join(LAB_ROOT, name);
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.mkdirSync(repo, { recursive: true });
+  const git = (...args) => spawnSync('git', args, { cwd: repo, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'lab', GIT_AUTHOR_EMAIL: 'lab@example.com', GIT_COMMITTER_NAME: 'lab', GIT_COMMITTER_EMAIL: 'lab@example.com' } });
+  for (const [file, content] of Object.entries(files)) fs.writeFileSync(path.join(repo, file), content);
+  git('init', '-q');
+  git('add', '.');
+  git('commit', '-q', '-m', 'init');
+  return { repo, git };
+}
+
 async function waitRecord(acc, sid, seconds = 20) {
   for (let i = 0; i < seconds * 4 && !(acc.state().waits || {})[sid]; i += 1) await sleep(250);
   return (acc.state().waits || {})[sid];
@@ -245,14 +257,7 @@ async function scenarioInHookWait(acc) {
 
 async function scenarioWorkspaceGuard(acc) {
   const now = nowSec();
-  const repo = path.join(LAB_ROOT, 'guard-repo');
-  fs.rmSync(repo, { recursive: true, force: true });
-  fs.mkdirSync(repo, { recursive: true });
-  const git = (...args) => spawnSync('git', args, { cwd: repo, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'lab', GIT_AUTHOR_EMAIL: 'lab@example.com', GIT_COMMITTER_NAME: 'lab', GIT_COMMITTER_EMAIL: 'lab@example.com' } });
-  git('init', '-q');
-  fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n');
-  git('add', '.');
-  git('commit', '-q', '-m', 'init');
+  const { repo, git } = labRepository('guard-repo', { 'a.txt': 'one\n' });
   acc.statusline('wg1', 'claude-fable-5-1', 100, nowSec() + 3, 23, now + 3 * 86400);
   const child = acc.hookAsync({ hook_event_name: 'UserPromptSubmit', session_id: 'wg1', cwd: repo, transcript_path: TRANSCRIPT, prompt: 'keep going with a.txt' });
   let stdout = '';
@@ -1179,6 +1184,114 @@ async function scenarioQueueContinuation(acc) {
   check('report html has the cost column', htmlReport.includes('<th>cost</th>') && htmlReport.includes('$0.127'), true);
   const selftest = acc.run(['selftest']);
   check('selftest runs end to end', selftest.includes('hook hızı') && (process.platform === 'win32' || selftest.includes('marker yazdı: evet')), true);
+}
+
+async function scenarioQueueProgress(acc) {
+  const now = nowSec();
+  const { repo } = labRepository('progress-repo', { 'TASKS.md': '# q\n- [ ] first item\n- [ ] second item\n' });
+  const queueFile = path.join(repo, 'TASKS.md');
+  acc.run(['queue', 'trust', '--file', queueFile]);
+  const stopsBeforeLetGo = (sid, changeBefore) => {
+    acc.statusline(sid, 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
+    for (let stop = 0; stop < 12; stop += 1) {
+      if (stop > 0) changeBefore(stop);
+      if (!acc.hook({ hook_event_name: 'Stop', session_id: sid, cwd: repo, transcript_path: TRANSCRIPT, stop_hook_active: stop > 0 }).includes('"decision":"block"')) return stop;
+    }
+    return 12;
+  };
+  check('queue progress: a session that changes nothing between stops is let go at its fourth stop', stopsBeforeLetGo('tp1', () => {}), 3);
+  check('queue progress: edits between stops earn three more continuations', stopsBeforeLetGo('tp2', (stop) => fs.writeFileSync(path.join(repo, `step${stop}.txt`), `step ${stop}\n`)), 6);
+  const movedEntries = acc.run(['why', '--json', '--last', '40']).split('\n').filter((line) => {
+    try {
+      const entry = JSON.parse(line);
+      return entry.sid === 'tp2' && entry.action === 'continue-queue' && entry.treeMoved === true && entry.reason.includes('working tree changed');
+    } catch {
+      return false;
+    }
+  });
+  check('queue progress: noctis why names each continuation the changed working tree earned', movedEntries.length, 3);
+  check('queue progress: a file edited back and forth is not progress', stopsBeforeLetGo('tp3', (stop) => fs.writeFileSync(path.join(repo, 'flip.txt'), stop % 2 ? 'one\n' : 'two\n')), 4);
+  acc.run(['queue', 'untrust', '--file', queueFile]);
+  fs.rmSync(repo, { recursive: true, force: true });
+}
+
+async function scenarioQueueChecks(acc) {
+  const now = nowSec();
+  const counter = path.join(LAB_ROOT, 'check-runs.txt');
+  fs.rmSync(counter, { force: true });
+  const counted = (word) => (IS_WINDOWS ? `echo ${word}>> "${counter}"` : `echo ${word} >> '${counter}'`);
+  const runs = (word) => (fs.existsSync(counter) ? fs.readFileSync(counter, 'utf8').split(/\r?\n/).filter((line) => line.trim() === word).length : 0);
+  const stop = (sid, cwd, active) => {
+    const raw = acc.hook({ hook_event_name: 'Stop', session_id: sid, cwd, transcript_path: TRANSCRIPT, stop_hook_active: active });
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  };
+  const outcome = (output) => {
+    const open = /Queue continues: (\d+) open/.exec(output.reason || '');
+    if (open) return `${open[1]} open`;
+    return output.decision === 'block' ? 'sent back' : 'let go';
+  };
+  const checkRuns = (sid) => acc.run(['why', '--json', '--last', '80']).split('\n').flatMap((line) => {
+    try {
+      const entry = JSON.parse(line);
+      return entry.sid === sid && entry.action === 'verify-queue' ? [entry] : [];
+    } catch {
+      return [];
+    }
+  });
+  const checklist = (header, items, ticked) => [...header, ...items.map((item, index) => `- [${index < ticked ? 'x' : ' '}] ${item}`), ''].join('\n');
+
+  const full = counted('full');
+  const each = counted('each');
+  const tiers = ['# q', `noctis-verify: \`${full}\``, `noctis-verify-each: \`${each}\``];
+  const items = ['one', 'two', 'three', 'four'];
+  const { repo } = labRepository('check-repo', { 'TASKS.md': checklist(tiers, items, 0), 'src.txt': 'start\n' });
+  const queueFile = path.join(repo, 'TASKS.md');
+  acc.run(['queue', 'trust', '--file', queueFile]);
+  const status = acc.run(['queue', 'status', '--file', queueFile]);
+  check('queue checks: noctis queue status names the per-item check next to the full one', status.includes(each) && status.includes(full) && status.includes('noctis-verify-each'), true);
+  acc.statusline('qv1', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400, 30);
+  const steps = [['a\n', 1], ['', 2], ['b\n', 3], ['', 4]].map(([source, ticked]) => {
+    if (source) fs.writeFileSync(path.join(repo, 'src.txt'), source);
+    fs.writeFileSync(queueFile, checklist(tiers, items, ticked));
+    return `${outcome(stop('qv1', repo, false))} ${runs('each')}/${runs('full')}`;
+  });
+  check('queue checks: the per-item check runs after each tick and is skipped on a tree it passed on; the full check runs before the queue ends', steps, ['3 open 1/0', '2 open 1/0', '1 open 2/0', 'let go 2/1']);
+  check('queue checks: noctis why journals each run with its tier, and the skip with its reason', checkRuns('qv1').map((entry) => `${entry.tier || 'full'}${entry.skipped && entry.reason.includes('working tree is as it was') ? ' skipped' : ''}`), ['each', 'each skipped', 'each', 'full']);
+  const reopened = [...items, 'five'];
+  fs.writeFileSync(queueFile, checklist(tiers, reopened, 4));
+  acc.run(['queue', 'trust', '--file', queueFile]);
+  const added = outcome(stop('qv1', repo, false));
+  fs.writeFileSync(queueFile, checklist(tiers, reopened, 5));
+  const ended = outcome(stop('qv1', repo, false));
+  const last = checkRuns('qv1').pop() || {};
+  check('queue checks: a last item ticked on the tree the full check passed on ends the queue without running it again', [added, ended, runs('full'), last.skipped === true && !last.tier], ['1 open', 'let go', 1, true]);
+  acc.run(['queue', 'untrust', '--file', queueFile]);
+
+  const failing = `${counted('fix')}${IS_WINDOWS ? ' & type fixed.txt' : '; cat fixed.txt'}`;
+  const fixHeader = ['# q', `noctis-verify: \`${failing}\``];
+  const { repo: fixRepo } = labRepository('check-fix-repo', { 'TASKS.md': checklist(fixHeader, ['first', 'second'], 0) });
+  const fixFile = path.join(fixRepo, 'TASKS.md');
+  acc.run(['queue', 'trust', '--file', fixFile]);
+  fs.writeFileSync(fixFile, checklist(fixHeader, ['first', 'second'], 1));
+  acc.editState((state) => {
+    delete state.escalateDay;
+  });
+  acc.statusline('qx1', 'claude-sonnet-5-5', 20, now + 7200, 10, now + 3 * 86400, 30);
+  const first = stop('qx1', fixRepo, false);
+  const second = stop('qx1', fixRepo, true);
+  check('check escalation: the second failure in a row hands the fix once to Opus instead of holding the queue',
+    [(first.reason || '').includes('Queue check failed:'), second.decision, (second.reason || '').includes(`Queue check failed again: \`${failing}\``) && (second.reason || '').includes('Hand the fix once to the noctis:worker subagent'), (second.systemMessage || '').startsWith('⇧') && second.systemMessage.includes('Opus')],
+    [true, 'block', true, true]);
+  const handed = checkRuns('qx1').pop() || {};
+  check('check escalation: noctis why journals the hand-off, and it counts toward the day', [handed.escalated, handed.escalateTo, (acc.state().escalateDay || {}).count], [true, 'opus', 1]);
+  fs.writeFileSync(path.join(fixRepo, 'fixed.txt'), 'ok\n');
+  check('check escalation: the fix the stronger model made passes and the queue goes on', [outcome(stop('qx1', fixRepo, true)), runs('fix')], ['1 open', 3]);
+  acc.run(['queue', 'untrust', '--file', fixFile]);
+  for (const target of [repo, fixRepo, counter]) fs.rmSync(target, { recursive: true, force: true });
 }
 
 async function scenarioProjection(acc) {
@@ -3175,6 +3288,8 @@ async function main() {
     ['autocompact adaptation', () => scenarioAutocompactAdaptation(accA)],
     ['stale-data projection', () => scenarioProjection(accA)],
     ['queue continuation: stop hook, report, selftest', () => scenarioQueueContinuation(accA)],
+    ['queue progress: a changing working tree, a revert loop, no change', () => scenarioQueueProgress(accA)],
+    ['queue checks: skipped on an unchanged tree, per-item and full tiers, a failing check handed to a stronger model', () => scenarioQueueChecks(accA)],
     ['locale, pace, statusline modes, plan detection', () => scenarioLocaleAndModes(accA)],
     ['multi-session max + scoped model rule', () => scenarioMultiSessionAndScoped(accA)],
     ['subagent pinning, digest policy, observe mode, why, completion promise', () => scenarioSubagentsAndObserve(accA)],
