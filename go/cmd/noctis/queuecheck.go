@@ -295,14 +295,6 @@ func queueCheckPass(record object, tier string, ticked []any, tree string, now f
 	return passed
 }
 
-func rememberPassedTree(key, tree string) {
-	updateState(func(next object) {
-		if record := getMap(getMap(next, "queueVerify"), key); record != nil {
-			record["tree"] = tree
-		}
-	})
-}
-
 func storeEscalatedCheck(key, sid string, record object, now int64) {
 	updateState(func(next object) {
 		stateMap(next, "queueVerify")[key] = record
@@ -491,20 +483,13 @@ func gateQueue(cfg, input object, sid, path, content, label string, snapshot que
 			return nil
 		}
 	}
-	if outcome == "" && tier == eachQueueCheck {
+	if outcome == "" {
 		storeQueueCheck(key, queueCheckPass(record, tier, ticked, tree, now))
 		journal(sid, "Stop", "verify-queue", "passed", facts)
 		logInfo("queue check %q passed for %s in %s", command, sid, folder)
-		return nil
-	}
-	if outcome == "" {
-		updateState(func(next object) { stateMap(next, "queueVerify")[key] = object{"ticked": ticked, "at": now} })
-		if tree != "" {
-			rememberPassedTree(key, tree)
+		if tier == fullQueueCheck {
+			syncDoneIssues(cfg, path, content, getString(input, "cwd"))
 		}
-		journal(sid, "Stop", "verify-queue", "passed", facts)
-		logInfo("queue check %q passed for %s in %s", command, sid, folder)
-		syncDoneIssues(cfg, path, content, getString(input, "cwd"))
 		return nil
 	}
 	failures := numberOr(record, "failures", 0) + 1
