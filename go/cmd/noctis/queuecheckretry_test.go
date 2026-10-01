@@ -183,7 +183,9 @@ func TestACheckThatFailsTheSameWayTwiceHoldsTheQueueBeforeItsAttemptsRunOut(t *t
 }
 
 func TestACheckThatFailsAnotherWayEachTimeKeepsItsAttempts(t *testing.T) {
-	command := shellFor(`echo run >> runs.txt; echo "FAIL TestStep$(wc -l < runs.txt)"; exit 1`, "echo run>> runs.txt & echo FAIL TestStep%RANDOM% & exit 1")
+	// Each run prints one line more than the run before it. cmd's %RANDOM% would not do: cmd seeds it with
+	// the clock in seconds, so two runs started within the same second print the same number.
+	command := shellFor(`echo run >> runs.txt; echo "FAIL TestStep$(wc -l < runs.txt)"; exit 1`, "echo run>> runs.txt & type runs.txt & echo FAIL TestStep & exit 1")
 	cfg, project, frontend := queueCheckSandbox(t, command)
 	section(cfg, "queue")["verifyAttempts"] = float64(3)
 	tickFirstQueueItem(t, project)
