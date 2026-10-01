@@ -3,12 +3,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/synex1437/noctis/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/synex1437/noctis/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/synex1437/noctis/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/synex1437/noctis"></a>
-  <img alt="Windows, macOS, Linux" src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-one%20binary-2a78d6">
-  <img alt="Claude Code, Codex CLI, Antigravity CLI, Droid, Copilot CLI" src="https://img.shields.io/badge/Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20Antigravity%20%C2%B7%20Droid%20%C2%B7%20Copilot-5%20tools-35b26e">
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-lightgrey"></a>
-  <a href="README.tr.md"><img alt="Türkçe README" src="https://img.shields.io/badge/README-T%C3%BCrk%C3%A7e-e30a17"></a>
+  <a href="https://github.com/synex1437/noctis/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/synex1437/noctis/ci.yml?branch=main&event=push&style=flat-square&label=CI&labelColor=0d0d10&color=ff3347"></a>
+  <a href="https://github.com/synex1437/noctis/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/synex1437/noctis?style=flat-square&label=release&labelColor=0d0d10&color=ff3347"></a>
+  <img alt="Windows, macOS, Linux" src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-one%20binary-ff3347?style=flat-square&labelColor=0d0d10">
+  <img alt="Claude Code, Codex CLI, Antigravity CLI, Droid, Copilot CLI" src="https://img.shields.io/badge/Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20Antigravity%20%C2%B7%20Droid%20%C2%B7%20Copilot-5%20tools-ff3347?style=flat-square&labelColor=0d0d10">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-ff3347?style=flat-square&labelColor=0d0d10"></a>
+</p>
+
+<p align="center">
+  <a href="#install"><b>Install</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#quick-start"><b>Quick start</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#how-it-compares"><b>Compare</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#commands"><b>Commands</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#faq"><b>FAQ</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="docs/GUIDE.md"><b>Guide</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="README.tr.md"><b>Türkçe</b></a>
 </p>
 
 # Noctis — Claude Code plugin: pause before usage limits, auto-resume after the reset
@@ -18,6 +21,15 @@
 You queued forty tasks, went to bed, and woke up to *"You've hit your session limit"* at 01:40 — or to a session that stopped at task three with *"moving on to the next thing"*. Noctis handles both: it stops Claude Code before the rate limit instead of after it, comes back when the limit resets, and keeps going down your list. Along the way it keeps Claude sharp: a fresh context once the conversation grows long, your check between items, and a stronger model for the item it gets stuck on.
 
 <p align="center"><img src="docs/demo.svg" alt="A night with noctis: it pauses before the 5-hour limit, waits out the reset in the same turn, keeps working down TASKS.md and stops cleanly when the queue is empty" width="100%"></p>
+
+<table align="center">
+  <tr>
+    <td align="center" width="25%"><b>~5 ms</b><br><sub>per hook on Linux</sub></td>
+    <td align="center" width="25%"><b>0 tokens</b><br><sub>per decision</sub></td>
+    <td align="center" width="25%"><b>1 binary</b><br><sub>no Node, no Git Bash</sub></td>
+    <td align="center" width="25%"><b>14 languages</b><br><sub>the one you type in</sub></td>
+  </tr>
+</table>
 
 ## What it does
 
@@ -60,6 +72,8 @@ Not ready to let it act? `"mode": "observe"` in `~/.claude/noctis/config.json` l
 ## Why not just let Claude Code continue?
 
 Recent Claude Code versions continue a session on their own once a usage limit resets, as long as that session stays open, the machine stays awake and the reset is less than 24 hours away. Noctis covers the rest: it pauses *before* the limit with a checkpoint, relaunches the session from a scheduled task when Claude Code was closed or the reset is days away (the weekly limit), and keeps a queue of jobs moving. When Claude Code's own continue fires, noctis cancels its relaunch.
+
+<p align="center"><img src="docs/before-after.svg" alt="The same night with and without noctis, as an illustration: Claude Code alone waits out the 01:40 limit, then stops at 03:20 with 21 of 48 tasks done; with noctis all 48 are done by 06:55" width="100%"></p>
 
 ## How it compares
 
@@ -153,8 +167,8 @@ Every push runs the Go tests on Linux, macOS and Windows, fuzzing, a lab that dr
 
 Bug reports with `noctis doctor` output and `noctis why --last 20` are the most useful thing you can send; `noctis report --bundle` zips them with the logs ([read it before you attach it](docs/GUIDE.md#bug-reports)). Build and test loop: [CONTRIBUTING.md](CONTRIBUTING.md).
 
-If noctis kept your queue moving, a ⭐ helps other Claude Code users find it.
-
 ## License
 
 MIT — © 2026 synex
+
+<p align="center"><sub>If noctis kept your queue moving, a ⭐ helps other Claude Code users find it&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#top">back to top</a></sub></p>

@@ -2,84 +2,119 @@
   <title>Install in about a minute: add the marketplace, install, run setup (which asks which model does which work), reload, then write TASKS.md and trust it</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b0f17"/>
-      <stop offset="1" stop-color="#121a27"/>
+      <stop offset="0" stop-color="#0d0d10"/>
+      <stop offset="1" stop-color="#050506"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#4f8ff7"/>
-      <stop offset="1" stop-color="#38c7d9"/>
+    <radialGradient id="glow" cx="0.05" cy="0" r="0.55">
+      <stop offset="0" stop-color="#ff1f3d" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#ff1f3d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ember" cx="1" cy="1.05" r="0.55">
+      <stop offset="0" stop-color="#ff1f3d" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#ff1f3d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="badge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff6b78"/>
+      <stop offset="0.5" stop-color="#ff2a40"/>
+      <stop offset="1" stop-color="#b30f26"/>
     </linearGradient>
     <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#141c2b"/>
-      <stop offset="1" stop-color="#0f1622"/>
+      <stop offset="0" stop-color="#131317"/>
+      <stop offset="1" stop-color="#0c0c0f"/>
+    </linearGradient>
+    <linearGradient id="window" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e0e12"/>
+      <stop offset="1" stop-color="#08080a"/>
+    </linearGradient>
+    <linearGradient id="band" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff2a40" stop-opacity="0.18"/>
+      <stop offset="0.8" stop-color="#ff2a40" stop-opacity="0.03"/>
+      <stop offset="1" stop-color="#ff2a40" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff2a40" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#ff2a40" stop-opacity="0.8"/>
+      <stop offset="0.75" stop-color="#ff2a40" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#ff2a40" stop-opacity="0"/>
     </linearGradient>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.45"/>
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.6"/>
     </filter>
+    <clipPath id="frame">
+      <rect x="0.5" y="0.5" width="1199" height="609" rx="18"/>
+    </clipPath>
     <style>
       .sans { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif; }
       .mono { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace; }
-      .eyebrow { font-size: 14px; font-weight: 700; fill: #7f8ea3; letter-spacing: 2.4px; }
-      .title { font-size: 30px; font-weight: 800; fill: #f2f5f9; letter-spacing: -0.4px; }
-      .step { font-size: 15px; font-weight: 700; fill: #dbe2ec; }
-      .num { font-size: 15px; font-weight: 800; fill: #0b0f17; }
-      .cmd { font-size: 14.5px; fill: #e6e9ee; }
-      .prompt { font-size: 14.5px; fill: #6fb1ff; }
-      .dim { font-size: 13px; fill: #8b95a5; }
-      .q { font-size: 14px; fill: #f2f5f9; }
-      .opt { font-size: 13.5px; fill: #aab4c3; }
-      .optHi { font-size: 13.5px; fill: #f5b544; font-weight: 700; }
-      .ok { font-size: 13.5px; fill: #3ecf8e; }
-      .out { font-size: 13.5px; fill: #c7cfda; }
-      .pill { font-size: 13px; font-weight: 600; fill: #dbe2ec; }
+      .eyebrow { font-size: 14px; font-weight: 700; fill: #6f6f79; letter-spacing: 2.4px; }
+      .title { font-size: 30px; font-weight: 800; fill: #f5f5f7; letter-spacing: -0.4px; }
+      .step { font-size: 15px; font-weight: 700; fill: #f5f5f7; }
+      .num { font-size: 15px; font-weight: 800; fill: #ffffff; }
+      .cmd { font-size: 14.5px; fill: #e4e4e8; }
+      .prompt { font-size: 14.5px; fill: #ff3347; }
+      .dim { font-size: 13px; fill: #8f8f99; }
+      .q { font-size: 14px; fill: #f5f5f7; }
+      .opt { font-size: 13.5px; fill: #a3a3ad; }
+      .on { fill: #e4e4e8; }
+      .optHi { font-size: 13.5px; fill: #ff3347; font-weight: 700; }
+      .ok { font-size: 13.5px; fill: #f5f5f7; }
+      .out { font-size: 13.5px; fill: #b9b9c2; }
+      .pill { font-size: 13.5px; font-weight: 600; fill: #e4e4e8; }
+      .ic { fill: none; stroke: #ff3347; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     </style>
   </defs>
 
-  <rect x="0.5" y="0.5" width="1199" height="609" rx="18" fill="url(#bg)" stroke="#232c3b"/>
+  <g clip-path="url(#frame)">
+    <rect width="1200" height="610" fill="url(#bg)"/>
+    <rect width="1200" height="610" fill="url(#glow)"/>
+    <rect width="1200" height="610" fill="url(#ember)"/>
+    <rect x="0" y="607" width="1200" height="3" fill="url(#rule)"/>
+  </g>
+  <rect x="0.5" y="0.5" width="1199" height="609" rx="18" fill="none" stroke="#24242b"/>
 
-  <text x="48" y="58" class="sans eyebrow">INSTALL · SIXTY SECONDS</text>
+  <text x="48" y="58" class="sans eyebrow"><tspan fill="#ff3347">INSTALL</tspan> · SIXTY SECONDS</text>
   <text x="48" y="98" class="sans title">Four commands, one question. Then trust your TASKS.md.</text>
 
   <!-- step rail -->
   <g class="sans">
     <!-- 1 -->
     <g transform="translate(48 132)">
-      <rect x="0" y="0" width="250" height="112" rx="14" fill="url(#card)" stroke="#26303f" filter="url(#shadow)"/>
-      <circle cx="26" cy="28" r="13" fill="url(#accent)"/>
+      <rect x="0.5" y="0.5" width="249" height="111" rx="14" fill="url(#card)" stroke="#26262d" filter="url(#shadow)"/>
+      <circle cx="26" cy="28" r="13" fill="url(#badge)"/>
       <text x="26" y="28" class="num" text-anchor="middle" dominant-baseline="central">1</text>
       <text x="48" y="28" class="step" dominant-baseline="central">Add the marketplace</text>
       <text x="20" y="64" class="mono prompt">/plugin marketplace add</text>
       <text x="20" y="86" class="mono cmd">synex1437/noctis</text>
     </g>
-    <path d="M 304 188 L 324 188" stroke="#2f3b50" stroke-width="2"/>
-    <path d="M 319 183 L 325 188 L 319 193" fill="none" stroke="#2f3b50" stroke-width="2"/>
+    <path d="M 304 188 L 324 188" stroke="#3a3a42" stroke-width="2"/>
+    <path d="M 319 183 L 325 188 L 319 193" fill="none" stroke="#3a3a42" stroke-width="2"/>
     <!-- 2 -->
     <g transform="translate(330 132)">
-      <rect x="0" y="0" width="204" height="112" rx="14" fill="url(#card)" stroke="#26303f" filter="url(#shadow)"/>
-      <circle cx="26" cy="28" r="13" fill="url(#accent)"/>
+      <rect x="0.5" y="0.5" width="203" height="111" rx="14" fill="url(#card)" stroke="#26262d" filter="url(#shadow)"/>
+      <circle cx="26" cy="28" r="13" fill="url(#badge)"/>
       <text x="26" y="28" class="num" text-anchor="middle" dominant-baseline="central">2</text>
       <text x="48" y="28" class="step" dominant-baseline="central">Install</text>
       <text x="20" y="64" class="mono prompt">/plugin install</text>
       <text x="20" y="86" class="mono cmd">noctis@noctis</text>
     </g>
-    <path d="M 540 188 L 560 188" stroke="#2f3b50" stroke-width="2"/>
-    <path d="M 555 183 L 561 188 L 555 193" fill="none" stroke="#2f3b50" stroke-width="2"/>
+    <path d="M 540 188 L 560 188" stroke="#3a3a42" stroke-width="2"/>
+    <path d="M 555 183 L 561 188 L 555 193" fill="none" stroke="#3a3a42" stroke-width="2"/>
     <!-- 3 -->
     <g transform="translate(566 132)">
-      <rect x="0" y="0" width="290" height="112" rx="14" fill="url(#card)" stroke="#3b4d6e" filter="url(#shadow)"/>
-      <circle cx="26" cy="28" r="13" fill="url(#accent)"/>
+      <rect x="0.5" y="0.5" width="289" height="111" rx="14" fill="url(#card)" stroke="#ff3347" stroke-opacity="0.55" filter="url(#shadow)"/>
+      <circle cx="26" cy="28" r="13" fill="url(#badge)"/>
       <text x="26" y="28" class="num" text-anchor="middle" dominant-baseline="central">3</text>
       <text x="48" y="28" class="step" dominant-baseline="central">Set up — it asks one thing</text>
       <text x="20" y="64" class="mono prompt">/noctis:setup</text>
       <text x="20" y="84" class="dim">asks which model does what</text>
       <text x="20" y="101" class="dim">edits settings.json, keeps a backup</text>
     </g>
-    <path d="M 862 188 L 882 188" stroke="#2f3b50" stroke-width="2"/>
-    <path d="M 877 183 L 883 188 L 877 193" fill="none" stroke="#2f3b50" stroke-width="2"/>
+    <path d="M 862 188 L 882 188" stroke="#3a3a42" stroke-width="2"/>
+    <path d="M 877 183 L 883 188 L 877 193" fill="none" stroke="#3a3a42" stroke-width="2"/>
     <!-- 4 -->
     <g transform="translate(888 132)">
-      <rect x="0" y="0" width="264" height="112" rx="14" fill="url(#card)" stroke="#26303f" filter="url(#shadow)"/>
-      <circle cx="26" cy="28" r="13" fill="url(#accent)"/>
+      <rect x="0.5" y="0.5" width="263" height="111" rx="14" fill="url(#card)" stroke="#26262d" filter="url(#shadow)"/>
+      <circle cx="26" cy="28" r="13" fill="url(#badge)"/>
       <text x="26" y="28" class="num" text-anchor="middle" dominant-baseline="central">4</text>
       <text x="48" y="28" class="step" dominant-baseline="central">Reload</text>
       <text x="20" y="64" class="mono prompt">/reload-plugins</text>
@@ -89,28 +124,31 @@
 
   <!-- the one question, then the trust step -->
   <g transform="translate(48 272)">
-    <rect x="0" y="0" width="716" height="290" rx="14" fill="#0d1320" stroke="#26303f" filter="url(#shadow)"/>
-    <circle cx="24" cy="24" r="6" fill="#ff5f57"/>
-    <circle cx="46" cy="24" r="6" fill="#febc2e"/>
-    <circle cx="68" cy="24" r="6" fill="#28c840"/>
+    <rect x="0.5" y="0.5" width="715" height="289" rx="14" fill="url(#window)" stroke="#26262d" filter="url(#shadow)"/>
+    <circle cx="24" cy="24" r="6" fill="#ff3347"/>
+    <circle cx="46" cy="24" r="6" fill="#4a4a52"/>
+    <circle cx="68" cy="24" r="6" fill="#33333a"/>
     <text x="358" y="29" class="mono dim" text-anchor="middle">setup — the one question</text>
-    <line x1="20" y1="44" x2="696" y2="44" stroke="#1d2634"/>
+    <line x1="20" y1="44" x2="696" y2="44" stroke="#1c1c22"/>
+    <rect x="14" y="83" width="688" height="22" rx="5" fill="url(#band)"/>
+    <rect x="14" y="83" width="3" height="22" rx="1.5" fill="#ff3347"/>
     <g class="mono">
       <text x="24" y="74" class="q">Which model should do which kind of work?</text>
-      <text x="24" y="98" class="opt">1 Code</text>
-      <text x="124" y="98" class="opt">Opus 5.5·xhigh code · Sonnet 5.5·high research · Haiku 4.5 digests</text>
+      <text x="24" y="98" class="optHi">1 Code</text>
+      <text x="124" y="98" class="opt on">Opus 5.5·xhigh code · Sonnet 5.5·high research · Haiku 4.5 digests</text>
       <text x="24" y="120" class="opt">2 Search</text>
       <text x="124" y="120" class="opt">Opus 5.5·xhigh research · Opus 5.5·xhigh code · Haiku 4.5 digests</text>
       <text x="24" y="142" class="opt">3 Balanced</text>
       <text x="124" y="142" class="opt">Sonnet 5.5·high code · Sonnet 5.5·high research · Haiku 4.5 digests</text>
-      <text x="24" y="164" class="optHi">4 SYNEX</text>
+      <text x="24" y="164" class="opt">4 SYNEX</text>
       <text x="124" y="164" class="opt">Opus 5.5·max code · Opus 5.5·xhigh research · Haiku 4.5 digests</text>
       <text x="24" y="186" class="opt">5 custom</text>
       <text x="124" y="186" class="opt">a model for each of the six roles, with an effort where one applies</text>
       <text x="24" y="216" class="prompt">›</text>
-      <text x="44" y="216" class="q">4</text>
-      <text x="64" y="216" class="ok">✔ statusLine wired · model=opus · effort=max · permissions.defaultMode=auto</text>
-      <line x1="20" y1="232" x2="696" y2="232" stroke="#1d2634"/>
+      <text x="44" y="216" class="q">1</text>
+      <path transform="translate(70 211)" d="M -5 0.5 L -1.5 4 L 5 -3.5" fill="none" stroke="#ff3347" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="84" y="216" class="ok">statusLine · model=opus · effortLevel=xhigh · defaultMode=auto</text>
+      <line x1="20" y1="232" x2="696" y2="232" stroke="#1c1c22"/>
       <text x="24" y="256" class="prompt">›</text>
       <text x="44" y="256" class="q">!noctis queue trust</text>
       <text x="44" y="278" class="out">This file may drive sessions: /home/you/my-project/TASKS.md</text>
@@ -119,15 +157,37 @@
 
   <!-- what you get -->
   <g transform="translate(792 272)" class="sans">
-    <rect x="0" y="0" width="360" height="290" rx="14" fill="url(#card)" stroke="#26303f" filter="url(#shadow)"/>
+    <rect x="0.5" y="0.5" width="359" height="289" rx="14" fill="url(#card)" stroke="#26262d" filter="url(#shadow)"/>
     <text x="24" y="40" class="step">What the night looks like afterwards</text>
     <g class="pill">
-      <text x="24" y="82"><tspan fill="#f5b544">⏸️</tspan> pauses before the limit, then resumes</text>
-      <text x="24" y="118"><tspan fill="#3ecf8e">✔</tspan> works down a trusted TASKS.md</text>
-      <text x="24" y="154"><tspan fill="#a78bfa">🔀</tspan> research in its own subagent</text>
-      <text x="24" y="190"><tspan fill="#38c7d9">⟳</tspan> workflows rerun from saved results</text>
-      <text x="24" y="226"><tspan fill="#6fb1ff">🌐</tspan> notices in the language you type</text>
-      <text x="24" y="262"><tspan fill="#e6e9ee">◎</tspan> no model calls · 5–11 ms per hook</text>
+      <g transform="translate(32 77)" fill="#ff3347">
+        <rect x="-6" y="-6.5" width="4" height="13" rx="1"/>
+        <rect x="1.5" y="-6.5" width="4" height="13" rx="1"/>
+      </g>
+      <text x="52" y="82">pauses before the limit, then resumes</text>
+      <path class="ic" transform="translate(32 113)" d="M -6 0.5 L -2 4.5 L 6 -4"/>
+      <text x="52" y="118">works down a trusted TASKS.md</text>
+      <g transform="translate(32 149)">
+        <path class="ic" d="M -7 0 H -2 L 5 -5.5 M -2 0 L 5 5.5"/>
+        <path class="ic" d="M 2 -6.5 L 5.5 -5.5 L 4.5 -2"/>
+        <path class="ic" d="M 2 6.5 L 5.5 5.5 L 4.5 2"/>
+      </g>
+      <text x="52" y="154">research in its own subagent</text>
+      <g transform="translate(32 185)">
+        <path class="ic" d="M 6 0 A 6 6 0 1 1 3.5 -4.9"/>
+        <path class="ic" d="M 1.2 -7.6 L 4 -4.6 L 0.4 -2.8"/>
+      </g>
+      <text x="52" y="190">workflows rerun from saved results</text>
+      <g transform="translate(32 221)">
+        <circle r="7" class="ic"/>
+        <path class="ic" stroke-width="1.5" d="M -7 0 H 7 M 0 -7 C -3.5 -3 -3.5 3 0 7 M 0 -7 C 3.5 -3 3.5 3 0 7"/>
+      </g>
+      <text x="52" y="226">notices in the language you type</text>
+      <g transform="translate(32 257)">
+        <circle r="7" class="ic"/>
+        <circle r="2.6" fill="#ff3347"/>
+      </g>
+      <text x="52" y="262">no model calls · 5–11 ms per hook</text>
     </g>
   </g>
 

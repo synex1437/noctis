@@ -2,30 +2,58 @@
   <title>The noctis status line</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b0f17"/>
-      <stop offset="1" stop-color="#121a27"/>
+      <stop offset="0" stop-color="#0d0d10"/>
+      <stop offset="1" stop-color="#050506"/>
     </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.6">
+      <stop offset="0" stop-color="#ff1f3d" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#ff1f3d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="window" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e0e12"/>
+      <stop offset="1" stop-color="#08080a"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff2a40" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#ff2a40" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff2a40" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#ff2a40" stop-opacity="0.8"/>
+      <stop offset="0.75" stop-color="#ff2a40" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#ff2a40" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="frame">
+      <rect x="0.5" y="0.5" width="1199" height="375" rx="16"/>
+    </clipPath>
     <style>
       .mono { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace; }
       .sans { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif; }
-      .line { font-size: 18px; fill: #dfe5ee; }
-      .dim { font-size: 18px; fill: #8b95a5; }
-      .st { font-size: 18px; fill: #c7cfda; }
-      .call { font-size: 15px; fill: #c7cfda; }
-      .note { font-size: 14px; fill: #8b95a5; }
-      .conn { stroke: #4a5568; stroke-width: 1.5; fill: none; }
+      .line { font-size: 18px; fill: #f5f5f7; }
+      .dim { font-size: 18px; fill: #7c7c86; }
+      .st { font-size: 18px; fill: #f5f5f7; }
+      .call { font-size: 15px; fill: #d7d7dd; }
+      .note { font-size: 14px; fill: #6f6f79; }
+      .conn { stroke: #ff3347; stroke-opacity: 0.45; stroke-width: 1.5; fill: none; }
       .titlebar { font-size: 14px; }
     </style>
   </defs>
-  <rect x="0.5" y="0.5" width="1199" height="375" rx="16" fill="url(#bg)" stroke="#232c3b"/>
-  <rect x="20.5" y="20.5" width="1159" height="190" rx="12" fill="#0d1320" stroke="#232c3b"/>
-  <circle cx="44" cy="44" r="6" fill="#ff5f57"/>
-  <circle cx="66" cy="44" r="6" fill="#febc2e"/>
-  <circle cx="88" cy="44" r="6" fill="#28c840"/>
+  <g clip-path="url(#frame)">
+    <rect width="1200" height="376" fill="url(#bg)"/>
+    <rect width="1200" height="376" fill="url(#glow)"/>
+    <rect x="0" y="373" width="1200" height="3" fill="url(#rule)"/>
+  </g>
+  <rect x="0.5" y="0.5" width="1199" height="375" rx="16" fill="none" stroke="#24242b"/>
+  <rect x="20.5" y="20.5" width="1159" height="190" rx="12" fill="url(#window)" stroke="#26262d"/>
+  <circle cx="44" cy="44" r="6" fill="#ff3347"/>
+  <circle cx="66" cy="44" r="6" fill="#4a4a52"/>
+  <circle cx="88" cy="44" r="6" fill="#33333a"/>
   <text x="600" y="49" class="mono dim titlebar" text-anchor="middle">claude — my-project</text>
-  <text x="44" y="92" class="mono line">&gt; Implement the retry logic in queue/worker.go and add tests</text>
-  <text x="44" y="122" class="mono dim">● Working… (Opus 5.5, effort max)</text>
-  <line x1="44" y1="142" x2="1156" y2="142" stroke="#232c3b"/>
+  <text x="44" y="92" class="mono line"><tspan fill="#ff3347">&gt;</tspan> Implement the retry logic in queue/worker.go and add tests</text>
+  <text x="44" y="122" class="mono dim">● Working… (Opus 5.5, effort xhigh)</text>
+  <line x1="44" y1="142" x2="1156" y2="142" stroke="#1c1c22"/>
+  <rect x="34" y="152" width="1132" height="34" rx="7" fill="url(#bar)"/>
+  <rect x="34" y="152" width="3" height="34" rx="1.5" fill="#ff3347"/>
   <!-- the status line exactly as noctis prints it: one plain line, no colours;
        textLength keeps the callout positions right in narrower monospace fonts -->
   <text x="44" y="176" class="mono st" textLength="1041" lengthAdjust="spacing">∞ 5h 41%→14:35 · Wk 60%▼→Mon 28.09 09:00 · ⌛ weekly threshold ~14h 27m · Opus 5.5/xhigh · ctx 37%</text>
@@ -37,16 +65,16 @@
     <path d="M912 192 V294"/>
   </g>
   <g class="sans call">
-    <circle cx="131" cy="244" r="3" fill="#5b9bff"/>
+    <circle cx="131" cy="244" r="3.5" fill="#ff3347"/>
     <text x="28" y="268">5-hour window · 41 % used · resets 14:35</text>
-    <circle cx="662" cy="244" r="3" fill="#f5b544"/>
+    <circle cx="662" cy="244" r="3.5" fill="#ff3347"/>
     <text x="662" y="268" text-anchor="middle">weekly pause point (95 %) in ~14h 27m at this rate</text>
-    <circle cx="1047" cy="244" r="3" fill="#9aa5b6"/>
+    <circle cx="1047" cy="244" r="3.5" fill="#ff3347"/>
     <text x="1047" y="268" text-anchor="middle">context used</text>
-    <circle cx="353" cy="294" r="3" fill="#3ecf8e"/>
+    <circle cx="353" cy="294" r="3.5" fill="#ff3347"/>
     <text x="353" y="318" text-anchor="middle">weekly · 60 % used · ▼ above an even pace · resets Mon 28.09 09:00</text>
-    <circle cx="912" cy="294" r="3" fill="#eef2f7"/>
+    <circle cx="912" cy="294" r="3.5" fill="#ff3347"/>
     <text x="912" y="318" text-anchor="middle">model / effort</text>
   </g>
-  <text x="600" y="354" class="sans note" text-anchor="middle">when the usage endpoint reports a Fable bucket: <tspan class="mono">· Fable 60%</tspan> — in a Fable session also: <tspan class="mono">· ⌛ Fable ~1d 3h 0m</tspan></text>
+  <text x="600" y="354" class="sans note" text-anchor="middle">when the usage endpoint reports a Fable bucket: <tspan class="mono" fill="#a3a3ad">· Fable 60%</tspan> — in a Fable session also: <tspan class="mono" fill="#a3a3ad">· ⌛ Fable ~1d 3h 0m</tspan></text>
 </svg>

@@ -2,65 +2,121 @@
   <title>One night, one queue, no one at the keyboard</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b0f17"/>
-      <stop offset="1" stop-color="#121a27"/>
+      <stop offset="0" stop-color="#0d0d10"/>
+      <stop offset="1" stop-color="#050506"/>
     </linearGradient>
+    <radialGradient id="glow" cx="0.08" cy="0" r="0.6">
+      <stop offset="0" stop-color="#ff1f3d" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#ff1f3d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ember" cx="1" cy="1.1" r="0.6">
+      <stop offset="0" stop-color="#ff1f3d" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#ff1f3d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="window" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e0e12"/>
+      <stop offset="1" stop-color="#08080a"/>
+    </linearGradient>
+    <linearGradient id="band" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff2a40" stop-opacity="0.16"/>
+      <stop offset="0.7" stop-color="#ff2a40" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#ff2a40" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff2a40" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#ff2a40" stop-opacity="0.8"/>
+      <stop offset="0.75" stop-color="#ff2a40" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#ff2a40" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="moonCut">
+      <rect x="-10" y="-10" width="20" height="20" fill="#ffffff"/>
+      <circle cx="3.5" cy="-2.5" r="6.2" fill="#000000"/>
+    </mask>
+    <clipPath id="frame">
+      <rect x="0.5" y="0.5" width="1199" height="499" rx="18"/>
+    </clipPath>
     <style>
       .mono { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 17px; }
       .sans { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif; }
-      .ts { fill: #7f8ea3; }
-      .user { fill: #f2f5f9; }
-      .task { fill: #aab4c3; }
-      .done { fill: #3ecf8e; }
-      .pause { fill: #f5b544; }
-      .hook { fill: #7fb0bd; }
-      .dim { fill: #8b95a5; }
-      .st { font-size: 17px; fill: #c7cfda; }
+      .ts { fill: #6f6f79; }
+      .user { fill: #f5f5f7; }
+      .task { fill: #b9b9c2; }
+      .ok { fill: #f5f5f7; }
+      .red { fill: #ff3347; }
+      .hook { fill: #ff8a95; }
+      .dim { fill: #7c7c86; }
+      .st { font-size: 17px; fill: #d7d7dd; }
       .titlebar { font-size: 14px; }
     </style>
   </defs>
-  <rect x="0.5" y="0.5" width="1199" height="499" rx="18" fill="url(#bg)" stroke="#232c3b"/>
-  <rect x="20.5" y="20.5" width="1159" height="459" rx="14" fill="#0d1320" stroke="#26303f"/>
-  <circle cx="44" cy="44" r="6" fill="#ff5f57"/>
-  <circle cx="66" cy="44" r="6" fill="#febc2e"/>
-  <circle cx="88" cy="44" r="6" fill="#28c840"/>
+  <g clip-path="url(#frame)">
+    <rect width="1200" height="500" fill="url(#bg)"/>
+    <rect width="1200" height="500" fill="url(#glow)"/>
+    <rect width="1200" height="500" fill="url(#ember)"/>
+    <rect x="0" y="497" width="1200" height="3" fill="url(#rule)"/>
+  </g>
+  <rect x="0.5" y="0.5" width="1199" height="499" rx="18" fill="none" stroke="#24242b"/>
+
+  <rect x="20.5" y="20.5" width="1159" height="459" rx="14" fill="url(#window)" stroke="#26262d"/>
+  <circle cx="44" cy="44" r="6" fill="#ff3347"/>
+  <circle cx="66" cy="44" r="6" fill="#4a4a52"/>
+  <circle cx="88" cy="44" r="6" fill="#33333a"/>
   <text x="600" y="49" class="mono dim titlebar" text-anchor="middle">claude — my-project</text>
   <g class="sans" font-size="13">
-    <rect x="1002" y="32" width="158" height="26" rx="13" fill="#161e2e" stroke="#2a3548"/>
-    <text x="1081" y="46" fill="#9aa5b6" text-anchor="middle" dominant-baseline="central">🌙 you: asleep</text>
+    <rect x="1018.5" y="31.5" width="142" height="26" rx="13" fill="#141418" stroke="#2c2c33"/>
+    <g transform="translate(1038 44.5)">
+      <circle r="6" fill="#f5f5f7" mask="url(#moonCut)"/>
+    </g>
+    <text x="1052" y="45" fill="#a3a3ad" dominant-baseline="central">you: asleep</text>
   </g>
-  <line x1="44" y1="68" x2="1156" y2="68" stroke="#1d2634"/>
+  <line x1="44" y1="68" x2="1156" y2="68" stroke="#1c1c22"/>
+
+  <!-- the turn noctis held: a faint red band behind the pause -->
+  <rect x="34" y="153" width="1132" height="62" rx="8" fill="url(#band)"/>
+  <rect x="34" y="153" width="3" height="62" rx="1.5" fill="#ff3347"/>
 
   <g class="mono">
     <text x="44" y="104" class="ts">23:00</text>
-    <text x="114" y="104" class="user">› Work through TASKS.md until every item is checked off.</text>
+    <text x="114" y="104" class="user"><tspan class="red">›</tspan> Work through TASKS.md until every item is checked off.</text>
 
     <text x="44" y="138" class="ts">01:17</text>
-    <text x="114" y="138" class="task">● Task 12/48 · refactor queue/worker.go <tspan class="done">— done, tests green</tspan></text>
+    <text x="114" y="138" class="task">● Task 12/48 · refactor queue/worker.go <tspan class="ok">— done, tests green</tspan></text>
 
     <text x="44" y="172" class="ts">01:40</text>
-    <text x="114" y="172" class="dim">⋯ 5h window at 92 %: checkpoint saved, the hook holds the turn (status line: · ⏸️ 02:36)</text>
+    <text x="114" y="172" class="dim">⋯ 5h window at 92 %: checkpoint saved, the hook holds the turn (status line: · ⏸&#xFE0E; 02:36)</text>
 
     <text x="44" y="206" class="ts">02:36</text>
-    <text x="114" y="206" class="pause">⏸️ 5h limit 92%: waited 56m, continuing. <tspan class="dim">← same turn, context kept</tspan></text>
+    <g transform="translate(114 200)" fill="#ff3347">
+      <rect x="0" y="-7" width="4" height="14" rx="1"/>
+      <rect x="7" y="-7" width="4" height="14" rx="1"/>
+    </g>
+    <text x="134" y="206" class="red">5h limit 92%: waited 56m, continuing. <tspan class="dim">← same turn, context kept</tspan></text>
 
     <text x="44" y="240" class="ts">02:51</text>
-    <text x="114" y="240" class="task">● Task 15/48 · retry logic + tests <tspan class="done">— done</tspan></text>
+    <text x="114" y="240" class="task">● Task 15/48 · retry logic + tests <tspan class="ok">— done</tspan></text>
 
     <text x="44" y="274" class="ts">02:52</text>
     <text x="114" y="274" class="hook">⎿ Stop hook → Claude: [noctis] Queue continues: 33 open in TASKS.md. Take the next eligible item …</text>
 
     <text x="44" y="308" class="ts">04:40</text>
-    <text x="114" y="308" class="task">● Task 31/48 · migrations + rollback test <tspan class="done">— done</tspan></text>
+    <text x="114" y="308" class="task">● Task 31/48 · migrations + rollback test <tspan class="ok">— done</tspan></text>
 
     <text x="44" y="342" class="ts">05:52</text>
-    <text x="114" y="342" class="task">● Task 41/48 · docs/api.md regenerated <tspan class="done">— done</tspan></text>
+    <text x="114" y="342" class="task">● Task 41/48 · docs/api.md regenerated <tspan class="ok">— done</tspan></text>
 
     <text x="44" y="376" class="ts">06:55</text>
-    <text x="114" y="376" class="done">✔ Queue finished — TASKS.md has no open items; stopping cleanly.</text>
+    <path transform="translate(114 370)" d="M 0 0.5 L 4.5 5 L 12 -4.5" fill="none" stroke="#ff3347" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="134" y="376" class="ok" font-weight="700">Queue finished — TASKS.md has no open items; stopping cleanly.</text>
   </g>
 
-  <line x1="44" y1="404" x2="1156" y2="404" stroke="#1d2634"/>
-  <text x="44" y="440" class="mono st">∞ 5h 61%→07:35 · Wk 71%●→Mon 21.09 09:00 · Opus 5.5/xhigh · ctx 52%</text>
-  <text x="1156" y="466" class="sans dim" font-size="13" text-anchor="end">⏸️ and ✔ lines are noctis notices shown to you; the Stop hook line is the instruction noctis hands Claude</text>
+  <line x1="44" y1="404" x2="1156" y2="404" stroke="#1c1c22"/>
+  <text x="44" y="440" class="mono st"><tspan class="red">∞</tspan> 5h 61%→07:35 · Wk 71%●→Mon 21.09 09:00 · Opus 5.5/xhigh · ctx 52%</text>
+  <g class="sans dim" font-size="13">
+    <g transform="translate(44 461)" fill="#ff3347">
+      <rect x="0" y="-5" width="3" height="10" rx="0.8"/>
+      <rect x="5" y="-5" width="3" height="10" rx="0.8"/>
+    </g>
+    <path transform="translate(58 461)" d="M 0 0.4 L 3.4 3.8 L 9 -3.4" fill="none" stroke="#ff3347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="74" y="466">lines are noctis notices shown to you; the Stop hook line is the instruction noctis hands Claude</text>
+  </g>
 </svg>

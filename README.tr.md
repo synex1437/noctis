@@ -3,12 +3,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/synex1437/noctis/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/synex1437/noctis/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/synex1437/noctis/releases"><img alt="Son sürüm" src="https://img.shields.io/github/v/release/synex1437/noctis"></a>
-  <img alt="Windows, macOS, Linux" src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-tek%20binary-2a78d6">
-  <img alt="Claude Code, Codex CLI, Antigravity CLI, Droid, Copilot CLI" src="https://img.shields.io/badge/Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20Antigravity%20%C2%B7%20Droid%20%C2%B7%20Copilot-5%20ara%C3%A7-35b26e">
-  <a href="LICENSE"><img alt="MIT lisansı" src="https://img.shields.io/badge/lisans-MIT-lightgrey"></a>
-  <a href="README.md"><img alt="English README" src="https://img.shields.io/badge/README-English-2a78d6"></a>
+  <a href="https://github.com/synex1437/noctis/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/synex1437/noctis/ci.yml?branch=main&event=push&style=flat-square&label=CI&labelColor=0d0d10&color=ff3347"></a>
+  <a href="https://github.com/synex1437/noctis/releases"><img alt="Son sürüm" src="https://img.shields.io/github/v/release/synex1437/noctis?style=flat-square&label=s%C3%BCr%C3%BCm&labelColor=0d0d10&color=ff3347"></a>
+  <img alt="Windows, macOS, Linux" src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-tek%20binary-ff3347?style=flat-square&labelColor=0d0d10">
+  <img alt="Claude Code, Codex CLI, Antigravity CLI, Droid, Copilot CLI" src="https://img.shields.io/badge/Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20Antigravity%20%C2%B7%20Droid%20%C2%B7%20Copilot-5%20ara%C3%A7-ff3347?style=flat-square&labelColor=0d0d10">
+  <a href="LICENSE"><img alt="MIT lisansı" src="https://img.shields.io/badge/lisans-MIT-ff3347?style=flat-square&labelColor=0d0d10"></a>
+</p>
+
+<p align="center">
+  <a href="#kurulum"><b>Kurulum</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#hızlı-başlangıç"><b>Hızlı başlangıç</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#benzer-araçlarla-karşılaştırma"><b>Karşılaştırma</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#komutlar"><b>Komutlar</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#sss"><b>SSS</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="docs/GUIDE.tr.md"><b>Kılavuz</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="README.md"><b>English</b></a>
 </p>
 
 # Noctis — kullanım limitinden önce duraklayan, sıfırlanınca kendiliğinden devam eden Claude Code eklentisi
@@ -18,6 +21,15 @@
 Kuyruğa kırk iş koyup yattınız; sabah sizi 01:40'ta düşmüş bir *"You've hit your session limit"* mesajı karşıladı — ya da üçüncü işte *"şimdi diğer işe geçiyorum"* deyip durmuş bir oturum. Noctis ikisini de çözer: Claude Code'u hız limitine çarptıktan sonra değil, çarpmadan önce durdurur, limit sıfırlanınca geri döner ve listenizde ilerlemeye devam eder. Bu arada Claude'u keskin tutar: konuşma uzayınca taze bir bağlam, maddeler arasında sizin denetiminiz, takıldığı madde için daha güçlü bir model.
 
 <p align="center"><img src="docs/demo.svg" alt="Noctis'le bir gece: 5 saatlik limitten önce duraklar, sıfırlanmayı aynı tur içinde bekler, TASKS.md'de ilerlemeye devam eder ve kuyruk boşalınca temizce durur" width="100%"></p>
+
+<table align="center">
+  <tr>
+    <td align="center" width="25%"><b>~5 ms</b><br><sub>Linux'ta hook başına</sub></td>
+    <td align="center" width="25%"><b>0 token</b><br><sub>karar başına</sub></td>
+    <td align="center" width="25%"><b>1 binary</b><br><sub>Node yok, Git Bash yok</sub></td>
+    <td align="center" width="25%"><b>14 dil</b><br><sub>hangisini yazıyorsanız</sub></td>
+  </tr>
+</table>
 
 ## Ne yapar
 
@@ -60,6 +72,8 @@ Ona iş yaptırmaya hazır değil misiniz? `~/.claude/noctis/config.json` içind
 ## Claude Code zaten devam etmiyor mu?
 
 Son Claude Code sürümleri, kullanım limiti sıfırlanınca bir oturumu kendiliğinden sürdürebilir; yeter ki o oturum açık kalsın, makine uyanık kalsın ve sıfırlanma 24 saatten yakın olsun. Gerisini noctis üstlenir: limitten *önce* checkpoint alarak duraklar, Claude Code kapatılmışsa ya da sıfırlanma günler sonraysa (haftalık limit) oturumu zamanlanmış bir görevden yeniden başlatır ve bir iş kuyruğunu yürütmeye devam eder. Claude Code'un kendi devamı tetiklenirse noctis kendi yeniden başlatmasını iptal eder.
+
+<p align="center"><img src="docs/before-after.svg" alt="Aynı gece, noctis'li ve noctis'siz, bir çizim olarak: Claude Code tek başına 01:40'taki limiti bekler, sonra 03:20'de 48 işin 21'i bitmişken durur; noctis'le 48'in hepsi 06:55'te bitmiştir" width="100%"></p>
 
 ## Benzer araçlarla karşılaştırma
 
@@ -153,8 +167,8 @@ Her push'ta Linux, macOS ve Windows'ta Go testleri, fuzzing, hook'ları Claude C
 
 `noctis doctor` çıktısı ve `noctis why --last 20` ile gönderilen hata raporları en işe yarar şeydir; `noctis report --bundle` bunları günlüklerle birlikte bir zip'e koyar ([eklemeden önce okuyun](docs/GUIDE.tr.md#hata-bildirimi)). Derleme ve test döngüsü: [CONTRIBUTING.md](CONTRIBUTING.md) (İngilizce).
 
-noctis kuyruğunuzu yürüttüyse bir ⭐, başka Claude Code kullanıcılarının onu bulmasına yardım eder.
-
 ## Lisans
 
 MIT — © 2026 synex
+
+<p align="center"><sub>noctis kuyruğunuzu yürüttüyse bir ⭐, başka Claude Code kullanıcılarının onu bulmasına yardım eder&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#top">başa dön</a></sub></p>

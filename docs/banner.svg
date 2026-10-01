@@ -2,89 +2,136 @@
   <title>Noctis</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b0f17"/>
-      <stop offset="1" stop-color="#141c2a"/>
+      <stop offset="0" stop-color="#0d0d10"/>
+      <stop offset="1" stop-color="#050506"/>
     </linearGradient>
-    <radialGradient id="glow" cx="0.18" cy="0.5" r="0.45">
-      <stop offset="0" stop-color="#4f8ff7" stop-opacity="0.38"/>
-      <stop offset="1" stop-color="#4f8ff7" stop-opacity="0"/>
+    <radialGradient id="glow" cx="0.15" cy="0.5" r="0.55">
+      <stop offset="0" stop-color="#ff1f3d" stop-opacity="0.34"/>
+      <stop offset="0.4" stop-color="#ff1f3d" stop-opacity="0.09"/>
+      <stop offset="1" stop-color="#ff1f3d" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="loop" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#4f8ff7"/>
-      <stop offset="1" stop-color="#38c7d9"/>
+    <radialGradient id="ember" cx="1" cy="1.1" r="0.7">
+      <stop offset="0" stop-color="#ff1f3d" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#ff1f3d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="loop" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff6b78"/>
+      <stop offset="0.5" stop-color="#ff2a40"/>
+      <stop offset="1" stop-color="#b30f26"/>
     </linearGradient>
     <linearGradient id="loopBg" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#4f8ff7" stop-opacity="0"/>
-      <stop offset="0.5" stop-color="#4f8ff7" stop-opacity="0.22"/>
-      <stop offset="1" stop-color="#38c7d9" stop-opacity="0"/>
+      <stop offset="0" stop-color="#ff2a40" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#ff2a40" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#ff2a40" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1c2a44"/>
-      <stop offset="1" stop-color="#0f1626"/>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1a1f"/>
+      <stop offset="1" stop-color="#0a0a0c"/>
     </linearGradient>
-    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
-      <circle cx="1.5" cy="1.5" r="1.2" fill="#ffffff" fill-opacity="0.045"/>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff3b4e" stop-opacity="0.95"/>
+      <stop offset="0.45" stop-color="#ff3b4e" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.08"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff2a40" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#ff2a40" stop-opacity="0.85"/>
+      <stop offset="0.75" stop-color="#ff2a40" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#ff2a40" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gridFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.1"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.04"/>
     </pattern>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000000" flood-opacity="0.55"/>
+    <mask id="gridMask">
+      <rect width="1280" height="420" fill="url(#gridFade)"/>
+    </mask>
+    <mask id="moonCut">
+      <rect x="-20" y="-20" width="40" height="40" fill="#ffffff"/>
+      <circle cx="7" cy="-5" r="13" fill="#000000"/>
+    </mask>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000000" flood-opacity="0.7"/>
     </filter>
-    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="6"/>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8"/>
     </filter>
+    <clipPath id="frame">
+      <rect x="0.5" y="0.5" width="1279" height="419" rx="22"/>
+    </clipPath>
     <style>
       .sans { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif; }
-      .h1 { font-size: 56px; font-weight: 800; fill: #f2f5f9; letter-spacing: -1px; }
-      .h2 { font-size: 23px; fill: #a9b3c2; }
-      .brand { font-size: 15px; font-weight: 700; fill: #7f8ea3; letter-spacing: 2px; }
-      .chip { font-size: 17px; font-weight: 500; fill: #dbe2ec; }
-      .icon { font-weight: 700; }
-      .foot { font-size: 14px; fill: #8b95a5; }
+      .h1 { font-size: 56px; font-weight: 800; fill: #f5f5f7; letter-spacing: -1px; }
+      .red { fill: #ff3347; }
+      .h2 { font-size: 22px; fill: #a3a3ad; }
+      .brand { font-size: 15px; font-weight: 700; fill: #6f6f79; letter-spacing: 2.5px; }
+      .chip { font-size: 17px; font-weight: 500; fill: #e4e4e8; }
+      .foot { font-size: 14px; fill: #6f6f79; }
     </style>
   </defs>
-
-  <rect x="0.5" y="0.5" width="1279" height="419" rx="22" fill="url(#bg)" stroke="#232c3b"/>
-  <rect x="0.5" y="0.5" width="1279" height="419" rx="22" fill="url(#dots)"/>
-  <rect x="0.5" y="0.5" width="1279" height="419" rx="22" fill="url(#glow)"/>
-
-  <!-- background infinity path, sweeping across the whole banner -->
-  <path d="M 120 300 C 120 120 520 120 640 300 C 760 480 1160 480 1160 300 C 1160 120 760 120 640 300 C 520 480 120 480 120 300 Z" fill="none" stroke="url(#loopBg)" stroke-width="3"/>
-  <path d="M 120 300 C 120 120 520 120 640 300 C 760 480 1160 480 1160 300 C 1160 120 760 120 640 300 C 520 480 120 480 120 300 Z" fill="none" stroke="url(#loopBg)" stroke-width="14" filter="url(#soft)" opacity="0.35"/>
+  <g clip-path="url(#frame)">
+    <rect width="1280" height="420" fill="url(#bg)"/>
+    <rect width="1280" height="420" fill="url(#grid)" mask="url(#gridMask)"/>
+    <rect width="1280" height="420" fill="url(#glow)"/>
+    <rect width="1280" height="420" fill="url(#ember)"/>
+    <!-- an infinity sweeping across the banner -->
+    <path d="M 120 300 C 120 120 520 120 640 300 C 760 480 1160 480 1160 300 C 1160 120 760 120 640 300 C 520 480 120 480 120 300 Z" fill="none" stroke="url(#loopBg)" stroke-width="2"/>
+    <path d="M 120 300 C 120 120 520 120 640 300 C 760 480 1160 480 1160 300 C 1160 120 760 120 640 300 C 520 480 120 480 120 300 Z" fill="none" stroke="url(#loopBg)" stroke-width="16" filter="url(#soft)" opacity="0.4"/>
+    <rect x="0" y="417" width="1280" height="3" fill="url(#rule)"/>
+  </g>
+  <rect x="0.5" y="0.5" width="1279" height="419" rx="22" fill="none" stroke="#24242b"/>
 
   <!-- logo tile -->
   <g filter="url(#shadow)">
-    <rect x="72" y="86" width="248" height="248" rx="56" fill="url(#tile)" stroke="#2b3b5a"/>
+    <rect x="72" y="86" width="248" height="248" rx="56" fill="url(#tile)"/>
   </g>
-  <rect x="73" y="87" width="246" height="120" rx="55" fill="#ffffff" fill-opacity="0.035"/>
-  <g transform="translate(196 210)">
-    <path d="M -78 0 C -78 -46 -30 -46 0 0 C 30 46 78 46 78 0 C 78 -46 30 -46 0 0 C -30 46 -78 46 -78 0 Z" fill="none" stroke="#000000" stroke-opacity="0.35" stroke-width="30" stroke-linejoin="round" transform="translate(0 6)"/>
+  <rect x="72.75" y="86.75" width="246.5" height="246.5" rx="55.5" fill="none" stroke="url(#rim)" stroke-width="1.5"/>
+  <rect x="74" y="88" width="244" height="112" rx="54" fill="#ffffff" fill-opacity="0.03"/>
+  <g transform="translate(196 214)">
+    <path d="M -78 0 C -78 -46 -30 -46 0 0 C 30 46 78 46 78 0 C 78 -46 30 -46 0 0 C -30 46 -78 46 -78 0 Z" fill="none" stroke="#ff1f3d" stroke-opacity="0.55" stroke-width="30" stroke-linejoin="round" filter="url(#soft)"/>
+    <path d="M -78 0 C -78 -46 -30 -46 0 0 C 30 46 78 46 78 0 C 78 -46 30 -46 0 0 C -30 46 -78 46 -78 0 Z" fill="none" stroke="#000000" stroke-opacity="0.45" stroke-width="28" stroke-linejoin="round" transform="translate(0 6)"/>
     <path d="M -78 0 C -78 -46 -30 -46 0 0 C 30 46 78 46 78 0 C 78 -46 30 -46 0 0 C -30 46 -78 46 -78 0 Z" fill="none" stroke="url(#loop)" stroke-width="26" stroke-linejoin="round"/>
-    <path d="M -78 0 C -78 -46 -30 -46 0 0" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="6" stroke-linecap="round"/>
+    <path d="M -78 0 C -78 -46 -30 -46 0 0" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <!-- a small moon: the name is Latin for "of the night" -->
+  <g transform="translate(282 124)">
+    <circle r="16" fill="#ff1f3d" opacity="0.45" filter="url(#soft)"/>
+    <circle r="15" fill="#f5f5f7" mask="url(#moonCut)"/>
   </g>
 
-  <!-- a small moon: the name is Latin for "of the night" -->
-  <g transform="translate(286 118)">
-    <circle cx="0" cy="0" r="15" fill="#f5d67a" opacity="0.95"/>
-    <circle cx="7" cy="-4" r="13" fill="#152036"/>
-  </g>
-  <text x="380" y="118" class="sans brand">NOCTIS · CLAUDE CODE · CODEX CLI · ANTIGRAVITY CLI · DROID · COPILOT CLI</text>
+  <text x="380" y="118" class="sans brand"><tspan class="red">NOCTIS</tspan> · CLAUDE CODE · CODEX CLI · ANTIGRAVITY CLI · DROID · COPILOT CLI</text>
   <text x="378" y="184" class="sans h1">AI coding agents that work</text>
-  <text x="378" y="246" class="sans h1">through the night.</text>
-  <text x="380" y="290" class="sans h2">Pauses before the usage limit, waits for the reset, resumes —</text>
-  <text x="380" y="320" class="sans h2">and keeps your task queue moving while you sleep.</text>
+  <text x="378" y="246" class="sans h1">through the <tspan class="red">night.</tspan></text>
+  <text x="380" y="292" class="sans h2">Pauses before the usage limit, waits for the reset, resumes —</text>
+  <text x="380" y="322" class="sans h2">and keeps your task queue moving while you sleep.</text>
 
   <g class="sans chip">
-    <rect x="380" y="346" width="197" height="40" rx="20" fill="#121a29" stroke="#2a3548"/>
-    <text x="478.5" y="367" text-anchor="middle" dominant-baseline="central"><tspan class="icon" fill="#f5b544">⚡</tspan><tspan dx="7">5–11 ms per hook</tspan></text>
-
-    <rect x="589" y="346" width="242" height="40" rx="20" fill="#121a29" stroke="#2a3548"/>
-    <text x="710" y="367" text-anchor="middle" dominant-baseline="central"><tspan class="icon" fill="#3ecf8e">◎</tspan><tspan dx="7">0 tokens per decision</tspan></text>
-
-    <rect x="843" y="346" width="180" height="40" rx="20" fill="#121a29" stroke="#2a3548"/>
-    <text x="933" y="367" text-anchor="middle" dominant-baseline="central"><tspan class="icon" fill="#38c7d9">▣</tspan><tspan dx="7">one Go binary</tspan></text>
-
-    <rect x="1035" y="346" width="205" height="40" rx="20" fill="#121a29" stroke="#2a3548"/>
-    <text x="1137.5" y="367" text-anchor="middle" dominant-baseline="central"><tspan class="icon" fill="#a78bfa">⊞</tspan><tspan dx="7">Win · Mac · Linux</tspan></text>
+    <rect x="380.5" y="348.5" width="199" height="40" rx="20" fill="#111115" stroke="#2a2a31"/>
+    <path transform="translate(404 368.5)" d="M 3 -10 L -6 1.5 L -0.5 1.5 L -3 10 L 6.5 -2 L 1 -2 Z" fill="#ff3347"/>
+    <text x="420" y="369" dominant-baseline="central">5–11 ms per hook</text>
+    <rect x="591.5" y="348.5" width="241" height="40" rx="20" fill="#111115" stroke="#2a2a31"/>
+    <g transform="translate(615 368.5)">
+      <circle r="7.5" fill="none" stroke="#ff3347" stroke-width="2"/>
+      <circle r="2.8" fill="#ff3347"/>
+    </g>
+    <text x="631" y="369" dominant-baseline="central">0 tokens per decision</text>
+    <rect x="844.5" y="348.5" width="179" height="40" rx="20" fill="#111115" stroke="#2a2a31"/>
+    <g transform="translate(868 368.5)">
+      <rect x="-7.5" y="-7.5" width="15" height="15" rx="3" fill="none" stroke="#ff3347" stroke-width="2"/>
+      <rect x="-3" y="-3" width="6" height="6" rx="1" fill="#ff3347"/>
+    </g>
+    <text x="884" y="369" dominant-baseline="central">one Go binary</text>
+    <rect x="1035.5" y="348.5" width="205" height="40" rx="20" fill="#111115" stroke="#2a2a31"/>
+    <g transform="translate(1059 368.5)" fill="#ff3347">
+      <rect x="-7.5" y="-7.5" width="6.5" height="6.5" rx="1.2"/>
+      <rect x="1" y="-7.5" width="6.5" height="6.5" rx="1.2"/>
+      <rect x="-7.5" y="1" width="6.5" height="6.5" rx="1.2"/>
+      <rect x="1" y="1" width="6.5" height="6.5" rx="1.2"/>
+    </g>
+    <text x="1075" y="369" dominant-baseline="central">Win · Mac · Linux</text>
   </g>
-
-  <text x="1228" y="404" class="sans foot" text-anchor="end">MIT</text>
+  <text x="1236" y="404" class="sans foot" text-anchor="end">MIT</text>
 </svg>
