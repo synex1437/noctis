@@ -909,9 +909,17 @@ async function marathonTurn(acc, session, turn, accounts) {
   if (rng() < 0.4) markQueueProgress();
   if (rng() < 0.3) {
     const stop = parseOutput(timedHook(acc, { hook_event_name: 'Stop', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, stop_hook_active: (session.forced || 0) > 0 }));
+    const wait = acc.state().waits[session.sid];
     if (stop.decision === 'block') {
       stats.queueContinues += 1;
       session.forced = (session.forced || 0) + 1;
+    } else if (wait && (wait.kind === 'stop' || /⏸/.test(stop.systemMessage || ''))) {
+      // A stop at a pause point (a limit, or the safety point before compaction) saves the work and ends
+      // the turn like the other pauses; the runner resumes the session. The relaunch a 🔁 model switch
+      // schedules is a wait record too, but the soak goes on with that session on the new model.
+      if (!/⏸/.test(stop.systemMessage || '')) anomaly(`stop paused without the saved notice ${acc.name}/${session.sid}: ${JSON.stringify(stop).slice(0, 160)}`);
+      queueResume(acc, session, {}, stop.systemMessage);
+      return 'stopped';
     } else if (stop.systemMessage && /ilerlemiyor/.test(stop.systemMessage)) {
       stats.stuckStops += 1;
     }
