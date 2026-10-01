@@ -15,7 +15,7 @@
 
 **Noctis keeps long Claude Code jobs running overnight. It pauses just before the 5-hour or weekly usage limit, waits for the reset and resumes the same session on its own, while it works through your task queue without stopping to ask.**
 
-You queued forty tasks, went to bed, and woke up to *"You've hit your session limit"* at 01:40 — or to a session that stopped at task three with *"moving on to the next thing"*. Noctis handles both: it stops Claude Code before the rate limit instead of after it, comes back when the limit resets, and keeps going down your list.
+You queued forty tasks, went to bed, and woke up to *"You've hit your session limit"* at 01:40 — or to a session that stopped at task three with *"moving on to the next thing"*. Noctis handles both: it stops Claude Code before the rate limit instead of after it, comes back when the limit resets, and keeps going down your list. Along the way it keeps Claude sharp: a fresh context once the conversation grows long, your check between items, and a stronger model for the item it gets stuck on.
 
 <p align="center"><img src="docs/demo.svg" alt="A night with noctis: it pauses before the 5-hour limit, waits out the reset in the same turn, keeps working down TASKS.md and stops cleanly when the queue is empty" width="100%"></p>
 
@@ -24,9 +24,10 @@ You queued forty tasks, went to bed, and woke up to *"You've hit your session li
 - **Pauses before the limit, not after the 429.** At 92 % of the 5-hour window and 95 % of the weekly one by default, or earlier when a burst or the burn rate says the next turns would cross it, after a checkpoint of the last request, the touched files, `git status`, todos and the next jobs.
 - **Auto-resumes the same session.** A reset within about 5½ hours is waited out inside the turn, context intact. A later one, such as the weekly limit, relaunches `claude --resume` from Task Scheduler, launchd or systemd, even days later and even after Claude Code was closed; Windows, and Linux with `CAP_WAKE_ALARM`, can wake the machine for it.
 - **Works through a task queue.** `/noctis:start jobs.md` runs the jobs in a file in order without stopping to ask; a long prompt with several tasks becomes such a list by itself; a `TASKS.md` you trust drives every session, with priorities, dependencies and GitHub issues. Steps marked `(human)` wait for you, a `noctis-verify` line runs your checks between items, and long builds run as background jobs the queue waits for.
+- **Keeps Claude in its smart zone.** Once a session's context passes 100k tokens, each next item goes to a fresh `noctis:worker` subagent with a brief of its own; after a compaction Claude is told the item in hand, the files changed and how the check stands; a failing check is fixed in the code, not in its tests; an item Claude keeps stopping on goes once to a stronger model; and `noctis queue status` shows what each item took, so you can size the next ones.
 - **Never spends paid usage credits.** It stops at 100 % of a window even when the thresholds are off, and refuses a fan-out workflow that would not fit in what is left.
 - **Zero tokens per decision.** Fixed rules over your usage data, and every decision logged (`noctis why`). One self-contained Go binary, about 5 ms per hook on Linux; no Node, Git Bash or compiler.
-- **The right model for each job.** Code on Opus 5.5 · max by default, or on Sonnet 5.5 · high to spend less (Balanced), file search and output digests on Haiku 4.5, and, with the router on, research and writing in a subagent of their own.
+- **The right model for each job.** Code on Opus 5.5 · xhigh by default (the Code profile), or on Sonnet 5.5 · high to spend less (Balanced), file search and output digests on Haiku 4.5, and, with the router on, research and writing in a subagent of their own.
 - **Lean compaction, a status line and 14 languages.** It compacts between turns at 70 % context, draws a status line with both usage windows and their reset times, and speaks the language you type in.
 - **Also runs in** OpenAI Codex CLI, Antigravity CLI, Factory Droid and GitHub Copilot CLI, with fewer features.
 
@@ -50,7 +51,7 @@ Setup asks one question, which model does which kind of work, and keeps the answ
 
 ## Quick start
 
-1. Look at the bottom of the window: `∞ 5h 41%→14:35 · Wk 23%▲→Mon 21.09 09:00 · Opus 5.5/max · ctx 37%` shows both usage windows and when each resets, the model and effort, and how full the context is.
+1. Look at the bottom of the window: `∞ 5h 41%→14:35 · Wk 23%▲→Mon 21.09 09:00 · Opus 5.5/xhigh · ctx 37%` shows both usage windows and when each resets, the model and effort, and how full the context is.
 2. Put a few jobs in a file, one per line (`- [ ] write tests for the payments module`), and type `/noctis:start TASKS.md`. Claude works through them in order; `/noctis:stop` ends it early.
 3. Go to bed. At a limit there is nothing to do: noctis pauses, waits and continues, and a desktop notification tells you when work resumes.
 

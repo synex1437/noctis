@@ -1,5 +1,7 @@
 # Noctis rehberi
 
+noctis'in iki işi var: uzun Claude Code işlerini kullanım limitlerine rağmen yürütmek ve bunu yaparken Claude'u en iyi hâlinde tutmak. İkincisi şu demek: her adım için küçük ve temiz bir bağlam, bir adım bitti sayılmadan önce bir denetim, Claude'un takıldığı adım için daha güçlü bir model ve uzun bir konuşmayı yeniden okumaya değil işe harcanan limitler.
+
 [README](../README.tr.md)'nin kısa tuttuğu her şey: noctis'in makinenizde neyi değiştirdiği ve bunun nasıl geri alınacağı, kuyruk biçimi, siz yokken ne yaptığı, büyük bir projeyi sunucuda yürütmek, yalın sıkıştırma, durum çubuğu, kurulum ayrıntıları ve çalıştığı diğer yapay zekâ kodlama araçları. Her komut, yapılandırma anahtarı ve dosya [REFERENCE.md](REFERENCE.md)'de (İngilizce).
 
 - [Başlarken: ilk beş dakika](#başlarken-ilk-beş-dakika)
@@ -19,7 +21,7 @@
 
 ## Başlarken: ilk beş dakika
 
-1. `/reload-plugins` sonrası pencerenin altına bakın: `∞ 5sa %41→14:35 · Hf %23▲→Pzt 21.09 09:00 · Opus 5.5/max · ctx %37` — iki kullanım penceresi ve her birinin sıfırlanma zamanı, model ve effort, bağlamın ne kadar dolu olduğu. *limit verisi bekleniyor* yazıyorsa bir mesaj gönderin; ilk yanıttan sonra dolar. (Bu oturumda Türkçe bir şey yazana kadar çubuk `NOCTIS_LANG`, `locale` ya da sistem dilini izler; bunlardan hiçbiri tanınan bir dil değilse — Windows'ta çoğu zaman böyledir — `5h … Wk … Mon … ctx 37%` ve *waiting for limit data* görürsünüz. `NOCTIS_LANG` ya da sabit bir `locale` varsa yazdığınız dil çubuğu değiştirmez.)
+1. `/reload-plugins` sonrası pencerenin altına bakın: `∞ 5sa %41→14:35 · Hf %23▲→Pzt 21.09 09:00 · Opus 5.5/xhigh · ctx %37` — iki kullanım penceresi ve her birinin sıfırlanma zamanı, model ve effort, bağlamın ne kadar dolu olduğu. *limit verisi bekleniyor* yazıyorsa bir mesaj gönderin; ilk yanıttan sonra dolar. (Bu oturumda Türkçe bir şey yazana kadar çubuk `NOCTIS_LANG`, `locale` ya da sistem dilini izler; bunlardan hiçbiri tanınan bir dil değilse — Windows'ta çoğu zaman böyledir — `5h … Wk … Mon … ctx 37%` ve *waiting for limit data* görürsünüz. `NOCTIS_LANG` ya da sabit bir `locale` varsa yazdığınız dil çubuğu değiştirmez.)
 2. `/noctis:status` yazın: kullanım, duraklama noktaları, hangi modelin hangi işi yaptığı ve eklentinin son kararları.
 3. Aşağıdaki üç satırlık `TASKS.md`'yi yazın ve `/noctis:start TASKS.md` yazın: noctis kaç iş bulduğunu söyler, Claude da onları kendi kendine yapar ve her birini noctis'in listedeki kopyasında işaretler. `/noctis:stop` onu erken bitirir.
 4. Limitte yapmanız gereken bir şey yok. Yaklaşık 5½ saat içindeki bir sıfırlanma tur içinde beklenir, bağlam korunur. Daha geç bir sıfırlanmada iş kaydedilir ve aynı oturum yeni bir terminalde `claude --resume` ile sürdürülür — Windows Terminal sekmesi (ya da bir konsol penceresi), macOS'ta Terminal penceresi, Linux'ta masaüstü terminaliniz. macOS ve Linux'ta hiçbiri açılamazsa oturum pencere açılmadan çalışır, çıktısı `resume-output.log`'a yazılır; Windows'ta pencere açılamazsa bu, çalıştırmanız gereken `claude --resume` komutuyla birlikte bildirilir. Windows ve Linux'ta görev makineyi uyandırma isteğiyle kurulur (Linux'ta bunun için `CAP_WAKE_ALARM` gerekir); launchd Mac'i uyandıramaz, Mac'in gece boyunca uykuya geçmemesini sağlayın.
@@ -211,7 +213,7 @@ noctis'in budadığı her sıkıştırma `~/.claude/noctis/compact.log` dosyası
 <p align="center"><img src="statusline.svg" alt="Durum çubuğu: 5 saatlik pencere, tempo işaretli ve ETA'lı haftalık pencere, model ve effort, bağlam" width="100%"></p>
 
 ```
-∞ 5sa %41→14:35 · Hf %60▼→Pzt 28.09 09:00 · ⌛ hafta eşiği ~14sa 27dk · Opus 5.5/max · ctx %37
+∞ 5sa %41→14:35 · Hf %60▼→Pzt 28.09 09:00 · ⌛ hafta eşiği ~14sa 27dk · Opus 5.5/xhigh · ctx %37
 ```
 
 `%41→14:35` pencerenin kullanılan payı ve sıfırlanma zamanıdır; başka bir güne düşen sıfırlanmada gün ve tarih de görünür. `▲ / ● / ▼` haftalık kullanımın, haftalık duraklama noktasına giden eşit tempodan yavaş mı, tempoda mı, hızlı mı gittiğini gösterir; `▼`, bu hızla sıfırlanmadan önce o noktaya varacağınız demektir. `⌛`, sıfırlanmadan önce gelecekse, mevcut hızla bir duraklama noktasına ne zaman varılacağını söyler. Kullanım uç noktası bir Fable kovası bildirdiğinde çubuk onu da gösterir (`· Fable %60`), bir Fable oturumu ise kendi ETA'sını alır (`· ⌛ Fable ~1g 3sa 0dk`). Bir pencerenin önündeki `⚠`, o pencerenin duraklama noktasına en fazla 6 puan kaldığını belirtir; `⏸ 02:36` bekleyen devam saatini gösterir; `↪ başka bir pencerede sürüyor`, oturumu başka yerde yeniden başlatılmış bir pencereyi işaretler; `⚠ hook yok`, durum çubuğunun güncellendiği ama 30 dakikadır hiçbir hook'un çalışmadığı anlamına gelir; `ctx %72▲`, [yalın sıkıştırmanın](#yalın-sıkıştırma) çalışmadığı bir oturumda bağlamın `compaction.compactAtPercent` değerine ulaştığını söyler (`/compact` yazın); `👁 gözlem` ise gözlem modunu gösterir. Hiçbiri token harcamaz. `statusline.mode: silent` veri toplamayı sürdürür ama hiçbir şey yazmaz, ya da yalnızca zincirlediğiniz durum çubuğunu yazar.
