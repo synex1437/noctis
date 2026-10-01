@@ -56,7 +56,8 @@ func paceNotesOf(record object) []paceNote {
 // noteQueuePace notes the pace of the queue file at path when the items done in content are not the
 // number noted last. Unticked or removed items start the notes over, since the ones kept no longer
 // describe the list. The items ticked since the note before are credited to the setup session sid
-// runs on (noteFinished). A checklist noctis wrote from a prompt is left out.
+// runs on (noteFinished), and what they took is recorded (noteTicks). A checklist noctis wrote from a
+// prompt is left out.
 func noteQueuePace(cfg, state object, sid, path, content string, now int64) {
 	if isAutoQueue(path) {
 		return
@@ -69,7 +70,7 @@ func noteQueuePace(cfg, state object, sid, path, content string, now int64) {
 	if week := currentUsage(now).sevenDay; week != nil {
 		used, resetsAt = week.used, week.resetsAt
 	}
-	setup := sessionSetup(cfg, state, sid)
+	setup, facts := sessionSetup(cfg, state, sid), tickFactsOf(state, sid, path)
 	updateState(func(next object) {
 		paces := stateMap(next, "queuePace")
 		kept := paceNotesOf(toObject(paces[key]))
@@ -82,6 +83,7 @@ func noteQueuePace(cfg, state object, sid, path, content string, now int64) {
 		latest := paceNote{at: float64(now), done: done, used: used, resetsAt: resetsAt}
 		if len(kept) > 0 {
 			noteFinished(next, path, content, kept[len(kept)-1], latest, setup, now)
+			noteTicks(next, path, content, kept[len(kept)-1], latest, setup, facts, now)
 		}
 		kept = append(kept, latest)
 		notes := []any{}

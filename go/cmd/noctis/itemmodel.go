@@ -30,7 +30,7 @@ func itemModelRule(view queueView) string {
 	}
 	for _, item := range view.items {
 		if itemModel(item) != "" {
-			return fmt.Sprintf(" An item tagged (opus), (sonnet), (haiku) or (fable) is for that model: when this session runs on another one, hand the item to %s with that model and a brief that stands on its own (the goal, the files and decisions it needs, what done means); wait for its result, then check its work and tick the item yourself.", workerText(""))
+			return " An item tagged (opus), (sonnet), (haiku) or (fable) is for that model: when this session runs on another one, hand it to " + handOff(workerText("")+" on that model", handOffBrief)
 		}
 	}
 	return ""
@@ -54,5 +54,5 @@ func itemModelNote(cfg, state object, sid string, items []string) (model, note s
 	if session != "" {
 		runs = " and this session runs on " + session
 	}
-	return model, fmt.Sprintf(" The next item is tagged (%s)%s: hand it to %s with a brief that stands on its own (the goal, the files and decisions it needs, what done means); wait for its result, then check its work and tick the item yourself.", model, runs, workerText(model))
+	return model, fmt.Sprintf(" The next item is tagged (%s)%s: hand it to %s", model, runs, handOff(workerText(model), handOffBrief))
 }

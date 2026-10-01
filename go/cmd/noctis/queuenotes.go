@@ -139,7 +139,7 @@ func queueNotesSince(notes object, path string, since float64) []string {
 // queueNotesRule tells a session that drives the queue file at path to note the decisions it takes
 // on its own, and gives it the last ones, so a fresh context keeps to them.
 func queueNotesRule(path string) string {
-	rule := fmt.Sprintf(` When you decide something the user may want to revisit (an approach chosen over another, an assumption where an item is unclear, something left out or done differently), note it in one line: %s queue note "<the decision, and why>" --file %s.`, pluginName, shellQuote(path))
+	rule := fmt.Sprintf(` When you decide something the user may want to revisit (an approach chosen over another, the reading you took of an item that reads more than one way, something left out or done differently), note it in one line: %s queue note "<the decision, and why>" --file %s.`, pluginName, shellQuote(path))
 	shown, count := lastQueueNotes(path)
 	if count == 0 {
 		return rule

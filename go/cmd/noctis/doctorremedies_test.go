@@ -180,3 +180,18 @@ func TestTheUsageAndRoleLinesSayWhatToRun(t *testing.T) {
 		}
 	})
 }
+
+func TestDoctorWarnsWhileFastModeIsOn(t *testing.T) {
+	doctorRemedySandbox(t)
+	cliWrite(t, files.settings, []byte(`{"model": "sonnet", "fastMode": true}`))
+	line, fix := remedyFor(t, doctorRun(t, "claude", object{}), "fast mode is on")
+	if !strings.Contains(line, "usage credits") || fix != "" && !strings.Contains(fix, "/fast") {
+		t.Errorf("the fast mode warning does not say what it costs or how to turn it off:\n%s\n%s", line, fix)
+	}
+	cliWrite(t, files.settings, []byte(`{"model": "sonnet", "fastMode": false}`))
+	for _, line := range doctorRun(t, "claude", object{}) {
+		if strings.Contains(line, "fast mode") {
+			t.Errorf("doctor warns about fast mode while it is off: %q", line)
+		}
+	}
+}

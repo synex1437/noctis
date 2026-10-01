@@ -245,7 +245,7 @@ func (step stuckStep) modelTitle() string {
 func (step stuckStep) lead(path string) (rule, notice string) {
 	switch {
 	case step.escalate:
-		rule = fmt.Sprintf(`The session keeps stopping without ticking an item or committing, and "%s" is still the next item. Hand it once to %s with a brief that stands on its own: the goal and what done means, what you tried, where and why it failed (the errors verbatim), and the files and decisions it needs, so it does not repeat your attempts. Wait for its result and start no other item meanwhile; then check its work and tick the item yourself. If it cannot finish the item either, the next stop asks you to set it aside.`, step.item, step.agentText())
+		rule = fmt.Sprintf(`The session keeps stopping without ticking an item or committing, and "%s" is still the next item. Hand it once to %s If it cannot finish the item either, the next stop asks you to set it aside.`, step.item, handOff(step.agentText(), "the goal and what done means, what you tried, where and why it failed with the errors verbatim, the files and decisions it needs, so it does not repeat your attempts"))
 		return rule, T("queue.escalateMessage", int(step.idle), truncateText(step.item, 100), step.modelTitle())
 	case step.setAside && step.escalated:
 		rule = queueSetAsideRule(step.item, path) + fmt.Sprintf(" It already went to a stronger model (%s), which did not finish it either: give the root cause it found as the reason.", step.modelTitle())
@@ -261,7 +261,7 @@ func (step stuckStep) note() string {
 	if !step.escalated || step.setAside {
 		return ""
 	}
-	return fmt.Sprintf(" The next item went to a stronger model after a session got stuck on it: keep it with %s, give it what the last attempt found and wait for its result, then check its work and tick the item yourself.", step.agentText())
+	return " The next item went to a stronger model after a session got stuck on it: keep it with " + handOff(step.agentText(), "what the last attempt found, "+handOffBrief)
 }
 
 // queueModelsRecord is the record of the queue file at path in state, made when there is none.
@@ -551,6 +551,9 @@ func escalationsSince(state object, path string, since float64) (count, done, st
 func printSetups(target string) {
 	state := readState()
 	lines := setupLines(state, target)
+	if line := ticksLine(state, target); line != "" {
+		lines = append(lines, line)
+	}
 	if open := openEscalations(state, target); len(open) > 0 {
 		lines = append(lines, T("queue.escalatedOpen", strings.Join(open, "; ")))
 	}
@@ -579,5 +582,5 @@ func setupFacts(state object, path string) object {
 	sort.SliceStable(escalated, func(a, b int) bool {
 		return numberOr(toObject(escalated[a]), "at", 0) < numberOr(toObject(escalated[b]), "at", 0)
 	})
-	return object{"setups": setups, "escalated": escalated, "hint": setupHint(setupStatsOf(state, path))}
+	return object{"setups": setups, "escalated": escalated, "hint": setupHint(setupStatsOf(state, path)), "ticks": tickFactsList(state, path)}
 }
