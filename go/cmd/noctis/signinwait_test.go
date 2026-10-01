@@ -38,7 +38,7 @@ func expiredSignInWait(t *testing.T) (object, object) {
 func pollWithoutBackoff(t *testing.T, cfg, record object, polls int) {
 	t.Helper()
 	for poll := 1; poll <= polls; poll++ {
-		if got := earlyRelease(cfg, "w1", record, true, true); got != "" {
+		if got := earlyRelease(cfg, "w1", record, 1, true); got != "" {
 			t.Fatalf("poll %d ended the wait (%s) without any new usage reading", poll, got)
 		}
 		fable := readJSON(files.fable)
@@ -97,7 +97,7 @@ func TestAWaitWhoseSignInExpiredStillEndsOnAnEarlyResetAStatusLineShows(t *testi
 
 	statusReading(now, 4, float64(now+5*3600), 3, float64(now+7*86400))
 
-	if got := earlyRelease(cfg, "w1", record, true, true); got != "reset" {
+	if got := earlyRelease(cfg, "w1", record, 1, true); got != "reset" {
 		t.Fatalf("with the sign-in expired, a status line showing the weekly window reset did not end the wait: %q", got)
 	}
 }

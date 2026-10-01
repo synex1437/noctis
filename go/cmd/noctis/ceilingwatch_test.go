@@ -153,7 +153,7 @@ func TestACeilingPauseOnAStaleTrendEndsWhenFreshDataShowsRoom(t *testing.T) {
 	if plan := evaluate(cfg, currentUsage(nowSec()), "claude-opus-5-5", 0, false).wait; plan != nil {
 		t.Fatalf("a fresh, flat 93%% reading still stops work: %+v", plan)
 	}
-	if got := earlyRelease(cfg, "rel", record, false, false); got != "data" {
+	if got := earlyRelease(cfg, "rel", record, 0, false); got != "data" {
 		t.Fatalf("a pause taken before the paid-credit ceiling on a stale trend held on (%q) after a fresh reading showed the window flat at 93%%, so it would last until the reset at %s", got, formatTime(reset))
 	}
 	if notice := readyNotice(record, "data", nowSec(), ""); notice != T("wait.dataReady", getString(record, "label"), "") {
@@ -162,7 +162,7 @@ func TestACeilingPauseOnAStaleTrendEndsWhenFreshDataShowsRoom(t *testing.T) {
 	for cause, used := range map[string]float64{"burst": 97, "threshold": 100} {
 		held := pauseRecord("ceiling", used, 100, numberOr(record, "startedAt", 0), reset)
 		held["cause"] = cause
-		if got := earlyRelease(cfg, "rel", held, false, false); got != "" {
+		if got := earlyRelease(cfg, "rel", held, 0, false); got != "" {
 			t.Fatalf("a stop at the paid-credit ceiling on a %s at %v%% ended (%s) on a fresh reading, before its window reset", cause, used, got)
 		}
 	}
@@ -192,7 +192,7 @@ func TestARescheduledCeilingPauseDescribesTheStopNowInForce(t *testing.T) {
 		t.Fatalf("the runner kept a pause before the ceiling that now rests on a stale trend, not a burst, described as %v", stored)
 	}
 	statusReading(nowSec(), 93, reset, 20, weekReset)
-	if got := earlyRelease(loadConfig(), "rel", stored, false, false); got != "data" {
+	if got := earlyRelease(loadConfig(), "rel", stored, 0, false); got != "data" {
 		t.Fatalf("the rescheduled pause held on (%q) after a fresh reading showed the window flat at 93%%", got)
 	}
 }
@@ -230,7 +230,7 @@ func TestNoUsageDataNearTheCeilingEndsInABlindPause(t *testing.T) {
 	cfg["thresholds"] = object{"session5h": nil, "weeklyAll": nil, "weeklyFable": nil}
 	cfg["wait"] = object{"earlyResetPollMinutes": float64(5)}
 	statusReadingFrom("blind-ceiling", nowSec(), 97.5, reset, 20, weekReset)
-	if got := earlyRelease(cfg, "blind-ceiling", pauseRecord("blind", 97, 100, float64(now), reset), false, false); got != "data" {
+	if got := earlyRelease(cfg, "blind-ceiling", pauseRecord("blind", 97, 100, float64(now), reset), 0, false); got != "data" {
 		t.Fatalf("a blind stop near the paid-credit ceiling held on (%q) after fresh data showed the window flat at 97.5%%", got)
 	}
 	cfg["credits"] = object{"allowPaid": true}

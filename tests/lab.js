@@ -2515,6 +2515,44 @@ async function scenarioEarlyReset(acc) {
   acc.run(['cancel']);
 }
 
+async function scenarioResetCheck(acc) {
+  const now = nowSec();
+  acc.setConfig((config) => {
+    config.wait.resetMarginSeconds = 90;
+  });
+  const weekly = { kind: 'weekly_all', percent: 20, resets_at: new Date((now + 3 * 86400) * 1000).toISOString() };
+  mock.limits = [{ kind: 'session', percent: 100, resets_at: new Date((now + 3) * 1000).toISOString() }, weekly];
+  fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
+  acc.statusline('rc1', 'claude-fable-5-1', 100, now + 3, 20, now + 3 * 86400);
+  const started = Date.now();
+  const child = acc.hookAsync({ hook_event_name: 'UserPromptSubmit', session_id: 'rc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: 'keep going with auth.js' });
+  let stdout = '';
+  child.stdout.on('data', (chunk) => { stdout += chunk; });
+  await sleep(1500);
+  const held = acc.state().waits.rc1;
+  check('reset check: the wait is held inside the hook with its margin 90 s past the reset', Boolean(held && held.inHook && held.resumeAt - held.until === 90), true);
+  mock.limits = [weekly];
+  await new Promise((resolve) => child.on('close', resolve));
+  const waited = (Date.now() - started) / 1000;
+  check('reset check: the wait ends at the first reading after the reset, long before its margin runs out', waited > 8 && waited < 45, true);
+  const actions = acc.run(['why', '--json', '--last', '20']).split('\n').flatMap((line) => {
+    try {
+      const entry = JSON.parse(line);
+      return entry.sid === 'rc1' ? [entry.action] : [];
+    } catch {
+      return [];
+    }
+  });
+  check('reset check: journaled as a confirmed reset, not as an early one', [actions.includes('reset-confirmed'), actions.includes('early-reset')], [true, false]);
+  check('reset check: the person is told the session goes on, with no early reset claimed', [/devam ediliyor|continuing/.test(stdout), /planlanandan önce|ahead of schedule/.test(stdout)], [true, false]);
+  acc.setConfig((config) => {
+    config.wait.resetMarginSeconds = 1;
+  });
+  mock.limits = [];
+  fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
+  acc.run(['cancel']);
+}
+
 async function scenarioDataReturns(acc) {
   const now = nowSec();
   const fiveReset = now + 3 * 3600;
@@ -3266,6 +3304,7 @@ async function main() {
     ['warn band + burst projection', () => scenarioWarnAndBurst(accA)],
     ['in-hook wait', () => scenarioInHookWait(accA)],
     ['early reset', () => scenarioEarlyReset(accA)],
+    ['reset check: a wait ends at the first reading after its reset', () => scenarioResetCheck(accA)],
     ['data returns: a blind pause ends on fresh data, never over a session that went on', () => scenarioDataReturns(accA)],
     ['visible relaunch: terminal, moved marker, close previous', () => scenarioVisibleRelaunch(accA)],
     ['repair: dead hand-offs and stranded waits', () => scenarioRepair(accA)],

@@ -1822,7 +1822,7 @@ func holdWait(kind, sid string, cfg object, wait *waitPlan, resumeAt float64, he
 		epoch := math.Max(resumeAt, heldResumeAt)
 		watch := newWaitWatch(cfg, sid, owned)
 		watch.startedAt = startedAt
-		reached := sleepUntilEvery(epoch, watch.tickSeconds(), func() bool {
+		reached := sleepUntilPaced(epoch, watch.steadyPace, func() bool {
 			state := readState()
 			if current := getMap(getMap(state, "waits"), sid); current != nil && !sameWait(current, startedAt, holder) || continuedElsewhere(state, sid, startedAt, holder) != "" {
 				return true
@@ -2405,6 +2405,10 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 			notify(cfg, pluginName, T("wait.earlyResetNotify", wait.label))
 			logInfo("in-hook wait for %s ended early: %s reset ahead of schedule", sid, wait.window)
 		default:
+			if watch.early {
+				action, facts := resetSeen(record, resumeAt)
+				journal(sid, kind, action, hitLabel(wait), facts)
+			}
 			notify(cfg, pluginName, T("wait.notifyReset", wait.label))
 			logInfo("in-hook wait finished for %s", sid)
 		}

@@ -15,6 +15,8 @@ const (
 	pauseSettleSeconds  = 60
 )
 
+var resetCheckOffsets = []float64{10, 30, 60}
+
 func earlyResetPollSeconds(cfg object) float64 {
 	minutes := numberOr(section(cfg, "wait"), "earlyResetPollMinutes", 5)
 	if minutes <= 0 {
@@ -39,10 +41,11 @@ func windowClearedAt(usage usageView, windowKey string, threshold, startedAt, ma
 		return false
 	}
 	if win == nil {
-
 		fresh := usage.hasAny && maxAge > 0 && float64(nowSec())-usage.updatedAt <= maxAge
 		another := usage.fiveHour != nil || usage.sevenDay != nil || usage.fable != nil
-		return fresh && another && until > 0 && float64(nowSec()) >= until
+		resetPassed := until > 0 && float64(nowSec()) >= until
+		goneSinceReset := usage.updatedAt >= until && usage.lapsedAt[windowKey] < until
+		return fresh && another && resetPassed && goneSinceReset
 	}
 	if maxAge > 0 && win.staleness > maxAge {
 		return false
@@ -78,15 +81,15 @@ func roomReported(cfg object, sid string, record object, usage usageView, now in
 	return !over || !getBool(section(cfg, "budget"), "hardStop", false)
 }
 
-func earlyRelease(cfg object, sid string, record object, poll, relaunch bool) string {
+func earlyRelease(cfg object, sid string, record object, fetchOlderThan float64, relaunch bool) string {
 	if getString(record, "hit") == "relaunch" {
 		return ""
 	}
 	now := nowSec()
 	pollEvery := earlyResetPollSeconds(cfg)
-	if poll && pollEvery > 0 && currentHost().limits {
+	if fetchOlderThan > 0 && pollEvery > 0 && currentHost().limits {
 		backoff := numberOr(readJSON(files.fable), "backoffUntil", 0)
-		fable := refreshFable(cfg, now, "early-reset", math.Max(1, pollEvery-2), false)
+		fable := refreshFableWaiting(cfg, now, "early-reset", fetchOlderThan, false, refreshWait)
 		if getString(fable, "error") == "token-expired" && numberOr(fable, "backoffUntil", 0) != backoff {
 			tellSignInExpired(cfg, record, numberOr(fable, "fetchedAt", 0))
 		}
@@ -161,23 +164,76 @@ func (w *waitWatch) tickSeconds() float64 {
 }
 
 func (w *waitWatch) tickPace(remaining float64) float64 {
-	base := w.tickSeconds()
-	if remaining <= sleepFarSeconds {
-		return base
+	pace := w.tickSeconds()
+	if remaining > sleepFarSeconds {
+		relaxed := float64(sleepFarTickSeconds)
+		if w.pollEvery > 0 && w.pollEvery < relaxed {
+			relaxed = w.pollEvery
+		}
+		pace = math.Max(pace, relaxed)
 	}
-	relaxed := float64(sleepFarTickSeconds)
-	if w.pollEvery > 0 && w.pollEvery < relaxed {
-		relaxed = w.pollEvery
+	return w.towardResetCheck(pace)
+}
+
+func (w *waitWatch) steadyPace(float64) float64 {
+	return w.towardResetCheck(w.tickSeconds())
+}
+
+func (w *waitWatch) towardResetCheck(pace float64) float64 {
+	now := float64(nowSec())
+	if next := w.nextResetCheck(now); next > 0 {
+		return math.Min(pace, next-now)
 	}
-	if relaxed < base {
-		return base
+	return pace
+}
+
+func (w *waitWatch) nextResetCheck(now float64) float64 {
+	reset := resetToConfirm(w.record)
+	if reset <= 0 {
+		return 0
 	}
-	return relaxed
+	for _, offset := range resetCheckOffsets {
+		if check := reset + offset; check > now {
+			return check
+		}
+	}
+	return 0
+}
+
+func (w *waitWatch) resetCheckDue(now float64) float64 {
+	reset := resetToConfirm(w.record)
+	due := 0.0
+	for _, offset := range resetCheckOffsets {
+		if check := reset + offset; reset > 0 && check <= now && check > w.lastPoll {
+			due = check
+		}
+	}
+	return due
+}
+
+func resetToConfirm(record object) float64 {
+	if builtinResumeFollows(record) {
+		return 0
+	}
+	return numberOr(record, "until", 0)
+}
+
+func builtinResumeFollows(record object) bool {
+	return getString(record, "kind") == "stopfailure"
+}
+
+func resetSeen(record object, resumeAt float64) (string, object) {
+	until := numberOr(record, "until", 0)
+	if now := float64(nowSec()); until > 0 && now >= until {
+		return "reset-confirmed", object{"ahead": math.Max(0, math.Round(resumeAt-now))}
+	}
+	return "early-reset", nil
 }
 
 type waitWatch struct {
 	sid       string
 	cfg       object
+	record    object
 	pollEvery float64
 	lastPoll  float64
 	startedAt float64
@@ -210,12 +266,17 @@ func (w *waitWatch) tick() bool {
 	if w.pollEvery <= 0 {
 		return false
 	}
-
-	poll := now-w.lastPoll >= w.pollEvery
-	if poll {
+	w.record = record
+	fetchOlderThan := 0.0
+	if check := w.resetCheckDue(now); check > 0 {
+		fetchOlderThan = math.Max(1, now-check)
+	} else if now-w.lastPoll >= w.pollEvery {
+		fetchOlderThan = math.Max(1, w.pollEvery-2)
+	}
+	if fetchOlderThan > 0 {
 		w.lastPoll = now
 	}
-	switch earlyRelease(w.cfg, w.sid, record, poll, w.relaunch) {
+	switch earlyRelease(w.cfg, w.sid, record, fetchOlderThan, w.relaunch) {
 	case "reset":
 		w.early = true
 		return true
@@ -244,8 +305,6 @@ func repairOrphanWaits() {
 	rearmStrandedWaits(state)
 }
 
-// triggerEarlyResumes runs on every status line refresh and only looks at the state: it changes a
-// wait through rescheduleOwnWait, which reads the state again.
 func triggerEarlyResumes(cfg object) {
 	if os.Getenv("NOCTIS_NO_EARLY_TRIGGER") != "" || cloudSession() {
 		return
@@ -259,7 +318,7 @@ func triggerEarlyResumes(cfg object) {
 		if getMap(getMap(state, "handedOff"), sid) != nil && !handoffWatchesEarlierWindow(state, sid, numberOr(record, "startedAt", 0)) {
 			continue
 		}
-		reason := earlyRelease(cfg, sid, record, false, true)
+		reason := earlyRelease(cfg, sid, record, 0, true)
 		if reason == "" {
 			continue
 		}
@@ -277,8 +336,9 @@ func triggerEarlyResumes(cfg object) {
 			journal(sid, "statusline", "data-back", getString(record, "label"), nil)
 			logInfo("fresh usage data shows room for %s (%s); resuming ahead of schedule", sid, getString(record, "label"))
 		} else {
-			journal(sid, "statusline", "early-reset", getString(record, "label"), nil)
-			logInfo("early reset seen for %s (%s); resuming ahead of schedule", sid, getString(record, "label"))
+			action, facts := resetSeen(record, numberOr(record, "resumeAt", 0))
+			journal(sid, "statusline", action, getString(record, "label"), facts)
+			logInfo("%s seen for %s (%s); resuming before the planned time", action, sid, getString(record, "label"))
 		}
 		detachedSelf(runnerArgs("resume", sid, files.configDir, "--release", reason))
 	}

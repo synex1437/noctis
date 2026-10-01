@@ -22,7 +22,7 @@ func TestTheUsageFetchDoesNotFollowARedirectWithTheToken(t *testing.T) {
 	t.Cleanup(redirecting.Close)
 	t.Setenv("NOCTIS_USAGE_URL", redirecting.URL)
 
-	next := refreshFable(object{"fable": object{"source": "oauth"}}, nowSec(), "probe", 0, true)
+	next := refreshFableWaiting(object{"fable": object{"source": "oauth"}}, nowSec(), "probe", 0, true, 0)
 
 	if reached.Load() != 0 {
 		t.Fatal("the usage fetch followed a redirect and sent the bearer token to the server it pointed at")

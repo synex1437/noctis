@@ -64,7 +64,7 @@ func pauseRecord(hit string, used, threshold float64, startedAt, until float64) 
 }
 
 func inHookRelease(cfg, record object) string {
-	return earlyRelease(cfg, "rel", record, false, false)
+	return earlyRelease(cfg, "rel", record, 0, false)
 }
 
 func TestABurstPauseHoldsUntilTheWindowReallyResets(t *testing.T) {
@@ -276,7 +276,7 @@ func TestAWeeklyBlindPauseEndsWhenTheUsageEndpointAnswersAgain(t *testing.T) {
 		"kind": "batch", "window": "seven_day", "label": "weekly", "used": float64(84), "threshold": float64(89), "hit": "blind",
 		"startedAt": float64(now - 120), "until": weekReset, "resumeAt": weekReset, "inHook": false, "transcript": transcript,
 	}
-	if got := earlyRelease(cfg, "rel", record, true, true); got != "data" {
+	if got := earlyRelease(cfg, "rel", record, 1, true); got != "data" {
 		t.Fatalf("a parked weekly blind pause stayed parked after the usage endpoint answered with room: %q", got)
 	}
 }
@@ -298,21 +298,21 @@ func TestAParkedDataPauseIsNotRelaunchedOverAContinuedSession(t *testing.T) {
 	record := pauseRecord("blind", 86, 92, float64(now-300), reset)
 	record["inHook"], record["transcript"] = false, transcript
 	statusReading(now, 86.5, reset, 20, weekReset)
-	if got := earlyRelease(cfg, "rel", record, false, true); got != "data" {
+	if got := earlyRelease(cfg, "rel", record, 0, true); got != "data" {
 		t.Fatalf("a parked blind pause of a quiet session stayed parked on fresh data with room: %q", got)
 	}
 	active := time.Unix(now-10, 0)
 	if err := os.Chtimes(transcript, active, active); err != nil {
 		t.Fatal(err)
 	}
-	if got := earlyRelease(cfg, "rel", record, false, true); got != "" {
+	if got := earlyRelease(cfg, "rel", record, 0, true); got != "" {
 		t.Fatalf("a relaunch was allowed (%s) although the session went on after the pause", got)
 	}
-	if got := earlyRelease(cfg, "rel", record, false, false); got != "data" {
+	if got := earlyRelease(cfg, "rel", record, 0, false); got != "data" {
 		t.Fatalf("the waiting hook itself was kept waiting on fresh data with room: %q", got)
 	}
 	record["transcript"] = filepath.Join(dir, "missing.jsonl")
-	if got := earlyRelease(cfg, "rel", record, false, true); got != "" {
+	if got := earlyRelease(cfg, "rel", record, 0, true); got != "" {
 		t.Fatalf("a relaunch was allowed (%s) for a session whose transcript cannot be checked", got)
 	}
 }

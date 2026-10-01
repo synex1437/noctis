@@ -154,7 +154,7 @@ func TestTheRetryRunnerRelaunchesAgainInsteadOfTakingTheFailedRunForTheSessionCo
 			}
 			time.Sleep(1100 * time.Millisecond)
 			statusReadingFrom(sid, nowSec(), 3, float64(nowSec()+18000), 20, float64(nowSec()+3*86400))
-			if reason := earlyRelease(releaseConfig(), sid, waitOf(sid), false, true); reason != "" {
+			if reason := earlyRelease(releaseConfig(), sid, waitOf(sid), 0, true); reason != "" {
 				t.Fatalf("a wait that retries a relaunch was released early (%s) by a status line showing room, which it always shows once the window reset", reason)
 			}
 			updateState(func(state object) {
