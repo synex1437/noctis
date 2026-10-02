@@ -110,5 +110,9 @@ Fable's limit, in its runner, or in a hook the soak's forced walls or chaos sent
 exercised no move off Fable, since the soak counted only the moves its own turns handled. It now
 counts them in noctis's decision journal, names in its summary what a seven-day run exercised too
 little of, and fails a `--hard 1` run with fewer than ten chaos injections, which it never did
-before, as it read a count it did not keep. The results of the local rounds on this release are in
-its commit message.
+before, as it read a count it did not keep. Any soak also counted a workflow the gate refused for
+want of room as refused at low usage whenever every window was under 70 %, while since 5.5.3 the
+gate has wanted 25 points of room before each window's pause point, a 5-hour window at most 67 %
+with the shipped thresholds; a CI run on Windows reached its workflow launch at 68.7 %. A refusal
+now counts as wrong only when every window has that room and 4 points more. The results of the local
+rounds on this release are in its commit message.
