@@ -2303,11 +2303,12 @@ func onStopFailure(input, cfg object) {
 	waitCfg := section(cfg, "wait")
 	margin := math.Max(0, numberOr(waitCfg, "resetMarginSeconds", 0)) + math.Max(0, numberOr(waitCfg, "builtinGraceSeconds", 0))
 	record := object{"kind": "stopfailure", "threshold": nil}
+	failureEnded := float64(now + 1)
 	switch {
 	case overloaded:
 		delay := overloadDelay(cfg, attempt)
 		record["window"], record["label"], record["used"] = "unknown", errorType, nil
-		record["until"], record["resumeAt"] = float64(now), float64(now)+delay
+		record["until"], record["resumeAt"] = failureEnded, float64(now)+delay
 		record["overload"], record["attempt"] = true, attempt
 	case weeklyCulprit:
 		record["window"], record["label"], record["used"] = "seven_day", windowLabel("seven_day"), usage.sevenDay.used
@@ -2321,7 +2322,7 @@ func onStopFailure(input, cfg object) {
 		}
 		persistModelSwitch(cfg, usage.fable.resetsAt, now)
 		record["window"], record["label"], record["used"] = "fable", scopedLabel(cfg), usage.fable.used
-		record["until"], record["resumeAt"] = float64(now), float64(now+120)
+		record["until"], record["resumeAt"] = failureEnded, float64(now+120)
 		record["modelOverride"] = getString(section(cfg, "models"), "fallback")
 	default:
 		retry, firstAt := failureRetry(cfg, sid, now)
@@ -2346,7 +2347,7 @@ func onStopFailure(input, cfg object) {
 			return
 		}
 		record["window"], record["label"], record["used"] = "unknown", windowLabel("unknown"), nil
-		record["until"], record["resumeAt"] = float64(now), float64(now)+delay
+		record["until"], record["resumeAt"] = failureEnded, float64(now)+delay
 		record["retry"], record["error"] = float64(retry), errorType
 	}
 	resumeAt := numberOr(record, "resumeAt", 0)
