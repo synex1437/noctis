@@ -590,7 +590,7 @@ function setOutage(mode) {
 
 function forceWall(acc, session) {
   rollWindows(acc);
-  if (acc.truth.five.resetsAt - T <= IN_HOOK_HOLD_MS / 1000) return false;
+  if (acc.truth.five.resetsAt - T <= IN_HOOK_HOLD_MS / 1000 || typedTurnFor(acc, session.sid)) return false;
   acc.truth.five.used = Math.max(acc.truth.five.used, THRESHOLDS.five + 2);
   publishTruth(acc);
   acc.statusline(session.sid, session.model, Number(acc.truth.five.used.toFixed(1)), acc.truth.five.resetsAt, Number(acc.truth.week.used.toFixed(1)), acc.truth.week.resetsAt, Math.round(session.context));
