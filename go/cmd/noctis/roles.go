@@ -147,18 +147,33 @@ func appliedEffort(role string, spec object) string {
 	return getString(spec, "effort")
 }
 
+func roleValueParts(value string, anyModel bool) (model, effort string, hasEffort bool) {
+	value = strings.TrimSpace(value)
+	cut := strings.Index(value, ":")
+	if anyModel {
+		cut = strings.LastIndex(value, ":")
+	}
+	if cut < 0 {
+		return value, "", false
+	}
+	if tail := strings.ToLower(strings.TrimSpace(value[cut+1:])); anyModel && tail != "" && !validEfforts[tail] {
+		return value, "", false
+	}
+	return strings.TrimSpace(value[:cut]), value[cut+1:], true
+}
+
 func roleFlagError(role, value string, anyModel bool) error {
-	parts := strings.SplitN(strings.TrimSpace(value), ":", 2)
-	if strings.TrimSpace(parts[0]) == "" {
+	model, effort, hasEffort := roleValueParts(value, anyModel)
+	if model == "" {
 		return errors.New(T("roles.badValue", role, value))
 	}
-	if model := strings.TrimSpace(parts[0]); !roleModelPattern.MatchString(model) {
+	if !roleModelPattern.MatchString(model) {
 		return errors.New(T("roles.badModel", role, strconv.Quote(model)))
 	} else if !anyModel && !knownModelName(model) {
 		return errors.New(T("roles.unknownModel", role, strconv.Quote(model)))
 	}
-	if len(parts) == 2 && !validEfforts[strings.ToLower(strings.TrimSpace(parts[1]))] {
-		return errors.New(T("roles.badEffort", role, parts[1]))
+	if hasEffort && !validEfforts[strings.ToLower(strings.TrimSpace(effort))] {
+		return errors.New(T("roles.badEffort", role, effort))
 	}
 	return nil
 }
@@ -167,11 +182,10 @@ func parseRoleFlag(role, value string, anyModel bool) (object, error) {
 	if err := roleFlagError(role, value, anyModel); err != nil {
 		return nil, err
 	}
-	parts := strings.SplitN(strings.TrimSpace(value), ":", 2)
-	model := strings.TrimSpace(parts[0])
+	model, effort, hasEffort := roleValueParts(value, anyModel)
 	spec := object{"model": model}
-	if len(parts) == 2 {
-		effort := strings.ToLower(strings.TrimSpace(parts[1]))
+	if hasEffort {
+		effort = strings.ToLower(strings.TrimSpace(effort))
 		switch {
 		case effortlessRoles[role]:
 			fmt.Println("  " + T("roles.effortIgnored", T("roles."+role), effort))

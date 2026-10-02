@@ -258,7 +258,7 @@ func patchHooks(installRoot, binary string) error {
 }
 
 func readInstallConfig(configFile string) (object, error) {
-	stored := readJSONStrict(configFile)
+	stored := readConfigStrict(configFile)
 	if !stored.ok {
 		return nil, errors.New(T("install.configBroken", configFile, stored.err))
 	}
@@ -288,17 +288,16 @@ func mergeConfig(configFile string, defaults object) (object, map[string]bool, e
 		if own == nil {
 			added[name] = true
 		}
-		if baseMap, ok := base.(object); ok {
+		baseMap, baseIsMap := base.(object)
+		ownMap, ownIsMap := own.(object)
+		switch {
+		case baseIsMap && (own == nil || ownIsMap):
 			combined := cloneObject(baseMap)
-			if ownMap, ok := own.(object); ok {
-				mergeInto(combined, ownMap)
-			}
+			mergeInto(combined, ownMap)
 			merged[name] = combined
-			continue
-		}
-		if own != nil {
+		case own != nil:
 			merged[name] = own
-		} else {
+		default:
 			merged[name] = base
 		}
 	}
@@ -394,7 +393,7 @@ func firstRunSetup(defaults object) {
 			return false
 		}
 		if current != "" {
-			stored := readJSONStrict(files.config)
+			stored := readConfigStrict(files.config)
 			if !stored.ok {
 				warn("ensure: statusLine left as it is: config.json, where its chain is kept, cannot be read (%s)", stored.err)
 				return false
@@ -465,6 +464,9 @@ func healStatusLine() {
 			return false
 		}
 		current := statusLineBinary(command)
+		if !noctisBinary(current) || !filepath.IsAbs(filepath.FromSlash(current)) {
+			return false
+		}
 		binary := healTargetBinary()
 		if binary == "" || forwardSlashes(current) == forwardSlashes(binary) {
 			return false
@@ -499,6 +501,11 @@ func statusLineBinary(command string) string {
 		return command[:space]
 	}
 	return command
+}
+
+func noctisBinary(path string) bool {
+	name := strings.ToLower(filepath.Base(strings.ReplaceAll(path, `\`, "/")))
+	return name == pluginName || name == pluginName+".exe"
 }
 
 func ownStatusLine(command string) bool {
@@ -1068,11 +1075,18 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 		}
 	}
 	modelNote := T("install.modelKept")
-	if managedModel := getMap(guardConfig, "managedModel"); managedModel != nil && getString(data, "model") == getString(managedModel, "set") {
-		if previous := getString(managedModel, "previous"); previous != "" {
+	if managedModel := getMap(guardConfig, "managedModel"); managedModel != nil {
+		previous := getString(managedModel, "previous")
+		changedSince := getString(data, "model") != getString(managedModel, "set")
+		switch {
+		case changedSince && previous != "":
+			modelNote = T("install.modelChanged", previous)
+		case changedSince:
+			modelNote = T("install.modelChangedNone")
+		case previous != "":
 			data["model"] = previous
 			modelNote = T("install.modelRestored", previous)
-		} else {
+		default:
 			delete(data, "model")
 			modelNote = T("install.modelRemoved")
 		}
@@ -1228,11 +1242,7 @@ func argProblems(allowed []string) []string {
 		values := args.values[name]
 		switch {
 		case !known[name]:
-			if guess := closestFlag(name, allowed); guess != "" {
-				problems = append(problems, T("args.unknownGuess", "--"+name, "--"+guess))
-			} else {
-				problems = append(problems, T("args.unknown", "--"+name))
-			}
+			problems = append(problems, unknownFlag(name, allowed))
 		case switchFlags[name]:
 			if len(values) > 0 {
 				problems = append(problems, T("args.noValue", "--"+name))
@@ -1257,6 +1267,13 @@ func argProblems(allowed []string) []string {
 		}
 	}
 	return problems
+}
+
+func unknownFlag(name string, allowed []string) string {
+	if guess := closestFlag(name, allowed); guess != "" {
+		return T("args.unknownGuess", "--"+name, "--"+guess)
+	}
+	return T("args.unknown", "--"+name)
 }
 
 func valueProblem(name, value string) string {

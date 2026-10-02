@@ -10,6 +10,7 @@ func TestItemModelReadsTheModelTagOfAnItem(t *testing.T) {
 		"design the schema (opus)":               "opus",
 		"fix the typo in the README (Sonnet)":    "sonnet",
 		"(HAIKU) rename the variables":           "haiku",
+		"(HAİKU) yazım hatalarını düzelt":        "haiku",
 		"write the proof (fable) first":          "fable",
 		"charge the first customer (after #pay)": "",
 		"compare opus and sonnet":                "",
@@ -98,5 +99,22 @@ func TestTheQueueDirectiveSaysWhatAModelTagMeans(t *testing.T) {
 	trustQueueFile(path, true)
 	if context := getString(getMap(hookOutput(t, onSessionStart, start, cfg), "hookSpecificOutput"), "additionalContext"); !strings.Contains(context, "An item tagged (opus), (sonnet), (haiku) or (fable) is for that model") {
 		t.Fatalf("the queue directive does not say what a model tag means: %q", context)
+	}
+}
+
+const longOpusItem = "migrate the users table to the new schema: add the tenant_id column, backfill it from the accounts table in batches of 10000 rows, then drop the old foreign key (opus)"
+
+func TestAModelTagAtTheEndOfAnItemLongerThanTheQueueViewStillNamesItsModel(t *testing.T) {
+	cfg, project, frontend, _ := deferSandbox(t)
+	path := writeQueueFile(t, project, strings.Replace(deferQueue, "migrate the users table", longOpusItem, 1))
+	trustQueueFile(path, true)
+	start := object{"hook_event_name": "SessionStart", "source": "startup", "session_id": "im9", "cwd": project}
+	if context := getString(getMap(hookOutput(t, onSessionStart, start, cfg), "hookSpecificOutput"), "additionalContext"); !strings.Contains(context, "An item tagged (opus), (sonnet), (haiku) or (fable) is for that model") {
+		t.Errorf("the only tagged item has %d characters, and the queue directive does not say what its tag means: %q", len([]rune(longOpusItem)), context)
+	}
+	runsOn("im9", "claude-sonnet-5-5", 20000)
+	reason := getString(stopHookOutput(t, stopInput("im9", frontend), cfg), "reason")
+	if want := `The next item is tagged (opus) and this session runs on sonnet: hand it to the noctis:worker subagent (subagent_type "noctis:worker", model "opus")`; !strings.Contains(reason, want) {
+		t.Fatalf("the next item of %d characters ends in (opus), but the continuation does not hand it to an opus subagent:\n%s", len([]rune(longOpusItem)), reason)
 	}
 }

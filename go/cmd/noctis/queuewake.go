@@ -200,7 +200,7 @@ func scheduleQueueWake(cfg object, sid string, record object) float64 {
 		record["scheduled"] = scheduled
 		updateState(func(next object) { stateMap(next, "queueWakes")[sid] = record })
 	})
-	journal(sid, "Stop", "arm-queue-wake", getString(record, "label"), object{"at": at, "method": getString(getMap(record, "scheduled"), "method")})
+	journal(sid, "Stop", "arm-queue-wake", getString(record, "label"), object{"wakeAt": at, "method": getString(getMap(record, "scheduled"), "method")})
 	return at
 }
 
@@ -242,6 +242,48 @@ func scheduleQueueWakeRunner(cfg object, sid string, at float64, previous object
 	}
 	logInfo("queue wake for %s scheduled at %s via %s", sid, localISO(at), getString(scheduled, "method"))
 	return scheduled
+}
+
+func rearmStrandedQueueWakes(state object, thorough bool) {
+	var cfg object
+	for sid, raw := range getMap(state, "queueWakes") {
+		wake := toObject(raw)
+		if wake == nil || queueWakeStranded(sid, wake, thorough) == "" {
+			continue
+		}
+		if cfg == nil {
+			cfg = loadConfig()
+		}
+		rearmStrandedQueueWake(cfg, sid, wake, thorough)
+	}
+}
+
+func queueWakeStranded(sid string, wake object, thorough bool) string {
+	return strandedBecause(queueWakeKey(sid), object{"resumeAt": wake["at"], "startedAt": wake["armedAt"], "scheduled": wake["scheduled"]}, nowSec(), thorough)
+}
+
+func rearmStrandedQueueWake(cfg object, sid string, seen object, thorough bool) {
+	withFileLock(scheduleLockFile(queueWakeKey(sid)), func() {
+		wake := getMap(getMap(readState(), "queueWakes"), sid)
+		if numberOr(wake, "armedAt", -1) != numberOr(seen, "armedAt", -2) {
+			return
+		}
+		reason := queueWakeStranded(sid, wake, thorough)
+		if reason == "" {
+			return
+		}
+		previous := getMap(wake, "scheduled")
+		at := math.Max(numberOr(wake, "at", 0), float64(nowSec()+15))
+		scheduled := scheduleQueueWakeRunner(cfg, sid, at, previous)
+		scheduled["rearms"] = numberOr(previous, "rearms", 0) + 1
+		updateState(func(next object) {
+			if current := getMap(getMap(next, "queueWakes"), sid); numberOr(current, "armedAt", -1) == numberOr(wake, "armedAt", -2) {
+				current["at"], current["scheduled"] = at, scheduled
+			}
+		})
+		journal(sid, "repair", "reschedule-queue-wake", reason, object{"wakeAt": at})
+		warn("queue wake of %s: %s; rescheduling", sid, reason)
+	})
 }
 
 // scheduleTimedRunner has the runner argv(account) started at at for key: a Windows task, a launchd
@@ -380,7 +422,7 @@ func fireQueueWake(sid string) {
 		rearm(float64(now+300), "the Stop hook that waits for the deferral still runs")
 		return
 	case numberOr(state, "disabledUntil", 0) > float64(now):
-		rearm(numberOr(state, "disabledUntil", 0)+15, "noctis is paused")
+		rearm(queueWakeAfterPause(numberOr(state, "disabledUntil", 0)), "noctis is paused")
 		return
 	}
 	claimed := false
@@ -471,4 +513,27 @@ func fireQueueWake(sid string) {
 	journal(sid, "queue-wake", "resume", label, object{"eligible": float64(len(view.items))})
 	logInfo("queue wake %s: a deferral in %s ended with %d item(s) eligible; resuming the session", sid, queuePath, len(view.items))
 	resumeWait(sid, "queue")
+}
+
+func queueWakeAfterPause(until float64) float64 {
+	return until + 15
+}
+
+func rearmQueueWakesPutOffBy(pausedUntil float64) {
+	if pausedUntil <= float64(nowSec()) {
+		return
+	}
+	var cfg object
+	for sid, raw := range getMap(readState(), "queueWakes") {
+		record := toObject(raw)
+		if numberOr(record, "at", 0) != queueWakeAfterPause(pausedUntil) {
+			continue
+		}
+		if cfg == nil {
+			cfg = loadConfig()
+		}
+		record["at"] = float64(nowSec())
+		at := scheduleQueueWake(cfg, sid, record)
+		logInfo("queue wake %s: noctis is on again; set again for %s", sid, localISO(at))
+	}
 }

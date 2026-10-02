@@ -72,6 +72,19 @@ func TestAnIssueInAChecklistFromThePromptIsClosedWhenTicked(t *testing.T) {
 	}
 }
 
+func TestAnIssueTickedAndCommentedOutBeforeItsCheckPassedStaysOpen(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, true)
+	section(cfg, "queue")["verifyCommand"] = "make check"
+	calls := fakeGhCLI(t, "[]")
+	queuePath := writeQueueFile(t, project, "# q\n- [ ] #12 Backend crash\n- [ ] write the release notes\n")
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
+	writeQueueFile(t, project, "# q\n- [ ] write the release notes\n<!-- done\n- [x] #12 Backend crash\n-->\n")
+	syncDoneIssues(cfg, queuePath, issueQueueText(t, queuePath), project)
+	if closes := ghLoggedCalls(calls, "close"); len(closes) != 0 || issueStatus(queuePath, "12") != "open" {
+		t.Fatalf("#12 was ticked and moved into an HTML comment before any queue check passed; it is %q after the close calls %q", issueStatus(queuePath, "12"), closes)
+	}
+}
+
 func issueStatus(queuePath, ref string) string {
 	return getString(getMap(getMap(readState(), "githubSeen"), queuePath+"#"+ref), "status")
 }

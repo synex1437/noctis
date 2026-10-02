@@ -17,7 +17,7 @@ type heldToken struct {
 }
 
 var heldReplacer = sync.OnceValue(func() *strings.Replacer {
-	return strings.NewReplacer("’", "'", "‘", "'", "ı", "i", "\u0307", "")
+	return strings.NewReplacer("’", "'", "‘", "'", "´", "'", "`", "'", "ʼ", "'", "′", "'", "＇", "'", "ı", "i", "\u0307", "")
 })
 
 func heldNormal(text string) string {
@@ -34,14 +34,15 @@ func normalWordSet(words string) func(string) bool {
 }
 
 const (
-	sentenceStops = ".;!?\n。；！？؛"
-	clauseStops   = ",:()—–…，：、،"
+	sentenceStops   = ".;!?\n。；！？؛؟"
+	clauseStops     = ",:()—–…，：、،"
+	heldApostrophes = "'’‘´`ʼ′＇"
 )
 
 func heldTokens(text string) []heldToken {
 	tokens, word := []heldToken{}, []rune{}
 	flush := func() {
-		if raw := strings.TrimRight(string(word), "'’-"); raw != "" {
+		if raw := strings.TrimRight(string(word), heldApostrophes+"-"); raw != "" {
 			tokens = append(tokens, heldToken{raw: raw, word: heldNormal(raw)})
 		}
 		word = word[:0]
@@ -50,7 +51,7 @@ func heldTokens(text string) []heldToken {
 		switch {
 		case unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.Is(unicode.Mn, r):
 			word = append(word, r)
-		case (r == '\'' || r == '’' || r == '-') && len(word) > 0:
+		case (strings.ContainsRune(heldApostrophes, r) || r == '-') && len(word) > 0:
 			word = append(word, r)
 		default:
 			flush()
@@ -134,7 +135,8 @@ var (
 	negationFillers = lazyWordSet(`yet now actually even really please go ahead and try to bother attempt i we you want need`)
 	workParticles   = lazyWordSet(`on with to at upon out`)
 	objectEnders    = lazyWordSet(`and but or so because until till before unless while just only instead then since as though although`)
-	conditionWords  = lazyWordSet(`if unless when whenever otherwise except once after whether case`)
+	conditionWords  = lazyWordSet(`if unless when whenever otherwise except once after`)
+	conditionLeads  = lazyWordSet(`even only especially please that`)
 	timeWords       = lazyWordSet(`yet now right away for the moment at this that point stage today tonight session time one
 		immediately please all whatsoever either just anymore still currently here me us`)
 	restrictWords    = lazyWordSet(`to in inside within across throughout on`)
@@ -298,10 +300,23 @@ func wholeWorkObject(words []string) bool {
 
 func objectEnd(words []string, from int) int {
 	end := from
-	for end < len(words) && words[end] != "" && (!objectEnders(words[end]) || untilLater(words, end)) {
+	for end < len(words) && words[end] != "" && (!objectEnders(words[end]) || untilLater(words, end) || anythingBut(words, end)) {
 		end++
 	}
 	return end
+}
+
+func anythingBut(words []string, index int) bool {
+	prev := wordAt(words, index-1)
+	if words[index] != "but" || prev != "anything" && prev != "everything" || !wholeDeterminers(wordAt(words, index+1)) {
+		return false
+	}
+	for _, word := range words[index+1 : min(index+5, len(words))] {
+		if talkNouns(word) || listNouns(word) {
+			return false
+		}
+	}
+	return true
 }
 
 func sentenceWords(sentence []heldToken) []string {
@@ -326,9 +341,14 @@ func englishForbids(sentence []heldToken, listOnly, codeIsPart bool) string {
 		return wholeWorkObject(object) && !(codeIsPart && codeObject(object))
 	}
 	words := sentenceWords(sentence)
+	conditioned := false
 	for index, word := range words {
-		if conditionWords(word) {
-			return ""
+		if sentence[index].stop == ':' {
+			conditioned = false
+		}
+		conditioned = conditioned || opensCondition(words, index)
+		if conditioned {
+			continue
 		}
 		if end := notYetEnd(words, index); end > 0 && !listOnly {
 			return heldQuote(sentence[index:end])
@@ -359,6 +379,15 @@ func englishForbids(sentence []heldToken, listOnly, codeIsPart bool) string {
 		}
 	}
 	return ""
+}
+
+func opensCondition(words []string, index int) bool {
+	word, next, prev := words[index], wordAt(words, index+1), wordAt(words, index-1)
+	switch {
+	case !conditionWords(word), word == "once" && (next == "again" || next == "more"), word == "after" && next == "all":
+		return false
+	}
+	return prev == "" || clauseJoins(prev) || conditionLeads(prev)
 }
 
 var (
@@ -485,7 +514,7 @@ func negatedObject(word string) bool {
 // these", "explain what these involve" or a question about them ask for
 // talk; "implement these", "can you do these?" ask for work.
 func englishTalkLead(sentence []heldToken) (string, bool) {
-	question := len(sentence) > 0 && (sentence[len(sentence)-1].stop == '?' || sentence[len(sentence)-1].stop == '？')
+	question := len(sentence) > 0 && strings.ContainsRune(questionMarks, sentence[len(sentence)-1].stop)
 	talk, work := "", false
 	for _, clause := range heldClauses(sentence, clauseJoins) {
 		words := heldWords(clause)
@@ -593,6 +622,7 @@ var (
 	turkishPlaceNouns = normalWordSet(`dosyalara dosyaları dosyaya dosyayı koda kodu kod kodlara kodları projeye projeyi depoya repoya`)
 	turkishNow        = normalWordSet(`şimdi şimdilik henüz`)
 	turkishExcept     = normalWordSet(`dışında dışındaki haricinde hariç başka`)
+	turkishLeadEnds   = normalWordSet(`için diye deyişle göre kadar rağmen dolayı yüzünden nedeniyle sebebiyle`)
 	turkishBefore     = normalWordSet(`önce evvel`)
 	turkishOnly       = normalWordSet(`sadece yalnızca yalnız`)
 	turkishJoins      = normalWordSet(`ve ama fakat ancak sonra ardından veya`)
@@ -630,10 +660,8 @@ var (
 // codeIsPart the code is such a named part of the work ("mevcut kodu
 // değiştirme", "şimdilik koda dokunma" in a prompt that asks for tests).
 func turkishWholeWorkIn(words []string, strong, codeIsPart bool) bool {
-	for _, word := range words {
-		if turkishExcept(word) {
-			return false
-		}
+	if turkishExceptIn(words) {
+		return false
 	}
 	now, named := false, false
 	for index, word := range words {
@@ -654,13 +682,20 @@ func turkishWholeWorkIn(words []string, strong, codeIsPart bool) bool {
 // turkishListWorkIn tells words that name the listed work itself, "bunların
 // hiçbirini", not a part of it such as "kodu" or "dosyalara".
 func turkishListWorkIn(words []string) bool {
-	for _, word := range words {
-		if turkishExcept(word) {
-			return false
-		}
+	if turkishExceptIn(words) {
+		return false
 	}
 	for _, word := range words {
 		if turkishListWork(word) {
+			return true
+		}
+	}
+	return false
+}
+
+func turkishExceptIn(words []string) bool {
+	for index := len(words) - 1; index >= 0 && !turkishLeadEnds(words[index]); index-- {
+		if turkishExcept(words[index]) {
 			return true
 		}
 	}
@@ -751,7 +786,7 @@ func turkishAsksOnly(sentence []heldToken) string {
 }
 
 func turkishTalkLead(sentence []heldToken) (string, bool) {
-	question := len(sentence) > 0 && (sentence[len(sentence)-1].stop == '?' || sentence[len(sentence)-1].stop == '？')
+	question := len(sentence) > 0 && strings.ContainsRune(questionMarks, sentence[len(sentence)-1].stop)
 	talk, work := "", false
 	for _, clause := range heldClauses(sentence, turkishJoins) {
 		words := heldWords(clause)
@@ -926,7 +961,8 @@ var heldForbidPhrases = []string{
 	"nie dotykaj kodu", "nie dotykaj niczego", "nie zmieniaj niczego", "nie zmieniaj nic", "niczego nie zmieniaj", "nic nie zmieniaj",
 	"nie zmieniaj plików", "nie zmieniaj kodu", "nie modyfikuj plików", "nie modyfikuj kodu", "nie modyfikuj niczego", "nie pisz kodu",
 	"nie pisz jeszcze kodu", "nie zaczynaj jeszcze",
-	"ничего не реализуй", "не реализуй пока", "не реализуйте пока", "пока не реализуй", "пока ничего не", "не реализуй ничего",
+	"ничего не реализуй", "не реализуй пока", "не реализуйте пока", "пока не реализуй", "пока ничего не пиши", "пока ничего не изменяй",
+	"пока ничего не начинай", "пока ничего не правь", "пока ничего не исправляй", "не реализуй ничего",
 	"не реализуйте ничего", "ничего не делай", "не делай ничего", "не делайте ничего", "пока не делай", "не трогай файлы",
 	"не трогайте файлы", "не трогай код", "не трогайте код", "ничего не трогай", "не трогай ничего", "не трогайте ничего", "ничего не меняй",
 	"не меняй ничего", "не меняйте ничего", "не меняй файлы", "не меняйте файлы", "не изменяй файлы", "не изменяйте файлы", "не изменяй код",
@@ -938,7 +974,8 @@ var heldForbidPhrases = []string{
 	"先不要实现", "暂时不要实现", "还不要实现", "不要实现任何", "不要实施任何", "不要修改任何", "不要改动任何", "不要动任何", "不要碰任何", "不要写代码",
 	"不要编写代码", "不要写任何代码", "不要做任何", "不要开始实现", "先别实现", "不要动代码", "不要修改代码", "不要修改文件", "不要改代码", "不要改文件",
 	"先不要實作", "先不要實現", "不要實作任何", "不要寫任何程式碼", "不要改任何",
-	"아직 구현하지", "아무것도 구현하지", "하나도 구현하지", "구현은 아직", "구현은 하지 마", "구현은 하지 말", "파일을 수정하지 마", "파일은 수정하지 마",
+	"아직 구현하지 마", "아직 구현하지 말", "아무것도 구현하지 마", "아무것도 구현하지 말", "하나도 구현하지 마", "하나도 구현하지 말", "구현은 아직",
+	"구현은 하지 마", "구현은 하지 말", "파일을 수정하지 마", "파일은 수정하지 마",
 	"파일을 건드리지 마", "파일은 건드리지 마", "파일도 건드리지 마", "파일도 건드리지 말", "아무것도 수정하지 마", "아무것도 건드리지 마",
 	"코드를 작성하지 마", "코드를 수정하지 마", "코드는 건드리지 마", "코드를 건드리지 마",
 	"لا تنفذ أي", "لا تنفّذ أي", "لا تنفذ شيئ", "لا تنفذ الآن", "لا تنفذها", "لا تطبق أي", "لا تطبق شيئ", "لا تقم بتنفيذ", "لا تقم بأي",
@@ -1001,7 +1038,7 @@ var heldAskPhrases = []string{
 }
 
 var heldElseMarkers = []string{
-	"d'autre", "autre", "más", "otro", "otra", "otros", "otras", "outro", "outra", "altro", "altri", "altra", "nient'altro", "anderes",
+	"d'autre", "autre", "más", "además", "otro", "otra", "otros", "otras", "outro", "outra", "altro", "altri", "altra", "nient'altro", "anderes",
 	"andere", "anders", "weiter", "więcej", "innego", "innych", "inne", "больше", "друг", "他の", "ほかの", "其他", "别的", "其它", "다른",
 	"آخر", "أخرى", "غير", "lain", "lainnya", "selain", "selebihnya",
 }
@@ -1015,26 +1052,41 @@ func latinOrCyrillic(r rune) bool {
 // limit on the job, not a hold on it.
 func heldPhrase(lower string, phrases []string, forbids bool) string {
 	for _, phrase := range phrases {
-		for from := 0; from < len(lower); {
-			at := strings.Index(lower[from:], phrase)
-			if at < 0 {
-				break
+		for at := phraseIndex(lower, phrase, 0); at >= 0; at = phraseIndex(lower, phrase, at+len(phrase)) {
+			if !forbids || !heldElse(lower, at, at+len(phrase)) && !heldStatement(lower[:at]) {
+				return phrase
 			}
-			at += from
-			from = at + len(phrase)
-			first, _ := utf8.DecodeRuneInString(phrase)
-			if latinOrCyrillic(first) && at > 0 {
-				if before, _ := utf8.DecodeLastRuneInString(lower[:at]); unicode.IsLetter(before) || before == '\'' {
-					continue
-				}
-			}
-			if forbids && heldElse(lower, at, from) {
-				continue
-			}
-			return phrase
 		}
 	}
 	return ""
+}
+
+func phraseIndex(text, phrase string, from int) int {
+	first, _ := utf8.DecodeRuneInString(phrase)
+	for from < len(text) {
+		at := strings.Index(text[from:], phrase)
+		if at < 0 {
+			return -1
+		}
+		at += from
+		if before, _ := utf8.DecodeLastRuneInString(text[:at]); !latinOrCyrillic(first) || !unicode.IsLetter(before) && before != '\'' {
+			return at
+		}
+		from = at + len(phrase)
+	}
+	return -1
+}
+
+var heldStatementLeads = []string{"sich", "ça", "cela", "sembra", "sembrano"}
+
+func heldStatement(before string) bool {
+	before = strings.TrimRight(before, " ")
+	for _, lead := range heldStatementLeads {
+		if strings.HasSuffix(before, lead) && phraseIndex(before, lead, len(before)-len(lead)) >= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func heldElse(lower string, start, end int) bool {
@@ -1046,9 +1098,16 @@ func heldElse(lower string, start, end int) bool {
 	if len(before) > 8 {
 		before = before[len(before)-8:]
 	}
+	next, last := string(after), string(before)
+	if stop := strings.IndexAny(next, sentenceStops+clauseStops); stop >= 0 {
+		next = next[:stop]
+	}
+	if stop := strings.LastIndexAny(last, sentenceStops+clauseStops); stop >= 0 {
+		last = last[stop:]
+	}
 	for _, marker := range heldElseMarkers {
 		first, _ := utf8.DecodeRuneInString(marker)
-		if strings.Contains(string(after), marker) || !latinOrCyrillic(first) && strings.Contains(string(before), marker) {
+		if phraseIndex(next, marker, 0) >= 0 || !latinOrCyrillic(first) && strings.Contains(last, marker) {
 			return true
 		}
 	}

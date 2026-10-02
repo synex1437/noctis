@@ -16,7 +16,12 @@ const (
 	splitQueueMaxWords = 1000
 )
 
-var clauseBreak = lazyRegexp(`[.!;:,]\s+|(?i:\s+(?:and|then|plus|ve|sonra|ardından|und|dann|et|puis|y|luego|e|poi|en|daarna|i|potem|и|затем|dan|lalu|kemudian|terus|serta)\s+)`)
+const clauseJoinWords = `and|then|plus|ve|sonra|ardından|und|dann|puis|y|luego|e|poi|en|daarna|i|potem|и|затем|dan|lalu|kemudian|terus|serta`
+
+var (
+	clauseBreak        = lazyRegexp(`[.!;:,]\s+|(?i:\s+(?:et|` + clauseJoinWords + `)\s+)`)
+	turkishClauseBreak = lazyRegexp(`[.!;:,]\s+|(?i:\s+(?:` + clauseJoinWords + `)\s+)`)
+)
 
 var verbFinalImperatives = lazyWordSet(verbFinalImperativeWords)
 
@@ -29,7 +34,7 @@ func cleanWord(word string) string {
 	return strings.ToLower(strings.Trim(word, ",.:;!()\"'“”‘’«»"))
 }
 
-func jobClause(clause string) bool {
+func jobClause(clause, lang string) bool {
 	words := strings.Fields(clause)
 	if len(words) == 0 {
 		return false
@@ -44,7 +49,7 @@ func jobClause(clause string) bool {
 		}
 	}
 	last := cleanWord(words[len(words)-1])
-	return verbFinalImperatives(last) || verbFinalImperatives(strings.TrimSuffix(strings.TrimSuffix(last, "in"), "iniz"))
+	return verbFinalImperatives(last) || verbFinalImperatives(strings.TrimSuffix(strings.TrimSuffix(last, "in"), "iniz")) || lang == "tr" && endsInVerb(clause, lang)
 }
 
 func severalJobsLikely(prompt string) bool {
@@ -52,13 +57,17 @@ func severalJobsLikely(prompt string) bool {
 	if size := len([]rune(text)); size < autoQueueMinChars || size > splitQueueMaxChars || endsQuestion(text) || hasBugReportMarker(text) {
 		return false
 	}
+	lang, breaks := detectLanguage(text), clauseBreak
+	if lang == "tr" {
+		breaks = turkishClauseBreak
+	}
 	jobs, logLines := 0, 0
 	for _, line := range strings.Split(text, "\n") {
 		if logLikeLine.MatchString(line) {
 			logLines++
 		}
-		for _, clause := range clauseBreak.Split(line, -1) {
-			if jobClause(clause) {
+		for _, clause := range breaks.Split(line, -1) {
+			if jobClause(clause, lang) {
 				jobs++
 			}
 		}

@@ -11,12 +11,14 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
 	webhookAttempts       = 3
 	webhookBreakerTrip    = 5
 	webhookBreakerSeconds = 1800
+	ntfyTextBytes         = 4095
 )
 
 type webhookConfig struct {
@@ -60,6 +62,17 @@ func isASCII(text string) bool {
 	return true
 }
 
+func withinBytes(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	cut := limit - len("…")
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut] + "…"
+}
+
 func buildWebhookRequest(config webhookConfig, endpoint *url.URL, title, body string) (*http.Request, error) {
 	var payload []byte
 	contentType := "application/json"
@@ -72,7 +85,7 @@ func buildWebhookRequest(config webhookConfig, endpoint *url.URL, title, body st
 	case "slack":
 		payload = marshalCompact(object{"text": "*" + title + "*\n" + body})
 	case "ntfy":
-		payload = []byte(body)
+		payload = []byte(withinBytes(body, ntfyTextBytes))
 		contentType = "text/plain; charset=utf-8"
 		if isASCII(title) {
 			headers["Title"] = title
@@ -134,7 +147,7 @@ func deliverWebhook(cfg object, title, body string, ignoreBreaker bool) (bool, s
 		return false, T("webhook.circuitOpen", formatTime(numberOr(getMap(state, "webhook"), "openUntil", 0)))
 	}
 	title, body = homeAsTilde(title), homeAsTilde(body)
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	delays := []time.Duration{0, time.Second, 3 * time.Second}
 	var lastError string
 	for attempt := 0; attempt < webhookAttempts; attempt++ {
@@ -161,7 +174,7 @@ func deliverWebhook(cfg object, title, body string, ignoreBreaker bool) (bool, s
 			return true, ""
 		}
 		lastError = "http-" + itoa(response.StatusCode)
-		if response.StatusCode >= 400 && response.StatusCode < 500 && response.StatusCode != 429 {
+		if response.StatusCode < 500 && response.StatusCode != 429 {
 			break
 		}
 	}

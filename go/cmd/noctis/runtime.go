@@ -170,13 +170,17 @@ func healHooksCommand() {
 	warn("hooks.json pointed at a missing binary; self-healed to %s (takes effect after /reload-plugins)", executable)
 }
 
-func readUsageForUpdate() object {
+func readUsageForUpdate() (object, bool) {
 	primary := readJSONStrict(files.usage)
 	if primary.ok && !primary.exists {
-		return object{}
+		return object{}, true
 	}
 	if primary.ok && primary.data != nil {
-		return primary.data
+		return primary.data, true
+	}
+	if primary.unopened {
+		warn("usage.json could not be opened (%s); left alone, this status line reading is not stored", primary.err)
+		return nil, false
 	}
 
 	backup := readJSONStrict(files.usageBackup)
@@ -187,9 +191,9 @@ func readUsageForUpdate() object {
 	}
 	warn("usage.json corrupt (%s); %s", primary.err, verdictText)
 	if recovered {
-		return backup.data
+		return backup.data, true
 	}
-	return object{}
+	return object{}, true
 }
 
 func recordStatusline(input object, now int64, multiSessionMax bool) (string, bool) {
@@ -199,7 +203,11 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 		reporter = sessionKey(input)
 	}
 	withFileLock(files.usageLock, func() {
-		previous := readUsageForUpdate()
+		previous, writable := readUsageForUpdate()
+		if !writable {
+			sid = reporter
+			return
+		}
 		next := cloneObject(previous)
 		version := getString(input, "version")
 		if version == "" {
@@ -215,6 +223,8 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 		limits := getMap(input, "rate_limits")
 		offered, stored, outdated := 0, 0, 0
 		unusable := []string{}
+		shownBefore := getMap(getMap(getMap(previous, "sessions"), reporter), "windows")
+		shown := object{}
 		for _, key := range []string{"five_hour", "seven_day"} {
 			win := getMap(limits, key)
 			if win == nil {
@@ -232,11 +242,20 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 				continue
 			}
 			previousWin := getMap(previous, key)
+			repeated := repeatsItsLastReading(getMap(shownBefore, key), used, resetsAt)
+			shown[key] = object{"used": used, "resetsAt": resetsAt}
 			if resetsAt <= float64(now) && numberOr(previousWin, "resetsAt", 0) > float64(now) {
 				// An idle session still shows a window that has reset since: the one stored is newer,
 				// and its samples stay in the history.
 				outdated++
 				continue
+			}
+			if repeated && numberOr(previousWin, "resetsAt", 0) > resetsAt+sameWindowSeconds {
+				outdated++
+				continue
+			}
+			if storedReset, ok := getNumber(previousWin, "resetsAt"); ok && getBool(win, "reset_from_countdown", false) && storedReset > float64(now) && math.Abs(storedReset-resetsAt) <= sameWindowSeconds {
+				resetsAt = storedReset
 			}
 			origin, reportedAt := reporter, float64(now)
 			if multiSessionMax && previousWin != nil && getString(previousWin, "sid") != "" && getString(previousWin, "sid") != reporter && numberOr(previousWin, "resetsAt", -1) == resetsAt && numberOr(previousWin, "used", 0) > used {
@@ -245,7 +264,9 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 				reportedAt = numberOr(previousWin, "at", 0)
 			}
 			next[key] = object{"used": used, "resetsAt": resetsAt, "sid": origin, "at": reportedAt}
-			appendHistory(history, key, used, resetsAt, now)
+			if multiSessionMax || !belowTheLastSample(history, key, used, resetsAt) {
+				appendHistory(history, key, used, resetsAt, now)
+			}
 			stored++
 		}
 		if stored > 0 {
@@ -273,6 +294,9 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 			}
 			if tokens, ok := contextTokensOf(getMap(input, "context_window")); ok {
 				info["contextTokens"] = tokens
+			}
+			if len(shown) > 0 {
+				info["windows"] = shown
 			}
 			sessions[sid] = info
 		}
@@ -1210,7 +1234,7 @@ func checkOnWakeAfterItsGrace(cfg object, sid string, startedAt, wakeAt float64)
 		leaveReplacedWait(sid)
 		return
 	}
-	journal(sid, "resume", "skip-launch", "the session was woken in place and its wake's grace is not over yet", object{"at": at})
+	journal(sid, "resume", "skip-launch", "the session was woken in place and its wake's grace is not over yet", object{"checkAt": at})
 	logInfo("runner %s: the session was woken in place at %s; checking on it at %s before relaunching it", sid, localISO(wakeAt), localISO(at))
 }
 
@@ -1312,4 +1336,17 @@ func platformName() string {
 
 func execCommand(binary string, arguments ...string) *exec.Cmd {
 	return exec.Command(binary, arguments...)
+}
+
+func repeatsItsLastReading(shownBefore object, used, resetsAt float64) bool {
+	return shownBefore != nil && numberOr(shownBefore, "used", math.NaN()) == used && numberOr(shownBefore, "resetsAt", math.NaN()) == resetsAt
+}
+
+func belowTheLastSample(history object, key string, used, resetsAt float64) bool {
+	list := getList(history, key)
+	if len(list) == 0 {
+		return false
+	}
+	last, _ := list[len(list)-1].(object)
+	return numberOr(last, "resetsAt", math.NaN()) == resetsAt && numberOr(last, "used", math.NaN()) > used
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -120,6 +121,36 @@ func TestOnlyALineOfItsOwnOutsideFencesNamesTheCheck(t *testing.T) {
 		if got := queueVerifyLine(test.content); got != test.want {
 			t.Errorf("queueVerifyLine(%q) = %q, want %q", test.content, got, test.want)
 		}
+	}
+}
+
+func TestACheckLineInsideAnHTMLCommentNamesNoCheck(t *testing.T) {
+	cases := []struct {
+		content, want string
+	}{
+		{"<!--\nnoctis-verify: `make check`\n-->\n- [ ] a\n", ""},
+		{"<!-- the old check:\nnoctis-verify: `make old`\n-->\nnoctis-verify: `make check`\n", "make check"},
+		{"<!-- a note -->\nnoctis-verify: `make check`\n", "make check"},
+	}
+	for _, test := range cases {
+		if got := queueVerifyLine(test.content); got != test.want {
+			t.Errorf("queueVerifyLine(%q) = %q, want %q", test.content, got, test.want)
+		}
+	}
+	if got := queueVerifyEachLine("<!--\nnoctis-verify-each: `go vet ./...`\n-->\n- [ ] a\n"); got != "" {
+		t.Errorf("a per-item check line inside an HTML comment named the check %q", got)
+	}
+}
+
+func TestACheckLineRightUnderAnItemIsNotPartOfIt(t *testing.T) {
+	cfg, project, frontend := queueCheckSandbox(t, "")
+	path := writeQueueFile(t, project, "# q\n- [ ] migrate the users table\nnoctis-verify-each: `go vet ./...`\n- [ ] write the release notes\nnoctis-verify: `go test ./...`\n")
+	trustQueueFile(path, true)
+	if view := queueSnapshot(path); !slices.Equal(view.items, []string{"migrate the users table", "write the release notes"}) {
+		t.Fatalf("with the check lines right under the items, the open items are %q", view.items)
+	}
+	if reason := getString(stopHookOutput(t, stopInput("fv7", frontend), cfg), "reason"); !strings.Contains(reason, `("migrate the users table")`) {
+		t.Fatalf("Claude was not handed the item without the check line under it: %s", reason)
 	}
 }
 

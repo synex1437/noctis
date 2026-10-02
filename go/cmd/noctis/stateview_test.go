@@ -374,3 +374,26 @@ func TestAWaitPutsTheDefaultCollectorBack(t *testing.T) {
 		t.Fatal("the collector still counts as tuned after it was put back")
 	}
 }
+
+func TestTheStatusLineLeavesAUsageFileItCannotOpenAlone(t *testing.T) {
+	sandboxFiles(t)
+	now := nowSec()
+	weekReset := float64(now + 3*86400)
+	weeklyOnlyStatusReading("one", now-120, 20, weekReset)
+	weeklyOnlyStatusReading("two", now-60, 21, weekReset)
+	if err := os.Rename(files.usage, files.usage+".held"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Base(files.usage), files.usage); err != nil {
+		t.Skipf("no symbolic links here: %v", err)
+	}
+	if _, err := os.ReadFile(files.usage); err == nil {
+		t.Fatal("setup: usage.json, a link to itself, could be opened")
+	}
+
+	weeklyOnlyStatusReading("three", now, 22, weekReset)
+
+	if info, err := os.Lstat(files.usage); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("a usage.json the status line could not open was written over from the backup: sessions %v", getMap(readJSON(files.usage), "sessions"))
+	}
+}

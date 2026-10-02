@@ -179,7 +179,8 @@ const ACTIONS = [
     ]);
     const alwaysOk = ['status', 'why', 'report', 'version', 'cancel', 'on', 'off', 'ensure', 'checkpoint'];
     const gates = { check: [0, 10, 11, 20], doctor: [0, 1] };
-    const allowExit = gates[command[0]] || (alwaysOk.includes(command[0]) ? [0] : [0, 1]);
+    const emptySid = command[0] === 'cancel' && command[1] === '';
+    const allowExit = emptySid ? [2] : gates[command[0]] || (alwaysOk.includes(command[0]) ? [0] : [0, 1]);
     checkResult(round, `cmd ${command.join(' ')}`, runEngine(command), { allowExit });
     note(`cmd:${command[0]}`);
   }],

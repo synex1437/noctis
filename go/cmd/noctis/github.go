@@ -119,6 +119,8 @@ func importedIssueTitle(issue object) string {
 func disarmedTitle(title string) string {
 	title = queuePriority.ReplaceAllString(title, "[P$1]")
 	title = queueAfter.ReplaceAllString(title, "[after $1]")
+	title = queueHuman.ReplaceAllString(title, "[$1]")
+	title = queueModelTag.ReplaceAllString(title, "[$1]")
 	return queueTag.ReplaceAllString(title, "$1")
 }
 
@@ -127,7 +129,7 @@ func titledAs(text, title string) bool {
 	if !found || (tail != "" && tail[0] != ' ' && tail[0] != '\t') {
 		return false
 	}
-	for _, annotation := range []*lazyRe{queueAfter, queuePriority, queueTag} {
+	for _, annotation := range []*lazyRe{queueAfter, queuePriority, queueTag, queueHuman, queueModelTag} {
 		tail = annotation.ReplaceAllString(tail, "")
 	}
 	return strings.TrimSpace(tail) == ""
@@ -154,7 +156,13 @@ func importRepo(value string) (string, bool) {
 func ghCommand(cwd string, arguments ...string) ([]byte, error) {
 	command := exec.Command("gh", arguments...)
 	command.Dir = cwd
-	return runWithTimeout(command, 20*time.Second)
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	output, err := runWithTimeout(command, 20*time.Second)
+	if detail := strings.TrimSpace(stderr.String()); err != nil && detail != "" {
+		return output, fmt.Errorf("%w: %s", err, strings.Join(strings.Fields(detail), " "))
+	}
+	return output, err
 }
 
 func runQueueTrust(cfg object, cwd, action string) {
@@ -362,7 +370,11 @@ func runQueue() {
 		}
 		output, err := ghCommand(cwd, arguments...)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, T("queue.ghFailed", err))
+			message := T("queue.ghRefused", err)
+			if errors.Is(err, exec.ErrNotFound) {
+				message = T("queue.ghFailed", err)
+			}
+			fmt.Fprintln(os.Stderr, message)
 			os.Exit(1)
 		}
 		var page []any
@@ -382,6 +394,9 @@ func runQueue() {
 			}
 			issues = append(issues, raw)
 		}
+	}
+	if repo == "" && gitDotOf(cwd) != gitDotOf(filepath.Dir(target)) {
+		repo = issuesRepo(issues)
 	}
 	authors, named := map[string]bool{}, ""
 	if len(issues) > 0 {
@@ -457,6 +472,10 @@ func runQueue() {
 			labels = append(labels, getString(toObject(rawLabel), "name"))
 		}
 		lines = append(lines, fmt.Sprintf("- [ ] %s%s %s", priorityFromLabels(labels), id, title))
+	}
+	if entries, plain := parseQueueEntries(text); plain && len(lines) > 0 {
+		fmt.Fprintln(os.Stderr, T("queue.importPlain", filepath.Base(target), len(entries)))
+		os.Exit(1)
 	}
 	if len(lines) > 0 {
 		cr, added := strings.TrimSuffix(newline, "\n"), []string{}
@@ -539,6 +558,18 @@ func importAuthorNames() []string {
 	return names
 }
 
+func issuesRepo(issues []any) string {
+	for _, raw := range issues {
+		link := getString(toObject(raw), "url")
+		if cut := strings.LastIndex(link, "/issues/"); cut > 0 {
+			if repo, valid := importRepo(link[:cut]); valid {
+				return strings.TrimPrefix(repo, "github.com/")
+			}
+		}
+	}
+	return ""
+}
+
 func issuesHost(repo string, issues []any) string {
 	if strings.Count(repo, "/") >= 2 {
 		host, _, _ := strings.Cut(repo, "/")
@@ -592,13 +623,9 @@ func importLogin(cwd, host string) string {
 
 func queueIssueItems(content string) (map[string]bool, map[string]issueID) {
 	open, checked := map[string]bool{}, map[string]issueID{}
-	fenced := false
+	blocks := hiddenBlocks{}
 	for _, line := range strings.Split(strings.TrimPrefix(content, "\uFEFF"), "\n") {
-		if queueFence(line) {
-			fenced = !fenced
-			continue
-		}
-		if fenced {
+		if blocks.hides(line) {
 			continue
 		}
 		entry, ok := parseQueueLine(line, 0)

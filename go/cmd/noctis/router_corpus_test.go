@@ -815,3 +815,22 @@ func TestASingularIncelemeRoutesOnlyAsAnAskToInvestigate(t *testing.T) {
 		}
 	}
 }
+
+func TestAFirstWordThatOnlyStartsWithAReplyWordIsNotAContinuation(t *testing.T) {
+	cfg := object{"router": object{"enabled": true}}
+	for _, pair := range [][2]string{
+		{"Okçuluk ekipmanlarının güncel fiyatlarını karşılaştır", "Atıcılık ekipmanlarının güncel fiyatlarını karşılaştır"},
+		{"Tamamıyla yeni bir bülten taslağı hazırla, lansman için", "Yepyeni bir bülten taslağı hazırla, lansman için"},
+		{"Noël markets in Alsace: find the latest news and sources", "Christmas markets in Alsace: find the latest news and sources"},
+	} {
+		got, control := classifyPrompt(cfg, nil, pair[0], "", nowSec()), classifyPrompt(cfg, nil, pair[1], "", nowSec())
+		if !control.route || !got.route {
+			t.Errorf("%q is routed: %v (%s); %q is routed: %v (%s)", pair[1], control.route, control.reason, pair[0], got.route, got.reason)
+		}
+	}
+	for _, reply := range []string{"ok, go ahead with the next one", "Okay, go on with the plan", "tamam, sıradaki maddeye geç", "Devam et, kaldığın yerden", "no, keep the old wording please", "dur, önce testleri çalıştır", "Evet. Aynen böyle sürdür.", "Hayır, bunu böyle bırak lütfen"} {
+		if verdict := classifyPrompt(cfg, nil, reply, "", nowSec()); verdict.route || verdict.reason != "continuation" {
+			t.Errorf("%q is no longer read as a reply: route %v (%s)", reply, verdict.route, verdict.reason)
+		}
+	}
+}

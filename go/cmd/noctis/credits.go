@@ -86,7 +86,6 @@ func guardPaused(cfg, state object, now int64) bool {
 
 func headroomLeft(cfg object, usage usageView) (float64, string) {
 	room, label := math.Inf(1), ""
-	thresholds := section(cfg, "thresholds")
 	consider := func(win *window, limit float64, name string) {
 		if win == nil {
 			return
@@ -98,11 +97,9 @@ func headroomLeft(cfg object, usage usageView) (float64, string) {
 	for _, spec := range []struct {
 		key, threshold string
 	}{{"five_hour", "session5h"}, {"seven_day", "weeklyAll"}} {
-		limit := creditCeiling(cfg)
-		if validThreshold(thresholds[spec.threshold]) {
-			limit = math.Min(limit, thresholdOf(cfg, spec.threshold))
+		if limit, guarded := stopPoint(cfg, spec.threshold); guarded {
+			consider(usage.byKey(spec.key), limit, windowLabel(spec.key))
 		}
-		consider(usage.byKey(spec.key), limit, windowLabel(spec.key))
 	}
 	if value := scopedThresholdValue(cfg); validThreshold(value) && usage.fable != nil {
 		consider(usage.fable, scopedThreshold(cfg), scopedLabel(cfg))

@@ -41,3 +41,6 @@ func (l *lazyRe) FindAllStringSubmatch(s string, n int) [][]string {
 func (l *lazyRe) ReplaceAllString(s, repl string) string { return l.get().ReplaceAllString(s, repl) }
 func (l *lazyRe) Split(s string, n int) []string         { return l.get().Split(s, n) }
 func (l *lazyRe) Match(b []byte) bool                    { return l.get().Match(b) }
+func (l *lazyRe) ReplaceAllLiteralString(s, repl string) string {
+	return l.get().ReplaceAllLiteralString(s, repl)
+}

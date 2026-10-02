@@ -162,3 +162,64 @@ func TestACopyUpdatedOverOneMadeBefore750KeepsNoPerCPUMacOSBinary(t *testing.T) 
 		t.Fatalf("the copy's binary is %q (%v), not the one installed", copied, err)
 	}
 }
+
+func TestEnsureLeavesAStatusLineThatOnlyMentionsNoctisAsItIs(t *testing.T) {
+	cliPluginTree(t)
+	binary := filepath.Join(files.pluginRoot, "bin", binaryFileName())
+	cliWrite(t, binary, []byte("engine"))
+	statusCommand := func() string { return getString(getMap(readJSON(files.settings), "statusLine"), "command") }
+	ownScript := filepath.Join(t.TempDir(), "noctis-line.sh")
+	cliWrite(t, ownScript, []byte("#!/bin/sh\necho line\n"))
+	ownScriptNotSyncedYet := filepath.Join(t.TempDir(), "dotfiles", "noctis-line.sh")
+	for _, command := range []string{
+		"bash /home/me/.claude/noctis-line.sh",
+		`NOCTIS_LANG=tr "` + forwardSlashes(binary) + `" statusline`,
+		forwardSlashes(ownScript),
+		`"` + forwardSlashes(ownScriptNotSyncedYet) + `" --short`,
+	} {
+		mustWriteJSON(files.config, object{"statusline": object{"chainCommand": ""}})
+		mustWriteJSON(files.settings, object{"statusLine": object{"type": "command", "command": command}})
+
+		capturedStdout(t, func() { firstRunSetup(shippedDefaults(t)) })
+		healStatusLine()
+
+		if got := statusCommand(); got != command {
+			t.Errorf("a session start rewrote the status line %q to %q", command, got)
+		}
+	}
+	gone := forwardSlashes(filepath.Join(t.TempDir(), "plugins", "cache", pluginName, pluginName, "8.4.0", "bin", binaryFileName()))
+	mustWriteJSON(files.settings, object{"statusLine": object{"type": "command", "command": `"` + gone + `" statusline`}})
+
+	healStatusLine()
+
+	if got, want := statusCommand(), `"`+forwardSlashes(binary)+`" statusline`; got != want {
+		t.Errorf("a status line on a noctis binary that is gone became %q, want %q", got, want)
+	}
+}
+
+func TestEnsureKeepsAConfigSectionOfTheWrongTypeForStatusAndDoctorToName(t *testing.T) {
+	cliPluginTree(t)
+	for _, own := range []any{float64(90), "92", []any{float64(92), float64(95)}, true} {
+		mustWriteJSON(files.config, object{"thresholds": own})
+
+		capturedStdout(t, runEnsure)
+
+		if repaired := repairedThresholds(loadConfig()); strings.Join(repaired, ", ") != "thresholds" {
+			t.Errorf("after a session start a thresholds value of %v is no longer named (%v); config.json holds %v", own, repaired, readJSON(files.config)["thresholds"])
+		}
+	}
+}
+
+func TestAConfigThatIsNotAnObjectIsNamedAndLeftAsItIs(t *testing.T) {
+	cliPluginTree(t)
+	for _, mine := range []string{`null`, `[{"mode": "observe", "queue": {"verifyCommand": "make check"}}]`, `"{\"mode\": \"observe\"}"`} {
+		cliWrite(t, files.config, []byte(mine))
+		if getString(loadConfig(), "configError") == "" {
+			t.Errorf("config.json %s is read as no settings at all, and nothing names it", mine)
+		}
+		capturedStdout(t, runEnsure)
+		if after, _ := os.ReadFile(files.config); string(after) != mine {
+			t.Errorf("a session start wrote over config.json %s:\n%.200s", mine, after)
+		}
+	}
+}

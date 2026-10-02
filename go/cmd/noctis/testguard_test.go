@@ -205,3 +205,21 @@ func TestATestClaudeWritesOnTheQueueStaysOpenToIt(t *testing.T) {
 		t.Fatalf("a test Claude wrote on the queue counts as one it changed past a refusal: %v", journaledFor("tg5"))
 	}
 }
+
+func TestALongItemThatNamesTestsOrTheTestFilePastItsFirst160CharactersLetsTheChangeThrough(t *testing.T) {
+	cfg, project, frontend, test := testGuardSandbox(t)
+	lead := "migrate the users table to the new schema with the extra audit columns, the renamed foreign keys, the dropped legacy flags, the backfill script and the new indexes, then "
+	if len([]rune(lead)) <= 160 {
+		t.Fatalf("the item names its tests within its first 160 characters: %d", len([]rune(lead)))
+	}
+	for _, item := range []string{lead + "update the tests", lead + "rename the helper in users_test.go"} {
+		writeQueueFile(t, project, "# q\n- [ ] "+item+"\n- [ ] write the release notes\n")
+		trustQueueFile(filepath.Join(project, "TASKS.md"), true)
+		if output := hookOutput(t, onPreToolUse, testFileEdit("tg6", frontend, test), cfg); output != nil {
+			t.Fatalf("on an item that names tests or the test file past its first 160 characters a change to the test was refused: %v", output)
+		}
+	}
+	if journaledAction("tg6", "ask-test-edit") {
+		t.Fatalf("a change to a test on an item about tests was journaled as refused: %v", journaledFor("tg6"))
+	}
+}

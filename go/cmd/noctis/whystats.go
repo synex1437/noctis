@@ -11,7 +11,7 @@ import (
 
 const (
 	whyStatsDays    = 7
-	whyStatsMaxDays = 3650
+	lookbackMaxDays = 3650
 )
 
 var (
@@ -177,7 +177,7 @@ func (continues *queueContinueTally) addLetGo(entry object, at float64) {
 func runWhyStats() {
 	days := float64(whyStatsDays)
 	if value, ok := toNumber(flagString("days")); ok && value > 0 && !math.IsInf(value, 1) {
-		days = math.Min(value, whyStatsMaxDays)
+		days = math.Min(value, lookbackMaxDays)
 	}
 	now := float64(nowSec())
 	stats := gatherDecisionStats(now-days*86400, now)

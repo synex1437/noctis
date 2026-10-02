@@ -49,17 +49,13 @@ func queueVerifyEachLine(content string) string {
 }
 
 func queueCommandLine(content string, pattern *lazyRe) string {
-	fenced := false
-	for _, raw := range strings.Split(strings.TrimPrefix(content, "\uFEFF"), "\n") {
-		line := strings.TrimSpace(raw)
-		switch {
-		case queueFence(line):
-			fenced = !fenced
-		case fenced:
-		default:
-			if match := pattern.FindStringSubmatch(line); match != nil {
-				return strings.TrimSpace(match[1])
-			}
+	blocks := hiddenBlocks{}
+	for _, line := range strings.Split(strings.TrimPrefix(content, "\uFEFF"), "\n") {
+		if blocks.hides(line) {
+			continue
+		}
+		if match := pattern.FindStringSubmatch(strings.TrimSpace(line)); match != nil {
+			return strings.TrimSpace(match[1])
 		}
 	}
 	return ""
@@ -192,15 +188,55 @@ func rearmQueueCheck(cfg, input object, sid string) {
 }
 
 func queueTicks(content string) []any {
-	ticked, seen := []any{}, map[string]bool{}
+	ticked := []any{}
 	entries, _ := parseQueueEntries(content)
-	for _, entry := range entries {
-		if digest := queueItemDigest(entry.text); entry.checked && !seen[digest] {
-			seen[digest] = true
+	for index, digest := range queueEntryDigests(entries) {
+		if entries[index].checked {
 			ticked = append(ticked, digest)
 		}
 	}
 	return ticked
+}
+
+func queueEntryDigests(entries []queueEntry) []string {
+	digests, occurrences := make([]string, len(entries)), map[string]int{}
+	for index, entry := range entries {
+		digest := queueItemDigest(entry.text)
+		occurrences[digest]++
+		if occurrence := occurrences[digest]; occurrence > 1 {
+			digest = queueItemDigest(fmt.Sprintf("%s\x00%d", entry.text, occurrence))
+		}
+		digests[index] = digest
+	}
+	return digests
+}
+
+func withoutUnticked(record object, ticked []any) (object, bool) {
+	current, kept, changed := digestSet(ticked), object{}, false
+	for name, value := range record {
+		kept[name] = value
+	}
+	for _, name := range []string{"ticked", "eachTicked"} {
+		recorded := getList(record, name)
+		still := []any{}
+		for _, digest := range recorded {
+			if text, _ := digest.(string); current[text] {
+				still = append(still, digest)
+			}
+		}
+		if len(still) < len(recorded) {
+			kept[name], changed = still, true
+		}
+	}
+	return kept, changed
+}
+
+func untickedForAFailedCheck(cfg, record object, path, content string) bool {
+	if numberOr(record, "failures", 0) == 0 || queueCheckCommandOf(cfg, path, content) == "" {
+		return false
+	}
+	_, passedUnticked := withoutUnticked(record, queueTicks(content))
+	return !passedUnticked
 }
 
 func queueCheckDue(record object, ticked []any, ending bool) bool {
@@ -253,6 +289,8 @@ func queueFullCheckEvery(cfg object) float64 {
 func markEachTier(fields object, tier string) {
 	if tier == eachQueueCheck {
 		fields["tier"] = eachQueueCheck
+	} else {
+		delete(fields, "tier")
 	}
 }
 
@@ -285,7 +323,7 @@ func queueCheckPass(record object, tier string, ticked []any, tree string, now f
 	if checked == nil {
 		checked = []any{}
 	}
-	passed := object{"ticked": checked, "eachTicked": queueChecksPending(record, ticked), "at": now}
+	passed := object{"ticked": checked, "eachTicked": queueChecksPending(record, ticked), "at": now, "tier": eachQueueCheck}
 	if tree != "" {
 		passed["eachTree"] = tree
 	}
@@ -321,8 +359,9 @@ func queueUncheckedIssues(cfg, state object, path, content string) map[string]bo
 	}
 	passed := digestSet(getList(queueCheckRecord(state, path), "ticked"))
 	entries, _ := parseQueueEntries(content)
-	for _, entry := range entries {
-		if issue, found := itemIssue(entry.text); found && entry.checked && !passed[queueItemDigest(entry.text)] {
+	digests := queueEntryDigests(entries)
+	for index, entry := range entries {
+		if issue, found := itemIssue(entry.text); found && entry.checked && !passed[digests[index]] {
 			unchecked[issue.ref()] = true
 		}
 	}
@@ -343,7 +382,17 @@ func queueFolder(cfg, input object, sid, path string) string {
 			}
 		}
 	}
-	return filepath.Dir(path)
+	folder := filepath.Dir(path)
+	for _, name := range queueFileNames(cfg) {
+		dir := filepath.Dir(path)
+		for range strings.Count(filepath.Clean(name), string(filepath.Separator)) {
+			dir = filepath.Dir(dir)
+		}
+		if len(dir) < len(folder) && filepath.Join(dir, name) == path {
+			folder = dir
+		}
+	}
+	return folder
 }
 
 // queueCheckReserve is the time a wait in place in the Stop hook leaves free for the queue check.
@@ -426,6 +475,10 @@ func gateQueue(cfg, input object, sid, path, content, label string, snapshot que
 	}
 	record := queueCheckRecord(readState(), path)
 	ticked := queueTicks(content)
+	if kept, changed := withoutUnticked(record, ticked); changed {
+		record = kept
+		storeQueueCheck(queueTrustKey(path), record)
+	}
 	ending := len(snapshot.items) == 0
 	if !queueCheckDue(record, ticked, ending) {
 		return nil
@@ -575,11 +628,10 @@ func queueUnverified(cfg, state object, path, content string) (unverified, ticke
 	return unverified, ticked
 }
 
-// unverifiedText says how many ticked items of the queue at path passed no check, or "" when all did.
 func unverifiedText(cfg, state object, path, content string) string {
 	unverified, ticked := queueUnverified(cfg, state, path, content)
 	switch {
-	case unverified == 0:
+	case unverified == 0 || queueHeld(cfg, state, path):
 		return ""
 	case queueCheckCommandOf(cfg, path, content) == "":
 		return T("queue.unverifiedNone", unverified)
@@ -591,5 +643,5 @@ func suggestedCheck(cfg object, path, content string) string {
 	if isAutoQueue(path) || queueVerifyLine(content) != "" || queueVerifyEachLine(content) != "" || queueCheckCommandOf(cfg, path, content) != "" || !getBool(section(cfg, "queue"), "fileVerify", true) {
 		return ""
 	}
-	return projectCheckCommand(filepath.Dir(path))
+	return projectCheckCommand(queueFolder(cfg, nil, "", path))
 }

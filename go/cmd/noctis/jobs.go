@@ -189,6 +189,7 @@ func execJob() {
 	if err := child.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "%s: the job could not start: %v\n", pluginName, err)
 	} else {
+		passSignalsToTree(child.Process)
 		pid := child.Process.Pid
 		updateState(func(next object) {
 			if record := getMap(getMap(next, "jobs"), id); record != nil {

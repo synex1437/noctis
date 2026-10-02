@@ -108,6 +108,16 @@ func TestMoreWaysOfWritingAListedStepKeepItOnTheChecklist(t *testing.T) {
 	q9ExpectSteps(t, "english", "Please work through this list for the release:", english, englishNotes)
 }
 
+func TestTurkishInstructionLinesEndingInEtLütfenOrTheFormalPluralAreAChecklist(t *testing.T) {
+	steps := []string{
+		"Kayıt sayfasının arkasındaki yavaş sorguyu optimize et.",
+		"Kullanıcılar tablosundaki e-posta sütununun indeksini kontrol et lütfen.",
+		"İki değişikliği de sürüm notlarına yaz lütfen.",
+		"Sürüm notlarındaki eski bağlantıları da güncelleyiniz.",
+	}
+	expectItems(t, "turkish lines", "Kayıt sayfası son sürümden beri çok yavaş ve birkaç kullanıcı bu hafta bununla ilgili yazdı.\n"+strings.Join(steps, "\n")+"\n", steps)
+}
+
 // q9ExpectSteps lists steps and then notes under a lead line and expects the
 // steps as the checklist and the notes, only they, left off it.
 func q9ExpectSteps(t *testing.T, name, lead string, steps, notes []string) {

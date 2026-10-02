@@ -2,6 +2,7 @@ export const SHIPPED = Object.freeze({ lean: true, compactAtPercent: 70, keepTur
 
 const READ_ONLY = new Set(["Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "NotebookRead"])
 const REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>\s*/g
+const UNCHANGED_NOTE = "File unchanged since last read"
 const DECIMAL = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/
 const LOG_LINES = 200
 const SESSIONS_KEPT = 50
@@ -117,11 +118,15 @@ function tailStart(rows, keepTurns) {
   return 0
 }
 
+function selfContained(answer) {
+  return answer?.isError !== true && answer?.result?.type !== "file_unchanged" && !(typeof answer?.text === "string" && answer.text.startsWith(UNCHANGED_NOTE))
+}
+
 function outcomes(rows) {
   const answered = new Map()
   for (const row of rows) {
     for (const result of Array.isArray(row?.toolResults) ? row.toolResults : []) {
-      if (typeof result?.tool_use_id === "string") answered.set(result.tool_use_id, result.isError === true)
+      if (typeof result?.tool_use_id === "string") answered.set(result.tool_use_id, selfContained(result))
     }
   }
   return answered
@@ -134,8 +139,7 @@ function supersededReads(rows) {
     if (row?.role !== "assistant" || !Array.isArray(row.toolUses)) continue
     for (const use of row.toolUses) {
       if (!READ_ONLY.has(use?.tool) || typeof use.tool_use_id !== "string") continue
-      const failed = use.isError === true || answered.get(use.tool_use_id) === true
-      calls.push({ id: use.tool_use_id, key: `${use.tool} ${canonical(use.input ?? {})}`, tool: use.tool, good: answered.has(use.tool_use_id) && !failed })
+      calls.push({ id: use.tool_use_id, key: `${use.tool} ${canonical(use.input ?? {})}`, tool: use.tool, good: answered.get(use.tool_use_id) === true && selfContained(use) })
     }
   }
   const superseded = new Map()

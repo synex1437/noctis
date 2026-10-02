@@ -144,8 +144,8 @@ func TestWhyStatsReachesBackAsManyDaysAsAsked(t *testing.T) {
 	if jsonUnmarshalObject([]byte(whyStatsOutput(t, "--days", "10", "--json")), &report) != nil || numberOr(report, "decisions", 0) != 31 || numberOr(report, "from", 0) != noon-6*86400 {
 		t.Fatalf("why --stats --days 10 did not reach back to the oldest decision in the rotated journal: %v", report)
 	}
-	if jsonUnmarshalObject([]byte(whyStatsOutput(t, "--days", "1e9", "--json")), &report) != nil || numberOr(report, "days", 0) != whyStatsMaxDays {
-		t.Fatalf("why --stats --days 1e9 was not capped at %d days: %v", whyStatsMaxDays, report["days"])
+	if jsonUnmarshalObject([]byte(whyStatsOutput(t, "--days", "1e9", "--json")), &report) != nil || numberOr(report, "days", 0) != lookbackMaxDays {
+		t.Fatalf("why --stats --days 1e9 was not capped at %d days: %v", lookbackMaxDays, report["days"])
 	}
 }
 

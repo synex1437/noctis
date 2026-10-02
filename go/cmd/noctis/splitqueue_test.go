@@ -142,6 +142,23 @@ func TestATurkishRequestForSeveralJobsIsListedToo(t *testing.T) {
 	}
 }
 
+func TestATurkishRequestWithLütfenACompoundVerbOrTheFormalPluralIsListedToo(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, false)
+	lead := "Kayıt sayfası son sürümden beri çok yavaş ve birkaç kullanıcı bu hafta bununla ilgili yazdı. "
+	for name, jobs := range map[string]string{
+		"lutfen":      "Kayıt sayfasının arkasındaki yavaş sorguyu düzelt, kullanıcılar tablosundaki e-posta sütununa bir indeks ekle ve iki değişikliği de sürüm notlarına yaz lütfen.",
+		"optimize-et": "Kayıt sayfasının arkasındaki yavaş sorguyu optimize et, kullanıcılar tablosundaki e-posta sütununa bir indeks ekle ve iki değişikliği de sürüm notlarına yaz.",
+		"kontrol-et":  "Kayıt sayfasının arkasındaki yavaş sorguyu düzelt, kullanıcılar tablosundaki e-posta sütununun indeksini kontrol et ve iki değişikliği de sürüm notlarına yaz.",
+		"iniz":        "Kayıt sayfasının arkasındaki yavaş sorguyu düzeltiniz, kullanıcılar tablosundaki e-posta sütununa bir indeks ekleyiniz ve iki değişikliği de sürüm notlarına yazınız.",
+	} {
+		sid := "sp-tr-" + name
+		output := startQueue(t, cfg, sid, project, lead+jobs)
+		if getMap(getMap(readState(), "autoQueues"), sid) == nil || !strings.Contains(contextOf(output), "several separate jobs") {
+			t.Errorf("%s: a Turkish request for three jobs got no checklist for Claude to list them in: %v", name, output)
+		}
+	}
+}
+
 func TestATurkishJobThatWritesTheIOfThePromptInTheOtherCaseIsNotRefused(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, false)
 	for _, tc := range []struct{ sid, prompt, jobs string }{

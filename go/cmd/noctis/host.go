@@ -318,8 +318,7 @@ func withoutOurGroups(groups []any) []any {
 		}
 		ours := false
 		for _, rawHandler := range getList(group, "hooks") {
-			handler := toObject(rawHandler)
-			if getString(handler, "statusMessage") == hookMarker || strings.Contains(getString(handler, "command"), pluginName) || strings.Contains(getString(handler, "command"), "/noctis") || strings.Contains(getString(handler, "command"), `\noctis`) {
+			if noctisHookHandler(toObject(rawHandler)) {
 				ours = true
 				break
 			}
@@ -329,6 +328,16 @@ func withoutOurGroups(groups []any) []any {
 		}
 	}
 	return kept
+}
+
+func noctisHookHandler(handler object) bool {
+	if getString(handler, "statusMessage") == hookMarker {
+		return true
+	}
+	command := getString(handler, "command")
+	binary := statusLineBinary(command)
+	arguments := strings.TrimPrefix(strings.TrimPrefix(command, `"`+binary+`"`), binary)
+	return noctisBinary(binary) && strings.HasPrefix(arguments+" ", " hook ")
 }
 
 func unwireHostHooks(host, accountDir string) ([]string, error) {
@@ -385,7 +394,7 @@ func unwireHostHooks(host, accountDir string) ([]string, error) {
 			}
 			removed = append(removed, file)
 		}
-		if settings.data != nil && strings.Contains(getString(getMap(settings.data, "statusLine"), "command"), "noctis") {
+		if settings.data != nil && noctisBinary(statusLineBinary(getString(getMap(settings.data, "statusLine"), "command"))) {
 			delete(settings.data, "statusLine")
 			if err := writeJSONKeepingOrder(settingsFile, settings.data); err != nil {
 				return removed, err
@@ -924,8 +933,9 @@ func antigravityRateLimits(input object, now int64) object {
 			continue
 		}
 		var resetsAt float64
+		fromCountdown := false
 		if seconds, ok := getNumber(bucket, "reset_in_seconds"); ok {
-			resetsAt = float64(now) + seconds
+			resetsAt, fromCountdown = float64(now)+seconds, true
 		} else if win, ok := toWindow(0, bucket["reset_time"]); ok {
 			resetsAt = numberOr(win, "resetsAt", 0)
 		} else {
@@ -950,7 +960,7 @@ func antigravityRateLimits(input object, now int64) object {
 			warn("the status line quota for %q is unusable (remaining_fraction=%v); ignored", name, remaining)
 			continue
 		}
-		entry := object{"used": used, "resets_at": resetsAt, "named": named}
+		entry := object{"used": used, "resets_at": resetsAt, "named": named, "countdown": fromCountdown}
 		current := getMap(limits, key)
 		if current != nil && getBool(current, "named", false) && !named {
 			continue
@@ -964,7 +974,7 @@ func antigravityRateLimits(input object, now int64) object {
 	}
 	for _, key := range []string{"five_hour", "seven_day"} {
 		if entry := getMap(limits, key); entry != nil {
-			limits[key] = object{"used_percentage": entry["used"], "resets_at": entry["resets_at"]}
+			limits[key] = object{"used_percentage": entry["used"], "resets_at": entry["resets_at"], "reset_from_countdown": entry["countdown"]}
 		}
 	}
 	return limits
@@ -1061,18 +1071,21 @@ func isWordByte(value byte) bool {
 
 func hostHooksWired(host, accountDir string) (bool, string) {
 	switch host {
-	case "codex":
+	case "codex", "droid":
 		file := filepath.Join(accountDir, "hooks.json")
-		content, _ := os.ReadFile(file)
-		return strings.Contains(string(content), hookMarker), file
-	case "droid":
-		file := filepath.Join(accountDir, "hooks.json")
-		content, _ := os.ReadFile(file)
-		return strings.Contains(string(content), "noctis"), file
+		table := readJSON(file)
+		if host == "codex" {
+			table = getMap(table, "hooks")
+		}
+		for _, raw := range table {
+			if groups, _ := raw.([]any); len(withoutOurGroups(groups)) < len(groups) {
+				return true, file
+			}
+		}
+		return false, file
 	case "antigravity":
 		file := antigravityHooksFile()
-		content, _ := os.ReadFile(file)
-		return strings.Contains(string(content), hookMarker), file
+		return readJSON(file)[hookMarker] != nil, file
 	case "copilot":
 		file := filepath.Join(accountDir, "hooks", pluginName+".json")
 		return statSafe(file) != nil, file

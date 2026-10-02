@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -47,6 +48,63 @@ func TestTheSelftestProbeDoesNotCountAsAHookPulse(t *testing.T) {
 
 	if at := numberOr(readState(), "lastHookAt", 0); at == 0 {
 		t.Fatal("a real hook call no longer records its pulse")
+	}
+}
+
+func selftestProbeLeavesNoTrace(t *testing.T, cfg object, cwd, scene string) {
+	t.Helper()
+	output := hookOutput(t, onPostToolBatch, object{"hook_event_name": "PostToolBatch", "session_id": selftestSession, "cwd": cwd}, cfg)
+	if stoppedBy(output) {
+		t.Errorf("%s the selftest's own probe was stopped: %v", scene, output)
+	}
+	if wait := pendingWait(selftestSession); wait != nil {
+		t.Errorf("%s the selftest's own probe was paused: %v", scene, wait)
+	}
+	if _, err := os.Stat(filepath.Join(files.checkpoints, selftestSession+".md")); err == nil || getMap(getMap(readState(), "checkpoints"), selftestSession) != nil {
+		t.Errorf("%s the selftest's own probe left a checkpoint behind (%v)", scene, getMap(getMap(readState(), "checkpoints"), selftestSession))
+	}
+	if journal, _ := os.ReadFile(files.decisions); strings.Contains(string(journal), `"sid":"`+selftestSession+`"`) {
+		t.Errorf("%s the selftest's own probe left an entry in the decision journal:\n%s", scene, journal)
+	}
+}
+
+func TestTheSelftestProbeIsNotPausedByAWindowPastItsPausePoint(t *testing.T) {
+	cfg, project, _ := limitSandbox(t, object{"wait": object{"maxInHookMinutes": float64(1)}}, 95, 40)
+
+	selftestProbeLeavesNoTrace(t, cfg, project, "with the 5-hour window at 95%, past its pause point,")
+
+	if output := hookOutput(t, onPostToolBatch, object{"hook_event_name": "PostToolBatch", "session_id": "real", "cwd": project}, cfg); pendingWait("real") == nil {
+		t.Fatalf("a real session's batch at 95%% was not paused, so the window was not past its pause point: %v", output)
+	}
+}
+
+func TestTheSelftestProbeDoesNotSwitchTheModelPastTheScopedThreshold(t *testing.T) {
+	cfg, project, _ := limitSandbox(t, object{"wait": object{"maxInHookMinutes": float64(1)}}, 20, 10)
+	mustWriteJSON(files.settings, object{"model": "claude-fable-5-1"})
+	now := float64(nowSec())
+	writeFableBucket(builtinThresholds["weeklyFable"]+1, now, now+86400)
+
+	selftestProbeLeavesNoTrace(t, cfg, project, "with the Fable bucket past its threshold")
+
+	if model := settingsModel(); model != "claude-fable-5-1" {
+		t.Fatalf("the selftest's own probe switched the default model to %q", model)
+	}
+	hookOutput(t, onPostToolBatch, object{"hook_event_name": "PostToolBatch", "session_id": "real", "cwd": project}, cfg)
+	if model := settingsModel(); model == "claude-fable-5-1" {
+		t.Fatal("a real Fable session's batch past the threshold did not switch the model, so the bucket was not past its threshold")
+	}
+}
+
+func TestTheSelftestProbeIsNotPausedBlindNearTheCeilingWithoutData(t *testing.T) {
+	recordingUsageEndpoint(t, "", "")
+	now := nowSec()
+	cfg, input, _ := blindAtTheCeiling(t, now, now+600, 3)
+
+	if plan := decide(cfg, readState(), object{"session_id": selftestSession, "cwd": getString(input, "cwd")}, now, decideOptions{}).wait; plan != nil {
+		t.Fatalf("3 points from the paid-credit ceiling without data the selftest's own probe was paused: %+v", plan)
+	}
+	if plan := decide(cfg, readState(), input, now, decideOptions{}).wait; plan == nil || plan.hit != "blind" {
+		t.Fatalf("a real session 3 points from the paid-credit ceiling without data was not paused blind: %+v", plan)
 	}
 }
 

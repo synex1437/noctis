@@ -17,7 +17,9 @@ func setMode(cfg object) {
 func journal(sid, event, action, reason string, extra object) {
 	entry := object{"at": float64(nowSec()), "sid": sid, "event": event, "action": action, "reason": reason}
 	for key, value := range extra {
-		entry[key] = value
+		if _, own := entry[key]; !own {
+			entry[key] = value
+		}
 	}
 	if observing {
 		entry["observe"] = true
@@ -60,7 +62,20 @@ type whyLine struct {
 func whyLines(count int) []whyLine {
 	merged := []whyLine{}
 	last := 0.0
-	for _, line := range tailFileLines(files.decisions, count) {
+	lines := tailFileLines(files.decisions, count)
+	if len(lines) < count {
+		lines = nil
+		for _, file := range []string{files.decisions + ".1", files.decisions} {
+			content, _ := readFileShared(file)
+			for _, line := range strings.Split(string(content), "\n") {
+				if line != "" {
+					lines = append(lines, line)
+				}
+			}
+		}
+		lines = lines[max(0, len(lines)-count):]
+	}
+	for _, line := range lines {
 		var entry object
 		if jsonUnmarshalObject([]byte(line), &entry) != nil {
 			entry = nil
@@ -91,14 +106,14 @@ func runWhy() {
 		count = int(math.Min(value, whyMaxLast))
 	}
 	lines := whyLines(count)
-	if len(lines) == 0 {
-		fmt.Println(T("why.empty"))
-		return
-	}
 	if args.present["json"] {
 		for _, line := range lines {
 			fmt.Println(line.raw)
 		}
+		return
+	}
+	if len(lines) == 0 {
+		fmt.Println(T("why.empty"))
 		return
 	}
 	for _, line := range lines {
@@ -110,6 +125,11 @@ func runWhy() {
 		for _, key := range []string{"five", "week", "scoped", "ctx"} {
 			if value, ok := getNumber(entry, key); ok {
 				facts = append(facts, fmt.Sprintf("%s=%s%%", key, formatNumber(value)))
+			}
+		}
+		for _, key := range []string{"wakeAt", "dueAt", "checkAt"} {
+			if value, ok := getNumber(entry, key); ok && value > 0 {
+				facts = append(facts, key+"="+formatTime(value))
 			}
 		}
 		factText := ""

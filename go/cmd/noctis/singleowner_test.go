@@ -122,7 +122,7 @@ func TestAnInterruptedPauseIsReleasedOnlyWhileItIsStillTheStoredOne(t *testing.T
 		stateMap(state, "waits")[sid] = object{"kind": "prompt", "window": "five_hour", "label": "5h", "inHook": false, "startedAt": now - 5, "until": now + 3600, "resumeAt": now + 3600,
 			"holder": "new-pause", "scheduled": object{"method": "manual", "at": now + 3600}}
 	})
-	releaseInterruptedWait(sid, object{"waits": object{sid: interrupted}})
+	releaseInterruptedWait(sid, object{"waits": object{sid: interrupted}}, false)
 	if wait := pendingWait(sid); getString(wait, "holder") != "new-pause" {
 		t.Fatalf("releasing an interrupted pause read before a new one was stored deleted the new pause: %v", wait)
 	}
@@ -196,6 +196,20 @@ func TestARunnerGivesASessionWokenInPlaceItsGraceBeforeRelaunchingIt(t *testing.
 	}
 	if at := numberOr(getMap(pendingWait(sid), "scheduled"), "at", 0); at < now+55 {
 		t.Fatalf("the runner did not come back to check on the wake once its grace is over: %v", pendingWait(sid))
+	}
+}
+
+func TestTheJournalDatesARunnerLeavingAWokenSessionItsGraceWhenItHappensAndNamesWhenItChecksAgain(t *testing.T) {
+	takeoverSandbox(t)
+	sid := "woken-journaled"
+	now := float64(nowSec())
+	strandedPause(t, sid, object{"kind": "stopfailure", "used": float64(100), "wakeAttemptedAt": now - 5})
+	statusReadingFrom(sid, nowSec(), 3, now+18000, 20, now+3*86400)
+	resumeWait(sid, "")
+	checkAt := numberOr(getMap(pendingWait(sid), "scheduled"), "at", 0)
+	entry := journaledEntry(sid, "skip-launch")
+	if at := numberOr(entry, "at", 0); checkAt < now+55 || at < now || at > float64(nowSec()) || numberOr(entry, "checkAt", 0) != checkAt {
+		t.Fatalf("the journal dates the runner's skip-launch at %s, or does not say it checks on the session at %s: %v", localISO(at), localISO(checkAt), entry)
 	}
 }
 

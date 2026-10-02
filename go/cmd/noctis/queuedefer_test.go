@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +64,19 @@ func TestADeferredItemIsSkippedAndWhatWaitsForItStaysBlocked(t *testing.T) {
 	}
 	if trusted, changed, _ := queueTrustGap(cfg, path); !trusted || len(changed) > 0 {
 		t.Fatalf("deferring an item ended the file's trust (changed %q)", changed)
+	}
+}
+
+func TestTheJournalNamesTheItemADeferralSetsAsideAndWhatItWaitsOn(t *testing.T) {
+	cfg, project, _, _ := deferSandbox(t)
+	queueCommand(t, cfg, project, "defer", "payment", "--reason", "waits for the Stripe account")
+	if entry := journaledEntry("", "defer"); getString(entry, "reason") != "connect the payment provider #pay: waits for the Stripe account" || getString(entry, "waitsOn") != "waits for the Stripe account" {
+		t.Fatalf("the journal entry of the deferral is %v, which does not name the item and what it waits on", entry)
+	}
+	defer func(previous parsedArgs) { args = previous }(args)
+	args = parseArgs([]string{"why"})
+	if printed := capturedStdout(t, runWhy); !strings.Contains(printed, "connect the payment provider #pay: waits for the Stripe account") {
+		t.Fatalf("noctis why does not say which item was set aside and what it waits on:\n%s", printed)
 	}
 }
 
@@ -148,6 +162,23 @@ func TestADeferralUntilATimeEndsByItself(t *testing.T) {
 	}
 }
 
+func TestADeferralUntilMoreThanNinetyDaysAheadHoldsUntilItEnds(t *testing.T) {
+	cfg, project, frontend, path := deferSandbox(t)
+	defer func(previous int64) { timeOffset = previous }(timeOffset)
+	queueCommand(t, cfg, project, "defer", "payment", "--reason", "waits for the yearly licence renewal", "--until", "120d")
+	timeOffset += 91 * 86400
+	stopHookOutput(t, stopInput("df90", frontend), cfg)
+	if view := queueSnapshot(path); view.deferred != 1 {
+		t.Fatalf("an item deferred --until 120d is no longer deferred 91 days later, once a hook wrote the state: %d deferred, %d open", view.deferred, view.total)
+	}
+	timeOffset += 30 * 86400
+	state := readState()
+	pruneDeferrals(state, nowSec())
+	if view := queueSnapshot(path); view.deferred != 0 || len(getMap(state, "queueDefer")) != 0 {
+		t.Fatalf("121 days later the deferral --until 120d still holds: %d deferred, kept %v", view.deferred, getMap(state, "queueDefer"))
+	}
+}
+
 func TestATagDefersItsGroupButLeavesTheUsersItemsToThem(t *testing.T) {
 	cfg, project, _ := queueCheckSandbox(t, "")
 	path := writeQueueFile(t, project, "# q\n- [ ] (human) sign the provider's contract #pay\n- [ ] connect the payment provider #pay\n- [ ] write the release notes\n")
@@ -155,6 +186,30 @@ func TestATagDefersItsGroupButLeavesTheUsersItemsToThem(t *testing.T) {
 	queueCommand(t, cfg, project, "defer", "#pay", "--reason", deferReason)
 	if view := queueSnapshot(path); view.deferred != 1 || view.human != 1 || view.total != 1 {
 		t.Fatalf("deferring #pay left %d deferred, %d marked (human) and %d open, want 1, 1 and 1", view.deferred, view.human, view.total)
+	}
+}
+
+func TestAnIssueReferenceDefersTheItemsImportedForThatIssue(t *testing.T) {
+	_, project, _ := queueCheckSandbox(t, "")
+	content := "# q\n## GitHub\n- [ ] (P1) #123 Fix the login redirect\n- [ ] (P2) #12 Add a dark mode\n- [ ] acme/web#7 Update the footer\n- [ ] acme/web#7 Update the header\n- [ ] acme/web#70 Remove the banner\n"
+	for reference, want := range map[string][]int{"#123": {1}, "#12": {2}, "acme/web#7": {3, 4}} {
+		matched, _ := matchQueueItems(content, reference)
+		ordinals := []int{}
+		for _, entry := range matched {
+			ordinals = append(ordinals, entry.ordinal)
+		}
+		if !slices.Equal(ordinals, want) {
+			t.Errorf("the reference %q names the items %v, want the items of that issue, %v", reference, ordinals, want)
+		}
+	}
+	path := writeQueueFile(t, project, content)
+	for reference, items := range map[string][]string{"#123": {"(P1) #123 Fix the login redirect"}, "acme/web#7": {"acme/web#7 Update the footer", "acme/web#7 Update the header"}} {
+		run := runNoctisCLI(t, nil, "queue", "defer", reference, "--reason", deferReason, "--file", path)
+		for _, item := range items {
+			if want := T("queue.deferredItem", "TASKS.md", item, deferReason); run.code != 0 || !strings.Contains(run.stdout, want) {
+				t.Errorf("noctis queue defer %q did not defer %q: %s", reference, item, run)
+			}
+		}
 	}
 }
 

@@ -117,8 +117,11 @@ func parseDeferUntil(text string, now time.Time) (float64, bool) {
 	return 0, false
 }
 
-// matchQueueItems finds the open items of content a reference names: an item number (as (after N)
-// counts them), a #tag, or a part of the text that only one open item has.
+func issueReference(reference string) (issueID, bool) {
+	issue, found := itemIssue(reference)
+	return issue, found && issue.String() == reference
+}
+
 func matchQueueItems(content, reference string) ([]queueEntry, []queueEntry) {
 	entries, _ := parseQueueEntries(content)
 	reference = strings.TrimSpace(reference)
@@ -137,6 +140,14 @@ func matchQueueItems(content, reference string) ([]queueEntry, []queueEntry) {
 		return nil, open
 	}
 	matched := []queueEntry{}
+	if issue, found := issueReference(reference); found {
+		for _, entry := range open {
+			if carried, carries := itemIssue(entry.text); carries && carried.ref() == issue.ref() {
+				matched = append(matched, entry)
+			}
+		}
+		return matched, open
+	}
 	if tag, found := strings.CutPrefix(reference, "#"); found && tag != "" {
 		for _, entry := range open {
 			if entry.tags[foldTag(tag)] {
@@ -176,6 +187,8 @@ func runQueueDefer(target, action string) {
 		os.Exit(2)
 	}
 	matched, _ := matchQueueItems(content, reference)
+	_, byIssue := issueReference(reference)
+	group := byIssue || strings.HasPrefix(reference, "#")
 	if action == "undefer" {
 		// Only a deferred item can be taken up again, so a reference that also matches items that
 		// are not deferred still names the one that is.
@@ -200,7 +213,7 @@ func runQueueDefer(target, action string) {
 		fmt.Fprintln(os.Stderr, T("queue.deferNoMatch", label, printableItem(reference)))
 		os.Exit(1)
 	}
-	if len(matched) > 1 && !strings.HasPrefix(reference, "#") {
+	if len(matched) > 1 && !group {
 		names := []string{}
 		for _, entry := range matched[:min(len(matched), queueUnmatchedNamed)] {
 			names = append(names, fmt.Sprintf("%d: %s", entry.ordinal, printableItem(truncateText(entry.text, 80))))
@@ -234,9 +247,7 @@ func runQueueDefer(target, action string) {
 		fmt.Fprintln(os.Stderr, T("queue.deferUntilBad", printableItem(flagString("until"))))
 		os.Exit(2)
 	}
-	// A #tag names a group: its (human) items are the user's already and stay out of the deferral.
-	// An item named alone must be one Claude could take.
-	if strings.HasPrefix(reference, "#") {
+	if group {
 		own := []queueEntry{}
 		for _, entry := range matched {
 			if !entry.human {
@@ -273,7 +284,7 @@ func runQueueDefer(target, action string) {
 		}
 	})
 	for _, entry := range matched {
-		journal("", "cli", "defer", truncateText(entry.text, 200), object{"file": label, "reason": truncateText(reason, 200), "until": until})
+		journal("", "cli", "defer", truncateText(entry.text, 200)+": "+truncateText(reason, 200), object{"file": label, "waitsOn": truncateText(reason, 200), "until": until})
 		logInfo("queue item deferred in %s: %q (%s)", target, truncateText(entry.text, 120), truncateText(reason, 120))
 		shown := printableItem(truncateText(reason, 200))
 		if until > 0 {
@@ -291,15 +302,13 @@ func printDeferrals(target string, view queueView) {
 	}
 }
 
-// pruneDeferrals drops the deferrals that ended, and any older than 90 days: the item they held may
-// have been reworded or removed since, and nothing else would clear them.
 func pruneDeferrals(state object, now int64) {
 	for key, raw := range stateMap(state, "queueDefer") {
 		records, _ := raw.(object)
 		for digest, entry := range records {
 			record, _ := entry.(object)
 			until := numberOr(record, "until", 0)
-			if record == nil || (until > 0 && until <= float64(now)) || float64(now)-numberOr(record, "at", 0) > 90*86400 {
+			if record == nil || (until > 0 && until <= float64(now)) || (until <= 0 && float64(now)-numberOr(record, "at", 0) > 90*86400) {
 				delete(records, digest)
 			}
 		}

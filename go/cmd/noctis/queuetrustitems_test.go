@@ -169,6 +169,7 @@ func TestMarkingAnItemDoneKeepsTheTrust(t *testing.T) {
 	for name, change := range map[string]struct{ trusted, marked string }{
 		"plain, struck through":          {"# q\n- migrate the users table\n- write the release notes\n", "# q\n- ~~migrate the users table~~\n- write the release notes\n"},
 		"plain, done at the end":         {"# q\n- migrate the users table\n- write the release notes\n", "# q\n- migrate the users table (done)\n- write the release notes\n"},
+		"plain, (BİTTİ) at the end":      {"# q\n- migrate the users table\n- write the release notes\n", "# q\n- migrate the users table (BİTTİ)\n- write the release notes\n"},
 		"plain, check mark first":        {"# q\n- migrate the users table\n- write the release notes\n", "# q\n- ✓ migrate the users table\n- write the release notes\n"},
 		"plain, item on two lines":       {"# q\n- migrate the users table\n  and the orders table\n- write the release notes\n", "# q\n- migrate the users table (done)\n  and the orders table\n- write the release notes\n"},
 		"plain done, then checkboxes":    {"# q\n- ~~migrate the users table~~\n- write the release notes\n", "# q\n- [x] migrate the users table\n- [ ] write the release notes\n"},

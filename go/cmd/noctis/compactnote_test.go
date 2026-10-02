@@ -102,3 +102,25 @@ func TestTheNoteAfterACompactionNamesTheCheckThatRanLast(t *testing.T) {
 		}
 	}
 }
+
+func TestTheNoteAfterACompactionNamesThePerItemCheckThatPassedLast(t *testing.T) {
+	cfg, project, counter := checkTierSandbox(t, 3, false)
+	full := countingCheck(counter, "full", shellFor("sleep 30", "ping -n 31 127.0.0.1 > nul"))
+	each := countingCheck(counter, "each", "")
+	section(cfg, "queue")["verifyCommand"] = full
+	section(cfg, "queue")["verifyEachCommand"] = each
+	section(cfg, "queue")["verifyFullEvery"] = float64(2)
+	section(cfg, "queue")["verifyTimeoutSeconds"] = float64(1)
+	tickTiered(t, project, 3, 1)
+	continues(t, stopHookOutput(t, stopInput("cn6", project), cfg), 2)
+	passed := "noctis runs the queue's check (`" + truncateText(each, 120) + "`) after you tick the item; it last passed at"
+	if context := sessionContext(t, compactStart("cn6", project), cfg); !strings.Contains(context, passed) {
+		t.Fatalf("only the per-item check ran and passed, yet the note after the compaction does not say %q:\n%s", passed, context)
+	}
+	tickTiered(t, project, 3, 2)
+	continues(t, stopHookOutput(t, stopInput("cn6", project), cfg), 1)
+	cut := "The queue's check (`" + truncateText(full, 120) + "`) was cut short at its last run"
+	if context := sessionContext(t, compactStart("cn6", project), cfg); !strings.Contains(context, cut) {
+		t.Fatalf("the full check was cut short after the per-item check passed, yet the note after the compaction does not say %q:\n%s", cut, context)
+	}
+}

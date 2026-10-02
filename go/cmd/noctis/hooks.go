@@ -202,7 +202,8 @@ func onSessionStart(input, cfg object) {
 	}
 	output := object{}
 	contexts := []string{}
-	queueNotice, queueNoticeKey, cutOffSid, handedSid := "", "", "", ""
+	queueNotice, cutOffSid, handedSid := "", "", ""
+	shown := []string{}
 	fresh := noteFreshStart(state, sid, getString(input, "transcript_path"))
 	if (source == "startup" || source == "clear") && !fresh {
 		if checkpointSid, checkpoint := checkpointForNewSession(state, cwd, now); checkpoint != nil {
@@ -248,7 +249,7 @@ func onSessionStart(input, cfg object) {
 
 		if key := "queue:" + queuePath; queueTrusted(cfg, queuePath) && !isAutoQueue(queuePath) && !queueHeld(cfg, state, queuePath) && snapshot.total > 0 && float64(now)-numberOr(getMap(state, "notified"), key, 0) > 7*86400 && (source == "startup" || source == "clear") {
 			queueNotice = T("queue.modeNotice", filepath.Base(queuePath), snapshot.total, pluginName)
-			queueNoticeKey = key
+			shown = append(shown, key)
 		}
 	}
 	if len(contexts) > 0 {
@@ -256,13 +257,13 @@ func onSessionStart(input, cfg object) {
 	}
 	if source == "startup" && float64(now)-numberOr(getMap(state, "notified"), "selfcheck", 0) > selfCheckIntervalSec {
 		if issues := selfCheckIssues(cfg); len(issues) > 0 {
-			updateState(func(next object) { stateMap(next, "notified")["selfcheck"] = float64(now) })
+			shown = append(shown, "selfcheck")
 			logInfo("self-check: %s", strings.Join(issues, "; "))
 			output["systemMessage"] = joinNotices(getString(output, "systemMessage"), T("selfcheck.message", pluginName, strings.Join(issues, "; ")))
 		}
 	}
 	maybeDigest(cfg, state, now)
-	if source == "startup" {
+	if source == "startup" && !observing {
 		if notice := restartNotice(cfg, state, now); notice != "" {
 			output["systemMessage"] = joinNotices(getString(output, "systemMessage"), notice)
 			state = readState()
@@ -294,7 +295,7 @@ func onSessionStart(input, cfg object) {
 		if verdict.wait != nil {
 			key := fmt.Sprintf("over:%s:%s", verdict.wait.window, formatNumber(verdict.wait.until))
 			if getMap(state, "notified")[key] == nil {
-				updateState(func(next object) { stateMap(next, "notified")[key] = float64(now) })
+				shown = append(shown, key)
 				output["systemMessage"] = joinNotices(getString(output, "systemMessage"), alreadyOverNotice(verdict.wait))
 			}
 		}
@@ -302,9 +303,6 @@ func onSessionStart(input, cfg object) {
 	if queueNotice != "" {
 
 		output["systemMessage"] = joinNotices(getString(output, "systemMessage"), queueNotice)
-		if queueNoticeKey != "" {
-			updateState(func(next object) { stateMap(next, "notified")[queueNoticeKey] = float64(now) })
-		}
 	}
 	if len(output) == 0 {
 		return
@@ -319,6 +317,13 @@ func onSessionStart(input, cfg object) {
 	emit(output)
 	if cutOffSid != "" {
 		forgetCutOffs(cutOffSid)
+	}
+	if len(shown) > 0 {
+		updateState(func(next object) {
+			for _, key := range shown {
+				stateMap(next, "notified")[key] = float64(now)
+			}
+		})
 	}
 }
 
@@ -576,12 +581,15 @@ func onUserPromptSubmit(input, cfg object) {
 	if guardPaused(cfg, state, now) {
 		pausedHookPulse(sid, state, now)
 		retireOwnCheckpoint(state, sid)
+		if getMap(state, "routes")[sid] != nil {
+			updateState(func(next object) { delete(stateMap(next, "routes"), sid) })
+		}
 		if controlCommand(getString(input, "prompt")) == "/"+pluginName+":start" {
 			emit(object{"decision": "block", "reason": T("queue.startPaused", formatTime(numberOr(state, "disabledUntil", 0)), pluginName)})
 		}
 		return
 	}
-	releaseInterruptedWait(sid, state)
+	releaseInterruptedWait(sid, state, true)
 	noteUserTurn(state, sid, getString(input, "prompt"), now)
 	if !queueContinuationPrompt(getString(input, "prompt")) {
 		resetIdleGuard(state, sid)
@@ -1410,8 +1418,9 @@ func onPreToolUse(input, cfg object) {
 	if !getBool(section(cfg, "router"), "enabled", false) || runsAsAgent(input, liteAgentType(cfg)) {
 		return
 	}
-	route := getMap(getMap(peekState(), "routes"), sid)
-	if route == nil || float64(now)-numberOr(route, "at", 0) > routeTTLSeconds {
+	state := peekState()
+	route := getMap(getMap(state, "routes"), sid)
+	if route == nil || float64(now)-numberOr(route, "at", 0) > routeTTLSeconds || guardPaused(cfg, state, now) {
 		return
 	}
 	maxDenies := math.Max(1, numberOr(section(cfg, "router"), "maxDeniesPerPrompt", 3))
@@ -1434,6 +1443,11 @@ func onPreToolUse(input, cfg object) {
 }
 
 func onWorkflowLaunch(input, cfg object, state object, now int64, sid string) {
+	if guardPaused(cfg, state, now) {
+		pausedHookPulse(sid, state, now)
+		recordWorkflowLaunch(sid, input, now)
+		return
+	}
 	result := decide(cfg, state, input, now, decideOptions{force: true})
 	if reason := gateWorkflowLaunch(cfg, result, input); reason != "" {
 		if observed(sid, "PreToolUse", "deny-workflow", reason, usageFacts(result.usage)) {
@@ -1831,7 +1845,7 @@ func onStop(input, cfg object) {
 	} else {
 		delete(guard, "empty")
 	}
-	stuck := stuckItemStep(cfg, state, sid, queuePath, numberOr(guard, "idle", 0), maxIdle, snapshot.items, result.wait != nil, now)
+	stuck := stuckItemStep(cfg, state, sid, queuePath, numberOr(guard, "idle", 0), maxIdle, snapshot, result.wait != nil, now)
 	if stuck.escalate {
 		guard["idle"] = math.Max(0, maxIdle-stopsLeftAfterEscalation)
 	}
@@ -1856,7 +1870,7 @@ func onStop(input, cfg object) {
 	if subagent != "" {
 		facts["subagent"], facts["contextTokens"] = true, tokens
 	}
-	if model, note := itemModelNote(cfg, state, sid, snapshot.items); note != "" {
+	if model, note := itemModelNote(cfg, state, sid, snapshot.itemModels); note != "" {
 		subagent, facts["itemModel"] = note, model
 	}
 	setAside := ""
@@ -1883,7 +1897,7 @@ func onStop(input, cfg object) {
 	if setAside == "" && stuck.idle > 0 {
 		blockedNote += queueDeferHint(queuePath)
 	}
-	if len(snapshot.items) > 0 && currentHost().agents && workflowAdvisable(cfg, result) && looksLikeFanOut(snapshot.items[0]) {
+	if len(snapshot.items) > 0 && currentHost().agents && workflowAdvisable(cfg, result) && looksLikeFanOut(snapshot.itemTexts[0]) {
 		systemMessage = joinNotices(systemMessage, workflowNotice(cfg, "notice.workflowQueue", result.usage))
 	}
 	if snapshot.plain {
@@ -2072,7 +2086,7 @@ func onPostToolBatch(input, cfg object) {
 		pausedHookPulse(sid, state, now)
 		return
 	}
-	releaseInterruptedWait(sid, state)
+	releaseInterruptedWait(sid, state, false)
 	result := decide(cfg, state, input, now, decideOptions{})
 	if result.fableHit {
 		if observed(sid, "PostToolBatch", "switch-model", scopedLabel(cfg), usageFacts(result.usage)) {
@@ -2786,7 +2800,7 @@ func runHook() {
 	promptFromPlugin = false
 	if prompt := getString(input, "prompt"); prompt != "" && event == "UserPromptSubmit" {
 		promptFromPlugin = pluginComposedPrompt(cfg, sid, prompt)
-		if !promptFromPlugin {
+		if !promptFromPlugin && !queueContinuationPrompt(prompt) && agentWrittenTurn(prompt) == "" {
 			rememberSessionLanguage(sid, prompt)
 		}
 	}

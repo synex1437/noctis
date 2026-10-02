@@ -186,6 +186,17 @@ func TestAppleScriptEscape(t *testing.T) {
 	}
 }
 
+func TestTheSessionProcessOfEveryHostIsRecognisedUnderItsWindowsName(t *testing.T) {
+	for _, host := range hostOrder {
+		exe := hostSpecs[host].exe
+		for _, name := range []string{exe, exe + ".exe", strings.ToUpper(exe) + ".EXE"} {
+			if !looksLikeSessionName(name) {
+				t.Errorf("%s: %q is the session's own process and must be recognised, or the window of a paused session stays open after its relaunch", host, name)
+			}
+		}
+	}
+}
+
 func TestLooksLikeSessionProcessNames(t *testing.T) {
 	for _, name := range []string{"claude", "claude.exe", "node", "/usr/bin/node", "CMD.EXE", "  node  ", "/usr/local/bin/node --inspect"} {
 		if !looksLikeSessionName(name) {

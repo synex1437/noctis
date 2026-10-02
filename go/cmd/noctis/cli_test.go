@@ -584,6 +584,74 @@ func TestCancelFindsTheSessionItIsGivenOrSaysItDidNot(t *testing.T) {
 	}
 }
 
+func TestCancelWithAnEmptyIdCancelsNothing(t *testing.T) {
+	sids := []string{cliLongSid, "9f8e7d6c-1111-2222-3333-444455556666"}
+	for _, argv := range [][]string{{"cancel", "--sid"}, {"cancel", "--sid="}, {"cancel", "--sid", ""}, {"cancel", "--sid", " "}, {"cancel", ""}} {
+		t.Run(fmt.Sprintf("%q", argv), func(t *testing.T) {
+			waits := object{}
+			for _, sid := range sids {
+				waits[sid] = cliWait()
+			}
+			account, env := cliStateAccount(t, object{"waits": waits})
+
+			run := runNoctisCLI(t, env, argv...)
+
+			if run.code != 2 || !strings.Contains(run.stderr, "--sid needs a value") || strings.Contains(run.stdout, "Cancelled") {
+				t.Fatalf("%q names no session, so it should say the id is missing and exit 2:\n%s", argv, run)
+			}
+			if left := getMap(cliState(t, account), "waits"); len(left) != len(sids) {
+				t.Fatalf("%q named no session, yet it cancelled waits; waits now %v", argv, left)
+			}
+		})
+	}
+}
+
+func TestCancelWithAnOptionItDoesNotKnowCancelsNothing(t *testing.T) {
+	sids := []string{cliLongSid, "9f8e7d6c-1111-2222-3333-444455556666"}
+	for _, c := range []struct {
+		argv []string
+		say  string
+	}{
+		{[]string{"cancel", "--id", "1a2b3c4d"}, "unknown option --id (did you mean --sid?)"},
+		{[]string{"cancel", "--session", "1a2b3c4d"}, "unknown option --session"},
+		{[]string{"cancel", "--sid1a2b3c4d"}, "unknown option --sid1a2b3c4d"},
+	} {
+		t.Run(fmt.Sprintf("%q", c.argv), func(t *testing.T) {
+			waits := object{}
+			for _, sid := range sids {
+				waits[sid] = cliWait()
+			}
+			account, env := cliStateAccount(t, object{"waits": waits})
+
+			run := runNoctisCLI(t, env, c.argv...)
+
+			if run.code != 2 || !strings.Contains(run.stderr, c.say) || strings.Contains(run.stdout, "Cancelled") {
+				t.Fatalf("%q gives an option cancel does not take, so it should say %q and exit 2:\n%s", c.argv, c.say, run)
+			}
+			if left := getMap(cliState(t, account), "waits"); len(left) != len(sids) {
+				t.Fatalf("%q cancelled waits through an option cancel does not take; waits now %v", c.argv, left)
+			}
+		})
+	}
+	t.Run("the account and host every command takes", func(t *testing.T) {
+		waits := object{}
+		for _, sid := range sids {
+			waits[sid] = cliWait()
+		}
+		account, env := cliStateAccount(t, object{"waits": waits})
+		env["CLAUDE_CONFIG_DIR"] = ""
+
+		run := runNoctisCLI(t, env, "cancel", "--account", account, "--host", "claude", "--sid", "1a2b3c4d")
+
+		if run.code != 0 || !strings.Contains(run.stdout, "Cancelled: 1a2b3c4d") {
+			t.Fatalf("cancel refused the flags every command takes:\n%s", run)
+		}
+		if left := getMap(cliState(t, account), "waits"); len(left) != 1 || left[sids[1]] == nil {
+			t.Fatalf("cancel --sid 1a2b3c4d should leave the other wait alone; waits now %v", left)
+		}
+	})
+}
+
 func TestCancelClearsTheFailedRelaunchStatusReports(t *testing.T) {
 	for _, argv := range [][]string{{"cancel", "x"}, {"cancel"}} {
 		t.Run(strings.Join(argv, " "), func(t *testing.T) {
@@ -634,6 +702,54 @@ func TestCheckpointAndModelTakeTheShortIdToo(t *testing.T) {
 		if run := runNoctisCLI(t, env, argv...); run.code != 2 || !strings.Contains(run.stderr, "abcd1-first") || !strings.Contains(run.stderr, "abcd2-second") || strings.Contains(run.stdout, "checkpoint of") || strings.Contains(run.stdout, "claude-") {
 			t.Fatalf("%s with an id two sessions share should name both and answer for neither:\n%s", strings.Join(argv, " "), run)
 		}
+	}
+}
+
+func TestCheckpointFindsTheFolderHoweverItsCwdIsWritten(t *testing.T) {
+	work := filepath.Join(t.TempDir(), "work", "app")
+	cliWrite(t, filepath.Join(work, "README.md"), []byte("app\n"))
+	work, err := filepath.EvalSymlinks(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := filepath.Join(t.TempDir(), "checkpoint.md")
+	cliWrite(t, checkpoint, []byte("# checkpoint of the app folder\n"))
+	_, env := cliStateAccount(t, object{"checkpoints": object{cliLongSid: object{"cwd": work, "at": float64(nowSec()), "path": checkpoint}}})
+	separator := string(filepath.Separator)
+
+	for _, spelling := range []string{work, work + separator, ".", filepath.Join("..", "app"), filepath.Dir(work) + separator + separator + "app"} {
+		run := startNoctisCLIAt(t, work, "", env, "checkpoint", "--cwd", spelling)()
+
+		if run.code != 0 || !strings.Contains(run.stdout, "checkpoint of the app folder") {
+			t.Errorf("checkpoint --cwd %q, run in %s, missed that folder's unused checkpoint:\n%s", spelling, work, run)
+		}
+	}
+}
+
+func TestCheckJudgesTheSessionItsShortIdNames(t *testing.T) {
+	account := t.TempDir()
+	guard := filepath.Join(account, pluginName)
+	now := float64(nowSec())
+	cliWrite(t, filepath.Join(guard, "usage.json"), marshalCompact(object{
+		"updatedAt": now,
+		"five_hour": object{"used": float64(30), "resetsAt": now + 7200, "at": now},
+		"seven_day": object{"used": float64(30), "resetsAt": now + 3*86400, "at": now},
+		"sessions": object{
+			cliLongSid:     object{"model": "claude-fable-5-1", "updatedAt": now},
+			"abcd1-first":  object{"model": "claude-fable-5-1", "updatedAt": now},
+			"abcd2-second": object{"model": "claude-opus-5-5", "updatedAt": now},
+		},
+	}))
+	cliWrite(t, filepath.Join(guard, "fable.json"), marshalCompact(object{"fetchedAt": now, "fable": object{"used": float64(98), "resetsAt": now + 3*86400}}))
+	env := cliAccountEnv(repoRoot(), account)
+
+	for _, sid := range []string{cliLongSid, "1a2b3c4d"} {
+		if run := runNoctisCLI(t, env, "check", "--json", "--sid", sid); run.code != 11 || !strings.Contains(run.stdout, `"model":"claude-fable-5-1"`) {
+			t.Fatalf("check --sid %s did not judge the Fable session at 98%% of its Fable window with its own model:\n%s", sid, run)
+		}
+	}
+	if run := runNoctisCLI(t, env, "check", "--sid", "abcd"); run.code != 2 || !strings.Contains(run.stderr, "abcd1-first") || !strings.Contains(run.stderr, "abcd2-second") || run.stdout != "" {
+		t.Fatalf("check with an id two sessions share should name both and give no verdict:\n%s", run)
 	}
 }
 

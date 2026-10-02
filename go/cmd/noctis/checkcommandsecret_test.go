@@ -69,3 +69,38 @@ func TestAHeldQueueKeepsTheCheckCommandOutOfTheNotification(t *testing.T) {
 		t.Errorf("the hold must go through the notify path once as %q (%d notification(s))", want, notices)
 	}
 }
+
+func TestABundleRedactsEachQueueCheckCommandAsItIsLogged(t *testing.T) {
+	home := t.TempDir()
+	cases := []struct {
+		name     string
+		queue    object
+		logged   string
+		password string
+	}{
+		{"the per-item check", object{"verifyEachCommand": "curl -fsS -u ci:x8EachPw77 https://ci.internal/ping && go test ./internal/queue/..."}, "curl -fsS -u ci:x8EachPw77 https://ci.internal/ping && go test ./internal/queue/...", "x8EachPw77"},
+		{"a check padded with spaces", object{"verifyCommand": " mysql -uci -px8PadPw77 -e 'select 1' && make check "}, "mysql -uci -px8PadPw77 -e 'select 1' && make check", "x8PadPw77"},
+		{"a check under the home folder", object{"verifyCommand": filepath.Join(home, "ci", "check.sh") + " -u ci:x8HomePw77"}, filepath.Join(home, "ci", "check.sh") + " -u ci:x8HomePw77", "x8HomePw77"},
+		{"a per-item check that starts with the full check", object{"verifyCommand": "make check", "verifyEachCommand": "make check && curl -fsS -u ci:x8LongPw77 https://ci.internal/ping"}, "make check && curl -fsS -u ci:x8LongPw77 https://ci.internal/ping", "x8LongPw77"},
+	}
+	for index, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			account := filepath.Join(home, ".claude", pluginName)
+			cliWrite(t, filepath.Join(account, "config.json"), marshalPretty(object{"queue": c.queue}))
+			logged := errorsLogEntry(time.Now().Add(-time.Hour), fmt.Sprintf("queue check %q failed 2 time(s) in a row for s1 (exited with status 1); TASKS.md held until it passes, stop allowed", c.logged))
+			cliWrite(t, filepath.Join(account, "guard.log"), []byte(logged))
+			cliWrite(t, filepath.Join(account, "errors.log"), []byte(logged))
+			cliWrite(t, filepath.Join(account, "decisions.jsonl"), append(marshalCompact(object{"at": float64(nowSec()), "sid": "s1", "event": "Stop", "action": "hold-queue", "reason": "exited with status 1", "command": c.logged}), '\n'))
+			target := filepath.Join(home, fmt.Sprintf("bundle-%d.zip", index))
+			if run := startNoctisCLIAt(t, home, "", nil, "report", "--bundle", target)(); run.code != 0 {
+				t.Fatalf("noctis report --bundle failed:\n%s", run)
+			}
+			for name, content := range bundleEntries(t, target) {
+				if at := strings.Index(content, c.password); at >= 0 {
+					start := strings.LastIndexByte(content[:at], '\n') + 1
+					t.Errorf("%s in the bundle carries the password of the check command: %.200s", name, content[start:])
+				}
+			}
+		})
+	}
+}

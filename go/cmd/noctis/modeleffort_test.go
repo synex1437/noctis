@@ -217,3 +217,45 @@ func TestTheDoctorChecksTheLevelWhereSetupSavedIt(t *testing.T) {
 		})
 	}
 }
+
+func TestTheDoctorAcceptsTheLevelSetupPutInTheVariable(t *testing.T) {
+	for _, c := range []struct {
+		model   string
+		noModel bool
+	}{{"sonnet", true}, {"opusplan", false}, {"us.anthropic.claude-opus-4-1-20250805-v1:0", false}, {"best", true}} {
+		t.Run(c.model, func(t *testing.T) {
+			doctorRemedySandbox(t)
+			mustWriteJSON(files.settings, object{"model": c.model})
+			previous := args
+			t.Cleanup(func() { args = previous })
+			args = parseArgs([]string{"setup", "--permissions", "keep"})
+			defaults := shippedDefaults(t)
+			config := cloneObject(defaults)
+			var err error
+			output := capturedStdout(t, func() {
+				err = wireSettings(files.configDir, filepath.Join(files.configDir, "bin", binaryFileName()), config, files.config, defaults, c.noModel)
+			})
+			if err != nil {
+				t.Fatalf("setup failed: %v", err)
+			}
+
+			lines := doctorRun(t, "claude", config)
+
+			for index, line := range lines {
+				if strings.HasPrefix(line, "!!") && strings.Contains(strings.ToLower(line), "effort") {
+					t.Errorf("settings.json on %q: setup said\n%s\nand the doctor right after it fails the level setup wrote:\n%s", c.model, output, strings.Join(lines[index:min(index+2, len(lines))], "\n"))
+				}
+			}
+		})
+	}
+	t.Run("a single model whose level setup has not saved yet", func(t *testing.T) {
+		doctorRemedySandbox(t)
+		mustWriteJSON(files.settings, object{"model": "opus", "env": object{"CLAUDE_CODE_EFFORT_LEVEL": "xhigh"}})
+
+		lines := doctorRun(t, "claude", object{"models": object{"primary": "opus", "effort": "xhigh"}})
+
+		if _, fix := remedyFor(t, lines, "Effort saved for claude-opus-5-5: none"); !strings.Contains(fix, "to save xhigh for claude-opus-5-5") {
+			t.Errorf("the remedy for a level still in the variable is %q", fix)
+		}
+	})
+}

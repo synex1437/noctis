@@ -107,15 +107,11 @@ func takeBackModelEfforts(settings, records object, keep string) {
 	}
 }
 
-// effortDoctorLines check the level setup writes where setup writes it: env.CLAUDE_CODE_EFFORT_LEVEL,
-// or the modelSettings entry of the code model, where that variable must not be set, since it would
-// override the saved level. A variable the scoped-model switch set for the fallback role is its own.
 func effortDoctorLines(cfg, settings object) []string {
 	none := T("doctor.none")
 	env := getString(getMap(settings, "env"), "CLAUDE_CODE_EFFORT_LEVEL")
-	models := section(cfg, "models")
-	want := getString(models, "effort")
-	model := effortModelFor(files.configDir, getString(models, "primary"), want)
+	want := getString(section(cfg, "models"), "effort")
+	model := effortModelFor(files.configDir, getString(settings, "model"), want)
 	// Setup saved the level for the model settings.json ran on, which can be the user's own; max and no
 	// level at all go back to the variable whatever setup saved before.
 	if want != "" && want != "max" {

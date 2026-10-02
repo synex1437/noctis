@@ -372,3 +372,45 @@ func TestSetupNamesAClaudeCodeTooOldForTheSonnetRolesItJustSet(t *testing.T) {
 		t.Fatalf("SYNEX runs nothing on sonnet, yet setup named the Claude Code Sonnet 5.5 needs:\n%s", synex)
 	}
 }
+
+func TestARoleSavedWithoutAnEffortGetsNoEffortFromTheShippedRole(t *testing.T) {
+	cliPluginTree(t)
+	previousHost := activeHost
+	t.Cleanup(func() { activeHost = previousHost })
+	activeHost = "claude"
+	mustWriteJSON(files.config, object{"roles": object{
+		"profile":  "custom",
+		"code":     object{"model": "opus", "effort": "xhigh"},
+		"research": object{"model": "opus"},
+		"planning": object{"model": "opus"},
+		"digest":   object{"model": "haiku"},
+		"explore":  object{"model": "haiku"},
+		"fallback": object{"model": "sonnet"},
+	}})
+	cfg := loadConfig()
+
+	if got := describeRoles(section(cfg, "roles")); strings.Contains(got, "opus/high") || !strings.HasSuffix(got, "=sonnet") {
+		t.Errorf("research {opus} and fallback {sonnet} were saved without an effort, but status shows: %s", got)
+	}
+	mustWriteJSON(files.settings, object{"model": "opus"})
+	persistModelSwitch(cfg, float64(nowSec()+3600), nowSec())
+	if effort := getString(getMap(readJSON(files.settings), "env"), "CLAUDE_CODE_EFFORT_LEVEL"); effort != "" {
+		t.Errorf("the switch to a fallback saved without an effort wrote CLAUDE_CODE_EFFORT_LEVEL=%q into settings.json", effort)
+	}
+	capturedStdout(t, runEnsure)
+	if content, _ := os.ReadFile(filepath.Join(files.pluginRoot, "agents", "lite.md")); strings.Contains(string(content), "effort:") {
+		t.Errorf("a session start wrote an effort into agents/lite.md for a research role saved without one:\n%s", content)
+	}
+}
+
+func TestAnOlderBalancedProfileIsToldItWasRetuned(t *testing.T) {
+	leanSandbox(t)
+	for _, retired := range retiredProfiles["balanced"] {
+		roles := cloneObject(retired)
+		roles["profile"] = "balanced"
+		mustWriteJSON(files.config, object{"roles": roles})
+		if got := retunedProfile(section(loadConfig(), "roles")); got != "balanced" {
+			t.Errorf("config.json holds the retired Balanced profile %v, but no re-tune notice is due", retired)
+		}
+	}
+}

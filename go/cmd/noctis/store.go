@@ -47,6 +47,7 @@ const (
 	burstSafety             = 1.2
 	projectionMinStaleness  = 60.0
 	projectionMaxStaleness  = 3600.0
+	projectionMinSpan       = 60.0
 	clockSkewMinSeconds     = 30
 	gitStatusCacheTTL       = 2 * time.Second
 	clockSkewMaxSeconds     = 86400
@@ -62,6 +63,7 @@ const (
 	nearEdgePollClose       = 15
 	blindAfterSeconds       = 60
 	fetchTimeout            = 5 * time.Second
+	fetchBackoffMaxSeconds  = 3600
 	appServerExitGrace      = time.Second
 	pluginVersion           = "8.5.0"
 	codingActivityWindow    = 45 * 60
@@ -1016,18 +1018,58 @@ func loadConfig() object {
 	if defaults == nil {
 		defaults = object{}
 	}
-	userRead := readJSONStrict(files.config)
+	userRead := readConfigStrict(files.config)
 	user := object{}
 	if userRead.ok && userRead.data != nil {
 		user = userRead.data
 	}
 	merged := mergeDefaults(defaults, user)
+	keepRolesWhole(merged, user)
 	if !userRead.ok {
 		merged["configError"] = userRead.err
 	}
 	repairThresholds(merged, defaults)
 	repairCompaction(merged, defaults)
+	repairWait(merged, defaults)
 	return merged
+}
+
+func readConfigStrict(file string) strictRead {
+	read := readJSONStrict(file)
+	if read.ok && read.exists && read.data == nil {
+		read.ok, read.err = false, "not a JSON object"
+	}
+	return read
+}
+
+func keepRolesWhole(merged, user object) {
+	roles := getMap(merged, "roles")
+	if roles == nil {
+		return
+	}
+	for name, own := range getMap(user, "roles") {
+		roles[name] = own
+	}
+}
+
+func repairWait(merged, defaults object) {
+	shipped := getMap(defaults, "wait")
+	if shipped == nil {
+		return
+	}
+	wait := getMap(merged, "wait")
+	if wait == nil {
+		merged["wait"] = mergeDefaults(shipped, object{})
+		return
+	}
+	for key, fallback := range shipped {
+		if _, shippedNumber := fallback.(float64); !shippedNumber {
+			continue
+		}
+		if _, ok := toNumber(wait[key]); !ok {
+			wait[key] = fallback
+		}
+	}
 }
 
 var builtinThresholds = map[string]float64{"session5h": 92, "weeklyAll": 95, "weeklyFable": 97}

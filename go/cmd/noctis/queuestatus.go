@@ -44,12 +44,17 @@ func printQueueProgress(target string, view queueView) {
 }
 
 func printQueueHold(cfg object, target string) {
-	state := readState()
+	if text := queueHoldText(cfg, readState(), target); text != "" {
+		fmt.Println(text)
+	}
+}
+
+func queueHoldText(cfg, state object, target string) string {
 	if !queueHeld(cfg, state, target) {
-		return
+		return ""
 	}
 	record := queueCheckRecord(state, target)
-	fmt.Println(T("queue.statusHeld", formatTime(numberOr(record, "held", 0)), printableItem(truncateText(recordedCheckCommand(cfg, record, target, ""), 120)), int(numberOr(record, "failures", 0))))
+	return T("queue.statusHeld", formatTime(numberOr(record, "held", 0)), printableItem(truncateText(recordedCheckCommand(cfg, record, target, ""), 120)), int(numberOr(record, "failures", 0)))
 }
 
 func queueStatusFacts(cfg object, target string, view queueView) object {

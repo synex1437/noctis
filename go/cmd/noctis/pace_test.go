@@ -180,3 +180,28 @@ func TestPaceNotesAreDroppedAMonthAfterTheLastOne(t *testing.T) {
 		t.Fatalf("pruning kept %v, want only the notes of the file noted a day ago", paces)
 	}
 }
+
+func TestThePaceStopsAtACreditCeilingUnderTheWeeklyPausePoint(t *testing.T) {
+	cfg, _, _, path := deferSandbox(t)
+	cfg["credits"] = object{"ceiling": float64(90)}
+	now := nowSec()
+	start, reset := float64(now-4*3600), float64(now+3*86400)
+	setPaceNotes(path, [4]float64{start, 1, 80, reset}, [4]float64{start + 3600, 2, 82, reset}, [4]float64{start + 7200, 3, 84, reset}, [4]float64{start + 3*3600, 4, 86, reset})
+	usage := usageView{sevenDay: &window{used: 86, resetsAt: reset}}
+	for _, weekly := range []any{false, float64(95)} {
+		section(cfg, "thresholds")["weeklyAll"] = weekly
+		if plan := evaluate(cfg, usageView{sevenDay: &window{used: 90, resetsAt: reset}}, "", 0, false).wait; plan == nil {
+			t.Fatalf("setup: at 90 %% of the weekly limit with credits.ceiling 90 and weeklyAll %v the guard did not stop", weekly)
+		}
+		pace := paceOf(cfg, readState(), path, 6, usage, now)
+		if want := reset + 4*3600; pace.finishAt != want || pace.weeklyRoom != 4 {
+			t.Errorf("work stops at 90 %% of the weekly limit (weeklyAll %v, credits.ceiling 90), now at 86 %%; the pace gives %v %% room and the six items left done %s, want 4 %% room and %s: %q",
+				weekly, pace.weeklyRoom, formatTime(pace.finishAt), formatTime(want), paceLines(pace))
+		}
+	}
+	cfg["credits"] = object{"ceiling": float64(90), "allowPaid": true}
+	section(cfg, "thresholds")["weeklyAll"] = float64(95)
+	if pace := paceOf(cfg, readState(), path, 6, usage, now); pace.weeklyRoom != 9 {
+		t.Errorf("with paid credits allowed the ceiling does not stop work, so the room is 95 - 86 = 9 %%, not %v %%", pace.weeklyRoom)
+	}
+}

@@ -5,12 +5,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func webhookAccount(t *testing.T, url string) string {
@@ -192,5 +194,59 @@ func TestAnOpenCircuitHoldsAMessageUntilItClosesButLetsATestThrough(t *testing.T
 	}
 	if state.Webhook.OpenUntil != 0 || state.Webhook.Failures != 0 {
 		t.Fatalf("a delivered test left the circuit open: %+v", state.Webhook)
+	}
+}
+
+func TestAWebhookThatAnswersWithARedirectIsNotDeliveredAndTheMessageGoesNowhereElse(t *testing.T) {
+	var mu sync.Mutex
+	elsewhere := []string{}
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		elsewhere = append(elsewhere, r.Method+" "+string(body))
+		mu.Unlock()
+	}))
+	defer target.Close()
+	for _, code := range []int{http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect} {
+		attempts := 0
+		redirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			io.Copy(io.Discard, r.Body)
+			mu.Lock()
+			attempts++
+			mu.Unlock()
+			http.Redirect(w, r, target.URL+"/hook/", code)
+		}))
+		run := startNoctisCLIAt(t, webhookAccount(t, redirect.URL+"/hook"), "", nil, "webhook", "--title", "T", "--body", "B")()
+		redirect.Close()
+		mu.Lock()
+		tries, followed := attempts, strings.Join(elsewhere, "\n")
+		mu.Unlock()
+		if run.code != 1 || !strings.Contains(run.stderr, "http-"+strconv.Itoa(code)) {
+			t.Fatalf("a webhook answering %d must be reported as not delivered, with its status:\n%s", code, run)
+		}
+		if followed != "" {
+			t.Fatalf("noctis followed a %d from the webhook and sent on: %s", code, followed)
+		}
+		if tries != 1 {
+			t.Fatalf("a webhook answering %d was tried %d times; a redirect answers the same every time", code, tries)
+		}
+	}
+}
+
+func TestALongDigestInJapaneseReachesNtfyAsTextNotAsAnAttachment(t *testing.T) {
+	endpoint, _ := url.Parse("https://ntfy.sh/noctis-test")
+	digest := truncateText(strings.Repeat("キューの項目が終わりました。", 200), digestMaxChars)
+	request, err := buildWebhookRequest(webhookConfig{preset: "ntfy"}, endpoint, "noctis", digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent, _ := io.ReadAll(request.Body)
+	if len(sent) >= 4096 || !utf8.Valid(sent) || !strings.HasSuffix(string(sent), "…") || !strings.HasPrefix(digest, strings.TrimSuffix(string(sent), "…")) {
+		t.Errorf("ntfy takes a body as text only below 4096 bytes; sent %d bytes (valid UTF-8: %v), ending %q", len(sent), utf8.Valid(sent), string([]rune(string(sent))[len([]rune(string(sent)))-3:]))
+	}
+	short := "キューの項目が終わりました。"
+	request, _ = buildWebhookRequest(webhookConfig{preset: "ntfy"}, endpoint, "noctis", short)
+	if sent, _ := io.ReadAll(request.Body); string(sent) != short {
+		t.Errorf("a short ntfy body must go as it is, sent %q", sent)
 	}
 }

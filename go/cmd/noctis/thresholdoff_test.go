@@ -58,3 +58,51 @@ func TestAThresholdSwitchedOffIsOffEverywhereItIsRead(t *testing.T) {
 		t.Fatalf("with the five-hour guard off a pause for lack of data must be the weekly window's at 89, got %s at %v (guarded %t)", key, threshold, guarded)
 	}
 }
+
+func statusThresholdsLine(t *testing.T, thresholds object, label string) string {
+	t.Helper()
+	mustWriteJSON(files.config, object{"thresholds": thresholds})
+	for _, line := range strings.Split(describeState(loadConfig(), object{}, usageView{}, nowSec()), "\n") {
+		if strings.HasPrefix(line, label) {
+			return line
+		}
+	}
+	t.Fatalf("status has no %s line", label)
+	return ""
+}
+
+func TestStatusShowsASwitchedOffThresholdAsOff(t *testing.T) {
+	dir := sandboxFiles(t)
+	files.pluginRoot = dir
+	mustWriteJSON(filepath.Join(dir, "config.default.json"), shippedDefaults(t))
+	previous := locale
+	t.Cleanup(func() { locale = previous })
+	locale = "en"
+	for _, off := range []any{nil, float64(0), false} {
+		for _, tc := range []struct{ key, want string }{
+			{"session5h", "Thresholds   : 5h off · weekly ≥95% · Fable ≥97%"},
+			{"weeklyAll", "Thresholds   : 5h ≥92% · weekly off · Fable ≥97%"},
+			{"weeklyFable", "Thresholds   : 5h ≥92% · weekly ≥95% · Fable off"},
+			{"weeklyScoped", "Thresholds   : 5h ≥92% · weekly ≥95% · Fable off"},
+		} {
+			if line := statusThresholdsLine(t, object{tc.key: off}, "Thresholds"); line != tc.want {
+				t.Errorf("thresholds.%s = %v switches that window off, but status shows\n  %q\nwant\n  %q", tc.key, off, line, tc.want)
+			}
+		}
+	}
+	for _, tc := range []struct {
+		thresholds object
+		want       string
+	}{
+		{object{}, "Thresholds   : 5h ≥92% · weekly ≥95% · Fable ≥97%"},
+		{object{"session5h": "90%", "weeklyAll": float64(88.5)}, "Thresholds   : 5h ≥92% · weekly ≥88.5% · Fable ≥97%"},
+	} {
+		if line := statusThresholdsLine(t, tc.thresholds, "Thresholds"); line != tc.want {
+			t.Errorf("thresholds %v: status shows\n  %q\nwant\n  %q", tc.thresholds, line, tc.want)
+		}
+	}
+	locale = "tr"
+	if line, want := statusThresholdsLine(t, object{"session5h": false}, "Eşikler"), "Eşikler      : 5sa kapalı · hafta ≥%95 · Fable ≥%97"; line != want {
+		t.Errorf("in Turkish a switched-off 5-hour threshold shows\n  %q\nwant\n  %q", line, want)
+	}
+}

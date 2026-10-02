@@ -83,6 +83,21 @@ func TestHeadroomIsMeasuredAgainstTheNearestWall(t *testing.T) {
 	}
 }
 
+func TestWithPaidCreditsAllowedAWorkflowNeedsRoomOnlyBeforeThePausePoint(t *testing.T) {
+	cfg := creditsConfig()
+	cfg["workflow"] = object{"gate": true}
+	cfg["credits"] = object{"allowPaid": true, "ceiling": float64(100), "fanOutHeadroom": float64(25)}
+	cfg["thresholds"] = object{"session5h": float64(0), "weeklyAll": float64(89), "weeklyFable": float64(95)}
+	if reason := gateWorkflowLaunch(cfg, decision{usage: usageFrom(80, 30, float64(nowSec()+3600))}, nil); reason != "" {
+		t.Fatalf("with credits.allowPaid on and thresholds.session5h off the 5-hour window has no pause point, yet a workflow at 80%% was refused: %s", reason)
+	}
+	cfg["credits"] = object{"allowPaid": true, "ceiling": float64(80), "fanOutHeadroom": float64(25)}
+	cfg["thresholds"] = object{"session5h": float64(92), "weeklyAll": float64(89), "weeklyFable": float64(95)}
+	if room, _ := headroomLeft(cfg, usageFrom(60, 30, float64(nowSec()+3600))); room != 32 {
+		t.Fatalf("with credits.allowPaid on the 5-hour pause point is 92%%, not the ceiling of 80%%; the room came out as %v, want 32", room)
+	}
+}
+
 func TestTheFallbackModelBringsItsOwnEffort(t *testing.T) {
 	sandboxFiles(t)
 	mustWriteJSON(files.settings, object{"model": "fable", "env": object{"CLAUDE_CODE_EFFORT_LEVEL": "max"}})

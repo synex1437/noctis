@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -107,7 +108,7 @@ func maybeDigest(cfg, state object, now int64) {
 		return
 	}
 	updateState(func(next object) { stateMap(next, "digest")["started"] = float64(now) })
-	journal("", "digest", "start-runner", clock, object{"at": at})
+	journal("", "digest", "start-runner", clock, object{"dueAt": at})
 	startDigestRunner()
 }
 
@@ -165,7 +166,7 @@ func armDigest(cfg object, clock string, now int64) {
 			entry["time"], entry["at"], entry["scheduled"] = clock, at, scheduled
 		})
 	})
-	journal("", "digest", "arm", clock, object{"at": at, "method": getString(scheduled, "method")})
+	journal("", "digest", "arm", clock, object{"dueAt": at, "method": getString(scheduled, "method")})
 	logInfo("daily digest set for %s via %s", localISO(at), getString(scheduled, "method"))
 }
 
@@ -320,8 +321,11 @@ func buildDigest(cfg, state object, usage usageView, baseline object, now int64)
 	previous := getMap(baseline, "queues")
 	queues := digestQueueFiles(state, now)
 	for _, path := range queues {
-		key := queueTrustKey(path)
-		block, seen := digestQueue(cfg, state, path, getMap(previous, key), numberOr(baseline, "at", 0), usage, now)
+		key, name := queueTrustKey(path), filepath.Base(path)
+		if slices.ContainsFunc(queues, func(other string) bool { return other != path && filepath.Base(other) == name }) {
+			name = homeAsTilde(path)
+		}
+		block, seen := digestQueue(cfg, state, path, name, getMap(previous, key), numberOr(baseline, "at", 0), usage, now)
 		lines = append(lines, "")
 		lines = append(lines, block...)
 		done[key] = object{"path": path, "done": seen}
@@ -406,14 +410,14 @@ func digestQueueFiles(state object, now int64) []string {
 // digestQueue reports on the queue file at path: how many items are done and open, which were done
 // since the last digest (before holds the items that one saw done), the item it takes next, its pace,
 // its check, and what waits on the user. It returns the lines and the items it sees done now.
-func digestQueue(cfg, state object, path string, before object, since float64, usage usageView, now int64) ([]string, []any) {
+func digestQueue(cfg, state object, path, name string, before object, since float64, usage usageView, now int64) ([]string, []any) {
 	content, _ := readQueueText(path)
 	entries, _ := parseQueueEntries(content)
 	view := queueSnapshotOf(path, content)
-	seen := map[string]bool{}
+	seen := map[string]int{}
 	for _, raw := range getList(before, "done") {
 		if digest, ok := raw.(string); ok {
-			seen[digest] = true
+			seen[digest]++
 		}
 	}
 	doneNow, newly := []any{}, []string{}
@@ -423,11 +427,13 @@ func digestQueue(cfg, state object, path string, before object, since float64, u
 		}
 		digest := queueItemDigest(entry.text)[:12]
 		doneNow = append(doneNow, digest)
-		if before != nil && !seen[digest] {
+		if seen[digest] > 0 {
+			seen[digest]--
+		} else if before != nil {
 			newly = append(newly, entry.text)
 		}
 	}
-	name, open := filepath.Base(path), view.total+view.human+view.deferred
+	open := view.total + view.human + view.deferred
 	lines := []string{T("digest.queue", name, len(doneNow), open)}
 	if open == 0 {
 		lines[0] = T("digest.queueFinished", name, len(doneNow))

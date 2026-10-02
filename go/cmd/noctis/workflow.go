@@ -27,7 +27,7 @@ var herTimeWord = lazyRegexp(`(?i)(?:^|\s)her\s+(?:zaman|gün|sefer|seferinde|ha
 
 var fanOutClauseBreak = lazyRegexp(`(?i)[,;.!?\n]+|\s(?:and|then|ve|sonra|ardından)\s`)
 
-var workflowKeywords = lazyRegexp(`(?i)\b(ultracode|workflow|iş akışı|/deep-research)\b`)
+var workflowKeywords = lazyRegexp(`(?i)\b(?:ultracode|workflow)\b|(?:^|[^\p{L}\p{N}_])(?:[iİ]ş akış\p{L}*|/deep-research\b)`)
 
 var nestedWorkflowCall = lazyRegexp(`\bworkflow\s*\(`)
 
@@ -176,7 +176,7 @@ func workflowAdvisable(cfg object, result decision) bool {
 }
 
 func suggestWorkflow(cfg object, prompt string, result decision) string {
-	if !workflowAdvisable(cfg, result) || !looksLikeFanOut(prompt) {
+	if !workflowAdvisable(cfg, result) || agentWrittenTurn(prompt) != "" || !looksLikeFanOut(prompt) {
 		return ""
 	}
 	return workflowNotice(cfg, "notice.workflowPrompt", result.usage)

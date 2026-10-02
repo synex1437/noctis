@@ -553,6 +553,21 @@ func TestALauncherInAFolderWithASpaceOrAQuoteOpensItsWindow(t *testing.T) {
 	}
 }
 
+func TestATerminalTemplateOpensItsWindowWhateverCaseItWritesTheScriptPlaceholderIn(t *testing.T) {
+	for index, template := range []string{"sh {SCRIPT}", "sh {Script}", "sh {script}"} {
+		t.Run(template, func(t *testing.T) {
+			home, _, calls := terminalSandbox(t)
+			files.launches = filepath.Join(t.TempDir(), "launches $1")
+			if !launchClaude(object{"resume": object{"mode": "window", "terminal": template}}, launchSpec{sid: fmt.Sprintf("case%d", index+1), cwd: home, prompt: "carry on"}).started {
+				t.Fatal("the window relaunch reported failure")
+			}
+			if runs, recorded := terminalRuns(t, calls); len(runs) != 1 || strings.HasPrefix(runs[0], "-p ") || !recorded {
+				t.Fatalf("resume.terminal %q did not run the launcher in %q in its window: claude ran %q (recorded=%t)", template, files.launches, runs, recorded)
+			}
+		})
+	}
+}
+
 func TestARelaunchFromASessionInTmuxOpensATmuxWindowBeforeADesktopTerminal(t *testing.T) {
 	for _, inTmux := range []bool{true, false} {
 		t.Run(fmt.Sprintf("in tmux %t", inTmux), func(t *testing.T) {
