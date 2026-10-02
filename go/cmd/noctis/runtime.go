@@ -796,7 +796,16 @@ func relaunchDidNothing(wait object, start time.Time, result launchResult) bool 
 }
 
 func waitContinued(wait object) bool {
-	return getString(wait, "kind") != "fable" && sessionContinuedAfter(wait, numberOr(wait, "until", 0))
+	if getString(wait, "kind") == "fable" {
+		return false
+	}
+	until := numberOr(wait, "until", 0)
+	if getString(wait, "hit") == "relaunch" {
+		if answered, _ := relaunchAnswered(wait, until-1); answered {
+			return true
+		}
+	}
+	return sessionContinuedAfter(wait, until)
 }
 
 func mergeInto(target, source object) {

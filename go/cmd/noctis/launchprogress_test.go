@@ -173,6 +173,50 @@ func TestTheRetryRunnerRelaunchesAgainInsteadOfTakingTheFailedRunForTheSessionCo
 	}
 }
 
+func TestAnAnswerInTheSecondAFailedRelaunchEndedKeepsItsRetryFromRelaunchingTheSessionAgain(t *testing.T) {
+	for _, kind := range []string{"batch", "stopfailure"} {
+		t.Run(kind, func(t *testing.T) {
+			sid := "late-answer-" + kind
+			calls := relaunchSandboxWith(t, fakeClaude(promptLine, apiFailureLine, "exit 1"))
+			previousOffset := timeOffset
+			t.Cleanup(func() { timeOffset = previousOffset })
+			parkForRelaunch(t, sid, kind, "headless")
+
+			resumeWait(sid, "")
+			wait := waitOf(sid)
+			if wait == nil || getString(wait, "hit") != "relaunch" {
+				t.Fatalf("the first relaunch did nothing and its retry was not parked: %v", wait)
+			}
+			answer := marshalCompact(object{"type": "assistant", "timestamp": transcriptStamp(numberOr(wait, "until", 0) - 0.001),
+				"message": object{"role": "assistant", "content": []any{object{"type": "text", "text": "Picking up the parser."}}}})
+			transcript, err := os.OpenFile(getString(wait, "transcript"), os.O_APPEND|os.O_WRONLY, 0o600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = transcript.Write(append(answer, '\n'))
+			transcript.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			timeOffset += int64(numberOr(wait, "resumeAt", 0)) - nowSec() + 1
+			now := float64(nowSec())
+			statusReadingFrom(sid, nowSec(), 3, now+18000, 20, now+3*86400)
+
+			resumeWait(sid, "")
+
+			if got := launchesOf(calls, sid); got != 1 {
+				t.Fatalf("the session answered in the second its failed relaunch ended, after the runner had looked, and the retry relaunched it again: %d launch(es) in total, want 1 (journal %v)", got, journaledFor(sid))
+			}
+			if left := waitOf(sid); left != nil {
+				t.Fatalf("the retry kept the pause of a session that went on: %v", left)
+			}
+			if !slices.Contains(journaledFor(sid), "skip-launch") {
+				t.Fatalf("the retry ended the pause without saying why in the journal: %v", journaledFor(sid))
+			}
+		})
+	}
+}
+
 func TestARelaunchThatNeverAnswersGivesUpAfterTheLastAttempt(t *testing.T) {
 	sid := "never-answers"
 	calls := relaunchSandboxWith(t, fakeClaude("exit 1"))
