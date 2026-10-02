@@ -183,3 +183,144 @@ func TestARunnerThatEndsAPauseWithoutARelaunchSaysWhyInTheJournal(t *testing.T) 
 		})
 	}
 }
+
+func TestWhatTheSessionWroteBeforeTheClockWentBackDoesNotCountAsItGoingOn(t *testing.T) {
+	answer := func(at float64) string {
+		return string(marshalCompact(object{"type": "assistant", "timestamp": transcriptStamp(at),
+			"message": object{"role": "assistant", "content": []any{object{"type": "text", "text": "The parser is fixed; running the tests next."}}}}))
+	}
+	resumeLater := func(sid string, at float64) {
+		timeOffset += int64(at) - nowSec() + 5
+		now := float64(nowSec())
+		statusReadingFrom(sid, nowSec(), 3, now+18000, 20, now+3*86400)
+	}
+	relaunchSandboxAt := func(t *testing.T) string {
+		calls := takeoverSandbox(t)
+		previousHost, previousOffset := activeHost, timeOffset
+		t.Cleanup(func() { activeHost, timeOffset = previousHost, previousOffset })
+		activeHost = "claude"
+		t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "")
+		config := releaseConfig()
+		config["resume"] = object{"mode": "window", "prompt": "carry on"}
+		config["wait"] = object{"maxInHookMinutes": float64(1)}
+		mustWriteJSON(files.config, config)
+		return calls
+	}
+
+	t.Run("a turn that failed on an overload", func(t *testing.T) {
+		calls := relaunchSandboxAt(t)
+		sid, cwd := "clock-back-overload", t.TempDir()
+		second := float64(nowSec())
+		failure := agentHookInput("StopFailure", sid, cwd, claudeFailure("overloaded", "", "API Error: Repeated 529 Overloaded errors"))
+		failure["transcript_path"] = writeTranscriptAt(t, cwd, []string{userPromptLine(second-60, "fix the parser"), answer(second + 300), apiErrorLine(second + 0.002)}, second+300)
+
+		hookOutput(t, onStopFailure, failure, loadConfig())
+		wait := pendingWait(sid)
+		if wait == nil {
+			t.Fatalf("the overload parked no retry (journal %v)", journaledFor(sid))
+		}
+		resumeLater(sid, numberOr(wait, "resumeAt", 0))
+		resumeWait(sid, "")
+
+		if got := launchesOf(calls, sid); got != 1 {
+			t.Fatalf("an answer written before the clock went back five minutes, stamped after the failure, was taken for the session going on after it: the retry relaunched it %d time(s), want 1, so the session stays stopped (journal %v)", got, journaledFor(sid))
+		}
+	})
+
+	t.Run("a pause at the limit", func(t *testing.T) {
+		calls := relaunchSandboxAt(t)
+		sid, cwd := "clock-back-limit", t.TempDir()
+		now := float64(nowSec())
+		reset := now + 600
+		statusReadingFrom(sid, nowSec(), 93, reset, 20, now+3*86400)
+		batch := agentHookInput("PostToolBatch", sid, cwd, nil)
+		batch["transcript_path"] = writeTranscriptAt(t, cwd, []string{userPromptLine(now-60, "fix the parser"), answer(reset + 120)}, reset+120)
+		plan := &waitPlan{window: "five_hour", label: windowLabel("five_hour"), used: 93, threshold: 92, until: reset, hit: "threshold"}
+
+		enforceWait("batch", batch, loadConfig(), decision{wait: plan, usage: currentUsage(nowSec())})
+		wait := pendingWait(sid)
+		if wait == nil || wait["inHook"] == true {
+			t.Fatalf("the pause was not handed to its runner: %v", wait)
+		}
+		resumeLater(sid, numberOr(wait, "resumeAt", 0))
+		resumeWait(sid, "")
+
+		if got := launchesOf(calls, sid); got != 1 {
+			t.Fatalf("an answer written before the clock went back past the reset was taken for the session going on after it: the runner relaunched it %d time(s), want 1, so the session stays stopped (journal %v)", got, journaledFor(sid))
+		}
+	})
+
+	wakes := []struct {
+		name, back string
+		ahead      float64
+	}{
+		{"a queue wake", "two minutes", 120},
+		{"a queue wake due before what the session wrote", "three hours", 3 * 3600},
+	}
+	for index, tc := range wakes {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, project, frontend, calls := queueWakeRelaunchSandbox(t)
+			defer func(previous int64) { timeOffset = previous }(timeOffset)
+			section(cfg, "wait")["maxInHookMinutes"] = float64(1)
+			deferPayUntil(t, cfg, project, "2h")
+			sid, now := fmt.Sprintf("clock-back-wake%d", index+1), float64(nowSec())
+			stop := stopInput(sid, frontend)
+			stop["transcript_path"] = writeTranscriptAt(t, t.TempDir(), []string{userPromptLine(now-60, "connect the payment provider"), answer(now + tc.ahead)}, now+tc.ahead)
+
+			stopHookOutput(t, stop, cfg)
+			wake := getMap(getMap(readState(), "queueWakes"), sid)
+			if wake == nil {
+				t.Fatalf("a stop on a deferral that ends in two hours set no wake (journal %v)", journaledFor(sid))
+			}
+			resumeLater(sid, numberOr(wake, "at", 0)+25)
+			fireQueueWake(sid)
+
+			if got := launchesOf(calls, sid); got != 1 {
+				t.Fatalf("an answer written before the clock went back %s, stamped after the wake was set, was taken for the session going on: the wake relaunched it %d time(s), want 1, so the queue stays idle (journal %v)", tc.back, got, journaledFor(sid))
+			}
+		})
+	}
+}
+
+func TestOnlyTheLinesWrittenAfterThePauseWasRecordedAreReadAsWrittenSince(t *testing.T) {
+	transcript := filepath.Join(t.TempDir(), "session.jsonl")
+	before, after := "{\"n\":1}\n{\"n\":2}\n", "{\"n\":3}\n{\"n\":4}\n"
+	padding := strings.Repeat("{\"pad\":\""+strings.Repeat("x", 1000)+"\"}\n", 300)
+	cases := []struct {
+		name    string
+		content string
+		size    int
+		want    []string
+	}{
+		{"the size recorded between two lines", before + after, len(before), []string{`{"n":3}`, `{"n":4}`}},
+		{"the size recorded in the middle of a line", before + after, len(before) + 3, []string{`{"n":4}`}},
+		{"the size recorded at the end", before + after, len(before + after), nil},
+		{"no size recorded", before + after, 0, []string{`{"n":1}`, `{"n":2}`, `{"n":3}`, `{"n":4}`}},
+		{"a transcript shorter than the size recorded", before + after, len(before+after) + 100, []string{`{"n":1}`, `{"n":2}`, `{"n":3}`, `{"n":4}`}},
+		{"the size recorded inside the tail of a longer transcript", before + padding + after, len(before + padding), []string{`{"n":3}`, `{"n":4}`}},
+	}
+	for _, tc := range cases {
+		if err := os.WriteFile(transcript, []byte(tc.content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		lines, first, ok := transcriptTailSince(object{"transcript": transcript, "transcriptSize": float64(tc.size)})
+		if !ok {
+			t.Fatalf("%s: the transcript was not read", tc.name)
+		}
+		var got []string
+		for _, line := range lines[first:] {
+			if line != "" {
+				got = append(got, line)
+			}
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: read %q as written since the pause, want %q", tc.name, got, tc.want)
+		}
+	}
+	if err := os.WriteFile(transcript, []byte(before+padding+after), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if lines, first, _ := transcriptTailSince(object{"transcript": transcript, "transcriptSize": float64(len(before))}); first != 0 || len(lines) < 2 || lines[len(lines)-2] != `{"n":4}` {
+		t.Errorf("a size recorded before the tail starts left out lines of the tail: first %d of %d", first, len(lines))
+	}
+}

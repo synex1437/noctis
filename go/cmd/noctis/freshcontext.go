@@ -198,5 +198,6 @@ func freshTranscript(wait object, fresh string) string {
 func freshProgress(wait object, fresh string) object {
 	view := cloneObject(wait)
 	view["transcript"] = freshTranscript(wait, fresh)
+	delete(view, "transcriptSize")
 	return view
 }

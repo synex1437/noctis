@@ -727,17 +727,38 @@ func sessionActiveAfter(wait object, epoch float64) bool {
 	return info != nil && float64(info.ModTime().UnixMilli())/1000 > epoch
 }
 
+func transcriptSize(file string) float64 {
+	if info := statSafe(file); info != nil {
+		return float64(info.Size())
+	}
+	return 0
+}
+
+func transcriptTailSince(record object) ([]string, int, bool) {
+	lines, end, ok := tailLinesWithEnd(getString(record, "transcript"), transcriptTailBytes)
+	from := int64(numberOr(record, "transcriptSize", 0))
+	if !ok || from <= 0 || from > end {
+		return lines, 0, ok
+	}
+	first := len(lines)
+	for first > 0 && end-int64(len(lines[first-1])) >= from {
+		end -= int64(len(lines[first-1])) + 1
+		first--
+	}
+	return lines, first, ok
+}
+
 func sessionContinuedAfter(wait object, epoch float64) bool {
-	lines, ok := tailLines(getString(wait, "transcript"), transcriptTailBytes)
+	lines, first, ok := transcriptTailSince(wait)
 	parsedAny := false
-	for i := len(lines) - 1; ok && i >= 0; i-- {
+	for i := len(lines) - 1; ok && i >= 0 && (i >= first || !parsedAny); i-- {
 		entry, parsed := parseTranscriptLine(lines[i])
 		if !parsed {
 			continue
 		}
 		parsedAny = true
 		at, err := time.Parse(time.RFC3339Nano, entry.timestamp)
-		if err != nil || float64(at.UnixMilli())/1000 <= epoch || entry.sidechain || entry.isMeta || entry.isCompact {
+		if i < first || err != nil || float64(at.UnixMilli())/1000 <= epoch || entry.sidechain || entry.isMeta || entry.isCompact {
 			continue
 		}
 		switch entry.entryType {
@@ -767,15 +788,15 @@ func carriesToolResult(content []any) bool {
 }
 
 func relaunchAnswered(wait object, since float64) (answered, known bool) {
-	lines, ok := tailLines(getString(wait, "transcript"), transcriptTailBytes)
-	for i := len(lines) - 1; ok && i >= 0; i-- {
+	lines, first, ok := transcriptTailSince(wait)
+	for i := len(lines) - 1; ok && i >= 0 && (i >= first || !known); i-- {
 		entry, parsed := parseTranscriptLine(lines[i])
 		if !parsed {
 			continue
 		}
 		known = true
 		at, err := time.Parse(time.RFC3339Nano, entry.timestamp)
-		if err == nil && float64(at.UnixMilli())/1000 > since && entry.entryType == "assistant" && !entry.apiError && !entry.sidechain {
+		if i >= first && err == nil && float64(at.UnixMilli())/1000 > since && entry.entryType == "assistant" && !entry.apiError && !entry.sidechain {
 			return true, true
 		}
 	}

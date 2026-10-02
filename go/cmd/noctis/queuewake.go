@@ -171,8 +171,8 @@ func armQueueWake(cfg, input object, sid, queuePath, label string, at float64, h
 	cwd := getString(input, "cwd")
 	record := object{
 		"queue": queuePath, "label": label, "at": at, "armedAt": float64(nowSec()), "cwd": cwd,
-		"transcript": getString(input, "transcript_path"), "permissionMode": permissionModeOf(input),
-		"configDirEnv": os.Getenv(claudeConfigEnv),
+		"transcript": getString(input, "transcript_path"), "transcriptSize": transcriptSize(getString(input, "transcript_path")),
+		"permissionMode": permissionModeOf(input), "configDirEnv": os.Getenv(claudeConfigEnv),
 	}
 	if mode := inferLaunchMode(cfg, sid); mode != "" {
 		record["launchMode"] = mode
@@ -488,7 +488,7 @@ func fireQueueWake(sid string) {
 		"startedAt": float64(now), "heartbeat": float64(now), "inHook": false, "storedBy": float64(os.Getpid()),
 		"queuedPrompt": fmt.Sprintf("Continue. A deferral in %s ended while this session was stopped, so its item is eligible again: take the queue up where it stopped. If what an item waited on is still missing, defer it again with %s queue defer instead of stalling on it.", label, pluginName),
 	}
-	for _, name := range []string{"cwd", "transcript", "permissionMode", "launchMode", "configDirEnv", "projectDir", "tree"} {
+	for _, name := range []string{"cwd", "transcript", "transcriptSize", "permissionMode", "launchMode", "configDirEnv", "projectDir", "tree"} {
 		if value, present := record[name]; present {
 			wait[name] = value
 		}

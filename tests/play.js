@@ -11,7 +11,7 @@ const TAIL_BYTES = 256 * 1024;
 const DEFAULT_WEIGHTS = { answer: 4, slow: 2, silent: 1, fail: 2, 'api-error': 1, 'answer-fail': 1, late: 2 };
 const FAILING_MODES = new Set(['fail', 'api-error', 'answer-fail', 'late']);
 const ANSWERING_MODES = new Set(['answer', 'slow', 'answer-fail']);
-const WAIT_FIELDS = ['startedAt', 'holder', 'kind', 'until', 'resumeAt', 'launchAttempts', 'hit', 'transcript'];
+const WAIT_FIELDS = ['startedAt', 'holder', 'kind', 'until', 'resumeAt', 'launchAttempts', 'hit', 'transcript', 'transcriptSize'];
 const HANDOFF_FIELDS = ['at', 'waitStartedAt', 'pid', 'fresh'];
 const MARK_FIELDS = ['startedAt', 'holder', 'by', 'at'];
 
@@ -52,6 +52,14 @@ function insideLab(labRoot, file) {
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
+function sizeOf(file) {
+  try {
+    return fs.statSync(file).size;
+  } catch {
+    return 0;
+  }
+}
+
 function endsWithNewline(file) {
   try {
     const size = fs.statSync(file).size;
@@ -80,8 +88,10 @@ function appendAnswer(labRoot, transcript, offset, by, { apiError = false } = {}
     ...(apiError ? { isApiErrorMessage: true } : {}),
     message: { role: 'assistant', content: [{ type: 'text', text: apiError ? 'API Error: 529 overloaded' : 'Resumed.' }] },
   };
-  fs.appendFileSync(transcript, `${endsWithNewline(transcript) ? '' : '\n'}${JSON.stringify(entry)}\n`);
-  const record = { id, by, transcript: path.resolve(transcript), ts: clockMs / 1000, real: Date.now(), apiError };
+  const separator = endsWithNewline(transcript) ? '' : '\n';
+  const position = sizeOf(transcript) + separator.length;
+  fs.appendFileSync(transcript, `${separator}${JSON.stringify(entry)}\n`);
+  const record = { id, by, transcript: path.resolve(transcript), ts: clockMs / 1000, real: Date.now(), position, apiError };
   writeRecord(path.join(recordDirs(labRoot).answers, `${id}.json`), record);
   return record;
 }

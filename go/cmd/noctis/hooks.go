@@ -2357,6 +2357,7 @@ func onStopFailure(input, cfg object) {
 	}
 	checkpoint := buildCheckpoint(input, T("stopfailure.reason", label, formatTime(resumeAt)), result.model, cfg)
 	record["inHook"], record["cwd"], record["transcript"] = false, getString(input, "cwd"), getString(input, "transcript_path")
+	record["transcriptSize"] = transcriptSize(getString(input, "transcript_path"))
 	record["checkpoint"], record["queuedPrompt"], record["startedAt"], record["attempts"] = checkpoint, "", float64(now), float64(0)
 	record["permissionMode"] = permissionModeOf(input)
 	recordTree(cfg, record, getString(input, "cwd"))

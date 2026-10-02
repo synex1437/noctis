@@ -2389,7 +2389,8 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 	record := object{
 		"kind": kind, "window": wait.window, "label": wait.label, "used": wait.used, "threshold": wait.threshold, "hit": wait.hit, "cause": wait.cause,
 		"until": wait.until, "resumeAt": resumeAt, "inHook": inHook, "cwd": getString(input, "cwd"),
-		"transcript": getString(input, "transcript_path"), "checkpoint": checkpoint, "queuedPrompt": queuedPrompt,
+		"transcript": getString(input, "transcript_path"), "transcriptSize": transcriptSize(getString(input, "transcript_path")),
+		"checkpoint": checkpoint, "queuedPrompt": queuedPrompt,
 		"startedAt": float64(now), "heartbeat": float64(now), "permissionMode": permissionModeOf(input),
 		"holder": strconv.Itoa(os.Getpid()) + "-" + strconv.FormatInt(time.Now().UnixNano(), 36),
 	}
@@ -2529,8 +2530,8 @@ func handleFableHit(kind string, input object, cfg object, result decision) stri
 	record := object{
 		"kind": "fable", "window": "fable", "label": label, "used": fableUsed, "threshold": scopedThreshold(cfg),
 		"until": float64(now), "resumeAt": float64(now + 20), "inHook": false, "cwd": getString(input, "cwd"),
-		"transcript": getString(input, "transcript_path"), "checkpoint": checkpoint, "modelOverride": fallback,
-		"queuedPrompt": "", "startedAt": float64(now), "permissionMode": permissionModeOf(input),
+		"transcript": getString(input, "transcript_path"), "transcriptSize": transcriptSize(getString(input, "transcript_path")),
+		"checkpoint": checkpoint, "modelOverride": fallback, "queuedPrompt": "", "startedAt": float64(now), "permissionMode": permissionModeOf(input),
 	}
 	recordTree(cfg, record, getString(input, "cwd"))
 	if !registerWait(sid, record, cfg) {
