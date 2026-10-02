@@ -26,6 +26,11 @@ function writtenBeforeClaim(answer, launch) {
   return answer.real < claimRealMs(launch) - CLAIM_SLACK_MS;
 }
 
+function writtenAfterThePause(answer, launch) {
+  const recorded = Number(launch.wait.transcriptSize);
+  return !(recorded > 0) || !Number.isFinite(answer.position) || answer.position >= recorded;
+}
+
 function sawAnswer(launch, answer) {
   return (launch.seen || []).some((entry) => samePath(entry.transcript, answer.transcript) && entry.ids.includes(answer.id));
 }
@@ -67,7 +72,7 @@ function relaunchesAfterTheSessionWentOn(launches, answers) {
     const until = Number(launch.wait.until);
     if (launch.wait.kind === 'fable' || !Number.isFinite(until)) continue;
     const went = answers.find((answer) => samePath(answer.transcript, launch.transcript) && answer.ts > until + 1
-      && writtenBeforeClaim(answer, launch) && sawAnswer(launch, answer));
+      && writtenAfterThePause(answer, launch) && writtenBeforeClaim(answer, launch) && sawAnswer(launch, answer));
     if (went) {
       problems.push(`${sessionLabel(launch)} was relaunched although the session had answered at ${iso(went.ts)}, after its pause ended at ${iso(until)} (pause started ${iso(launch.wait.startedAt)})`);
     }

@@ -295,14 +295,20 @@ func runClassify() {
 }
 
 func tailLines(file string, maxBytes int64) ([]string, bool) {
+	lines, _, ok := tailLinesWithEnd(file, maxBytes)
+	return lines, ok
+}
+
+func tailLinesWithEnd(file string, maxBytes int64) ([]string, int64, bool) {
 	info := statSafe(file)
 	if info == nil {
-		return nil, false
+		return nil, 0, false
 	}
 	content, cut, err := readTailBytes(file, info.Size(), maxBytes)
 	if err != nil {
 		warn("transcript tail unreadable: %v", err)
-		return nil, false
+		return nil, 0, false
 	}
-	return strings.Split(string(dropPartialFirstLine(content, cut)), "\n"), true
+	end := max(info.Size()-maxBytes, 0) + int64(len(content))
+	return strings.Split(string(dropPartialFirstLine(content, cut)), "\n"), end, true
 }

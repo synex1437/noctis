@@ -217,6 +217,35 @@ func TestAnAnswerInTheSecondAFailedRelaunchEndedKeepsItsRetryFromRelaunchingTheS
 	}
 }
 
+func TestWhatTheSessionWroteBeforeTheClockWentBackDoesNotPassForTheReplyToAFailedRelaunch(t *testing.T) {
+	sid, cwd := "fallback-clock-back", t.TempDir()
+	calls := relaunchSandboxWith(t, fakeClaude(promptLine, apiFailureLine, "exit 1"))
+	previousOffset := timeOffset
+	t.Cleanup(func() { timeOffset = previousOffset })
+	now := float64(nowSec())
+	answer := marshalCompact(object{"type": "assistant", "timestamp": transcriptStamp(now + 300),
+		"message": object{"role": "assistant", "content": []any{object{"type": "text", "text": "The parser is fixed; running the tests next."}}}})
+	transcript := writeTranscriptAt(t, cwd, []string{userPromptLine(now-60, "fix the parser"), string(answer)}, now+300)
+	t.Setenv("NOCTIS_TEST_TRANSCRIPT", transcript)
+
+	handleFableHit("batch", object{"session_id": sid, "cwd": cwd, "transcript_path": transcript}, loadConfig(), fableHitDecision())
+	wait := waitOf(sid)
+	if getString(wait, "kind") != "fable" {
+		t.Fatalf("Fable's limit parked no relaunch on the fallback model: %v (journal %v)", wait, journaledFor(sid))
+	}
+	timeOffset += int64(numberOr(wait, "resumeAt", 0)) - nowSec() + 1
+	statusReadingFrom(sid, nowSec(), 3, float64(nowSec()+18000), 20, float64(nowSec()+3*86400))
+
+	resumeWait(sid, "")
+
+	if got := launchesOf(calls, sid); got != 1 {
+		t.Fatalf("the runner launched the session %d time(s), want 1 (journal %v)", got, journaledFor(sid))
+	}
+	if retry := waitOf(sid); retry == nil || getString(retry, "hit") != "relaunch" {
+		t.Fatalf("the relaunch on the fallback model wrote only its prompt and an API error, yet an answer written before the clock went back five minutes, stamped after the relaunch, was taken for its answer and no retry was parked, so the session stays stopped: %v (journal %v)", retry, journaledFor(sid))
+	}
+}
+
 func TestARelaunchThatNeverAnswersGivesUpAfterTheLastAttempt(t *testing.T) {
 	sid := "never-answers"
 	calls := relaunchSandboxWith(t, fakeClaude("exit 1"))
