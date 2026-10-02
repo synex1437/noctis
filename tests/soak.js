@@ -15,8 +15,9 @@ for (let i = 2; i < process.argv.length; i += 2) {
 
 const HOUR = 3600;
 const DAY = 86400;
-const SHIPPED = readJson(path.join(__dirname, '..', 'config.default.json')).thresholds;
-const THRESHOLDS = { five: SHIPPED.session5h, week: SHIPPED.weeklyAll, fable: SHIPPED.weeklyFable };
+const SHIPPED = readJson(path.join(__dirname, '..', 'config.default.json'));
+const THRESHOLDS = { five: SHIPPED.thresholds.session5h, week: SHIPPED.thresholds.weeklyAll, fable: SHIPPED.thresholds.weeklyFable };
+const FAN_OUT_HEADROOM = SHIPPED.credits.fanOutHeadroom;
 const CODING_PROMPTS = ['auth.js dosyasındaki hatayı düzelt', 'Refactor the payment module and add unit tests', 'npm test çalıştır ve kırmızıları düzelt', 'Implement caching for the api layer', 'Bu fonksiyonu optimize et', 'Add a migration for the orders table'];
 const RESEARCH_PROMPTS = ['En iyi mekanik klavye 2026 araştır', 'Compare pricing of Claude Max and ChatGPT Pro plans', 'Anthropic güncel haberleri neler', 'Latest research on intermittent fasting', 'Şu yazıyı özetle https://example.com/article'];
 const OTHER_PROMPTS = ['Bu konuşmayı özetle', 'devam et', 'Write a short poem about autumn', 'JWT nasıl çalışır kısaca anlat'];
@@ -735,7 +736,7 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       const name = `audit-${serial}`;
       const gate = parseOutput(timedHook(acc, { hook_event_name: 'PreToolUse', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, tool_name: 'Workflow', tool_input: { script_path: `.claude/workflows/${name}.ts`, name } }));
       const denied = Boolean(gate.hookSpecificOutput && gate.hookSpecificOutput.permissionDecision === 'deny');
-      const low = acc.truth.five.used < 70 && acc.truth.week.used < 70 && acc.truth.fable.used < 70;
+      const low = Object.keys(THRESHOLDS).every((key) => THRESHOLDS[key] - acc.truth[key].used >= FAN_OUT_HEADROOM + MAX_OVERSHOOT);
       if (denied && low) anomaly(`workflow denied at low usage ${acc.name}/${session.sid}: ${gate.hookSpecificOutput.permissionDecisionReason}`);
       if (!denied) {
         stats.workflowLaunches += 1;
