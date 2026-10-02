@@ -109,6 +109,7 @@ function account(name) {
 }
 
 function setClock(accounts, t) {
+  lab.settleLateAnswers();
   T = t;
   const offset = T - Math.floor(Date.now() / 1000);
   for (const acc of accounts) acc.timeOffset = offset;
