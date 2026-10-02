@@ -276,6 +276,7 @@ const ACTIONS = [
     note('resume');
   }],
   ['time-passes', () => {
+    lab.settleLateAnswers();
     acc.timeOffset += pick([between(60, 600), between(600, 3 * 3600), between(3 * 3600, 6 * 3600)]);
     note('time-passes');
   }],

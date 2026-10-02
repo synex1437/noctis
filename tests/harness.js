@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn, spawnSync, fork } = require('child_process');
-const { appendAnswer, readPlay, unsettledPlayers } = require('./play');
+const { appendAnswer, readPlay, unsettledPlayers, lateAnswersPending, launchRecordCount } = require('./play');
 
 const PLUGIN_NAME = 'noctis';
 const SOURCE_ROOT = path.resolve(__dirname, '..');
@@ -145,6 +145,7 @@ class Lab {
     this.mockPort = 0;
     this.mockProcess = null;
     this.playSettings = path.join(this.root, 'play.json');
+    this.settledLaunchRecords = 0;
     fs.rmSync(this.root, { recursive: true, force: true });
     fs.mkdirSync(this.root, { recursive: true });
     this.snapshotSource();
@@ -395,6 +396,20 @@ class Lab {
       open = unsettledPlayers(this.root);
     }
     return open;
+  }
+
+  settleLateAnswers(limitMs = 10000) {
+    const records = launchRecordCount(this.root);
+    if (records === this.settledLaunchRecords) return 0;
+    this.settledLaunchRecords = records;
+    const endedSince = Date.now() - limitMs;
+    const deadline = Date.now() + limitMs;
+    let pending = lateAnswersPending(this.root, endedSince);
+    while (pending && Date.now() < deadline) {
+      sleepSync(50);
+      pending = lateAnswersPending(this.root, endedSince);
+    }
+    return pending;
   }
 
   account(name, options) {

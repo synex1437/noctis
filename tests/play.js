@@ -260,9 +260,17 @@ function unsettledPlayers(labRoot) {
   return readPlay(labRoot).launches.filter((launch) => !launch.done || (launch.done.lateExpected && !launch.late)).length;
 }
 
+function lateAnswersPending(labRoot, endedSince = 0) {
+  return readPlay(labRoot).launches.filter((launch) => launch.done && launch.done.lateExpected && !launch.late && launch.done.real >= endedSince).length;
+}
+
+function launchRecordCount(labRoot) {
+  return readDir(recordDirs(labRoot).launches).length;
+}
+
 if (require.main === module) {
   if (process.argv[2] === '--late') answerLate(process.argv.slice(3));
   else process.exitCode = play(process.argv[2] || '');
 }
 
-module.exports = { appendAnswer, readPlay, unsettledPlayers };
+module.exports = { appendAnswer, readPlay, unsettledPlayers, lateAnswersPending, launchRecordCount };
