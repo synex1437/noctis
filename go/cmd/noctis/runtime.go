@@ -817,10 +817,14 @@ func relaunchDidNothing(wait object, start time.Time, result launchResult) bool 
 }
 
 func waitContinued(wait object) bool {
-	if getString(wait, "kind") == "fable" {
-		return false
-	}
 	until := numberOr(wait, "until", 0)
+	if getString(wait, "kind") == "fable" {
+		if numberOr(wait, "transcriptSize", 0) <= 0 {
+			return false
+		}
+		answered, _ := relaunchAnswered(wait, until+1)
+		return answered
+	}
 	if getString(wait, "hit") == "relaunch" {
 		if answered, _ := relaunchAnswered(wait, until-1); answered {
 			return true
@@ -969,8 +973,12 @@ func resumeWait(sid, release string) {
 			leaveReplacedWait(sid)
 			return
 		}
-		journal(sid, "resume", "skip-launch", "the session went on in its own window after the reset", nil)
-		logInfo("runner %s: the session went on after the reset; not relaunching it", sid)
+		after := "the reset"
+		if kind == "fable" {
+			after = "the model switch"
+		}
+		journal(sid, "resume", "skip-launch", "the session went on in its own window after "+after, nil)
+		logInfo("runner %s: the session went on after %s; not relaunching it", sid, after)
 		return
 	}
 	if resumedByAnEarlierRunner(readState(), sid, wait) {
@@ -1184,8 +1192,12 @@ func resumeWait(sid, release string) {
 			leaveReplacedWait(sid)
 			return
 		}
-		journal(sid, "resume", "skip-launch", "the session went on in its own window while usage was checked", nil)
-		logInfo("runner %s: the session went on after the reset while usage was checked; not relaunching it", sid)
+		after, while := "the reset", "usage was checked"
+		if kind == "fable" {
+			after, while = "the model switch", "its relaunch was prepared"
+		}
+		journal(sid, "resume", "skip-launch", "the session went on in its own window while "+while, nil)
+		logInfo("runner %s: the session went on after %s while %s; not relaunching it", sid, after, while)
 		return
 	}
 	if woken > 0 {

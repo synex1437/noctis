@@ -324,3 +324,79 @@ func TestOnlyTheLinesWrittenAfterThePauseWasRecordedAreReadAsWrittenSince(t *tes
 		t.Errorf("a size recorded before the tail starts left out lines of the tail: first %d of %d", first, len(lines))
 	}
 }
+
+func TestTheRunnerDoesNotRelaunchASessionThatAnsweredInItsOwnWindowAfterFablesPausePoint(t *testing.T) {
+	answer := func(at float64) string {
+		return string(marshalCompact(object{"type": "assistant", "timestamp": transcriptStamp(at),
+			"message": object{"role": "assistant", "content": []any{object{"type": "text", "text": "Carrying on with the parser."}}}}))
+	}
+	cases := []struct {
+		name     string
+		written  func(switched float64) []string
+		unsized  bool
+		launches int
+	}{
+		{"the session answered a prompt typed in its own window", func(at float64) []string { return []string{userPromptLine(at+8, "go on"), answer(at + 12)} }, false, 0},
+		{"a local command was typed in its window", func(at float64) []string {
+			return []string{userPromptLine(at+8, "<command-name>/usage</command-name>"), userPromptLine(at+9, "<local-command-stdout>Fable: 99% used</local-command-stdout>")}
+		}, false, 1},
+		{"the batch's own answer reached the transcript after the hook had looked", func(at float64) []string { return []string{answer(at + 0.5)} }, false, 1},
+		{"an API error was written in its window", func(at float64) []string { return []string{apiErrorLine(at + 8)} }, false, 1},
+		{"the session answered, but its pause was recorded without the transcript's length", func(at float64) []string { return []string{answer(at + 12)} }, true, 1},
+	}
+	for index, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := takeoverSandbox(t)
+			previousHost, previousOffset := activeHost, timeOffset
+			t.Cleanup(func() { activeHost, timeOffset = previousHost, previousOffset })
+			activeHost = "claude"
+			t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "")
+			config := releaseConfig()
+			config["models"] = object{"primary": "claude-fable-5", "fallback": "claude-opus-5"}
+			config["resume"] = object{"mode": "headless", "prompt": "carry on"}
+			mustWriteJSON(files.config, config)
+			mustWriteJSON(files.settings, object{"model": "claude-fable-5"})
+			sid, cwd := fmt.Sprintf("fable-own-window%d", index+1), t.TempDir()
+			now := float64(nowSec())
+			writeFableBucket(99, now, now+3*86400)
+			batch := agentHookInput("PostToolBatch", sid, cwd, nil)
+			transcript := writeTranscriptAt(t, cwd, []string{userPromptLine(now-60, "fix the parser")}, now-60)
+			batch["transcript_path"] = transcript
+
+			hookOutput(t, onPostToolBatch, batch, loadConfig())
+			wait := pendingWait(sid)
+			if getString(wait, "kind") != "fable" {
+				t.Fatalf("Fable's pause point parked no relaunch on the fallback model: %v (journal %v)", wait, journaledFor(sid))
+			}
+			if tc.unsized {
+				updateState(func(state object) { delete(getMap(getMap(state, "waits"), sid), "transcriptSize") })
+			}
+			file, err := os.OpenFile(transcript, os.O_APPEND|os.O_WRONLY, 0o600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = file.WriteString(strings.Join(tc.written(numberOr(wait, "until", 0)), "\n") + "\n")
+			file.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			timeOffset += int64(numberOr(wait, "resumeAt", 0)) - nowSec() + 1
+			statusReadingFrom(sid, nowSec(), 3, float64(nowSec()+18000), 20, float64(nowSec()+3*86400))
+
+			resumeWait(sid, "")
+
+			if got := launchesOf(calls, sid); got != tc.launches {
+				t.Fatalf("%s after Fable's pause point: the runner relaunched the session on the fallback model %d time(s), want %d (journal %v)", tc.name, got, tc.launches, journaledFor(sid))
+			}
+			if tc.launches > 0 {
+				return
+			}
+			if left := pendingWait(sid); left != nil {
+				t.Fatalf("the runner kept the pause of a session that went on in its own window: %v", left)
+			}
+			if journal := journaledFor(sid); !slices.Contains(journal, "skip-launch") {
+				t.Fatalf("the runner ended the pause without relaunching the session and left no reason in the journal: %v", journal)
+			}
+		})
+	}
+}
