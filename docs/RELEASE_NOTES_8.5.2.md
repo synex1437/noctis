@@ -114,5 +114,8 @@ before, as it read a count it did not keep. Any soak also counted a workflow the
 want of room as refused at low usage whenever every window was under 70 %, while since 5.5.3 the
 gate has wanted 25 points of room before each window's pause point, a 5-hour window at most 67 %
 with the shipped thresholds; a CI run on Windows reached its workflow launch at 68.7 %. A refusal
-now counts as wrong only when every window has that room and 4 points more. The results of the local
-rounds on this release are in its commit message.
+now counts as wrong only when every window has that room and 4 points more. The Go test of the paced
+wait, `TestSleepUntilPacedAsksThePaceEachRound`, failed once in CI on a busy runner: the moment it
+waits for was two whole seconds ahead, and when the test began late in a second and its one-second
+sleep woke late, that moment came before its second tick. It is now five seconds ahead. The results
+of the local rounds on this release are in its commit message.

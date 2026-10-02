@@ -42,7 +42,7 @@ func TestTickPaceWithEarlyResetOff(t *testing.T) {
 func TestSleepUntilPacedAsksThePaceEachRound(t *testing.T) {
 	seen := []float64{}
 	ticks := 0
-	done := sleepUntilPaced(float64(nowSec())+2, func(remaining float64) float64 {
+	done := sleepUntilPaced(float64(nowSec())+5, func(remaining float64) float64 {
 		seen = append(seen, remaining)
 		return 1
 	}, func() bool {
