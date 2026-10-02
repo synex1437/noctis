@@ -196,3 +196,70 @@ func TestTheRunnerDoesNotRelaunchASessionThatWentOnBeforeItStarted(t *testing.T)
 		})
 	}
 }
+
+func relaunchAWaitAnEarlierRunnerResumed(t *testing.T, sid, kind string, answered bool) string {
+	t.Helper()
+	calls := takeoverSandbox(t)
+	previousHost := activeHost
+	t.Cleanup(func() { activeHost = previousHost })
+	activeHost = "claude"
+	now := float64(nowSec())
+	startedAt, claimedAt := now-7200, now-3000
+	cwd := t.TempDir()
+	lines := []string{userPromptLine(startedAt-60, "fix the parser"), apiErrorLine(startedAt - 59), userPromptLine(claimedAt+5, "carry on")}
+	if answered {
+		lines = append(lines, `{"type":"assistant","timestamp":"`+transcriptStamp(claimedAt+30)+`","message":{"role":"assistant","content":[{"type":"text","text":"Carrying on with the parser."}]}}`)
+	}
+	transcript := writeTranscriptAt(t, cwd, lines, claimedAt+30)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, limitsBody(2, now+5*3600, 20, now+3*86400))
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("NOCTIS_USAGE_URL", server.URL)
+	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "lab")
+	config := releaseConfig()
+	config["fable"] = object{"source": "oauth"}
+	config["resume"] = object{"mode": "headless", "prompt": "carry on"}
+	mustWriteJSON(files.config, config)
+	waits := map[string]object{
+		"batch": {"kind": "batch", "window": "five_hour", "label": "5h", "used": float64(100), "hit": "threshold", "threshold": float64(92), "holder": "earlier-holder",
+			"until": now - 100, "startedAt": startedAt, "resumeAt": now - 10, "attempts": float64(0), "cwd": cwd, "transcript": transcript, "launchMode": "headless"},
+		"fable": {"kind": "fable", "window": "fable", "label": "Fable", "holder": "earlier-holder", "until": startedAt, "startedAt": startedAt, "resumeAt": startedAt + 20,
+			"cwd": cwd, "transcript": transcript, "launchMode": "headless", "modelOverride": "claude-sonnet-5", "queuedPrompt": ""},
+	}
+	wait := waits[kind]
+	updateState(func(state object) {
+		stateMap(state, "waits")[sid] = wait
+		stateMap(state, "continuedBy")[sid] = object{"startedAt": startedAt, "holder": "earlier-holder", "by": "runner", "at": claimedAt}
+	})
+	resumeWait(sid, "")
+	return calls
+}
+
+func TestTheRunnerDoesNotRelaunchASessionAnEarlierRunnerResumedThatAnswered(t *testing.T) {
+	cases := []struct {
+		name     string
+		kind     string
+		answered bool
+		launches int
+	}{
+		{"the session answered the runner that resumed it after an early reset", "batch", true, 0},
+		{"the session never answered the runner that resumed it after an early reset", "batch", false, 1},
+		{"the session answered the runner that relaunched it on another model at Fable's pause point", "fable", true, 0},
+		{"the session never answered the runner that relaunched it on another model at Fable's pause point", "fable", false, 1},
+	}
+	for index, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sid := fmt.Sprintf("resumed-earlier%d", index+1)
+
+			calls := relaunchAWaitAnEarlierRunnerResumed(t, sid, tc.kind, tc.answered)
+
+			if got := launchesOf(calls, sid); got != tc.launches {
+				t.Fatalf("%s, and its wait came back with that runner's claim on it: the session was relaunched %d time(s), want %d (journal %v)", tc.name, got, tc.launches, journaledFor(sid))
+			}
+			if left := getMap(getMap(readState(), "waits"), sid); tc.launches == 0 && left != nil {
+				t.Fatalf("the wait of a session the earlier runner resumed was kept, so it is armed again: %v", left)
+			}
+		})
+	}
+}

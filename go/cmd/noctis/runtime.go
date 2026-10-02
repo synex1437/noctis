@@ -942,6 +942,15 @@ func resumeWait(sid, release string) {
 		logInfo("runner %s: the session went on after the reset; not relaunching it", sid)
 		return
 	}
+	if resumedByAnEarlierRunner(readState(), sid, wait) {
+		if !takeWait(sid, wait, "", true) {
+			leaveReplacedWait(sid)
+			return
+		}
+		journal(sid, "resume", "skip-launch", "an earlier runner already resumed the session and it answered", nil)
+		logInfo("runner %s: an earlier runner already resumed the session and it answered; not relaunching it", sid)
+		return
+	}
 	if fresh, at := earlierFreshStart(readState(), sid, startedAt); fresh != "" {
 		if sessionContinuedAfter(freshProgress(wait, fresh), at) {
 			if !takeWait(sid, wait, "session", true) {
