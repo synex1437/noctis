@@ -894,6 +894,7 @@ func resumeWait(sid, release string) {
 			leaveReplacedWait(sid)
 			return
 		}
+		journal(sid, "resume", "skip-launch", "Claude Code's own auto-continue already resumed the session", nil)
 		logInfo("runner %s: builtin auto-continue already resumed the session", sid)
 		return
 	}
@@ -992,6 +993,7 @@ func resumeWait(sid, release string) {
 					leaveReplacedWait(sid)
 					return
 				}
+				journal(sid, "resume", "skip-launch", fmt.Sprintf("no usage data after %d tries, so the session is left for the user to resume", attempts), nil)
 				notify(cfg, pluginName, T("runner.noData", shortSid(sid), hostResumeCommand(currentHost().id, sid)))
 				fail("runner %s: giving up after %d attempts without usage data", sid, attempts)
 				return
@@ -1023,7 +1025,9 @@ func resumeWait(sid, release string) {
 	if getString(resume, "mode") == "none" {
 		if !clearWait(sid, state) {
 			leaveReplacedWait(sid)
+			return
 		}
+		journal(sid, "resume", "skip-launch", "resume.mode is none, so the session is left for the user to resume", nil)
 		return
 	}
 	if wakeAt := numberOr(wait, "wakeAttemptedAt", 0); wakeAt > 0 && sessionActiveAfter(wait, wakeAt) {
