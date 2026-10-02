@@ -6,6 +6,7 @@ const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
 const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, waitKey, isAlive } = require('./harness');
+const { checkContinuations, pauseEndedWithoutReason } = require('./continuations');
 
 const args = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -16,6 +17,7 @@ const SEED = Number(flag('seed', '7'));
 const ROUNDS = Number(flag('rounds', '400'));
 const VERBOSE = args.includes('--verbose');
 const HANDOFF_GRACE_SECONDS = 60;
+const LAUNCH_OVERLAP_MS = 5000;
 
 let rngState = SEED >>> 0;
 function random() {
@@ -79,6 +81,10 @@ function runEngine(argv, input, extraEnv = {}) {
   });
   acc.settleRefresh(argv);
   return result;
+}
+
+function clock() {
+  return nowSec() + acc.timeOffset;
 }
 
 function currentState() {
@@ -158,7 +164,7 @@ const ACTIONS = [
     if (event === 'PostModelSwitch') input.to_model = pick(MODELS);
     if (event === 'PreCompact') input.trigger = pick(['auto', 'manual']);
     if (event.startsWith('Task')) { input.task_id = `t${between(1, 5)}`; input.task_subject = 'thing'; }
-    const since = nowSec();
+    const since = clock();
     checkResult(round, `hook ${event}`, runEngine(['hook'], input), { since, sid });
     note(`hook:${event}`);
   }],
@@ -166,7 +172,7 @@ const ACTIONS = [
     const sid = pick(SESSIONS);
     const five = chance(0.15) ? between(90, 100) : between(0, 89);
     const week = chance(0.15) ? between(85, 100) : between(0, 84);
-    const input = acc.statuslineInput(sid || 'anon', pick(MODELS), five, nowSec() + between(-600, 18000), week, nowSec() + between(-600, 5 * 86400), between(0, 99));
+    const input = acc.statuslineInput(sid || 'anon', pick(MODELS), five, clock() + between(-600, 18000), week, clock() + between(-600, 5 * 86400), between(0, 99));
     if (chance(0.1)) delete input.rate_limits;
     if (chance(0.1)) input.rate_limits = { five_hour: { used_percentage: 'lots' } };
     checkResult(round, 'statusline', runEngine(['statusline'], input));
@@ -230,7 +236,7 @@ const ACTIONS = [
     note(`damage:${what}`);
   }],
   ['limits', (round) => {
-    const now = nowSec();
+    const now = clock();
     const kind = pick(['calm', 'near', 'over', 'weekly-over', 'scoped-over', 'empty', 'garbage', 'reset-early']);
     const shapes = {
       calm: [{ kind: 'session', percent: between(0, 60), resets_at: new Date((now + 7200) * 1000).toISOString() }],
@@ -248,24 +254,43 @@ const ACTIONS = [
   }],
   ['parallel-hooks', (round) => {
     const inputs = Array.from({ length: between(2, 6) }, () => ({ hook_event_name: pick(['PostToolBatch', 'UserPromptSubmit', 'Stop']), session_id: pick(SESSIONS), cwd: lab.projectDir, transcript_path: lab.transcript, prompt: pick(PROMPTS) }));
-    const since = nowSec();
+    const since = clock();
     const children = inputs.map((input) => runEngine(['hook'], input));
     children.forEach((result, index) => checkResult(round, `parallel hook ${index}`, result, { since, sid: inputs[index].session_id }));
     note('parallel-hooks');
   }],
   ['resume', (round) => {
-    const sid = pick(SESSIONS);
-    checkResult(round, 'resume', runEngine(['resume', '--sid', sid, '--account', acc.dir]), { allowExit: sid === '' ? [2] : [0, 1] });
+    const waiting = Object.keys((currentState() || {}).waits || {});
+    const sid = waiting.length && chance(0.6) ? pick(waiting) : pick(SESSIONS);
+    const before = sid ? ((currentState() || {}).waits || {})[sid] : undefined;
+    const mark = acc.journalMark();
+    const startedReal = Date.now();
+    const result = runEngine(['resume', '--sid', sid, '--account', acc.dir]);
+    checkResult(round, 'resume', result, { allowExit: sid === '' ? [2] : [0, 1] });
+    if (before && !result.error) {
+      const after = ((currentState() || {}).waits || {})[sid];
+      const launched = lab.playRecords().launches.some((launch) => launch.key === sid && (!launch.done || launch.done.real >= startedReal - LAUNCH_OVERLAP_MS));
+      const silent = pauseEndedWithoutReason({ key: sid, before, after, launched, journal: acc.journalSince(mark) });
+      if (silent) problem(round, 'resume', silent);
+    }
     note('resume');
+  }],
+  ['time-passes', () => {
+    acc.timeOffset += pick([between(60, 600), between(600, 3 * 3600), between(3 * 3600, 6 * 3600)]);
+    note('time-passes');
+  }],
+  ['session-answers', () => {
+    if (fs.existsSync(lab.transcript)) lab.writeAnswer(lab.transcript, acc.timeOffset);
+    note('session-answers');
   }],
 ];
 
 function invariants(round) {
-  const checkStartedAt = nowSec();
+  const checkStartedAt = clock();
   runEngine(['on']); 
   const recovery = runEngine(['hook'], { hook_event_name: 'PostToolBatch', session_id: 'invariant', cwd: lab.projectDir, transcript_path: lab.transcript });
   checkResult(round, 'recovery hook', recovery);
-  runEngine(['statusline'], acc.statuslineInput('invariant', 'claude-fable-5-1', 20, nowSec() + 7200, 20, nowSec() + 3 * 86400));
+  runEngine(['statusline'], acc.statuslineInput('invariant', 'claude-fable-5-1', 20, clock() + 7200, 20, clock() + 3 * 86400));
   const state = currentState();
   if (state === null) {
     problem(round, 'state', 'state.json is still unreadable after a recovery hook');
@@ -312,6 +337,7 @@ async function main() {
   await lab.startMock();
   acc.install();
   acc.fastClaude = true;
+  lab.playClaude({ seed: SEED });
   process.stdout.write(`monkey: seed ${SEED}, ${ROUNDS} rounds\n`);
   const started = Date.now();
   for (let round = 1; round <= ROUNDS; round += 1) {
@@ -333,21 +359,25 @@ async function main() {
     current.thresholds = { ...readJson(path.join(SOURCE_ROOT, 'config.default.json')).thresholds };
     current.wait = { ...(current.wait || {}), maxInHookMinutes: 330 };
   });
-  lab.setLimits([{ kind: 'session', percent: 30, resets_at: new Date((nowSec() + 7200) * 1000).toISOString() }]);
+  lab.setLimits([{ kind: 'session', percent: 30, resets_at: new Date((clock() + 7200) * 1000).toISOString() }]);
   fs.rmSync(path.join(acc.guardDir, 'fable.json'), { force: true });
   const recovery = runEngine(['doctor']);
   if (![0, 1].includes(recovery.status)) problems.push(`recovery: doctor exits ${recovery.status}`);
   if (!/OK {2}engine:/.test(recovery.stdout || '')) problems.push('recovery: doctor prints no report after the monkey');
-  const statusline = runEngine(['statusline'], acc.statuslineInput('recover', 'claude-fable-5-1', 30, nowSec() + 7200, 20, nowSec() + 3 * 86400));
+  const statusline = runEngine(['statusline'], acc.statuslineInput('recover', 'claude-fable-5-1', 30, clock() + 7200, 20, clock() + 3 * 86400));
   if (!/∞|NOCTIS/.test(statusline.stdout || '')) problems.push('recovery: status line does not render after the monkey');
   const errors = fs.existsSync(path.join(acc.guardDir, 'errors.log')) ? fs.readFileSync(path.join(acc.guardDir, 'errors.log'), 'utf8') : '';
   const panics = errors.split('\n').filter((line) => /panic|goroutine/.test(line));
   if (panics.length) problems.push(`errors.log records ${panics.length} panic line(s): ${panics[0].slice(0, 160)}`);
   const collected = acc.stopRunners();
   lab.stopMock();
+  const unsettled = await lab.settlePlayers();
+  const continuations = checkContinuations(lab.playRecords());
+  for (const line of continuations.problems) problems.push(`continuation: ${line}`);
   const seconds = ((Date.now() - started) / 1000).toFixed(0);
   process.stdout.write(`\naction mix: ${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}=${v}`).join(' ')}\n`);
   process.stdout.write(`${ROUNDS} rounds in ${seconds}s, ${collected} background process(es) collected\n`);
+  process.stdout.write(`continuations: ${JSON.stringify({ ...continuations.summary, unsettledPlayers: unsettled })}\n`);
   if (problems.length) {
     process.stdout.write(`\nMONKEY FOUND ${problems.length} PROBLEM(S)\n`);
     for (const line of problems.slice(0, 40)) process.stdout.write(`  ${line}\n`);

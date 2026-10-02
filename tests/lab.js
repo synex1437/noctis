@@ -1780,7 +1780,7 @@ async function scenarioStaleRepoSums() {
   fs.rmSync(checkout, { recursive: true, force: true });
   fs.cpSync(lab.sourceRoot, checkout, { recursive: true });
   fs.mkdirSync(path.join(checkout, 'tests'), { recursive: true });
-  fs.copyFileSync(path.join(__dirname, 'harness.js'), path.join(checkout, 'tests', 'harness.js'));
+  for (const name of ['harness.js', 'play.js']) fs.copyFileSync(path.join(__dirname, name), path.join(checkout, 'tests', name));
   const shippedName = path.relative(path.join(lab.sourceRoot, 'bin'), lab.snapshotBinary).split(path.sep).join('/');
   const staleSums = `${'0'.repeat(64)}  ${shippedName}\n`;
   const checkoutSums = path.join(checkout, 'bin', 'SHA256SUMS');
