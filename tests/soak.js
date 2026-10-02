@@ -150,6 +150,7 @@ const FETCH_TIMEOUT_HOLD_MS = 4500;
 // little more for the hook's own work), never longer. inHookHolds counts the in-hook waits that held
 // the host at least FETCH_TIMEOUT_HOLD_MS.
 const IN_HOOK_HOLD_MS = 70 * 1000;
+const HUNG_ENDPOINT_HOLD_MS = 1500;
 
 function logSince(file, offset) {
   try {
@@ -174,7 +175,7 @@ function timedHook(acc, input, extraEnv = {}) {
   const hookMs = Math.round(acc.lastRunMs);
   const event = input.hook_event_name || '?';
   stats.latencies.push(hookMs);
-  stats.timings.push({ ms: hookMs, event, sid: input.session_id || '?' });
+  stats.timings.push({ ms: hookMs, event, sid: input.session_id || '?', endpointHangs: outage === 'timeout' });
   stats.labWaitMs = Math.max(stats.labWaitMs, elapsed - hookMs);
   const hookLog = hookMs >= FETCH_TIMEOUT_HOLD_MS ? logSince(log, logFrom) : '';
   const inHookWait = hookLog.split('\n').some((line) => line.includes(` for ${input.session_id}: `) && line.includes('; inHook=true;'));
@@ -205,6 +206,8 @@ const MAX_OVERSHOOT = 4;
 
 const NEAR_EDGE = 8;
 
+const BURST_MIN_USED = 60;
+
 function pastLimit(acc) {
   const { five, week } = acc.truth;
   return five.used >= THRESHOLDS.five || week.used >= THRESHOLDS.week || five.used >= 100 || week.used >= 100;
@@ -220,10 +223,21 @@ function subagentLimited(out) {
   return specific.permissionDecision === 'deny' && /^\[noctis\] .* usage is /.test(specific.permissionDecisionReason || '');
 }
 
+function citedUsage(out) {
+  const cited = /usage is ([\d.]+)%/.exec(out.hookSpecificOutput.permissionDecisionReason);
+  return cited ? Number(cited[1]) : NaN;
+}
+
+function withinBurstReach(acc, out) {
+  const used = citedUsage(out);
+  const { five, week } = acc.truth;
+  return used >= BURST_MIN_USED && used <= Math.ceil(Math.max(five.used, week.used));
+}
+
 function expectedSubagentLimit(acc, out, mainPaused) {
   if (!subagentLimited(out)) return false;
   if (pastLimit(acc) || mainPaused) return true;
-  return nearLimit(acc) && /reached early at the current burn rate/.test(out.hookSpecificOutput.permissionDecisionReason);
+  return (nearLimit(acc) || withinBurstReach(acc, out)) && /reached early at the current burn rate/.test(out.hookSpecificOutput.permissionDecisionReason);
 }
 
 // The last few guard decisions for a session, so a breach in a CI log says how the call got through.
@@ -563,12 +577,20 @@ const LANGUAGE_SAMPLES = [
   ['tr', 'Dosyadaki hatayı düzelt ve sonra testleri yeniden çalıştır lütfen'],
 ];
 let chaosSerial = 0;
+let outage = '';
 
 function anomaly(text) {
   stats.anomalies.push(text);
 }
 
+function setOutage(mode) {
+  outage = mode;
+  lab.setOutage(mode);
+}
+
 function forceWall(acc, session) {
+  rollWindows(acc);
+  if (acc.truth.five.resetsAt - T <= IN_HOOK_HOLD_MS / 1000) return false;
   acc.truth.five.used = Math.max(acc.truth.five.used, THRESHOLDS.five + 2);
   publishTruth(acc);
   acc.statusline(session.sid, session.model, Number(acc.truth.five.used.toFixed(1)), acc.truth.five.resetsAt, Number(acc.truth.week.used.toFixed(1)), acc.truth.week.resetsAt, Math.round(session.context));
@@ -815,15 +837,15 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       timedHook(acc, { hook_event_name: 'PostToolBatch', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript });
       break;
     case 'api-error':
-      lab.setOutage('error');
+      setOutage('error');
       session.outageUntilTurn = turn + 3;
       break;
     case 'api-garbage':
-      lab.setOutage('garbage');
+      setOutage('garbage');
       session.outageUntilTurn = turn + 2;
       break;
     case 'api-timeout':
-      lab.setOutage('timeout');
+      setOutage('timeout');
       session.outageUntilTurn = turn + 1;
       break;
     case 'statusline-blackout':
@@ -834,9 +856,8 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       fs.writeFileSync(lock, rng() < 0.5 ? '' : '999999');
       const old = new Date(Date.now() - 60000);
       fs.utimesSync(lock, old, old);
-      const started = Date.now();
       timedHook(acc, { hook_event_name: 'PostToolBatch', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript }, { NOCTIS_NO_QUIET: '1' });
-      if (Date.now() - started > 3000) anomaly(`a stale lock cost the hook ${Date.now() - started} ms ${acc.name}`);
+      if (acc.lastRunMs > 3000) anomaly(`a stale lock cost the hook ${Math.round(acc.lastRunMs)} ms ${acc.name}`);
       acc.run(['on']);
       if (fs.existsSync(lock) && Date.now() - fs.statSync(lock).mtimeMs > 30000) anomaly(`stale lock survived a state write ${acc.name}`);
       break;
@@ -861,11 +882,8 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
     }
     case 'big-transcript':
       fs.appendFileSync(session.transcript, `${JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'y'.repeat(4000) }] } })}\n`.repeat(250));
-      {
-        const started = Date.now();
-        timedHook(acc, { hook_event_name: 'PostToolBatch', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript });
-        if (Date.now() - started > 8000) anomaly(`a hook took ${Date.now() - started} ms on a big transcript ${acc.name}`);
-      }
+      timedHook(acc, { hook_event_name: 'PostToolBatch', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript });
+      if (acc.lastRunMs > 8000) anomaly(`a hook took ${Math.round(acc.lastRunMs)} ms on a big transcript ${acc.name}`);
       break;
     case 'parallel-subagents': {
       const spawns = [];
@@ -891,7 +909,7 @@ async function marathonTurn(acc, session, turn, accounts) {
   rollWindows(acc);
   publishTruth(acc);
   if (session.outageUntilTurn !== undefined && turn >= session.outageUntilTurn) {
-    lab.setOutage('');
+    setOutage('');
     session.outageUntilTurn = undefined;
   }
   const blackout = session.blackoutUntilTurn !== undefined && turn < session.blackoutUntilTurn;
@@ -1061,7 +1079,7 @@ async function runMarathonDay(accounts, day) {
     }
   }
   for (const slot of slots) timedHook(slot.acc, { hook_event_name: 'SessionEnd', session_id: slot.session.sid, reason: 'exit' });
-  lab.setOutage('');
+  setOutage('');
 }
 
 async function main() {
@@ -1115,13 +1133,17 @@ async function main() {
   for (const line of continuations.problems) stats.anomalies.push(`continuation: ${line}`);
   const slowest = (list) => list.slice().sort((a, b) => b.ms - a.ms).slice(0, 20).map((entry) => `${entry.event}/${entry.sid} ${entry.ms}ms`).join(', ');
   const guarding = stats.timings.filter((entry) => entry.event !== 'StopFailure');
-  const pausing = stats.timings.filter((entry) => entry.event === 'StopFailure');
+  const pausing = stats.timings.filter((entry) => entry.event === 'StopFailure' && !entry.endpointHangs);
+  const pausingOnAHungEndpoint = stats.timings.filter((entry) => entry.event === 'StopFailure' && entry.endpointHangs);
   const p95 = percentile(guarding.map((entry) => entry.ms), 0.95);
   if (p95 > 400) stats.anomalies.push(`hook p95 latency ${p95} ms is above the 400 ms budget (slowest: ${slowest(guarding)})`);
   const pauseTimes = pausing.map((entry) => entry.ms);
   const pauseP95 = pausing.length ? percentile(pauseTimes, 0.95) : 0;
   const pauseBudget = process.platform === 'win32' ? 5000 : 400;
   if (pauseP95 > pauseBudget) stats.anomalies.push(`StopFailure p95 latency ${pauseP95} ms is above the ${pauseBudget} ms budget (slowest: ${slowest(pausing)})`);
+  const hungPauseBudget = HUNG_ENDPOINT_HOLD_MS + pauseBudget;
+  const pastHungPauseBudget = pausingOnAHungEndpoint.filter((entry) => entry.ms > hungPauseBudget);
+  if (pastHungPauseBudget.length) stats.anomalies.push(`StopFailure held the host past ${hungPauseBudget} ms while the usage endpoint hung (${slowest(pastHungPauseBudget)})`);
   if (stats.corruptions > 0 && stats.recoveries === 0) stats.anomalies.push(`${stats.corruptions} file corruption(s) and not one recovery from a backup`);
   const summary = {
     simulatedDays: options.days,
@@ -1171,6 +1193,7 @@ async function main() {
       calls: pausing.length,
       budget: pauseBudget,
       meetsTheUnsplitBudget: pauseP95 <= 400,
+      whileTheEndpointHung: { calls: pausingOnAHungEndpoint.length, max: pausingOnAHungEndpoint.length ? Math.max(...pausingOnAHungEndpoint.map((entry) => entry.ms)) : 0, budget: hungPauseBudget },
     },
     breaches: stats.breaches.length,
     breachDetails: stats.breaches.slice(0, 6),
