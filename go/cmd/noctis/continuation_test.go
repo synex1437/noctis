@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -123,6 +124,61 @@ func TestWhatTheSessionWroteInTheSecondItFailedDoesNotCountAsItGoingOn(t *testin
 
 			if got := launchesOf(calls, sid); got != 1 {
 				t.Fatalf("what the session wrote in the second it failed, before the failure, was taken for the session going on after it: the retry relaunched it %d time(s), want 1, so the session stays stopped (journal %v)", got, journaledFor(sid))
+			}
+		})
+	}
+}
+
+func TestARunnerThatEndsAPauseWithoutARelaunchSaysWhyInTheJournal(t *testing.T) {
+	cases := []struct {
+		name  string
+		usage bool
+		setup func(sid string, wait object)
+	}{
+		{"Claude Code's own auto-continue resumed the session", true, func(sid string, _ object) {
+			updateState(func(state object) {
+				stateMap(state, "autoResume")[sid] = object{"type": "quota_auto_resume_fired", "at": float64(nowSec())}
+			})
+		}},
+		{"resume.mode is none", true, func(string, object) {
+			config := readJSON(files.config)
+			config["resume"] = object{"mode": "none"}
+			mustWriteJSON(files.config, config)
+		}},
+		{"its last try found no usage data", false, func(_ string, wait object) {
+			wait["attempts"] = float64(stopFailureMaxAttempts - 1)
+		}},
+	}
+	for index, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := takeoverSandbox(t)
+			previousHost := activeHost
+			t.Cleanup(func() { activeHost = previousHost })
+			activeHost = "claude"
+			t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "")
+			sid := fmt.Sprintf("ended%d", index+1)
+			now := float64(nowSec())
+			failedAt := now - 600
+			cwd := t.TempDir()
+			transcript := writeTranscriptAt(t, cwd, []string{userPromptLine(failedAt-100, "fix the parser"), apiErrorLine(failedAt + 0.4)}, failedAt+0.4)
+			wait := object{"kind": "stopfailure", "window": "unknown", "label": "overloaded", "overload": true, "attempt": float64(1), "used": nil, "threshold": nil,
+				"until": failedAt + 1, "startedAt": failedAt, "resumeAt": failedAt + 30, "cwd": cwd, "transcript": transcript, "launchMode": "headless"}
+			tc.setup(sid, wait)
+			updateState(func(state object) { stateMap(state, "waits")[sid] = wait })
+			if tc.usage {
+				statusReadingFrom(sid, nowSec(), 3, now+18000, 20, now+3*86400)
+			}
+
+			resumeWait(sid, "")
+
+			if got := launchesOf(calls, sid); got != 0 {
+				t.Fatalf("the runner relaunched the session %d time(s), want none", got)
+			}
+			if left := pendingWait(sid); left != nil {
+				t.Fatalf("the pause was kept: %v", left)
+			}
+			if journal := journaledFor(sid); !slices.Contains(journal, "skip-launch") {
+				t.Fatalf("the runner ended the pause without relaunching the session and left no reason in the journal, so noctis why does not say what became of it: %v", journal)
 			}
 		})
 	}
