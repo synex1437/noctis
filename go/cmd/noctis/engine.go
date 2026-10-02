@@ -24,16 +24,16 @@ import (
 const bulletMarker = `[-*+•]`
 
 var (
-	queueItemPattern = lazyRegexp(`(?i)^\s*(?:(?:` + bulletMarker + `|\(?\d+[.)])?\s*\[\s*([xX✓✔]?)\s*\]|(TODO)[:\s])\s*(.+)$`)
+	queueItemPattern = lazyRegexp(`^\s*(?:(?:` + bulletMarker + `|\(?\d+[.)])?\s*\[\s*([xX✓✔]?)\s*\]|((?i:todo):|TODO\s))\s*(.+)$`)
 
 	queueBulletPattern = lazyRegexp(`^\s*(?:` + bulletMarker + `|\(?\d+[.)])\s+(\S.*)$`)
-	queueDoneMarker    = lazyRegexp(`(?i)^~~.*~~$|^\s*(?:✓|✔|\[done\]|\(done\)|\(tamam\)|\(bitti\))|(?:\(done\)|\(tamam\)|\(bitti\)|✓|✔)\s*$`)
-	queueDoneAffix     = lazyRegexp(`(?i)^\s*(?:✓|✔|\[done\]|\(done\)|\(tamam\)|\(bitti\))|(?:\(done\)|\(tamam\)|\(bitti\)|✓|✔)\s*$`)
+	queueDoneMarker    = lazyRegexp(`(?i)^~~.*~~$|^\s*(?:✓|✔|\[done\]|\(done\)|\(tamam\)|\(b[iİı]tt[iİı]\))|(?:\(done\)|\(tamam\)|\(b[iİı]tt[iİı]\)|✓|✔)\s*$`)
+	queueDoneAffix     = lazyRegexp(`(?i)^\s*(?:✓|✔|\[done\]|\(done\)|\(tamam\)|\(b[iİı]tt[iİı]\))|(?:\(done\)|\(tamam\)|\(b[iİı]tt[iİı]\)|✓|✔)\s*$`)
 	queueHeading       = lazyRegexp(`^\s*#{1,6}\s`)
 	queuePriority      = lazyRegexp(`(?i)\(p([0-9])\)`)
 	queueAfter         = lazyRegexp(`(?i)\(after\s+([^)]+)\)`)
 	queueTag           = lazyRegexp(`#(\pL[\pL\pN_-]*)`)
-	queueHuman         = lazyRegexp(`(?i)\((?:human|insan)\)`)
+	queueHuman         = lazyRegexp(`(?i)\((human|insan)\)`)
 	queueReference     = lazyRegexp(`^(?:\d+|#\pL[\pL\pN_-]*|(?:` + issueRepoPattern + `)?#\d+)$`)
 )
 
@@ -311,6 +311,8 @@ type queueView struct {
 	freeAt        float64
 	freed         []deferredItem
 	items         []string
+	itemModels    []string
+	itemTexts     []string
 	plain         bool
 	unmatched     []string
 	unmatchedMore int
@@ -340,13 +342,9 @@ func referenceDigest(reference string) string {
 
 func parseQueueEntries(content string) ([]queueEntry, bool) {
 	lines := strings.Split(strings.TrimPrefix(content, "\uFEFF"), "\n")
-	hasBoxes, fenced := false, false
+	hasBoxes, blocks := false, hiddenBlocks{}
 	for _, line := range lines {
-		if queueFence(line) {
-			fenced = !fenced
-			continue
-		}
-		if !fenced && queueItemPattern.MatchString(strings.TrimRight(line, "\r")) {
+		if !blocks.hides(line) && queueItemPattern.MatchString(strings.TrimRight(line, "\r")) {
 			hasBoxes = true
 			break
 		}
@@ -358,13 +356,10 @@ func parseQueueEntries(content string) ([]queueEntry, bool) {
 	}
 	drafts := []*draft{}
 	open := false
-	fenced = false
+	blocks = hiddenBlocks{}
 	for index, line := range lines {
-		if queueFence(line) {
-			fenced, open = !fenced, false
-			continue
-		}
-		if fenced {
+		if blocks.hides(line) {
+			open = false
 			continue
 		}
 		trimmed := strings.TrimSpace(strings.TrimRight(line, "\r"))
@@ -381,7 +376,7 @@ func parseQueueEntries(content string) ([]queueEntry, bool) {
 			item.text.WriteString(text)
 			drafts = append(drafts, item)
 			open = true
-		case trimmed == "" || queueHeading.MatchString(trimmed):
+		case trimmed == "" || queueHeading.MatchString(trimmed) || queueVerifyPattern.MatchString(trimmed) || queueVerifyEachPattern.MatchString(trimmed):
 			open = false
 
 		case open && hasBoxes && queueBulletPattern.MatchString(trimmed):
@@ -416,6 +411,24 @@ type queueEntry struct {
 func queueFence(line string) bool {
 	trimmed := strings.TrimSpace(line)
 	return strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")
+}
+
+type hiddenBlocks struct{ fenced, commented bool }
+
+func (blocks *hiddenBlocks) hides(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	switch {
+	case blocks.commented:
+		blocks.commented = !strings.Contains(trimmed, "-->")
+	case queueFence(trimmed):
+		blocks.fenced = !blocks.fenced
+	case blocks.fenced:
+	default:
+		rest, opens := strings.CutPrefix(trimmed, "<!--")
+		blocks.commented = opens && !strings.Contains(rest, "-->")
+		return opens
+	}
+	return true
 }
 
 func queueLineParts(line string) (text string, checked, ok bool) {
@@ -466,7 +479,7 @@ func parseQueueBullet(line string, ordinal int) (queueEntry, bool) {
 
 func newQueueEntry(ordinal int, text string, checked bool) queueEntry {
 	entry := queueEntry{ordinal: ordinal, text: strings.TrimSpace(text), checked: checked, priority: 5, tags: map[string]bool{}}
-	entry.human = queueHuman.MatchString(entry.text)
+	entry.human = queueHuman.MatchString(foldTag(entry.text))
 	if found := queuePriority.FindStringSubmatch(entry.text); found != nil {
 		entry.priority = int(found[1][0] - '0')
 	}
@@ -639,6 +652,8 @@ func queueSnapshotOf(file, content string) queueView {
 			break
 		}
 		view.items = append(view.items, truncateText(entry.text, 160))
+		view.itemModels = append(view.itemModels, itemModel(entry.text))
+		view.itemTexts = append(view.itemTexts, entry.text)
 	}
 	return view
 }
@@ -868,11 +883,11 @@ func gitStatusAhead(cwd string) func() {
 	return func() { <-done }
 }
 
-func gitStatusUncached(cwd string) (string, bool) {
+func gitStatusUncached(cwd string, options ...string) (string, bool) {
 	if !insideGitRepo(cwd) {
 		return "", false
 	}
-	command := exec.Command("git", "-c", "status.relativePaths=true", "-c", "color.status=false", "-c", "status.branch=false", "status", "--short")
+	command := exec.Command("git", append([]string{"-c", "status.relativePaths=true", "-c", "color.status=false", "-c", "status.branch=false", "status", "--short"}, options...)...)
 	command.Dir = cwd
 	command.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
 	output, err := runWithTimeout(command, 3*time.Second)
@@ -1867,6 +1882,8 @@ func holdWait(kind, sid string, cfg object, wait *waitPlan, resumeAt float64, he
 					hold.cancelled = true
 				} else if float64(nowSec()) >= heldResumeAt {
 					sleepUntil(epoch, nil)
+				} else {
+					hold.cancelled = earlyRelease(cfg, sid, held, 0, false) == ""
 				}
 			}
 			return hold
@@ -1886,8 +1903,11 @@ func joinWait(kind, sid string, cfg object, wait *waitPlan, current object, resu
 	if !inHook || !getBool(current, "inHook", false) {
 		return waitOutcome{stop: savedNotice(cfg, wait.label, formatNumber(wait.used), formatTime(numberOr(current, "resumeAt", resumeAt)), "") + pauseWhy(wait)}
 	}
-	if hold := holdWait(kind, sid, cfg, wait, resumeAt, current, false); hold.stop != "" {
+	switch hold := holdWait(kind, sid, cfg, wait, resumeAt, current, false); {
+	case hold.stop != "":
 		return waitOutcome{stop: hold.stop, halt: hold.halt}
+	case hold.cancelled:
+		return waitOutcome{notice: T("wait.cancelled", wait.label)}
 	}
 	return waitOutcome{notice: resumedNotice(wait, float64(nowSec()-now))}
 }
@@ -2017,13 +2037,13 @@ func sleeperAlive(wait object) bool {
 	return waking > 0 && float64(nowSec())-math.Max(numberOr(wait, "heartbeat", 0), waking) < heartbeatFreshSeconds
 }
 
-func releaseInterruptedWait(sid string, state object) {
+func releaseInterruptedWait(sid string, state object, takenOver bool) {
 	clearDeadHandoffs(state)
-	dropInterruptedWait(sid, state)
+	dropInterruptedWait(sid, state, takenOver)
 	rearmStrandedWaits(state)
 }
 
-func dropInterruptedWait(sid string, state object) {
+func dropInterruptedWait(sid string, state object, takenOver bool) {
 	wait := getMap(getMap(state, "waits"), sid)
 	if wait == nil || getMap(getMap(state, "handedOff"), sid) != nil {
 		return
@@ -2050,7 +2070,7 @@ func dropInterruptedWait(sid string, state object) {
 		logInfo("same-session wake of %s let go after %ds of %ds: the session went on in place; runner cancelled", sid, int(slept), int(intended))
 		return
 	}
-	if slept > 120 && intended-slept > 120 {
+	if slept > 120 && intended-slept > 120 && !takenOver {
 		updateState(func(next object) {
 			samples := getList(next, "interruptedWaits")
 			samples = append(samples, slept)
@@ -2140,6 +2160,7 @@ func rearmStrandedWaits(state object) {
 		}
 		rearmStrandedWait(cfg, sid, record, thorough)
 	}
+	rearmStrandedQueueWakes(state, thorough)
 }
 
 // storerAlive tells whether the process that stored a wait may still be recording its runner, which
@@ -2297,6 +2318,17 @@ var hookBudgets = map[string]map[string]float64{
 	"droid":       {"SessionStart": 20, "SessionEnd": 10, "UserPromptSubmit": 21600, "PreToolUse": 20, "PostToolUse": 21600, "Stop": 60},
 	"antigravity": {"PreToolUse": 20, "PreInvocation": 21600, "PostInvocation": 21600, "Stop": 60},
 	"copilot":     {"sessionStart": 20, "sessionEnd": 10, "userPromptSubmitted": 21600, "preToolUse": 20, "agentStop": 60, "errorOccurred": 20},
+}
+
+func blindProbeRounds(usageCfg object, interval float64) int {
+	rounds := math.Max(1, numberOr(usageCfg, "blindProbeRounds", 5))
+	if budget, known := hookBudget(activeHost, activeEvent); known {
+		if budget < minInHookBudgetSeconds {
+			return 0
+		}
+		rounds = math.Min(rounds, math.Floor((budget-hookBudgetSlackSeconds)/interval))
+	}
+	return int(rounds)
 }
 
 func hookBudget(host, event string) (float64, bool) {
@@ -2588,9 +2620,10 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 	edge := nearEdge(cfg, snapshot)
 	fableLimit, fableGuarded := scopedThresholdEnabled(cfg)
 	fableEdge := fableCandidate && fableGuarded && snapshot.fable != nil && snapshot.fable.used >= fableLimit-nearEdgeBand
+	projecting := projectionAhead(cfg, snapshot)
 	usage := snapshot
 	refreshError := ""
-	if fableCandidate || usageStale || options.force || edge {
+	if fableCandidate || usageStale || options.force || edge || projecting {
 		reason := "stale-usage-fallback"
 		maxAge := -1.0
 		switch {
@@ -2600,14 +2633,13 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 			reason, maxAge = "near-edge", edgePollSeconds(cfg, snapshot)
 		case fableEdge:
 			reason, maxAge = "fable-edge", nearEdgePollNormal
+		case projecting:
+			reason, maxAge = "projection", projectionMinStaleness
 		case fableCandidate:
 			reason = "fable-session"
 		}
-		// Near an edge, or when the caller makes a one-time choice (force), the answer decides
-		// whether work goes on, so the hook waits for it, up to refreshWait. Elsewhere it hands
-		// the fetch off and decides on the reading it has.
 		wait := time.Duration(0)
-		if options.force || edge || fableEdge {
+		if options.force || edge || fableEdge || projecting {
 			wait = refreshWait
 		}
 		before := numberOr(readJSON(files.fable), "fetchedAt", 0)
@@ -2620,10 +2652,12 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 	}
 	fetchedOnce := numberOr(readJSON(files.fable), "fetchedAt", 0) > 0
 	permanentError := refreshError == "no-token" || refreshError == "token-expired" || strings.HasPrefix(refreshError, "http-40")
-	if edge && refreshError != "" && fetchedOnce && !permanentError && !options.noProbe && float64(now)-snapshot.updatedAt > blindAfterSeconds {
-		warn("near the limit without fresh data (%s); probing before allowing more work", refreshError)
-		rounds := int(math.Max(1, numberOr(usageCfg, "blindProbeRounds", 5)))
+	if edge && refreshError != "" && fetchedOnce && !permanentError && !options.noProbe && sid != selftestSession && float64(now)-snapshot.updatedAt > blindAfterSeconds {
 		interval := math.Max(1, numberOr(usageCfg, "blindProbeSeconds", 60))
+		rounds := blindProbeRounds(usageCfg, interval)
+		if rounds > 0 {
+			warn("near the limit without fresh data (%s); probing before allowing more work", refreshError)
+		}
 		probedFrom := numberOr(readJSON(files.fable), "fetchedAt", 0)
 		for round := 1; round <= rounds; round++ {
 			latest := readJSON(files.fable)
@@ -2682,6 +2716,9 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 	}
 	if len(notices) > 0 {
 		result.notice = strings.Join(notices, " ")
+	}
+	if sid == selftestSession {
+		result.wait, result.fableHit = nil, false
 	}
 	return result
 }

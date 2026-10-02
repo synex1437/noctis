@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -161,5 +162,53 @@ func TestEverySwitchThatTakesClaudeCodeOffAnthropicsAPICounts(t *testing.T) {
 	}
 	if providerModels(object{}) || providerModels(nil) {
 		t.Error("an account with no provider settings counts as another provider")
+	}
+}
+
+func TestAProviderModelIDWithAColonIsTakenWithOrWithoutAnEffort(t *testing.T) {
+	const bedrockID = "us.anthropic.claude-opus-4-1-20250805-v1:0"
+	for _, row := range []struct{ value, model, effort string }{
+		{bedrockID, bedrockID, ""},
+		{bedrockID + ":high", bedrockID, "high"},
+		{bedrockProfileARN, bedrockProfileARN, ""},
+		{bedrockProfileARN + ":MAX", bedrockProfileARN, "max"},
+		{"opus:xhigh", "opus", "xhigh"},
+	} {
+		spec, err := parseRoleFlag("code", row.value, true)
+		if err != nil || getString(spec, "model") != row.model || getString(spec, "effort") != row.effort {
+			t.Errorf("--code %s on a provider account gave model %q effort %q (err %v), want %q %q", row.value, getString(spec, "model"), getString(spec, "effort"), err, row.model, row.effort)
+		}
+	}
+	for _, value := range []string{"opus:", ":high", "opsu:max"} {
+		if _, err := parseRoleFlag("code", value, false); err == nil {
+			t.Errorf("setup accepted --code %q on an Anthropic account", value)
+		}
+	}
+	if _, err := parseRoleFlag("code", "opus:hgh", false); err == nil || !strings.Contains(err.Error(), "hgh") {
+		t.Errorf("--code opus:hgh does not name the unknown effort: %v", err)
+	}
+}
+
+func TestPressingEnterKeepsAProviderModelIDTheSetupOffers(t *testing.T) {
+	inLocale(t, "en")
+	current := object{"profile": "custom"}
+	for _, role := range roleNames {
+		current[role] = object{"model": bedrockProfileARN}
+	}
+	current["code"] = object{"model": "us.anthropic.claude-opus-4-1-20250805-v1:0", "effort": "high"}
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func(previous *os.File) { os.Stdin = previous }(os.Stdin)
+	os.Stdin = reader
+	if _, err := writer.WriteString("custom\n" + strings.Repeat("\n", len(roleNames))); err != nil {
+		t.Fatal(err)
+	}
+	writer.Close()
+	var roles object
+	asked := capturedStdout(t, func() { roles = askRoles(current, true) })
+	if strings.Count(asked, T("roles.roleQuestion", T("roles.code"))) != 1 || getString(getMap(roles, "code"), "model") != "us.anthropic.claude-opus-4-1-20250805-v1:0" || getString(getMap(roles, "explore"), "model") != bedrockProfileARN {
+		t.Fatalf("Enter on the offered provider ids did not keep them; roles %v; setup printed:\n%s", roles, asked)
 	}
 }

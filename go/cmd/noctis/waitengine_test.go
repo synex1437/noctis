@@ -693,6 +693,63 @@ func TestTwoPausesOfOneSessionMomentsApartShareOneWait(t *testing.T) {
 	}
 }
 
+func TestAHookThatJoinedACancelledWaitSaysItWasCancelled(t *testing.T) {
+	dir := sandboxFiles(t)
+	t.Setenv("NOCTIS_NO_TASKS", "1")
+	t.Setenv("NOCTIS_NO_SCHEDULE", "1")
+	cfg := sharedWaitConfig()
+	sid := "cancelled-joined"
+	until := float64(nowSec() + 40)
+	first := pauseAside("batch", sid, dir, cfg, fiveHourPlan(until))
+	if storedWaitOf(t, sid) == nil {
+		t.Fatal("the first hook's in-hook wait was never stored")
+	}
+	time.Sleep(1100 * time.Millisecond)
+	second := pauseAside("batch", sid, dir, cfg, fiveHourPlan(until))
+	for deadline := time.Now().Add(10 * time.Second); journaledCount(sid, "join-wait") == 0; time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the second hook never joined the first one's wait")
+		}
+	}
+	if !cancelSessions([]string{sid}, readState()) {
+		t.Fatal("the shared wait could not be cancelled")
+	}
+	want := waitOutcome{notice: T("wait.cancelled", "5h")}
+	owner, joiner := <-first, <-second
+	if owner.outcome != want {
+		t.Fatalf("the hook that stored the cancelled wait returned %+v, want only the notice %q", owner.outcome, want.notice)
+	}
+	if joiner.outcome != want {
+		t.Fatalf("the hook that joined the cancelled wait went on %ds before the reset with %+v, want only the notice %q", int64(until)-joiner.at, joiner.outcome, want.notice)
+	}
+}
+
+func TestAHookThatJoinedAWaitAnEarlyResetEndedSaysItWaited(t *testing.T) {
+	dir := sandboxFiles(t)
+	t.Setenv("NOCTIS_NO_TASKS", "1")
+	t.Setenv("NOCTIS_NO_SCHEDULE", "1")
+	cfg := inHookConfig()
+	sid := "early-joined"
+	now := nowSec()
+	reset, weekReset := float64(now+40), float64(now+3*86400)
+	statusReading(now-120, 95, reset, 20, weekReset)
+	served := limitsServer(t, limitsBody(3, float64(now+5*3600), 20, weekReset))
+	first := pauseAside("batch", sid, dir, cfg, fiveHourPlan(reset))
+	if storedWaitOf(t, sid) == nil {
+		t.Fatal("the first hook's in-hook wait was never stored")
+	}
+	time.Sleep(1100 * time.Millisecond)
+	second := pauseAside("batch", sid, dir, cfg, fiveHourPlan(reset))
+	<-first
+	joiner := <-second
+	if served.Load() == 0 || float64(joiner.at) >= reset || journaledCount(sid, "join-wait") != 1 || journaledCount(sid, "early-reset") != 1 {
+		t.Fatalf("the shared wait did not end on an early reset of its window while both hooks held it: %d reading(s), journaled %v", served.Load(), journalActions())
+	}
+	if want := (waitOutcome{notice: T("wait.resumed", "5h", formatNumber(95), durationText(0))}); joiner.outcome != want {
+		t.Fatalf("the hook that joined a wait an early reset ended returned %+v, want only the notice %q", joiner.outcome, want.notice)
+	}
+}
+
 func TestAPauseThatMissedASlowSiblingsWaitStillJoinsIt(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the slow stand-in git is a shell script")
@@ -887,7 +944,7 @@ func TestAPromptPauseNeverJoinsTheWaitOfTheSameReset(t *testing.T) {
 func toolHookAside(sid, cwd string, cfg object, plan *waitPlan, deciding time.Duration) <-chan pauseResult {
 	done := make(chan pauseResult, 1)
 	go func() {
-		releaseInterruptedWait(sid, readState())
+		releaseInterruptedWait(sid, readState(), false)
 		time.Sleep(deciding)
 		outcome := enforceWait("batch", object{"session_id": sid, "cwd": cwd}, cfg, decision{wait: plan, model: "claude-opus-5"})
 		done <- pauseResult{outcome: outcome, at: nowSec()}
@@ -1097,7 +1154,7 @@ func TestReleasingAnInterruptedWaitLeavesOnlyTheWaitOfALiveSleeperAlone(t *testi
 			record["inHook"], record["waking"] = false, now
 		}
 		updateState(func(state object) { stateMap(state, "waits")[sid] = record })
-		releaseInterruptedWait(sid, readState())
+		releaseInterruptedWait(sid, readState(), false)
 		kept := getMap(getMap(readState(), "waits"), sid) != nil
 		stops := unitStops(*recorded, systemdUnit(sid))
 		if kept != tc.kept || (stops == 0) != tc.kept {
@@ -1129,7 +1186,7 @@ func TestReleasingAnInterruptedWaitLeavesASleeperThatMissedItsHeartbeatAlone(t *
 		updateState(func(state object) {
 			stateMap(state, "waits")[sid] = sleepingWait(sid, strconv.Itoa(tc.pid)+"-x", stale)
 		})
-		releaseInterruptedWait(sid, readState())
+		releaseInterruptedWait(sid, readState(), false)
 		kept := getMap(getMap(readState(), "waits"), sid) != nil
 		if stops := unitStops(*recorded, systemdUnit(sid)); kept != tc.kept || (stops == 0) != tc.kept {
 			t.Errorf("%s: the in-hook wait was kept %t with its runner stopped %d times, want kept %t", tc.name, kept, stops, tc.kept)
@@ -1884,7 +1941,7 @@ func TestReleasingASessionsInterruptedWaitDoesNotRearmItFirst(t *testing.T) {
 	wait := parkedWait(dir, now+1200, nil)
 	wait["inHook"], wait["startedAt"], wait["heartbeat"], wait["holder"] = true, now-1000, now-400, strconv.Itoa(deadPid(t))+"-x"
 	storeWaits(map[string]object{sid: wait})
-	releaseInterruptedWait(sid, readState())
+	releaseInterruptedWait(sid, readState(), false)
 	if stored := getMap(getMap(readState(), "waits"), sid); stored != nil {
 		t.Fatalf("the session's own interrupted in-hook wait was not released: %v", stored)
 	}
@@ -2077,6 +2134,7 @@ func TestAPauseListsOnlyWaitsThatResumeByThemselvesAndOffersToCancelAllOnlyWhenN
 		{"a wait stored when no scheduler was available", object{}, map[string]string{first: "systemd", second: "manual"}, "", []string{first}, false},
 		{"a failed relaunch of another session", object{}, map[string]string{first: "systemd", second: "systemd"}, "launchFailures", []string{first, second}, false},
 		{"a relaunch of another session under way", object{}, map[string]string{first: "systemd", second: "systemd"}, "handedOff", []string{first, second}, false},
+		{"a queue wake of another session", object{}, map[string]string{first: "systemd", second: "systemd"}, "queueWakes", []string{first, second}, false},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			sandboxFiles(t)
@@ -2113,6 +2171,42 @@ func TestAPauseListsOnlyWaitsThatResumeByThemselvesAndOffersToCancelAllOnlyWhenN
 			}
 			if waits := getMap(readState(), "waits"); len(waits) != len(row.methods) {
 				t.Fatalf("the pause removed waits: %v", waits)
+			}
+		})
+	}
+}
+
+func TestANearLimitPauseWithoutFreshDataAnswersAShortCodexHookAtOnce(t *testing.T) {
+	cases := []struct {
+		name, event, kind string
+		payload           func(sid, dir string) object
+	}{
+		{"a Codex agent spawn", "PreToolUse", "batch", func(sid, dir string) object {
+			return object{"hook_event_name": "PreToolUse", "session_id": sid, "cwd": dir, "model": "gpt-5.6", "permission_mode": "default", "tool_name": "spawn_agent", "tool_input": object{"message": "review the diff"}}
+		}},
+		{"a Codex stop with the queue open", "Stop", "stop", func(sid, dir string) object {
+			return object{"hook_event_name": "Stop", "session_id": sid, "cwd": dir, "model": "gpt-5.6", "permission_mode": "default", "stop_hook_active": false, "last_assistant_message": "done with the first item"}
+		}},
+	}
+	for index, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, _ := shortHookSandbox(t, "codex")
+			if err := writeJSONAtomic(files.config, object{"host": "codex", "fable": object{"source": "codex"}, "alarm": object{"enabled": false}, "usage": object{"blindProbeRounds": float64(1), "blindProbeSeconds": float64(25)}}); err != nil {
+				t.Fatal(err)
+			}
+			now := float64(nowSec())
+			if err := writeJSONAtomic(files.fable, object{"fetchedAt": now - 300, "five_hour": object{"used": float64(90), "resetsAt": now + 7200}, "seven_day": object{"used": float64(40), "resetsAt": now + 5*86400}, "error": "codex app-server timed out", "backoffUntil": now + 100}); err != nil {
+				t.Fatal(err)
+			}
+			sid := "blind-short-hook-" + strconv.Itoa(index)
+			run := runHostHook(t, "codex", tc.payload(sid, dir), sid, 5*time.Second)
+			budget, _ := hookBudget("codex", tc.event)
+			if !run.answered {
+				t.Fatalf("%s at 90 %% (pause point 92) without fresh data was still probing in its %s hook after 5 s, took %s; Codex kills that hook at %s s with no answer", tc.name, tc.event, run.took.Round(time.Second), formatNumber(budget))
+			}
+			wait := getMap(getMap(readState(), "waits"), sid)
+			if getString(wait, "hit") != "blind" || getString(wait, "kind") != tc.kind || getBool(wait, "inHook", true) || getMap(wait, "scheduled") == nil {
+				t.Fatalf("%s left no blind %s wait for the runner outside the hook: %v (answer %v)", tc.name, tc.kind, wait, run.answer)
 			}
 		})
 	}

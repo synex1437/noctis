@@ -4,7 +4,7 @@ fail() {
   printf 'noctis: %s\n' "$1" >&2
   exit 1
 }
-root=$(cd "$(dirname "$0")/.." && pwd)
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 system=$(uname -s)
 case "$system" in
   Linux)

@@ -172,6 +172,30 @@ func TestWorktreeFingerprintFollowsContentNotTimes(t *testing.T) {
 	}
 }
 
+func TestTheFilesGitIgnoresInAnUntrackedFolderAreNotPartOfTheTree(t *testing.T) {
+	cfg, project := progressSandbox(t, true)
+	writeRepoFile(t, project, ".gitignore", "node_modules/\ndist/\n.env\n")
+	gitIn(t, project, "add", ".gitignore")
+	gitIn(t, project, "commit", "-q", "-m", "ignore the build output")
+	writeRepoFile(t, project, "web/index.js", "export {}\n")
+	writeRepoFile(t, project, "web/.env", "KEY=1\n")
+	before := worktreeFingerprint(project, "")
+	writeRepoFile(t, project, "web/.env", "KEY=2\n")
+	writeRepoFile(t, project, "web/dist/bundle.js", "built\n")
+	if after := worktreeFingerprint(project, ""); after != before {
+		t.Errorf("a change to files git ignores in the untracked folder web/ moved the tree: %s -> %s", before, after)
+	}
+	for index := range treeStatLimit {
+		writeRepoFile(t, project, fmt.Sprintf("web/node_modules/pkg%d/index.js", index), "module.exports = 1\n")
+	}
+	steps := stopSteps(t, cfg, "tp8", project, 9, func(stop int) {
+		writeRepoFile(t, project, "web/index.js", fmt.Sprintf("export const step = %d\n", stop))
+	})
+	if want := []string{"continue", "continue", "continue", "continue", "continue", "escalate", "set aside", "let go"}; !slices.Equal(steps, want) {
+		t.Fatalf("a session that edits web/index.js before every stop, next to %d files git ignores in web/node_modules, got %v, want %v as without them", treeStatLimit, steps, want)
+	}
+}
+
 func TestAPromptStartsTheTreeAllowanceAgain(t *testing.T) {
 	sandboxFiles(t)
 	updateState(func(state object) {

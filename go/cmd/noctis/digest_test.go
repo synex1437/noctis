@@ -100,6 +100,19 @@ func TestTheDigestSaysHowTheQueueStandsAndWhatWaitsOnTheUser(t *testing.T) {
 	}
 }
 
+func TestTheDigestTellsApartTheQueuesOfTwoProjectsThatShareAFileName(t *testing.T) {
+	cfg, _, _, shop, _ := digestSandbox(t, "08:00")
+	blog := writeQueueFile(t, t.TempDir(), "# q\n- [x] write the post\n- [x] add the RSS feed\n- [ ] (human) proofread the post\n")
+	trustQueueFile(blog, true)
+	now := nowSec()
+	body := buildDigest(cfg, readState(), currentUsage(now), nil, now).body
+	for _, want := range []string{T("digest.queue", homeAsTilde(shop), 1, 5), T("digest.queue", homeAsTilde(blog), 2, 1)} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("the digest of two projects' %s does not head one of them %q:\n%s", filepath.Base(shop), want, body)
+		}
+	}
+}
+
 func TestTheDigestGoesOutAndTheNextOneNamesWhatWasDoneSince(t *testing.T) {
 	cfg, project, _, _, inbox := digestSandbox(t, "21:00")
 	if sent, reason := sendDigest(cfg, "test", false); !sent {
@@ -136,6 +149,19 @@ func TestTheDigestGoesOutAndTheNextOneNamesWhatWasDoneSince(t *testing.T) {
 	}
 	if after := readJSON(digestFile()); numberOr(after, "at", 0) != numberOr(baseline, "at", 0) {
 		t.Fatalf("a digest that did not go out became the baseline: %v", after)
+	}
+}
+
+func TestTheDigestNamesAnItemDoneSinceWhenAnotherWithTheSameTextWasDoneBefore(t *testing.T) {
+	cfg, project, _, _, _ := digestSandbox(t, "21:00")
+	path := writeQueueFile(t, project, "# q\n- [x] update the docs\n- [ ] update the docs\n- [ ] ship it\n")
+	trustQueueFile(path, true)
+	now := nowSec()
+	baseline := object{"at": float64(now - 3600), "queues": buildDigest(cfg, readState(), currentUsage(now), nil, now).done}
+	writeQueueFile(t, project, "# q\n- [x] update the docs\n- [x] update the docs\n- [ ] ship it\n")
+	body := buildDigest(cfg, readState(), currentUsage(now), baseline, now).body
+	if want := "- " + T("digest.doneSince", formatTime(float64(now-3600)), 1, "update the docs"); !strings.Contains(body, want) {
+		t.Fatalf("the second \"update the docs\" was ticked since the last digest, and the digest does not say %q:\n%s", want, body)
 	}
 }
 
@@ -203,6 +229,30 @@ func TestASessionStartsTheDigestRunnerWhenNoneIsSetForTheTimeOrItIsLate(t *testi
 		if started != step.want {
 			t.Fatalf("%s: %d runner(s) started, want %d", step.name, started, step.want)
 		}
+	}
+}
+
+func TestTheJournalDatesTheStartAndSettingOfTheDigestRunnerWhenTheyHappenAndNamesTheDigestsTime(t *testing.T) {
+	cfg, _, _, _, _ := digestSandbox(t, "09:30")
+	previous := startDigestRunner
+	t.Cleanup(func() { startDigestRunner = previous })
+	startDigestRunner = func() {}
+	now := nowSec()
+	late := float64(now - digestLateSeconds - 1)
+	updateState(func(next object) { next["digest"] = object{"time": "09:30", "at": late} })
+
+	maybeDigest(cfg, readState(), now)
+	armDigest(cfg, "09:30", now)
+
+	next := nextDigestAt(now, "09:30")
+	for action, due := range map[string]float64{"start-runner": late, "arm": next} {
+		entry := journaledEntry("", action)
+		if at := numberOr(entry, "at", 0); at < float64(now) || at > float64(nowSec()) || numberOr(entry, "dueAt", 0) != due {
+			t.Errorf("the journal dates the digest's %s at %s, or does not name the digest due %s: %v", action, localISO(at), localISO(due), entry)
+		}
+	}
+	if listed := whyOutput(t); !strings.Contains(listed, " 09:30 [dueAt="+formatTime(next)+"]\n") {
+		t.Errorf("noctis why does not say when the next digest is due (%s):\n%s", formatTime(next), listed)
 	}
 }
 

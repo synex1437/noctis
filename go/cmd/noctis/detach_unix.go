@@ -5,6 +5,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"os/signal"
 	"syscall"
 )
 
@@ -19,6 +20,16 @@ func isolateTree(command *exec.Cmd) {
 func killTree(process *os.Process) {
 	_ = syscall.Kill(-process.Pid, syscall.SIGKILL)
 	_ = process.Kill()
+}
+
+func passSignalsToTree(process *os.Process) {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	go func() {
+		for received := range signals {
+			_ = syscall.Kill(-process.Pid, received.(syscall.Signal))
+		}
+	}()
 }
 
 // hideConsoleWindow matters only on Windows: a child here opens no window.

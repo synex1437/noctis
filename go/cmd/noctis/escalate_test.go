@@ -187,6 +187,19 @@ func TestAnItemTheStrongerModelFinishesIsCreditedToTheSetup(t *testing.T) {
 	}
 }
 
+func TestAStuckItemTaggedForOpusPastTheQueueViewGoesUpFromOpus(t *testing.T) {
+	cfg, project, frontend, path := escalationSandbox(t, "es9", "claude-sonnet-5-5", "high")
+	writeQueueFile(t, project, strings.Replace(deferQueue, "migrate the users table", longOpusItem, 1))
+	trustQueueFile(path, true)
+	up := stopsWithoutProgress(t, "es9", frontend, cfg)
+	if reason := getString(up, "reason"); !strings.Contains(reason, `Hand it once to the noctis:deep subagent (subagent_type "noctis:deep", Opus at max effort)`) {
+		t.Fatalf("an item of %d characters tagged (opus) got stuck, and the last continuation does not hand it one step up from Opus:\n%s", len([]rune(longOpusItem)), reason)
+	}
+	if record := escalationRecord(readState(), path, longOpusItem); getString(record, "agent") != pluginName+":"+deepAgentName {
+		t.Fatalf("the item that went up is recorded as %v", record)
+	}
+}
+
 func TestEscalationTargetIsOneStepUp(t *testing.T) {
 	cfg, _, _, _ := deferSandbox(t)
 	cases := []struct {
@@ -214,7 +227,7 @@ func TestEscalationTargetIsOneStepUp(t *testing.T) {
 		if c.switched {
 			state["modelSwitched"] = object{"at": float64(nowSec())}
 		}
-		if model, agent := escalationTarget(cfg, state, "et", c.item); model != c.model || agent != c.agent {
+		if model, agent := escalationTarget(cfg, state, "et", itemModel(c.item)); model != c.model || agent != c.agent {
 			t.Errorf("%s: the item goes to %q through %q, want %q through %q", c.name, model, agent, c.model, c.agent)
 		}
 	}
@@ -223,21 +236,21 @@ func TestEscalationTargetIsOneStepUp(t *testing.T) {
 	activeHost = "codex"
 	section(cfg, "queue")["escalate"] = "auto"
 	runsOn("et", "claude-sonnet-5-5", 20000)
-	if model, _ := escalationTarget(cfg, object{}, "et", "migrate the users table"); model != "" {
+	if model, _ := escalationTarget(cfg, object{}, "et", ""); model != "" {
 		t.Errorf("a host without subagents hands a stuck item to %q", model)
 	}
 }
 
 func TestAStuckItemDoesNotGoUpWhenAPauseIsDue(t *testing.T) {
 	cfg, _, _, path := escalationSandbox(t, "es7", "claude-sonnet-5-5", "high")
-	items := []string{"migrate the users table"}
-	if step := stuckItemStep(cfg, readState(), "es7", path, 2, 3, items, true, nowSec()); step.escalate || !step.setAside {
+	view := queueSnapshot(path)
+	if step := stuckItemStep(cfg, readState(), "es7", path, 2, 3, view, true, nowSec()); step.escalate || !step.setAside {
 		t.Fatalf("with a pause due the stuck item went up: %+v", step)
 	}
-	if step := stuckItemStep(cfg, readState(), "es7", path, 1, 3, items, false, nowSec()); step.escalate || step.setAside {
+	if step := stuckItemStep(cfg, readState(), "es7", path, 1, 3, view, false, nowSec()); step.escalate || step.setAside {
 		t.Fatalf("a continuation before the last one did something about the item: %+v", step)
 	}
-	if step := stuckItemStep(cfg, readState(), "es7", path, 2, 3, items, false, nowSec()); !step.escalate || step.setAside || step.setup != "sonnet/high" {
+	if step := stuckItemStep(cfg, readState(), "es7", path, 2, 3, view, false, nowSec()); !step.escalate || step.setAside || step.setup != "sonnet/high" {
 		t.Fatalf("the last continuation did not hand the item up: %+v", step)
 	}
 }

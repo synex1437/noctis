@@ -219,3 +219,29 @@ func TestAPerItemCheckCutShortIsTheOneNamedUntilItRunsAgain(t *testing.T) {
 		t.Fatalf("after the per-item check was cut short the record names %q, want the per-item check", command)
 	}
 }
+
+func TestAQueueInDotClaudeOrDocsIsSuggestedTheCheckOfTheProjectFolderItRunsIn(t *testing.T) {
+	for _, folder := range []string{".claude", "docs"} {
+		cfg, project, _ := queueCheckSandbox(t, "")
+		for _, dir := range []string{".claude", "docs"} {
+			if err := os.MkdirAll(filepath.Join(project, dir), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for file, content := range map[string]string{"go.mod": "module example.com/tasks\n", "docs/package.json": `{"scripts": {"test": "vitepress build"}}`} {
+			if err := os.WriteFile(filepath.Join(project, file), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.Rename(filepath.Join(project, "TASKS.md"), filepath.Join(project, folder, "TASKS.md")); err != nil {
+			t.Fatal(err)
+		}
+		suggestion := T("queue.verifySuggest", "go test ./...", "go test ./...", "TASKS.md", pluginName)
+		if granted := queueCommand(t, cfg, project, "trust"); !strings.Contains(granted, suggestion) {
+			t.Fatalf("noctis queue trust does not suggest the check of the project %s/TASKS.md is in:\n%s", folder, granted)
+		}
+		if status := queueCommand(t, cfg, project, "status"); !strings.Contains(status, suggestion) {
+			t.Fatalf("noctis queue status does not suggest the check of the project %s/TASKS.md is in:\n%s", folder, status)
+		}
+	}
+}

@@ -106,12 +106,64 @@ func TestAFailingQueueVerifyLeavesTheHoldAndItsCountAlone(t *testing.T) {
 	}
 }
 
+func TestNoStatusOfAHeldQueueSaysItsCheckRunsAtTheNextStop(t *testing.T) {
+	cfg, project, queuePath := heldQueue(t, "make check")
+	now := nowSec()
+	heldAt := numberOr(queueCheckRecord(readState(), queuePath), "held", 0)
+	held := T("queue.statusHeld", formatTime(heldAt), "make check", 2)
+	nextStop := T("queue.unverifiedWait", 1, 1, pluginName)
+	if status := queueCommand(t, cfg, project, "status", "--file", queuePath); strings.Contains(status, nextStop) || !strings.Contains(status, held) {
+		t.Errorf("noctis queue status of a held queue says its check runs at the next stop, or not that the queue is held:\n%s", status)
+	}
+	if status := describeState(cfg, readState(), currentUsage(now), now); strings.Contains(status, nextStop) || !strings.Contains(status, "  "+held) {
+		t.Errorf("noctis status of a held queue says its check runs at the next stop, or not that the queue is held:\n%s", status)
+	}
+	if body := buildDigest(cfg, readState(), currentUsage(now), nil, now).body; strings.Contains(body, nextStop) || !strings.Contains(body, "- "+T("digest.checkHeld", formatTime(heldAt), pluginName)) {
+		t.Errorf("the digest of a held queue says its check runs at the next stop, or not that the queue is held:\n%s", body)
+	}
+
+	updateState(func(next object) {
+		stateMap(next, "queueVerify")[queueTrustKey(queuePath)] = object{"ticked": []any{}, "failures": float64(1), "at": float64(now - 60)}
+	})
+	if status := queueCommand(t, cfg, project, "status", "--file", queuePath); !strings.Contains(status, "  "+nextStop+"\n") || strings.Contains(status, "⏸") {
+		t.Errorf("noctis queue status of a queue whose check failed once does not say the check runs at the next stop:\n%s", status)
+	}
+	if status := describeState(cfg, readState(), currentUsage(now), now); !strings.Contains(status, "  "+nextStop+"\n") || strings.Contains(status, "⏸") {
+		t.Errorf("noctis status of a queue whose check failed once does not say the check runs at the next stop:\n%s", status)
+	}
+	if body := buildDigest(cfg, readState(), currentUsage(now), nil, now).body; !strings.Contains(body, "- "+nextStop) {
+		t.Errorf("the digest of a queue whose check failed once does not say the check runs at the next stop:\n%s", body)
+	}
+}
+
 func TestQueueVerifyWithoutACheckCommandSaysHowToNameOne(t *testing.T) {
 	cfg, project, _, queuePath := deferSandbox(t)
 	var code int
 	printed := capturedStdout(t, func() { code = verifyQueueNow(cfg, project, queuePath) })
 	if code != 1 || printed != "" {
 		t.Fatalf("noctis queue verify with no check command exited %d and printed to stdout:\n%s", code, printed)
+	}
+}
+
+func TestQueueVerifyFromAnotherFolderRunsTheCheckWhereTheStopHookDoes(t *testing.T) {
+	t.Setenv("CLAUDE_PROJECT_DIR", "")
+	for _, folder := range []string{"docs", ".claude"} {
+		t.Run(folder, func(t *testing.T) {
+			cfg, project := queueTrustSandbox(t, false)
+			if err := os.MkdirAll(filepath.Join(project, folder), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			queuePath := writeQueueFile(t, filepath.Join(project, folder), "# q\n- [x] migrate the users table\n- [ ] write the release notes\n")
+			trustQueueFile(queuePath, true)
+			section(cfg, "queue")["verifyCommand"] = "echo checked> verified.txt"
+			if stopHook := queueFolder(cfg, object{"cwd": project}, "", queuePath); stopHook != project {
+				t.Fatalf("the Stop hook of a session in %s runs the check in %s", project, stopHook)
+			}
+			printed := queueCommand(t, cfg, t.TempDir(), "verify", "--file", queuePath)
+			if _, err := os.Stat(filepath.Join(project, "verified.txt")); err != nil {
+				t.Fatalf("noctis queue verify --file %s from another folder did not run the check in %s, where the Stop hook runs it (%v):\n%s", queuePath, project, err, printed)
+			}
+		})
 	}
 }
 

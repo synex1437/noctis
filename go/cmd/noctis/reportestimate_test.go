@@ -74,3 +74,49 @@ func TestTheReportLeavesOutTheEstimateWhenTheSubagentModelCostsMore(t *testing.T
 		t.Errorf("report --json must keep the gap as it is, below zero, with its basis: %s", marshalCompact(kept))
 	}
 }
+
+func writeKeptOffTranscript(t *testing.T) {
+	t.Helper()
+	stamp := time.Now().UTC().Format(time.RFC3339Nano)
+	call := func(id, model string, sidechain bool, input, output float64) string {
+		return string(marshalCompact(object{"type": "assistant", "timestamp": stamp, "isSidechain": sidechain,
+			"message": object{"id": id, "role": "assistant", "model": model, "content": []any{}, "usage": object{"input_tokens": input, "output_tokens": output}}}))
+	}
+	cliWrite(t, filepath.Join(files.configDir, "projects", "-work-app", "s1.jsonl"), []byte(strings.Join([]string{
+		call("m1", "claude-opus-5-5", false, 1000, 200),
+		call("m2", "claude-opus-5-5", true, 4000, 1000),
+		call("m3", "claude-sonnet-5-5", true, 300, 100),
+	}, "\n")+"\n"))
+}
+
+func TestTheReportKnowsAPrimaryWrittenWithTheLongContextSuffix(t *testing.T) {
+	sandboxFiles(t)
+	writeKeptOffTranscript(t)
+
+	for _, primary := range []string{"opus", "opus[1m]", "claude-opus-5-5[1m]"} {
+		cfg := object{"models": object{"primary": primary}}
+		data := collectReport(cfg, 1)
+		kept := getMap(reportJSON(cfg, data), "keptOffPrimary")
+
+		if data.keptOff.calls != 1 || data.keptOff.total() != 400 || data.otherSub.total() != 5000 || kept["costOnPrimary"] != 0.0032 || kept["savedVsPrimary"] != 0.0016 {
+			t.Errorf("primary %q: %v tokens in %d calls kept off it, %v other subagent tokens, keptOffPrimary %s; want the Sonnet call's 400 tokens kept off, the Opus subagent's 5000 on the primary, costOnPrimary 0.0032 and savedVsPrimary 0.0016",
+				primary, data.keptOff.total(), data.keptOff.calls, data.otherSub.total(), marshalCompact(kept))
+		}
+	}
+}
+
+func TestTheReportClaimsNoCostOnAPrimaryItHasNoPriceFor(t *testing.T) {
+	sandboxFiles(t)
+	writeKeptOffTranscript(t)
+
+	for _, primary := range []string{"best", "opusplan"} {
+		cfg := object{"models": object{"primary": primary}}
+		kept := getMap(reportJSON(cfg, collectReport(cfg, 1)), "keptOffPrimary")
+
+		_, costed := kept["costOnPrimary"]
+		_, saved := kept["savedVsPrimary"]
+		if costed || saved || kept["cost"] == nil || kept["basis"] == nil {
+			t.Errorf("primary %q has no price, so keptOffPrimary should give the calls' own cost and its basis but no costOnPrimary or savedVsPrimary: %s", primary, marshalCompact(kept))
+		}
+	}
+}

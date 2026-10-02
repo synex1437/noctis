@@ -31,7 +31,7 @@ func onPreCompact(input, cfg object) {
 	if len(items) == 0 {
 		return
 	}
-	digest, now, count := queueItemDigest(items[0]), float64(nowSec()), 0.0
+	digest, now, count := escalationKey(items[0]), float64(nowSec()), 0.0
 	updateState(func(next object) {
 		record := stateMap(stateMap(next, "queueCompactions"), queueTrustKey(path))
 		if getString(record, "item") != digest {
@@ -48,7 +48,7 @@ func onPreCompact(input, cfg object) {
 // itemCompactions is how many compactions the item in hand of the queue at path has seen.
 func itemCompactions(state object, path, item string) int {
 	record := getMap(getMap(state, "queueCompactions"), queueTrustKey(path))
-	if getString(record, "item") != queueItemDigest(item) {
+	if getString(record, "item") != escalationKey(item) {
 		return 0
 	}
 	return int(numberOr(record, "count", 0))

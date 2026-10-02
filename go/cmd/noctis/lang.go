@@ -57,8 +57,12 @@ func detectLanguage(text string) string {
 		return ""
 	}
 
+	fallback := ""
 	if counts["ja"] >= 2 {
-		return "ja"
+		if (counts["ja"]+counts["zh"])*4 >= letters {
+			return "ja"
+		}
+		fallback = "ja"
 	}
 	for _, script := range scriptLanguages {
 		if script.lang != "ja" && counts[script.lang]*4 >= letters && counts[script.lang] >= 3 {
@@ -72,7 +76,7 @@ func detectLanguage(text string) string {
 		words = appendTokenWords(words, token)
 	}
 	if len(words) < 2 {
-		return ""
+		return fallback
 	}
 	scores := map[string]int{}
 	exclusive := map[string]int{}
@@ -110,8 +114,8 @@ func detectLanguage(text string) string {
 			second = score
 		}
 	}
-	if best-second < 1 || (best < 3 && exclusive[bestLang] < 2) {
-		return ""
+	if best-second < 1 || (best < 3 && (fallback != "" || exclusive[bestLang] < 2)) {
+		return fallback
 	}
 	return bestLang
 }
@@ -152,7 +156,7 @@ func listedWord(word string) bool {
 }
 
 func rememberSessionLanguage(sid, text string) string {
-	lang := detectLanguage(text)
+	lang := detectLanguage(withoutCodeBlocks(text))
 	if lang == "" || sid == "" {
 		return ""
 	}
@@ -171,10 +175,7 @@ func sessionLanguage(state object, sid string) string {
 // sessionLocaleWanted says whether the language of the session's prompts picks the locale: not
 // when config.json or NOCTIS_LANG names one.
 func sessionLocaleWanted(cfg object) bool {
-	if strings.ToLower(strings.TrimSpace(getString(cfg, "locale"))) != "auto" && getString(cfg, "locale") != "" {
-		return false
-	}
-	return os.Getenv("NOCTIS_LANG") == ""
+	return pinnedLocale(getString(cfg, "locale")) == "" && pinnedLocale(os.Getenv("NOCTIS_LANG")) == ""
 }
 
 func applySessionLocale(cfg object, state object, sid string) {
@@ -400,6 +401,8 @@ func extraCatalogDe() map[string]string {
 		"queue.stopProjectFileOpen": "☰ In dieser Sitzung wurde keine Warteschlange gestartet. %s in diesem Ordner steuert sie, weil queue.requireTrust aus ist; ist es an, steuern nur Dateien, denen du vertraust, Sitzungen.",
 		"queue.usage":               "Aufruf: noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 		"queue.ghFailed":            "gh issue list fehlgeschlagen: %v (ist die GitHub-CLI installiert und angemeldet?)",
+		"queue.ghRefused":           "gh issue list fehlgeschlagen: %v",
+		"queue.importPlain":         "queue import hat nichts geschrieben: %[1]s ist eine Liste ohne Checkboxen. Ein importiertes Issue wäre ihr erster Punkt mit Checkbox; noctis würde dann nur noch Punkte mit Checkbox lesen, und ihre %[2]d Punkt(e) würden aus der Warteschlange fallen. Gib ihnen zuerst Checkboxen (- [ ] …) und importiere dann erneut.",
 		"queue.importNone":          "nichts Neues: die %[1]d offenen Issues von %[2]s, die gh aufgelistet hat, stehen bereits in %[3]s",
 		"queue.importEmpty":         "nichts zu importieren: gh hat keine offenen Issues von %s aufgelistet",
 		"queue.importLimit":         "gh hat %[1]s offene Issues von %[2]s aufgelistet, so viele wie --limit %[1]s höchstens erlaubt, ältere können also fehlen: für sie erneut mit einem höheren --limit ausführen",
@@ -465,7 +468,9 @@ func extraCatalogDe() map[string]string {
 		"status.usage":              "Nutzung      : %s",
 		"status.noData":             "(keine Daten)",
 		"status.updated":            " (aktualisiert %s)",
-		"status.thresholds":         "Schwellen    : 5 Std ≥%s%% · wöchentlich ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "Schwellen    : 5 Std %s · wöchentlich %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "aus",
 		"status.thresholdsBad":      "  ! keine Schwelle: %s — diese Fenster sind NICHT geschützt",
 		"status.thresholdsFixed":    "  ! außerhalb 1-100: %s — der eingebaute Standardwert wird verwendet",
 		"status.credits":            "Credits      : %s",
@@ -679,6 +684,8 @@ func extraCatalogDe() map[string]string {
 		"install.modelKept":         "Modelleinstellung beibehalten (das Setup hatte sie nicht geändert)",
 		"install.modelRestored":     "Modell auf %s zurückgesetzt",
 		"install.modelRemoved":      "Modelleinstellung entfernt (vor dem Setup gab es keine)",
+		"install.modelChanged":      "Modelleinstellung beibehalten (nach dem Setup geändert; vor dem Setup: %s)",
+		"install.modelChangedNone":  "Modelleinstellung beibehalten (nach dem Setup geändert; vor dem Setup nicht gesetzt)",
 		"install.configBroken":      "%s ist nicht lesbar (%s); nichts wurde geändert — repariere die Datei oder leg sie beiseite und führe das Setup erneut aus",
 		"install.configUnwritable":  "%s konnte nicht geschrieben werden (%s); die Einstellungen blieben unverändert — mach den Ordner beschreibbar und führe das Setup erneut aus",
 		"install.uninstallBroken":   "%s ist nicht lesbar (%s); nichts wurde entfernt — repariere die Datei und führe die Deinstallation erneut aus",
@@ -1053,6 +1060,8 @@ func extraCatalogFr() map[string]string {
 		"queue.stopProjectFileOpen": "☰ Aucune file n'a été lancée dans cette session. %s dans ce dossier la pilote parce que queue.requireTrust est désactivé ; activé, seuls les fichiers auxquels tu fais confiance pilotent les sessions.",
 		"queue.usage":               "usage : noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 		"queue.ghFailed":            "échec de gh issue list : %v (la CLI GitHub est-elle installée et connectée ?)",
+		"queue.ghRefused":           "échec de gh issue list : %v",
+		"queue.importPlain":         "queue import n'a rien écrit : %[1]s est une liste sans cases à cocher. Un ticket importé serait son premier élément avec case à cocher ; noctis ne lirait alors plus que les éléments avec case à cocher, et ses %[2]d élément(s) sortiraient de la file. Donne-leur d'abord des cases à cocher (- [ ] …), puis importe à nouveau.",
 		"queue.importNone":          "rien de neuf : les %[1]d tickets ouverts de %[2]s listés par gh sont déjà dans %[3]s",
 		"queue.importEmpty":         "rien à importer : gh n'a listé aucun ticket ouvert de %s",
 		"queue.importLimit":         "gh a listé %[1]s tickets ouverts de %[2]s, le maximum que --limit %[1]s permet, donc des tickets plus anciens peuvent manquer : relance avec un --limit plus élevé pour les prendre",
@@ -1118,7 +1127,9 @@ func extraCatalogFr() map[string]string {
 		"status.usage":              "Usage           : %s",
 		"status.noData":             "(aucune donnée)",
 		"status.updated":            " (mis à jour %s)",
-		"status.thresholds":         "Seuils          : 5 h ≥%s%% · hebdo ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "Seuils          : 5 h %s · hebdo %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "désactivé",
 		"status.thresholdsBad":      "  ! aucun seuil : %s — ces fenêtres ne sont PAS protégées",
 		"status.thresholdsFixed":    "  ! hors plage (1-100) : %s — la valeur par défaut intégrée est utilisée",
 		"status.credits":            "Crédits         : %s",
@@ -1332,6 +1343,8 @@ func extraCatalogFr() map[string]string {
 		"install.modelKept":         "réglage du modèle conservé (la configuration ne l'avait pas changé)",
 		"install.modelRestored":     "modèle rétabli à %s",
 		"install.modelRemoved":      "réglage du modèle retiré (il n'y en avait pas avant la configuration)",
+		"install.modelChanged":      "réglage du modèle conservé (changé après la configuration ; avant la configuration : %s)",
+		"install.modelChangedNone":  "réglage du modèle conservé (changé après la configuration ; non défini avant la configuration)",
 		"install.configBroken":      "%s est illisible (%s) ; rien n'a été modifié — corrige le fichier ou mets-le de côté, puis relance la configuration",
 		"install.configUnwritable":  "%s n'a pas pu être écrit (%s) ; les réglages sont restés tels quels — rends son dossier accessible en écriture, puis relance la configuration",
 		"install.uninstallBroken":   "%s est illisible (%s) ; rien n'a été retiré — corrige-le, puis relance la désinstallation",
@@ -1706,6 +1719,8 @@ func extraCatalogEs() map[string]string {
 		"queue.stopProjectFileOpen": "☰ No se inició ninguna cola en esta sesión. %s en esta carpeta la dirige porque queue.requireTrust está desactivado; activado, solo los archivos en los que confías dirigen sesiones.",
 		"queue.usage":               "uso: noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 		"queue.ghFailed":            "gh issue list falló: %v (¿está la CLI de GitHub instalada y con sesión iniciada?)",
+		"queue.ghRefused":           "gh issue list falló: %v",
+		"queue.importPlain":         "queue import no escribió nada: %[1]s es una lista sin casillas. Una incidencia importada sería su primer elemento con casilla; noctis leería entonces solo los elementos con casilla, y sus %[2]d elemento(s) saldrían de la cola. Ponles casillas primero (- [ ] …) y luego vuelve a importar.",
 		"queue.importNone":          "nada nuevo: las %[1]d incidencias abiertas de %[2]s que listó gh ya están en %[3]s",
 		"queue.importEmpty":         "nada que importar: gh no listó ninguna incidencia abierta de %s",
 		"queue.importLimit":         "gh listó %[1]s incidencias abiertas de %[2]s, el máximo que permite --limit %[1]s, así que pueden faltar otras más antiguas: vuelve a ejecutarlo con un --limit mayor para tomarlas",
@@ -1771,7 +1786,9 @@ func extraCatalogEs() map[string]string {
 		"status.usage":              "Uso              : %s",
 		"status.noData":             "(sin datos)",
 		"status.updated":            " (actualizado %s)",
-		"status.thresholds":         "Umbrales         : 5 h ≥%s%% · semanal ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "Umbrales         : 5 h %s · semanal %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "desactivado",
 		"status.thresholdsBad":      "  ! sin umbral: %s — esas ventanas NO están protegidas",
 		"status.thresholdsFixed":    "  ! fuera de rango (1-100): %s — se usa el valor por defecto integrado",
 		"status.credits":            "Créditos         : %s",
@@ -1985,6 +2002,8 @@ func extraCatalogEs() map[string]string {
 		"install.modelKept":         "ajuste de modelo conservado (la configuración no lo había cambiado)",
 		"install.modelRestored":     "modelo restaurado a %s",
 		"install.modelRemoved":      "ajuste de modelo eliminado (no había ninguno antes de la configuración)",
+		"install.modelChanged":      "ajuste de modelo conservado (cambiado después de la configuración; antes de la configuración: %s)",
+		"install.modelChangedNone":  "ajuste de modelo conservado (cambiado después de la configuración; no estaba definido antes de la configuración)",
 		"install.configBroken":      "%s no se puede leer (%s); no se ha cambiado nada — corrige el archivo o apártalo y vuelve a ejecutar la configuración",
 		"install.configUnwritable":  "%s no se pudo escribir (%s); los ajustes se han dejado como estaban — haz que su carpeta admita escritura y vuelve a ejecutar la configuración",
 		"install.uninstallBroken":   "%s no se puede leer (%s); no se ha quitado nada — corrígelo y vuelve a ejecutar la desinstalación",
@@ -2359,6 +2378,8 @@ func extraCatalogPt() map[string]string {
 		"queue.stopProjectFileOpen": "☰ Nenhuma fila foi iniciada nesta sessão. %s nesta pasta a conduz porque queue.requireTrust está desligado; ligado, só os arquivos em que você confia conduzem sessões.",
 		"queue.usage":               "uso: noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 		"queue.ghFailed":            "gh issue list falhou: %v (a CLI do GitHub está instalada e autenticada?)",
+		"queue.ghRefused":           "gh issue list falhou: %v",
+		"queue.importPlain":         "queue import não gravou nada: %[1]s é uma lista sem caixas de seleção. Uma issue importada seria o primeiro item dela com caixa de seleção; o noctis passaria então a ler só itens com caixa de seleção, e os %[2]d item(ns) dela sairiam da fila. Dê caixas de seleção a eles primeiro (- [ ] …) e depois importe de novo.",
 		"queue.importNone":          "nada de novo: as %[1]d issues abertas de %[2]s que o gh listou já estão em %[3]s",
 		"queue.importEmpty":         "nada a importar: o gh não listou nenhuma issue aberta de %s",
 		"queue.importLimit":         "o gh listou %[1]s issues abertas de %[2]s, o máximo que --limit %[1]s permite, então pode haver mais antigas de fora: rode de novo com um --limit maior para trazê-las",
@@ -2424,7 +2445,9 @@ func extraCatalogPt() map[string]string {
 		"status.usage":              "Uso           : %s",
 		"status.noData":             "(sem dados)",
 		"status.updated":            " (atualizado %s)",
-		"status.thresholds":         "Limiares      : 5 h ≥%s%% · semanal ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "Limiares      : 5 h %s · semanal %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "desligado",
 		"status.thresholdsBad":      "  ! sem limite: %s — essas janelas NÃO estão protegidas",
 		"status.thresholdsFixed":    "  ! fora do intervalo (1-100): %s — o padrão embutido é usado no lugar",
 		"status.credits":            "Créditos      : %s",
@@ -2638,6 +2661,8 @@ func extraCatalogPt() map[string]string {
 		"install.modelKept":         "ajuste de modelo mantido (a configuração não o havia alterado)",
 		"install.modelRestored":     "modelo restaurado para %s",
 		"install.modelRemoved":      "ajuste de modelo removido (não havia nenhum antes da configuração)",
+		"install.modelChanged":      "ajuste de modelo mantido (alterado depois da configuração; antes da configuração: %s)",
+		"install.modelChangedNone":  "ajuste de modelo mantido (alterado depois da configuração; não estava definido antes da configuração)",
 		"install.configBroken":      "%s não pode ser lido (%s); nada foi alterado — corrija o arquivo ou mova-o para outro lugar e rode a configuração de novo",
 		"install.configUnwritable":  "%s não pôde ser escrito (%s); as configurações ficaram como estavam — torne a pasta gravável e rode a configuração de novo",
 		"install.uninstallBroken":   "%s não pode ser lido (%s); nada foi removido — corrija-o e rode a desinstalação de novo",
@@ -3012,6 +3037,8 @@ func extraCatalogIt() map[string]string {
 		"queue.stopProjectFileOpen": "☰ In questa sessione non è stata avviata nessuna coda. %s in questa cartella la guida perché queue.requireTrust è disattivato; se è attivo, guidano le sessioni solo i file a cui dai fiducia.",
 		"queue.usage":               "uso: noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 		"queue.ghFailed":            "gh issue list non riuscito: %v (la CLI di GitHub è installata e con accesso effettuato?)",
+		"queue.ghRefused":           "gh issue list non riuscito: %v",
+		"queue.importPlain":         "queue import non ha scritto nulla: %[1]s è un elenco senza caselle di spunta. Una issue importata sarebbe il suo primo elemento con casella di spunta; noctis leggerebbe allora solo gli elementi con casella di spunta, e i suoi elementi (%[2]d) uscirebbero dalla coda. Aggiungi prima le caselle di spunta (- [ ] …), poi importa di nuovo.",
 		"queue.importNone":          "niente di nuovo: le %[1]d issue aperte di %[2]s elencate da gh sono già in %[3]s",
 		"queue.importEmpty":         "niente da importare: gh non ha elencato issue aperte di %s",
 		"queue.importLimit":         "gh ha elencato %[1]s issue aperte di %[2]s, il massimo che --limit %[1]s consente, quindi quelle più vecchie potrebbero mancare: rilancia con un --limit più alto per prenderle",
@@ -3077,7 +3104,9 @@ func extraCatalogIt() map[string]string {
 		"status.usage":              "Uso              : %s",
 		"status.noData":             "(nessun dato)",
 		"status.updated":            " (aggiornato %s)",
-		"status.thresholds":         "Soglie           : 5 h ≥%s%% · settimanale ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "Soglie           : 5 h %s · settimanale %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "disattivata",
 		"status.thresholdsBad":      "  ! nessuna soglia: %s — quelle finestre NON sono protette",
 		"status.thresholdsFixed":    "  ! fuori intervallo (1-100): %s — viene usato il valore predefinito incorporato",
 		"status.credits":            "Crediti          : %s",
@@ -3291,6 +3320,8 @@ func extraCatalogIt() map[string]string {
 		"install.modelKept":         "impostazione del modello mantenuta (la configurazione non l'aveva cambiata)",
 		"install.modelRestored":     "modello ripristinato a %s",
 		"install.modelRemoved":      "impostazione del modello rimossa (prima della configurazione non c'era)",
+		"install.modelChanged":      "impostazione del modello mantenuta (cambiata dopo la configurazione; prima della configurazione: %s)",
+		"install.modelChangedNone":  "impostazione del modello mantenuta (cambiata dopo la configurazione; prima della configurazione non c'era)",
 		"install.configBroken":      "%s non è leggibile (%s); non è stato modificato nulla — correggi il file o spostalo altrove, poi esegui di nuovo la configurazione",
 		"install.configUnwritable":  "impossibile scrivere %s (%s); le impostazioni sono rimaste com'erano — rendi scrivibile la sua cartella, poi esegui di nuovo la configurazione",
 		"install.uninstallBroken":   "%s non è leggibile (%s); non è stato rimosso nulla — correggilo, poi esegui di nuovo la disinstallazione",
@@ -3665,6 +3696,8 @@ func extraCatalogNl() map[string]string {
 		"queue.stopProjectFileOpen": "☰ In deze sessie is geen wachtrij gestart. %s in deze map stuurt deze sessie aan omdat queue.requireTrust uit staat; staat het aan, dan sturen alleen bestanden die je vertrouwt sessies aan.",
 		"queue.usage":               "gebruik: noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 		"queue.ghFailed":            "gh issue list mislukt: %v (is de GitHub-CLI geïnstalleerd en ingelogd?)",
+		"queue.ghRefused":           "gh issue list mislukt: %v",
+		"queue.importPlain":         "queue import heeft niets geschreven: %[1]s is een lijst zonder selectievakjes. Een geïmporteerde issue zou het eerste item met selectievakje worden; noctis zou dan alleen nog items met selectievakje lezen, en de %[2]d item(s) van de lijst zouden uit de wachtrij vallen. Geef ze eerst selectievakjes (- [ ] …) en importeer daarna opnieuw.",
 		"queue.importNone":          "niets nieuws: de %[1]d open issues van %[2]s die gh toonde staan al in %[3]s",
 		"queue.importEmpty":         "niets te importeren: gh toonde geen open issues van %s",
 		"queue.importLimit":         "gh toonde %[1]s open issues van %[2]s, het maximum dat --limit %[1]s toestaat, dus oudere kunnen ontbreken: draai opnieuw met een hogere --limit om ze mee te nemen",
@@ -3730,7 +3763,9 @@ func extraCatalogNl() map[string]string {
 		"status.usage":              "Gebruik       : %s",
 		"status.noData":             "(geen gegevens)",
 		"status.updated":            " (bijgewerkt %s)",
-		"status.thresholds":         "Drempels      : 5 u ≥%s%% · wekelijks ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "Drempels      : 5 u %s · wekelijks %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "uit",
 		"status.thresholdsBad":      "  ! geen drempel: %s — die vensters zijn NIET beschermd",
 		"status.thresholdsFixed":    "  ! buiten bereik (1-100): %s — de ingebouwde standaard wordt gebruikt",
 		"status.credits":            "Credits       : %s",
@@ -3944,6 +3979,8 @@ func extraCatalogNl() map[string]string {
 		"install.modelKept":         "modelinstelling behouden (de setup had die niet gewijzigd)",
 		"install.modelRestored":     "model teruggezet naar %s",
 		"install.modelRemoved":      "modelinstelling verwijderd (die was er vóór de setup niet)",
+		"install.modelChanged":      "modelinstelling behouden (na de setup gewijzigd; voor de setup: %s)",
+		"install.modelChangedNone":  "modelinstelling behouden (na de setup gewijzigd; voor de setup niet ingesteld)",
 		"install.configBroken":      "%s is onleesbaar (%s); er is niets gewijzigd — herstel het bestand of zet het opzij en voer de setup opnieuw uit",
 		"install.configUnwritable":  "%s kon niet worden geschreven (%s); de instellingen zijn gebleven zoals ze waren — maak de map beschrijfbaar en voer de setup opnieuw uit",
 		"install.uninstallBroken":   "%s is onleesbaar (%s); er is niets verwijderd — herstel het en voer het verwijderen opnieuw uit",
@@ -4318,6 +4355,8 @@ func extraCatalogPl() map[string]string {
 		"queue.stopProjectFileOpen": "☰ W tej sesji nie uruchomiono kolejki. Prowadzi ją %s w tym folderze, bo queue.requireTrust jest wyłączone; gdy jest włączone, sesje prowadzą tylko pliki, którym zaufano.",
 		"queue.usage":               "użycie: noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 		"queue.ghFailed":            "gh issue list nie powiodło się: %v (czy GitHub CLI jest zainstalowane i zalogowane?)",
+		"queue.ghRefused":           "gh issue list nie powiodło się: %v",
+		"queue.importPlain":         "queue import niczego nie zapisał: %[1]s to lista bez pól wyboru. Zaimportowane zgłoszenie byłoby jej pierwszym punktem z polem wyboru; noctis czytałby wtedy tylko punkty z polem wyboru, a jej punkty (%[2]d) wypadłyby z kolejki. Najpierw dodaj im pola wyboru (- [ ] …), potem zaimportuj ponownie.",
 		"queue.importNone":          "nic nowego: wszystkie otwarte zgłoszenia od %[2]s wypisane przez gh (%[1]d) są już w %[3]s",
 		"queue.importEmpty":         "nie ma czego importować: gh nie wypisał żadnych otwartych zgłoszeń od %s",
 		"queue.importLimit":         "gh wypisał otwarte zgłoszenia od %[2]s (%[1]s), najwięcej, ile pozwala --limit %[1]s, więc starszych może brakować: uruchom ponownie z wyższym --limit, aby je wziąć",
@@ -4383,7 +4422,9 @@ func extraCatalogPl() map[string]string {
 		"status.usage":              "Zużycie         : %s",
 		"status.noData":             "(brak danych)",
 		"status.updated":            " (zaktualizowano %s)",
-		"status.thresholds":         "Progi           : 5 h ≥%s%% · tygodniowo ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "Progi           : 5 h %s · tygodniowo %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "wyłączony",
 		"status.thresholdsBad":      "  ! brak progu: %s — te okna NIE są chronione",
 		"status.thresholdsFixed":    "  ! poza zakresem (1-100): %s — używana jest wbudowana wartość domyślna",
 		"status.credits":            "Kredyty         : %s",
@@ -4597,6 +4638,8 @@ func extraCatalogPl() map[string]string {
 		"install.modelKept":         "ustawienie modelu zachowane (konfiguracja go nie zmieniała)",
 		"install.modelRestored":     "model przywrócony do %s",
 		"install.modelRemoved":      "ustawienie modelu usunięte (przed konfiguracją go nie było)",
+		"install.modelChanged":      "ustawienie modelu zachowane (zmienione po konfiguracji; przed konfiguracją: %s)",
+		"install.modelChangedNone":  "ustawienie modelu zachowane (zmienione po konfiguracji; przed konfiguracją go nie było)",
 		"install.configBroken":      "%s jest nieczytelny (%s); nic nie zostało zmienione — napraw plik albo odłóż go na bok, a potem uruchom konfigurację ponownie",
 		"install.configUnwritable":  "nie udało się zapisać %s (%s); ustawienia zostały bez zmian — nadaj folderowi prawo zapisu i uruchom konfigurację ponownie",
 		"install.uninstallBroken":   "%s jest nieczytelny (%s); nic nie zostało usunięte — napraw go i uruchom odinstalowanie ponownie",
@@ -4971,6 +5014,8 @@ func extraCatalogRu() map[string]string {
 		"queue.stopProjectFileOpen": "☰ В этой сессии очередь не запускалась. Её ведёт %s в этой папке, потому что queue.requireTrust выключен; когда он включён, сессии ведут только файлы, которым ты доверяешь.",
 		"queue.usage":               "использование: noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 		"queue.ghFailed":            "gh issue list завершилась ошибкой: %v (GitHub CLI установлен и выполнен вход?)",
+		"queue.ghRefused":           "gh issue list завершилась ошибкой: %v",
+		"queue.importPlain":         "queue import ничего не записал: %[1]s — список без чекбоксов. Импортированная задача стала бы его первым пунктом с чекбоксом; тогда noctis читал бы только пункты с чекбоксом, и его пункты (%[2]d) выпали бы из очереди. Сначала добавь им чекбоксы (- [ ] …), потом импортируй снова.",
 		"queue.importNone":          "ничего нового: все открытые задачи от %[2]s, которые показал gh (%[1]d), уже есть в %[3]s",
 		"queue.importEmpty":         "нечего импортировать: gh не показал ни одной открытой задачи от %s",
 		"queue.importLimit":         "gh показал открытые задачи от %[2]s (%[1]s) — больше --limit %[1]s не позволяет, поэтому более старые могли не попасть: запусти снова с большим --limit, чтобы взять и их",
@@ -5036,7 +5081,9 @@ func extraCatalogRu() map[string]string {
 		"status.usage":              "Использование    : %s",
 		"status.noData":             "(нет данных)",
 		"status.updated":            " (обновлено %s)",
-		"status.thresholds":         "Пороги           : 5 ч ≥%s%% · неделя ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "Пороги           : 5 ч %s · неделя %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "выключен",
 		"status.thresholdsBad":      "  ! нет порога: %s — эти окна НЕ защищены",
 		"status.thresholdsFixed":    "  ! вне диапазона (1-100): %s — используется встроенное значение по умолчанию",
 		"status.credits":            "Кредиты          : %s",
@@ -5250,6 +5297,8 @@ func extraCatalogRu() map[string]string {
 		"install.modelKept":         "настройка модели сохранена (установка её не меняла)",
 		"install.modelRestored":     "модель восстановлена на %s",
 		"install.modelRemoved":      "настройка модели удалена (до установки её не было)",
+		"install.modelChanged":      "настройка модели сохранена (изменена после установки; до установки: %s)",
+		"install.modelChangedNone":  "настройка модели сохранена (изменена после установки; до установки её не было)",
 		"install.configBroken":      "%s не читается (%s); ничего не изменено — исправь файл или убери его в сторону, затем запусти настройку снова",
 		"install.configUnwritable":  "не удалось записать %s (%s); настройки остались как были — сделай папку доступной для записи и запусти настройку снова",
 		"install.uninstallBroken":   "%s не читается (%s); ничего не удалено — исправь его и запусти удаление снова",
@@ -5624,6 +5673,8 @@ func extraCatalogJa() map[string]string {
 		"queue.stopProjectFileOpen": "☰ このセッションで開始したキューはありません。queue.requireTrust がオフのため、このフォルダーの %s がこのセッションを進行させています。オンなら、信頼したファイルだけがセッションを進行させます。",
 		"queue.usage":               "使い方: noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 		"queue.ghFailed":            "gh issue list が失敗しました: %v（GitHub CLI はインストール済みでログインしていますか？）",
+		"queue.ghRefused":           "gh issue list が失敗しました: %v",
+		"queue.importPlain":         "queue import は何も書き込みませんでした: %[1]s はチェックボックスのないリストです。取り込んだ issue がその最初のチェックボックス付き項目になると、noctis はチェックボックス付きの項目だけを読むようになり、リストの %[2]d 件の項目がキューから外れます。先にそれらにチェックボックス（- [ ] …）を付けてから、もう一度取り込んでください。",
 		"queue.importNone":          "新しいものはありません: gh が一覧にした %[2]s の未解決 issue %[1]d 件はすべてすでに %[3]s にあります",
 		"queue.importEmpty":         "取り込むものはありません: gh は %s の未解決 issue を一覧にしませんでした",
 		"queue.importLimit":         "gh が一覧にした %[2]s の未解決 issue は %[1]s 件で、--limit %[1]s の上限に達したため、古いものが漏れている可能性があります: それらも取り込むには、より大きな --limit で再実行してください",
@@ -5689,7 +5740,9 @@ func extraCatalogJa() map[string]string {
 		"status.usage":              "使用状況     : %s",
 		"status.noData":             "（データなし）",
 		"status.updated":            "（更新 %s）",
-		"status.thresholds":         "しきい値     : 5時間 ≥%s%% · 週次 ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "しきい値     : 5時間 %s · 週次 %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "オフ",
 		"status.thresholdsBad":      "  ! しきい値なし: %s — これらの枠は保護されていません",
 		"status.thresholdsFixed":    "  ! 範囲外 (1-100): %s — 組み込みの既定値を使用します",
 		"status.credits":            "クレジット   : %s",
@@ -5903,6 +5956,8 @@ func extraCatalogJa() map[string]string {
 		"install.modelKept":         "モデル設定はそのままにしました（セットアップは変更していませんでした）",
 		"install.modelRestored":     "モデルを %s に戻しました",
 		"install.modelRemoved":      "モデル設定を削除しました（セットアップ前は設定されていませんでした）",
+		"install.modelChanged":      "モデル設定はそのままにしました（セットアップ後に変更されています。セットアップ前: %s）",
+		"install.modelChangedNone":  "モデル設定はそのままにしました（セットアップ後に変更されています。セットアップ前は未設定でした）",
 		"install.configBroken":      "%s を読み取れません（%s）。何も変更していません — ファイルを直すか別の場所に移してから、セットアップをやり直してください",
 		"install.configUnwritable":  "%s を書き込めませんでした（%s）。設定はそのままです — フォルダーを書き込み可能にしてから、セットアップをやり直してください",
 		"install.uninstallBroken":   "%s を読み取れません（%s）。何も削除していません — 直してから、アンインストールをやり直してください",
@@ -6277,6 +6332,8 @@ func extraCatalogZh() map[string]string {
 		"queue.stopProjectFileOpen": "☰ 此会话中没有启动过队列。由于 queue.requireTrust 已关闭，此文件夹中的 %s 在驱动这个会话；开启后，只有你信任的文件才会驱动会话。",
 		"queue.usage":               "用法：noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 		"queue.ghFailed":            "gh issue list 失败：%v（GitHub CLI 是否已安装并登录？）",
+		"queue.ghRefused":           "gh issue list 失败：%v",
+		"queue.importPlain":         "queue import 未写入任何内容：%[1]s 是没有复选框的列表。导入的议题会成为其中第一个带复选框的条目；此后 noctis 只读取带复选框的条目，列表中的 %[2]d 个条目会从队列中掉出。请先给它们加上复选框（- [ ] …），然后再导入。",
 		"queue.importNone":          "没有新内容：gh 列出的 %[2]s 的 %[1]d 个开放议题都已在 %[3]s 中",
 		"queue.importEmpty":         "没有可导入的内容：gh 没有列出 %s 的开放议题",
 		"queue.importLimit":         "gh 列出了 %[2]s 的 %[1]s 个开放议题，已达到 --limit %[1]s 的上限，因此可能漏掉了更早的议题：要导入它们，请用更大的 --limit 重新运行",
@@ -6342,7 +6399,9 @@ func extraCatalogZh() map[string]string {
 		"status.usage":              "用量     ：%s",
 		"status.noData":             "（无数据）",
 		"status.updated":            "（更新于 %s）",
-		"status.thresholds":         "阈值     ：5 小时 ≥%s%% · 每周 ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "阈值     ：5 小时 %s · 每周 %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "关闭",
 		"status.thresholdsBad":      "  ! 没有阈值：%s — 这些窗口不受保护",
 		"status.thresholdsFixed":    "  ! 超出范围 (1-100)：%s — 已改用内置默认值",
 		"status.credits":            "额度     ：%s",
@@ -6556,6 +6615,8 @@ func extraCatalogZh() map[string]string {
 		"install.modelKept":         "保留了模型设置（安装并没有改动它）",
 		"install.modelRestored":     "模型已恢复为 %s",
 		"install.modelRemoved":      "已移除模型设置（安装之前本来就没有）",
+		"install.modelChanged":      "保留了模型设置（安装后被改动过；安装前：%s）",
+		"install.modelChangedNone":  "保留了模型设置（安装后被改动过；安装前未设置）",
 		"install.configBroken":      "%s 无法读取（%s）；未做任何更改 — 请修复该文件或把它移到别处，然后重新运行安装",
 		"install.configUnwritable":  "%s 无法写入（%s）；设置保持原样 — 请让它所在的文件夹可写，然后重新运行安装",
 		"install.uninstallBroken":   "%s 无法读取（%s）；未移除任何内容 — 请修复它，然后重新运行卸载",
@@ -6930,6 +6991,8 @@ func extraCatalogKo() map[string]string {
 		"queue.stopProjectFileOpen": "☰ 이 세션에서 시작한 큐가 없습니다. queue.requireTrust 가 꺼져 있어 이 폴더의 %s 파일이 이 세션을 이끌고 있습니다. 켜 두면 신뢰한 파일만 세션을 이끕니다.",
 		"queue.usage":               "사용법: noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 		"queue.ghFailed":            "gh issue list 실패: %v (GitHub CLI가 설치되어 있고 로그인되어 있나요?)",
+		"queue.ghRefused":           "gh issue list 실패: %v",
+		"queue.importPlain":         "queue import가 아무것도 쓰지 않았습니다: %[1]s은(는) 체크박스가 없는 목록입니다. 가져온 이슈가 그 첫 체크박스 항목이 되면 noctis는 체크박스 항목만 읽게 되어, 목록의 항목 %[2]d개가 큐에서 빠집니다. 먼저 항목에 체크박스(- [ ] …)를 붙인 다음 다시 가져오세요.",
 		"queue.importNone":          "새로운 것이 없습니다: gh가 나열한 %[2]s의 열린 이슈 %[1]d개는 이미 %[3]s에 있습니다",
 		"queue.importEmpty":         "가져올 것이 없습니다: gh가 %s의 열린 이슈를 하나도 나열하지 않았습니다",
 		"queue.importLimit":         "gh가 %[2]s의 열린 이슈 %[1]s개를 나열했고 이는 --limit %[1]s의 한도이므로 더 오래된 이슈가 빠졌을 수 있습니다: 그것들도 가져오려면 더 큰 --limit로 다시 실행하세요",
@@ -6995,7 +7058,9 @@ func extraCatalogKo() map[string]string {
 		"status.usage":              "사용량        : %s",
 		"status.noData":             "(데이터 없음)",
 		"status.updated":            " (갱신 %s)",
-		"status.thresholds":         "임계값        : 5시간 ≥%s%% · 주간 ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "임계값        : 5시간 %s · 주간 %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "꺼짐",
 		"status.thresholdsBad":      "  ! 임계값 없음: %s — 이 창들은 보호되지 않습니다",
 		"status.thresholdsFixed":    "  ! 범위를 벗어남 (1-100): %s — 기본 내장값을 대신 사용합니다",
 		"status.credits":            "크레딧        : %s",
@@ -7209,6 +7274,8 @@ func extraCatalogKo() map[string]string {
 		"install.modelKept":         "모델 설정을 그대로 두었습니다(설치가 바꾸지 않았습니다)",
 		"install.modelRestored":     "모델을 %s 로 되돌렸습니다",
 		"install.modelRemoved":      "모델 설정을 제거했습니다(설치 전에는 없었습니다)",
+		"install.modelChanged":      "모델 설정을 그대로 두었습니다(설치 뒤에 바뀌었습니다. 설치 전: %s)",
+		"install.modelChangedNone":  "모델 설정을 그대로 두었습니다(설치 뒤에 바뀌었습니다. 설치 전에는 설정되어 있지 않았습니다)",
 		"install.configBroken":      "%s 를 읽을 수 없습니다(%s). 아무것도 바꾸지 않았습니다 — 파일을 고치거나 다른 곳으로 옮긴 뒤 설치를 다시 실행하세요",
 		"install.configUnwritable":  "%s 를 기록하지 못했습니다(%s). 설정은 그대로 두었습니다 — 폴더를 쓰기 가능하게 만든 뒤 설치를 다시 실행하세요",
 		"install.uninstallBroken":   "%s 를 읽을 수 없습니다(%s). 아무것도 제거하지 않았습니다 — 고친 뒤 제거를 다시 실행하세요",
@@ -7583,6 +7650,8 @@ func extraCatalogAr() map[string]string {
 		"queue.stopProjectFileOpen": "☰ لم تبدأ أي قائمة مهام في هذه الجلسة. يقودها %s في هذا المجلد لأن queue.requireTrust معطّل؛ عند تفعيله لا تقود الجلسات إلا الملفات التي تثق بها.",
 		"queue.usage":               "الاستخدام: noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 		"queue.ghFailed":            "فشل gh issue list: %v (هل واجهة GitHub المكتبية مثبّتة ومسجّل الدخول بها؟)",
+		"queue.ghRefused":           "فشل gh issue list: %v",
+		"queue.importPlain":         "لم يكتب queue import شيئًا: %[1]s قائمة بلا مربعات اختيار. ستصبح المسألة المستوردة أول بند فيها بمربع اختيار؛ وعندها لا يقرأ noctis إلا البنود ذات مربعات الاختيار، فتخرج بنودها (%[2]d) من قائمة المهام. أضف إليها مربعات اختيار (- [ ] …) أولًا، ثم استورد من جديد.",
 		"queue.importNone":          "لا جديد: كل المسائل المفتوحة لـ %[2]s التي سردها gh وعددها %[1]d موجودة أصلًا في %[3]s",
 		"queue.importEmpty":         "لا شيء للاستيراد: لم يسرد gh أي مسألة مفتوحة لـ %s",
 		"queue.importLimit":         "سرد gh عدد %[1]s من المسائل المفتوحة لـ %[2]s، وهو أقصى ما يسمح به ‎--limit %[1]s‎، لذا قد تكون مسائل أقدم خارج القائمة: أعد التشغيل بقيمة ‎--limit‎ أعلى لاستيرادها",
@@ -7648,7 +7717,9 @@ func extraCatalogAr() map[string]string {
 		"status.usage":              "الاستخدام     : %s",
 		"status.noData":             "(لا بيانات)",
 		"status.updated":            " (حُدِّث %s)",
-		"status.thresholds":         "العتبات       : 5 س ≥%s%% · أسبوعي ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "العتبات       : 5 س %s · أسبوعي %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "معطّلة",
 		"status.thresholdsBad":      "  ! لا توجد عتبة: %s — هذه النوافذ غير محمية",
 		"status.thresholdsFixed":    "  ! خارج النطاق (1-100): %s — تُستخدم القيمة الافتراضية المدمجة بدلاً منها",
 		"status.credits":            "الأرصدة       : %s",
@@ -7862,6 +7933,8 @@ func extraCatalogAr() map[string]string {
 		"install.modelKept":         "أُبقي إعداد النموذج كما هو (لم يغيّره الإعداد)",
 		"install.modelRestored":     "أُعيد النموذج إلى %s",
 		"install.modelRemoved":      "أُزيل إعداد النموذج (لم يكن موجودًا قبل الإعداد)",
+		"install.modelChanged":      "أُبقي إعداد النموذج كما هو (تغيّر بعد الإعداد؛ قبل الإعداد: %s)",
+		"install.modelChangedNone":  "أُبقي إعداد النموذج كما هو (تغيّر بعد الإعداد؛ لم يكن مضبوطًا قبل الإعداد)",
 		"install.configBroken":      "تعذّرت قراءة %s (%s)؛ لم يُغيَّر شيء — أصلح الملف أو انقله جانبًا، ثم أعد تشغيل الإعداد",
 		"install.configUnwritable":  "تعذّرت كتابة %s (%s)؛ بقيت الإعدادات كما هي — اجعل مجلده قابلًا للكتابة، ثم أعد تشغيل الإعداد",
 		"install.uninstallBroken":   "تعذّرت قراءة %s (%s)؛ لم يُزَل شيء — أصلحه، ثم أعد تشغيل الإزالة",
@@ -8236,6 +8309,8 @@ func extraCatalogId() map[string]string {
 		"queue.stopProjectFileOpen": "☰ Tidak ada antrean yang dimulai di sesi ini. %s di folder ini menggerakkannya karena queue.requireTrust dimatikan; dengan itu menyala, hanya file yang kamu percayai yang menggerakkan sesi.",
 		"queue.usage":               "penggunaan: noctis queue import [--repo owner/name] [--label nama] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<keputusan>\" [--file TASKS.md]",
 		"queue.ghFailed":            "gh issue list gagal: %v (apakah GitHub CLI terpasang dan sudah login?)",
+		"queue.ghRefused":           "gh issue list gagal: %v",
+		"queue.importPlain":         "queue import tidak menulis apa pun: %[1]s adalah daftar tanpa kotak centang. Issue yang diimpor akan menjadi item berkotak centang pertamanya; noctis lalu hanya membaca item berkotak centang, dan %[2]d item-nya akan keluar dari antrean. Beri mereka kotak centang (- [ ] …) dulu, lalu impor lagi.",
 		"queue.importNone":          "tidak ada yang baru: %[1]d issue terbuka oleh %[2]s yang didaftar gh sudah ada di %[3]s",
 		"queue.importEmpty":         "tidak ada yang diimpor: gh tidak mendaftar issue terbuka oleh %s",
 		"queue.importLimit":         "gh mendaftar %[1]s issue terbuka oleh %[2]s, jumlah terbanyak yang diizinkan --limit %[1]s, jadi yang lebih lama mungkin tertinggal: jalankan lagi dengan --limit lebih tinggi untuk mengambilnya",
@@ -8301,7 +8376,9 @@ func extraCatalogId() map[string]string {
 		"status.usage":              "Penggunaan    : %s",
 		"status.noData":             "(tidak ada data)",
 		"status.updated":            " (diperbarui %s)",
-		"status.thresholds":         "Ambang        : 5 jam ≥%s%% · mingguan ≥%s%% · %s ≥%s%%",
+		"status.thresholds":         "Ambang        : 5 jam %s · mingguan %s · %s %s",
+		"status.thresholdAt":        "≥%s%%",
+		"status.thresholdOff":       "mati",
 		"status.thresholdsBad":      "  ! tidak ada ambang: %s — jendela itu TIDAK dijaga",
 		"status.thresholdsFixed":    "  ! di luar rentang (1-100): %s — nilai bawaan dipakai sebagai gantinya",
 		"status.credits":            "Kredit        : %s",
@@ -8515,6 +8592,8 @@ func extraCatalogId() map[string]string {
 		"install.modelKept":         "pengaturan model dipertahankan (setup tidak mengubahnya)",
 		"install.modelRestored":     "model dikembalikan ke %s",
 		"install.modelRemoved":      "pengaturan model dihapus (tidak ada sebelum setup)",
+		"install.modelChanged":      "pengaturan model dipertahankan (diubah setelah setup; sebelum setup: %s)",
+		"install.modelChangedNone":  "pengaturan model dipertahankan (diubah setelah setup; tidak diatur sebelum setup)",
 		"install.configBroken":      "%s tidak bisa dibaca (%s); tidak ada yang diubah — perbaiki filenya atau singkirkan, lalu jalankan setup lagi",
 		"install.configUnwritable":  "%s tidak bisa ditulis (%s); pengaturan dibiarkan apa adanya — buat foldernya bisa ditulis, lalu jalankan setup lagi",
 		"install.uninstallBroken":   "%s tidak bisa dibaca (%s); tidak ada yang dihapus — perbaiki, lalu jalankan uninstall lagi",

@@ -117,6 +117,32 @@ func TestTheJobsOfAStartedFileAreTheOnesItsAuthorWrote(t *testing.T) {
 	}
 }
 
+func TestAStartedFileOfOneJobPerLineLeavesItsHTMLCommentsOut(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, false)
+	writeJobFile(t, project, "jobs.md", "<!--\n  Tonight's jobs, one per line.\n  Keep each one short.\n-->\nupgrade the database driver\n<!-- the next one may take long -->\nrename the config keys\n")
+	output := startQueue(t, cfg, "sq12", project, "/noctis:start jobs.md")
+	want := []string{"upgrade the database driver", "rename the config keys"}
+	if got := openJobs(t, sessionQueueFile(cfg, "sq12", project)); !slices.Equal(got, want) {
+		t.Fatalf("the jobs of the file are %q, want %q: the lines of its HTML comments became jobs (%q)", got, want, getString(output, "systemMessage"))
+	}
+}
+
+func TestAJobThatStartsWithTheWordTodoIsAJobOfItsOwn(t *testing.T) {
+	for _, jobs := range [][]string{
+		{"upgrade the database driver", "rename the config keys", "todo app: add a dark mode toggle", "write the release notes"},
+		{"actualizar el driver de la base de datos", "renombrar las claves de configuración", "Todo el código nuevo necesita tests", "escribir las notas de la versión"},
+	} {
+		t.Run(jobs[2], func(t *testing.T) {
+			cfg, project := queueTrustSandbox(t, false)
+			writeJobFile(t, project, "jobs.md", strings.Join(jobs, "\n")+"\n")
+			output := startQueue(t, cfg, "sq13", project, "/noctis:start jobs.md")
+			if got := openJobs(t, sessionQueueFile(cfg, "sq13", project)); !slices.Equal(got, jobs) {
+				t.Fatalf("the jobs of the file are %q, want one per line, %q (%q)", got, jobs, getString(output, "systemMessage"))
+			}
+		})
+	}
+}
+
 func TestAStartedQueueDrivesTheSessionUntilEveryJobIsTicked(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, false)
 	writeJobFile(t, project, "deneme.md", "- add a login page\n- add a logout button\n")

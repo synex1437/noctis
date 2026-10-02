@@ -108,3 +108,26 @@ func TestOnlyThePersonCanStartTheSkillsThatLowerProtection(t *testing.T) {
 		}
 	}
 }
+
+func TestTheSetupSkillsCustomExampleIsTakenAsWritten(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "..", "skills", "setup", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	example := regexp.MustCompile("for custom: `([^`]+)`").FindStringSubmatch(string(content))
+	if example == nil {
+		t.Fatal("skills/setup/SKILL.md gives no custom example")
+	}
+	words := strings.Fields(example[1])
+	for index := 0; index+1 < len(words); index += 2 {
+		flag, value := words[index], words[index+1]
+		printed := capturedStdout(t, func() {
+			if _, err := parseRoleFlag(strings.TrimPrefix(flag, "--"), value, false); err != nil {
+				t.Errorf("setup refuses the skill's own custom example %s %s: %v", flag, value, err)
+			}
+		})
+		if printed != "" {
+			t.Errorf("setup takes the skill's own custom example %s %s with a warning: %s", flag, value, strings.TrimSpace(printed))
+		}
+	}
+}

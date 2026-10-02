@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -66,6 +68,69 @@ func TestEachTickNotesWhatTheItemTook(t *testing.T) {
 	}
 	if printed := queueCommand(t, cfg, project, "status"); !strings.Contains(printed, "  "+want) {
 		t.Fatalf("noctis queue status does not sum up the ticks:\n%s", printed)
+	}
+}
+
+func TestTheCompactionsOfAnItemLongerThanTheQueueViewShowsGoWithItsTick(t *testing.T) {
+	cfg, project, frontend := queueCheckSandbox(t, "")
+	long := "migrate the users table to the new schema: add the tenant_id column, backfill it from the accounts table in batches of 10000 rows, add the index concurrently, then drop the old foreign key"
+	queue := strings.Replace(tickQueue, "migrate the users table", long, 1)
+	path := writeQueueFile(t, project, queue)
+	trustQueueFile(path, true)
+	stopHookOutput(t, stopInput("tk3", frontend), cfg)
+	for range 2 {
+		hookOutput(t, onPreCompact, agentHookInput("PreCompact", "tk3", frontend, object{"trigger": "auto"}), cfg)
+	}
+	if context := sessionContext(t, compactStart("tk3", frontend), cfg); !strings.Contains(context, "This item has now gone through 2 compactions") {
+		t.Fatalf("the two compactions are not counted on the long item in hand:\n%s", context)
+	}
+	writeQueueFile(t, project, strings.Replace(queue, "- [ ] ", "- [x] ", 1))
+	stopHookOutput(t, stopAgain("tk3", frontend), cfg)
+	state := readState()
+	ticks := getList(setupFacts(state, path), "ticks")
+	if len(ticks) != 1 || numberOr(toObject(ticks[0]), "compactions", -1) != 2 {
+		t.Fatalf("an item of %d characters went through 2 compactions, but its tick records are %v", len([]rune(long)), ticks)
+	}
+	if counted := getMap(state, "queueCompactions"); len(counted) != 0 {
+		t.Fatalf("the compactions of the ticked long item are still counted for the item in hand: %v", counted)
+	}
+}
+
+func TestAnItemUntickedForAFailedCheckAndTickedAgainIsCountedOnce(t *testing.T) {
+	cfg, project, frontend := queueCheckSandbox(t, shellFor("test -f fixed.txt", "type fixed.txt"))
+	path := writeQueueFile(t, project, tickQueue)
+	trustQueueFile(path, true)
+	runsOn("tk4", "claude-sonnet-5-5", 42000)
+	continues(t, stopHookOutput(t, stopInput("tk4", frontend), cfg), 4)
+	writeQueueFile(t, project, tickedQueue(1))
+	if failed := getString(stopHookOutput(t, stopAgain("tk4", frontend), cfg), "reason"); !strings.Contains(failed, "untick it if you already marked it done") {
+		t.Fatalf("setup: the failing check did not send the item back: %q", failed)
+	}
+	writeQueueFile(t, project, tickQueue)
+	writeRepoFile(t, project, "fixed.txt", "ok\n")
+	continues(t, stopHookOutput(t, stopAgain("tk4", frontend), cfg), 4)
+	writeQueueFile(t, project, tickedQueue(1))
+	continues(t, stopHookOutput(t, stopAgain("tk4", frontend), cfg), 3)
+	writeQueueFile(t, project, tickedQueue(2))
+	continues(t, stopHookOutput(t, stopAgain("tk4", frontend), cfg), 2)
+	state := readState()
+	items := 0.0
+	for _, record := range ticksOf(state, path) {
+		items += record.items
+	}
+	if stats := setupStatsOf(state, path); items != 2 || len(stats) != 1 || stats[0].items != 2 {
+		t.Fatalf("two items were done, the first unticked for a failed check and ticked again, but the tick records count %v items and the setups are credited with %+v", items, stats)
+	}
+
+	if err := os.Remove(filepath.Join(project, "fixed.txt")); err != nil {
+		t.Fatal(err)
+	}
+	writeQueueFile(t, project, tickedQueue(3))
+	stopHookOutput(t, stopAgain("tk4", frontend), cfg)
+	writeQueueFile(t, project, tickQueue)
+	stopHookOutput(t, stopAgain("tk4", frontend), cfg)
+	if notes := paceNotesIn(path); len(notes) != 1 || notes[0].done != 0 {
+		t.Fatalf("every item was unticked, also the two that passed the check, but while the check failed the pace notes did not start over: %v", notes)
 	}
 }
 

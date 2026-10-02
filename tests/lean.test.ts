@@ -58,6 +58,22 @@ describe("prune", () => {
     expect(out[8]).toBe(rows[8])
   })
 
+  test("a later Read answered only with the file-unchanged note does not replace the earlier result", () => {
+    const unchanged = "File unchanged since last read. The content from the earlier Read tool_result in this conversation is still current — refer to that instead of re-reading."
+    const note = { role: "user", text: "", toolUses: [], toolResults: [{ tool_use_id: "t2", text: unchanged, isError: false, result: { type: "file_unchanged", file: { filePath: "/p/config.ts" } } }], handle: "h5" }
+    const rows = [
+      prompt("why port 3000?", "h1"),
+      call("t1", "Read", { file_path: "/p/config.ts" }, "h2"),
+      answer("t1", "export const PORT = 3000", "h3"),
+      call("t2", "Read", { file_path: "/p/config.ts" }, "h4"),
+      note,
+      reply("PORT is 3000", "h6"),
+    ]
+    expect(prune(rows, POLICY)[2]).toBe(rows[2])
+    const textOnly = [...rows.slice(0, 4), answer("t2", unchanged, "h5"), rows[5]]
+    expect(prune(textOnly, POLICY)[2]).toBe(textOnly[2])
+  })
+
   test("a later call that failed does not replace an earlier result", () => {
     const rows = [
       prompt("look", "h1"),

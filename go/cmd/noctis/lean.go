@@ -190,7 +190,7 @@ func leanCompactions(count int) []object {
 
 func approxCount(value float64) string {
 	switch {
-	case value >= 1e6:
+	case math.Round(value/1e3) >= 1e3:
 		return strconv.FormatFloat(value/1e6, 'f', 1, 64) + "M"
 	case value >= 1e3:
 		return formatNumber(math.Round(value/1e3)) + "k"

@@ -260,3 +260,57 @@ func TestTheFullCheckIsDueOnceEnoughTicksWaitForItAndWhenTheQueueEnds(t *testing
 		t.Fatalf("with queue.verifyFullEvery 0 the full check ran before the queue ends")
 	}
 }
+
+func repeatedStepsQueue(ticked int) string {
+	var queue strings.Builder
+	queue.WriteString("# q\n")
+	for index, item := range []string{"add endpoint A", "update the docs", "add endpoint B", "update the docs"} {
+		mark := " "
+		if index < ticked {
+			mark = "x"
+		}
+		fmt.Fprintf(&queue, "- [%s] %s\n", mark, item)
+	}
+	return queue.String()
+}
+
+func TestAnItemWithTheSameTextAsAnEarlierOneIsCheckedWhenItIsTicked(t *testing.T) {
+	cfg, project, counter := checkTierSandbox(t, 1, false)
+	section(cfg, "queue")["verifyCommand"] = countingCheck(counter, "full", "")
+	trustQueueFile(writeQueueFile(t, project, repeatedStepsQueue(0)), true)
+	for ticked := 1; ticked <= 3; ticked++ {
+		writeQueueFile(t, project, repeatedStepsQueue(ticked))
+		continues(t, stopHookOutput(t, stopInput("repeat1", project), cfg), 4-ticked)
+	}
+	writeQueueFile(t, project, repeatedStepsQueue(4))
+	finished := stopHookOutput(t, stopInput("repeat1", project), cfg)
+	if runs := checkRuns(counter, "full"); runs != 4 {
+		t.Fatalf("the last item, with the same text as the second, was ticked and the queue ended after %d check runs, want 4: %v", runs, finished)
+	}
+	content, _ := readQueueText(filepath.Join(project, "TASKS.md"))
+	if unverified, ticked := queueUnverified(cfg, readState(), filepath.Join(project, "TASKS.md"), content); unverified != 0 || ticked != 4 {
+		t.Fatalf("after the last check %d of %d ticked items count as unchecked, want 0 of 4", unverified, ticked)
+	}
+}
+
+func TestAnItemTickedAgainAfterItWasUntickedIsCheckedAgain(t *testing.T) {
+	cfg, project, counter := checkTierSandbox(t, 3, false)
+	section(cfg, "queue")["verifyCommand"] = countingCheck(counter, "full", "")
+	tickTiered(t, project, 3, 1)
+	continues(t, stopHookOutput(t, stopInput("again1", project), cfg), 2)
+	tickTiered(t, project, 3, 3)
+	if finished := stopHookOutput(t, stopInput("again1", project), cfg); getString(finished, "systemMessage") != T("queue.doneMessage", "TASKS.md") {
+		t.Fatalf("the first run did not finish: %v", finished)
+	}
+	tickTiered(t, project, 3, 0)
+	stopHookOutput(t, stopInput("again1", project), cfg)
+	tickTiered(t, project, 3, 1)
+	continues(t, stopHookOutput(t, stopInput("again1", project), cfg), 2)
+	if runs := checkRuns(counter, "full"); runs != 3 {
+		t.Fatalf("an item ticked again after the list was unticked ran the check %d times in all, want 3", runs)
+	}
+	content, _ := readQueueText(filepath.Join(project, "TASKS.md"))
+	if unverified, ticked := queueUnverified(cfg, readState(), filepath.Join(project, "TASKS.md"), content); unverified != 0 || ticked != 1 {
+		t.Fatalf("after the check %d of %d ticked items count as unchecked, want 0 of 1", unverified, ticked)
+	}
+}

@@ -201,7 +201,7 @@ func slopeFor(history []any, resetsAt float64, now int64, idleAfter float64) (fl
 	}
 	span := numberOr(last, "at", 0) - numberOr(first, "at", 0)
 	rise := numberOr(last, "used", 0) - numberOr(first, "used", 0)
-	if span <= 0 || rise <= 0 {
+	if span < projectionMinSpan || rise <= 0 {
 		return 0, true
 	}
 	return rise / span, true
@@ -867,10 +867,11 @@ func fableRefreshDue(cfg object, now int64, maxAge float64, ignoreBackoff bool) 
 	if pollSeconds < 0 {
 		pollSeconds = math.Max(5, numberOr(fableCfg, "pollMinutes", 10)*60)
 	}
-	if fetchedAt := numberOr(cached, "fetchedAt", 0); fetchedAt > 0 && float64(now)-fetchedAt < pollSeconds {
+	fetchedAt := numberOr(cached, "fetchedAt", 0)
+	if age := float64(now) - fetchedAt; fetchedAt > 0 && age > -clockSkewMinSeconds && age < pollSeconds {
 		return cached, false
 	}
-	if !ignoreBackoff && numberOr(cached, "backoffUntil", 0) > float64(now) {
+	if backoffUntil := numberOr(cached, "backoffUntil", 0); !ignoreBackoff && backoffUntil > float64(now) && backoffUntil <= float64(now+fetchBackoffMaxSeconds) {
 		return cached, false
 	}
 	return cached, true
@@ -927,7 +928,7 @@ func fetchOauthFable(cfg, cached object, now int64, reason string, limit time.Du
 		case 401, 403:
 			backoff = 1800
 		case 429:
-			backoff = min(max(600, retryAfterSeconds(response)), 3600)
+			backoff = min(max(600, retryAfterSeconds(response)), fetchBackoffMaxSeconds)
 		}
 		message := "http-" + itoa(response.status)
 		if response.err != "" {
@@ -1069,15 +1070,18 @@ func holderStale(owner string, age time.Duration) bool {
 	pid, parsed := lockOwnerPid(owner)
 	switch {
 	case parsed && pid != os.Getpid() && !processAlive(pid):
-		return age > lockDeadOwnerMs*time.Millisecond
+		return leftByDeadHolder(age)
 	case parsed && pid != os.Getpid():
 		return age > lockLiveHolderMs*time.Millisecond
 	case !parsed && owner != "":
-		// A holder writes its pid as it takes a lock, so a lock that names no process was left by
-		// none that is still running: it goes as soon as one whose holder died.
-		return age > lockDeadOwnerMs*time.Millisecond
+		return leftByDeadHolder(age)
 	}
 	return age > lockStaleMs*time.Millisecond
+}
+
+func leftByDeadHolder(age time.Duration) bool {
+	barrier := lockDeadOwnerMs * time.Millisecond
+	return age > barrier || age < -barrier
 }
 
 func lockAbandoned(lockFile string) bool {
@@ -1404,6 +1408,18 @@ func nearEdge(cfg object, usage usageView) bool {
 	return (usage.fiveHour != nil && validThreshold(thresholds["session5h"]) && usage.fiveHour.used >= thresholdOf(cfg, "session5h")-nearEdgeBand) ||
 		(usage.sevenDay != nil && validThreshold(thresholds["weeklyAll"]) && usage.sevenDay.used >= thresholdOf(cfg, "weeklyAll")-nearEdgeBand) ||
 		nearCeiling(cfg, usage)
+}
+
+func projectionAhead(cfg object, usage usageView) bool {
+	for _, guarded := range []struct {
+		win       *window
+		threshold string
+	}{{usage.fiveHour, "session5h"}, {usage.sevenDay, "weeklyAll"}} {
+		if limit, enabled := stopPoint(cfg, guarded.threshold); enabled && windowHit(guarded.win, limit) == "projection" {
+			return true
+		}
+	}
+	return false
 }
 
 func edgePollSeconds(cfg object, usage usageView) float64 {

@@ -26,6 +26,8 @@ func killTree(process *os.Process) {
 	_ = process.Kill()
 }
 
+func passSignalsToTree(_ *os.Process) {}
+
 // hideConsoleWindow starts a console program in a console that has no window. A runner that Task
 // Scheduler or a detached parent started has no visible console a child could share, so each console
 // child (PowerShell, git, taskkill, a headless session) would otherwise open a window of its own, and

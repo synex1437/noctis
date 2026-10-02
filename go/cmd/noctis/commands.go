@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"html"
 	"math"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -63,8 +66,14 @@ func planWindows(usage usageView, cfg object) string {
 	return strings.Join(parts, " + ")
 }
 
+func thresholdText(threshold float64, guarded bool) string {
+	if !guarded {
+		return T("status.thresholdOff")
+	}
+	return T("status.thresholdAt", formatNumber(threshold))
+}
+
 func describeState(cfg, state object, usage usageView, now int64) string {
-	thresholds := section(cfg, "thresholds")
 	models := section(cfg, "models")
 	lines := []string{T("status.accountDir", files.configDir)}
 	if statSafe(files.config) == nil {
@@ -76,7 +85,7 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	}
 	lines = append(lines, T("status.usage", usageText))
 	lines = append(lines, T("status.plan", planWindows(usage, cfg)))
-	lines = append(lines, T("status.thresholds", getString(thresholds, "session5h"), getString(thresholds, "weeklyAll"), scopedLabel(cfg), formatNumber(scopedThreshold(cfg))))
+	lines = append(lines, T("status.thresholds", thresholdText(thresholdEnabled(cfg, "session5h")), thresholdText(thresholdEnabled(cfg, "weeklyAll")), scopedLabel(cfg), thresholdText(scopedThresholdEnabled(cfg))))
 	if repaired := repairedThresholds(cfg); len(repaired) > 0 {
 		lines = append(lines, T("status.thresholdsFixed", strings.Join(repaired, ", ")))
 	}
@@ -213,7 +222,10 @@ func runCheck() {
 	cfg := loadConfig()
 	usage := currentUsage(now)
 	state := readState()
-	model := resolveSessionModel(cfg, state, readJSON(files.usage), flagString("sid"))
+	model, unique := modelOfSessionID(cfg, state, flagString("sid"))
+	if !unique {
+		os.Exit(2)
+	}
 
 	staleSeconds := usageStaleSeconds(cfg)
 	code, verdict := 0, "ok"
@@ -290,10 +302,22 @@ func resolveSid(arg string, spaces ...object) (string, bool) {
 	return arg, true
 }
 
+var cancelFlags = []string{"sid", "account", "config-dir", "host"}
+
 func runCancel() {
-	target := flagString("sid")
+	for _, name := range sortedKeys(args.present) {
+		if !slices.Contains(cancelFlags, name) {
+			fmt.Fprintln(os.Stderr, unknownFlag(name, cancelFlags))
+			os.Exit(2)
+		}
+	}
+	target := strings.TrimSpace(flagString("sid"))
 	if target == "" {
-		target = positional(1)
+		target = strings.TrimSpace(positional(1))
+	}
+	if target == "" && (args.present["sid"] || len(args.positional) > 1) {
+		fmt.Fprintln(os.Stderr, T("args.needsValue", "--sid"))
+		os.Exit(2)
 	}
 	if code := cancelPending(target); code != 0 {
 		os.Exit(code)
@@ -418,7 +442,7 @@ func printWaitsThatStillResume(cfg, state object, now int64) {
 	if len(lines) == 0 {
 		return
 	}
-	for _, others := range []object{handedOff, getMap(state, "launchFailures")} {
+	for _, others := range []object{handedOff, getMap(state, "launchFailures"), getMap(state, "queueWakes")} {
 		for sid := range others {
 			skipped = skipped || !listed[sid]
 		}
@@ -465,9 +489,10 @@ func runOn() {
 }
 
 func resumeGuard() int {
-	applied, failures := false, writeFailures
+	applied, failures, pausedUntil := false, writeFailures, 0.0
 	updateState(func(next object) {
 		applied = true
+		pausedUntil = numberOr(next, "disabledUntil", 0)
 		next["disabledUntil"] = float64(0)
 		next["hookCapSeconds"] = float64(0)
 		next["interruptedWaits"] = []any{}
@@ -477,29 +502,32 @@ func resumeGuard() int {
 		return 1
 	}
 	fmt.Println(T("on.done", pluginName))
+	rearmQueueWakesPutOffBy(pausedUntil)
 	return 0
 }
 
 func runModel() {
 	cfg, state := loadConfig(), readState()
 	if sid := flagString("sid"); sid != "" {
-		usageFile := readJSON(files.usage)
-		key, unique := resolveSid(sid, getMap(state, "modelOverrides"), getMap(usageFile, "sessions"))
+		model, unique := modelOfSessionID(cfg, state, sid)
 		if !unique {
 			os.Exit(2)
 		}
-		fmt.Println(resolveSessionModel(cfg, state, usageFile, key))
+		fmt.Println(model)
 		return
 	}
 	fmt.Println(defaultModel(cfg, state))
 }
 
+func modelOfSessionID(cfg, state object, sid string) (string, bool) {
+	usageFile := readJSON(files.usage)
+	key, unique := resolveSid(sid, getMap(state, "modelOverrides"), getMap(usageFile, "sessions"))
+	return resolveSessionModel(cfg, state, usageFile, key), unique
+}
+
 func runCheckpointCommand() {
 	sid := flagString("sid")
-	cwd := flagString("cwd")
-	if cwd == "" {
-		cwd, _ = os.Getwd()
-	}
+	cwd, _ := filepath.Abs(flagString("cwd"))
 
 	now := nowSec()
 	state := readState()
@@ -1095,14 +1123,18 @@ func attachPrices(cfg object, data *reportData) {
 		}
 	}
 	sort.Strings(data.unpriced)
-	primary := regexp.MustCompile("(?i)" + regexp.QuoteMeta(getString(section(cfg, "models"), "primary")))
+	primary := regexp.MustCompile("(?i)" + regexp.QuoteMeta(reportPrimary(cfg)))
 	for _, model := range sortedModels(data.byModel) {
 		if price, ok := data.prices[model]; ok && primary.MatchString(model) {
 			data.primaryPrice, data.primaryPriced = price, true
 			return
 		}
 	}
-	data.primaryPrice, data.primaryPriced = priceFor(cfg, getString(section(cfg, "models"), "primary"))
+	data.primaryPrice, data.primaryPriced = priceFor(cfg, reportPrimary(cfg))
+}
+
+func reportPrimary(cfg object) string {
+	return strings.TrimSuffix(strings.ToLower(getString(section(cfg, "models"), "primary")), "[1m]")
 }
 
 func collectReport(cfg object, days float64) reportData {
@@ -1110,23 +1142,22 @@ func collectReport(cfg object, days float64) reportData {
 	data := reportData{days: days, byModel: map[string]*tokenBucket{}, byDay: map[string]*tokenBucket{}, byDayModel: map[string]map[string]*tokenBucket{}, keptOffByModel: map[string]*tokenBucket{}, events: map[string]int{}}
 	transcripts := walkTranscripts(filepath.Join(files.configDir, "projects"), since)
 	data.transcripts = len(transcripts)
-	primary := regexp.MustCompile("(?i)" + regexp.QuoteMeta(getString(section(cfg, "models"), "primary")))
+	primary := regexp.MustCompile("(?i)" + regexp.QuoteMeta(reportPrimary(cfg)))
 	counted := map[string]bool{}
 	for _, file := range transcripts {
-		info := statSafe(file)
-		if info == nil || info.Size() > 64*1024*1024 {
-			continue
-		}
-		content, err := os.ReadFile(file)
+		transcript, err := os.Open(file)
 		if err != nil {
 			continue
 		}
-		for _, line := range strings.Split(string(content), "\n") {
-			if !strings.Contains(line, `"usage"`) {
+		lines := bufio.NewScanner(transcript)
+		lines.Buffer(make([]byte, 0, 64*1024), 64*1024*1024)
+		for lines.Scan() {
+			line := lines.Bytes()
+			if !bytes.Contains(line, []byte(`"usage"`)) {
 				continue
 			}
 			var raw object
-			if err := jsonUnmarshalObject([]byte(line), &raw); err != nil || raw == nil || getString(raw, "type") != "assistant" {
+			if err := jsonUnmarshalObject(line, &raw); err != nil || raw == nil || getString(raw, "type") != "assistant" {
 				continue
 			}
 			message := getMap(raw, "message")
@@ -1151,7 +1182,7 @@ func collectReport(cfg object, days float64) reportData {
 			data.byModel[model].add(usage)
 			day := "unknown"
 			if parseErr == nil {
-				day = at.UTC().Format("2006-01-02")
+				day = at.Local().Format("2006-01-02")
 			}
 			if data.byDay[day] == nil {
 				data.byDay[day] = &tokenBucket{}
@@ -1174,6 +1205,7 @@ func collectReport(cfg object, days float64) reportData {
 				}
 			}
 		}
+		transcript.Close()
 	}
 	for _, file := range []string{files.log, files.log + ".1"} {
 		content, err := os.ReadFile(file)
@@ -1268,22 +1300,25 @@ func reportJSON(cfg object, data reportData) object {
 	for _, model := range data.unpriced {
 		unpriced = append(unpriced, model)
 	}
+	keptOff := object{
+		"primary": getString(section(cfg, "models"), "primary"),
+		"tokens":  data.keptOff.total(),
+		"calls":   data.keptOff.calls,
+		"cost":    roundTo(actual, 4),
+		"basis":   "API list-price estimate, not plan quota saved",
+	}
+	if data.primaryPriced {
+		keptOff["costOnPrimary"] = roundTo(onPrimary, 4)
+		keptOff["savedVsPrimary"] = roundTo(onPrimary-actual, 4)
+	}
 	return object{
-		"days":        data.days,
-		"transcripts": data.transcripts,
-		"account":     files.configDir,
-		"daily":       daily,
-		"models":      byModel,
-		"totals":      totalsJSON,
-		"keptOffPrimary": object{
-			"primary":        getString(section(cfg, "models"), "primary"),
-			"tokens":         data.keptOff.total(),
-			"calls":          data.keptOff.calls,
-			"cost":           roundTo(actual, 4),
-			"costOnPrimary":  roundTo(onPrimary, 4),
-			"savedVsPrimary": roundTo(onPrimary-actual, 4),
-			"basis":          "API list-price estimate, not plan quota saved",
-		},
+		"days":                data.days,
+		"transcripts":         data.transcripts,
+		"account":             files.configDir,
+		"daily":               daily,
+		"models":              byModel,
+		"totals":              totalsJSON,
+		"keptOffPrimary":      keptOff,
 		"otherSubagentTokens": data.otherSub.total(),
 		"events":              data.events,
 		"pricing":             object{"source": "builtin+config", "unit": "USD per million tokens, API list prices", "unpricedModels": unpriced},
@@ -1391,7 +1426,7 @@ func runReport() {
 	cfg := loadConfig()
 	days := 7.0
 	if value, ok := toNumber(flagString("days")); ok && value >= 1 {
-		days = value
+		days = math.Min(value, lookbackMaxDays)
 	}
 	if args.present["bundle"] {
 		target, err := writeBundle(cfg)

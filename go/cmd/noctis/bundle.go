@@ -26,17 +26,17 @@ var (
 	bundleTokenPattern = lazyRegexp(`(?i)(sk-ant-[A-Za-z0-9_-]+|sk-[a-z]+-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|xox[abprs]-[A-Za-z0-9-]{8,}|AKIA[0-9A-Z]{12,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+|(?:api[_-]?key|access[_-]?token|oauth[_-]?token|secret|password|bearer|token|key)["'=: ]+[A-Za-z0-9._~+/-]{8,}|glpat-[A-Za-z0-9_-]{8,}|npm_[A-Za-z0-9]{8,}|AIza[A-Za-z0-9_-]{8,}|[a-z][a-z0-9+.-]*://[^\s"'/]*:[^\s"'/]+@)`)
 
 	bundleWebhookPattern = lazyRegexp(`(?i)(?:[a-z][a-z0-9+.-]*:/*[^\s"']*(?:` + bundleWebhookHosts + `|[?&](?:token|key|secret|auth)=)|[^\s"']*(?:` + bundleWebhookHosts + `)/)[^\s"']*`)
-	bundleSecretKeys     = map[string]bool{"url": true, "webhook": true, "webhookurl": true, "token": true, "chatid": true, "secret": true, "key": true, "apikey": true, "password": true, "chaincommand": true, "verifycommand": true, "terminal": true}
+	bundleSecretKeys     = map[string]bool{"url": true, "webhook": true, "webhookurl": true, "token": true, "chatid": true, "secret": true, "key": true, "apikey": true, "password": true, "chaincommand": true, "verifycommand": true, "verifyeachcommand": true, "terminal": true}
 
 	// Older versions logged an alarm.webhook.url that did not parse as it was, secret and all.
 	bundleLoggedWebhookPattern = lazyRegexp(`(alarm\.webhook\.url invalid: )[^\r\n]*`)
 )
 
 func redactBundleText(text string) string {
-	text = homeAsTilde(text)
 	for _, secret := range configuredSecrets() {
 		text = strings.ReplaceAll(text, secret, "<redacted>")
 	}
+	text = homeAsTilde(text)
 	text = bundleTokenPattern.ReplaceAllString(text, "<redacted-token>")
 	text = bundleLoggedWebhookPattern.ReplaceAllString(text, "${1}<redacted-webhook>")
 	text = bundleWebhookPattern.ReplaceAllString(text, "<redacted-webhook>")
@@ -49,11 +49,17 @@ func configuredSecrets() []string {
 		return nil
 	}
 	values := []string{}
+	add := func(text string) {
+		if len(text) >= 6 {
+			quoted, encoded := strconv.Quote(text), string(marshalCompact(text))
+			values = append(values, text, quoted[1:len(quoted)-1], encoded[1:len(encoded)-1])
+		}
+	}
 	collect := func(value any) {
 		for _, text := range secretStrings(value) {
-			if len(text) >= 6 {
-				quoted, encoded := strconv.Quote(text), string(marshalCompact(text))
-				values = append(values, text, quoted[1:len(quoted)-1], encoded[1:len(encoded)-1])
+			add(text)
+			if trimmed := strings.TrimSpace(text); trimmed != text {
+				add(trimmed)
 			}
 		}
 	}
@@ -61,8 +67,14 @@ func configuredSecrets() []string {
 	collect(section(config, "alarm")["webhookUrl"])
 	collect(section(config, "statusline")["chainCommand"])
 	collect(section(config, "queue")["verifyCommand"])
+	collect(section(config, "queue")["verifyEachCommand"])
 	collect(getMap(section(config, "queue"), "github"))
-	sort.Strings(values)
+	sort.Slice(values, func(a, b int) bool {
+		if len(values[a]) != len(values[b]) {
+			return len(values[a]) > len(values[b])
+		}
+		return values[a] < values[b]
+	})
 	return values
 }
 

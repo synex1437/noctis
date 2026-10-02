@@ -100,13 +100,13 @@ var leadIns = lazyWordSet(`please lütfen bitte veuillez merci por favor per fav
 	сначала затем потом наконец также и
 	tolong mohon silakan coba pertama lalu kemudian setelah itu terakhir akhirnya selanjutnya juga dan sekarang`)
 
-func imperativeLike(unit string) bool {
+func imperativeLike(unit, lang string) bool {
 	fields := wordSplit.Split(strings.TrimSpace(unit), -1)
 	if leadsWithImperative(fields) {
 		return true
 	}
 	last := stepWord(fields[len(fields)-1])
-	return imperativeWords(last) || imperativeWords(strings.TrimSuffix(strings.TrimSuffix(last, "in"), "iniz"))
+	return imperativeWords(last) || imperativeWords(strings.TrimSuffix(strings.TrimSuffix(last, "in"), "iniz")) || lang == "tr" && endsInVerb(unit, lang)
 }
 
 func stepWord(word string) string {
@@ -238,6 +238,19 @@ var bugReportMarkers = []string{
 	"steps to reproduce", "to reproduce", "repro steps", "expected:", "expected result", "expected behaviour", "expected behavior",
 	"actual:", "actual result", "stack trace", "stacktrace", "traceback",
 	"yeniden üret", "beklenen", "hata mesajı", "hata çıktısı",
+	"schritte zum reproduzieren", "zum reproduzieren:", "schritte zur reproduktion", "reproduktionsschritte", "erwartet:", "erwartetes ergebnis", "erwartetes verhalten", "tatsächlich:", "tatsächliches ergebnis",
+	"étapes pour reproduire", "pour reproduire :", "pour reproduire:", "étapes de reproduction", "résultat attendu", "comportement attendu", "résultat obtenu",
+	"pasos para reproducir", "para reproducir:", "resultado esperado", "comportamiento esperado", "resultado obtenido",
+	"passos para reproduzir", "para reproduzir:", "comportamento esperado", "resultado obtido", "resultado atual:",
+	"passi per riprodurre", "passaggi per riprodurre", "per riprodurre:", "risultato atteso", "comportamento atteso", "risultato ottenuto", "risultato attuale:",
+	"stappen om te reproduceren", "om te reproduceren:", "reproductiestappen", "verwacht:", "verwacht resultaat", "verwacht gedrag", "werkelijk resultaat", "werkelijk:",
+	"kroki do odtworzenia", "kroki do reprodukcji", "oczekiwany rezultat", "oczekiwany wynik", "oczekiwane zachowanie", "rzeczywisty rezultat", "rzeczywisty wynik",
+	"шаги воспроизведения", "шаги для воспроизведения", "как воспроизвести:", "ожидаемый результат", "ожидаемое поведение", "фактический результат",
+	"再現手順", "再現方法", "期待される結果", "期待される動作", "期待結果", "実際の結果",
+	"复现步骤", "重现步骤", "重現步驟", "预期结果", "預期結果", "期望结果", "预期行为", "实际结果", "實際結果",
+	"재현 단계", "재현 방법", "재현 절차", "예상 결과", "기대 결과", "예상 동작", "실제 결과",
+	"خطوات إعادة إنتاج", "خطوات إعادة الإنتاج", "خطوات اعادة انتاج", "خطوات اعادة الانتاج", "النتيجة المتوقعة", "السلوك المتوقع", "النتيجة الفعلية",
+	"langkah reproduksi", "langkah untuk mereproduksi", "hasil yang diharapkan", "perilaku yang diharapkan", "hasil sebenarnya", "hasil aktual",
 }
 
 func lazyWordSet(words string) func(string) bool {
@@ -265,9 +278,35 @@ func firstWord(text string) string {
 	return strings.ToLower(strings.Trim(fields[0], ",.:;!()\"'“”‘’«»"))
 }
 
+const questionMarks = "?？؟"
+
+var questionEmoticons = []string{":)", ":-)", ";)", ";-)", "=)", ":(", ":-(", ":d", ":-d", ";d", "xd", ":p", ":-p", ";p"}
+
+func questionTail(r rune) bool {
+	return unicode.IsSpace(r) || strings.ContainsRune("\"'”’)»*!！", r) || unicode.In(r, unicode.So, unicode.Sk, unicode.Cf, unicode.Mn)
+}
+
+func trimQuestionTail(text string) string {
+	for {
+		cut := 0
+		for _, emoticon := range questionEmoticons {
+			if len(text) >= len(emoticon) && strings.EqualFold(text[len(text)-len(emoticon):], emoticon) {
+				cut = len(emoticon)
+			}
+		}
+		if last, size := utf8.DecodeLastRuneInString(text); cut == 0 && size > 0 && questionTail(last) {
+			cut = size
+		}
+		if cut == 0 {
+			return text
+		}
+		text = text[:len(text)-cut]
+	}
+}
+
 func endsQuestion(text string) bool {
-	trimmed := strings.TrimRight(strings.TrimSpace(text), "\"'”’)»* ")
-	return strings.HasSuffix(trimmed, "?") || strings.HasSuffix(trimmed, "？")
+	last, _ := utf8.DecodeLastRuneInString(trimQuestionTail(text))
+	return strings.ContainsRune(questionMarks, last)
 }
 
 func stepLike(unit, lang string) bool {
@@ -468,7 +507,7 @@ func promptJobOf(prompt string) promptJob {
 	if len(items) < autoQueueMinItems {
 		items, prose, skipped = items[:0], []string{}, nil
 		for _, line := range lines {
-			if stepLike(line, lang) && imperativeLike(line) {
+			if stepLike(line, lang) && imperativeLike(line, lang) {
 				if item := cleanItem(line); item != "" {
 					items = append(items, item)
 					continue
@@ -502,10 +541,9 @@ func promptJobOf(prompt string) promptJob {
 // question, "Can you do these?" or "Bunları yapabilir misin?", and returns
 // where it starts; -1 when the prompt ends in any other question.
 func closingAsk(text string) int {
-	body := strings.TrimRight(text, "\"'”’)»* \t\r\n")
-	_, size := utf8.DecodeLastRuneInString(body)
-	head := body[:len(body)-size]
-	start := strings.LastIndexFunc(head, func(r rune) bool { return strings.ContainsRune(".!?;\n。！？；", r) })
+	body := trimQuestionTail(text)
+	head := strings.TrimRight(body, questionMarks+"!！")
+	start := strings.LastIndexFunc(head, func(r rune) bool { return strings.ContainsRune(".!?;\n。！？；؟", r) })
 	if start < 0 {
 		return -1
 	}
@@ -538,7 +576,7 @@ func sentenceSteps(paragraph, lang string) []string {
 func stepsOf(units []string, lang string) []string {
 	items := []string{}
 	for _, unit := range units {
-		if stepLike(unit, lang) && imperativeLike(unit) {
+		if stepLike(unit, lang) && imperativeLike(unit, lang) {
 			if item := cleanItem(unit); item != "" {
 				items = append(items, item)
 			}
@@ -571,7 +609,7 @@ func chainedSteps(sentence, lang string) []string {
 	}
 	parts = append(parts, strings.TrimSpace(sentence[start:]))
 	for _, part := range parts {
-		if !stepLike(part, lang) || !imperativeLike(part) {
+		if !stepLike(part, lang) || !imperativeLike(part, lang) {
 			return []string{sentence}
 		}
 	}

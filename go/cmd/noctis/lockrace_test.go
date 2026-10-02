@@ -175,3 +175,37 @@ func TestALockThatNamesNoProcessIsTakenOverAsSoonAsOneWhoseHolderDied(t *testing
 		t.Errorf("a writer waited %s for a 3 s old usage.lock that names no process; one whose holder died goes after 2 s", waited)
 	}
 }
+
+func TestALockADeadHolderLeftAheadOfTheClockIsTakenOver(t *testing.T) {
+	sandboxFiles(t)
+	const deadPid = 2147483646
+	if processAlive(deadPid) {
+		t.Skipf("pid %d is alive here", deadPid)
+	}
+	ahead := time.Now().Add(time.Hour)
+	for _, owner := range []string{strconv.Itoa(deadPid), "left by no process"} {
+		if err := os.WriteFile(files.stateLock, []byte(owner), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(files.stateLock, ahead, ahead); err != nil {
+			t.Fatal(err)
+		}
+		if !lockAbandoned(files.stateLock) {
+			t.Errorf("a lock owned by %q, its time an hour ahead of the clock, is not taken for abandoned", owner)
+		}
+		begin := time.Now()
+		if ran := withFileLock(files.stateLock, func() {}); !ran || time.Since(begin) > 3*time.Second {
+			t.Errorf("the work under a lock owned by %q, its time an hour ahead of the clock, ran: %v, after %s", owner, ran, time.Since(begin).Round(time.Millisecond))
+		}
+	}
+	if err := os.WriteFile(files.stateLock, []byte(strconv.Itoa(os.Getppid())), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(files.stateLock, ahead, ahead); err != nil {
+		t.Fatal(err)
+	}
+	if lockAbandoned(files.stateLock) {
+		t.Error("a lock whose holder is alive was taken for abandoned because its time is ahead of the clock")
+	}
+	os.Remove(files.stateLock)
+}

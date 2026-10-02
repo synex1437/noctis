@@ -695,7 +695,7 @@ func (f *shellFrame) heredocEnd(doc heredocOpen) (end, next int, found bool) {
 				stop = lineEnd + newline
 			}
 			part := f.src[lineEnd:stop]
-			if !doc.quoted && newline >= 0 && len(part)-len(strings.TrimRight(part, `\`))%2 == 1 {
+			if !doc.quoted && newline >= 0 && (len(part)-len(strings.TrimRight(part, `\`)))%2 == 1 {
 				line.WriteString(part[:len(part)-1])
 				lineEnd, joined = stop+1, true
 				continue

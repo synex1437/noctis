@@ -59,7 +59,7 @@ func noteTicks(state object, path, content string, before, after paceNote, setup
 	if counted := getMap(getMap(state, "queueCompactions"), key); counted != nil {
 		entries, _ := parseQueueEntries(content)
 		for _, entry := range entries {
-			if entry.checked && entry.text != "" && queueItemDigest(entry.text) == getString(counted, "item") {
+			if entry.checked && entry.text != "" && escalationKey(entry.text) == getString(counted, "item") {
 				compactions = numberOr(counted, "count", 0)
 				delete(getMap(state, "queueCompactions"), key)
 				break

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -168,6 +169,67 @@ func TestEveryEachAllACountOrTheWholeCodebaseStillBringsAWorkflowSuggestion(t *t
 	for _, prompt := range fanOutsOverEveryUnitOrACount {
 		if notice := fanOutNotice(hookOutput(t, onUserPromptSubmit, promptInput("s1", project, prompt), cfg)); !strings.Contains(notice, "looks like a fan-out task") {
 			t.Errorf("%q no longer brings a workflow suggestion: %q", prompt, notice)
+		}
+	}
+}
+
+func TestAPromptThatAsksForAWorkflowItselfBringsNoWorkflowSuggestion(t *testing.T) {
+	cfg, project := retiredProfileSandbox(t, object{"workflow": object{"suggest": true}}, 20)
+	for _, prompt := range []string{
+		"iş akışı ile tüm servisleri yeni API'ye taşı",
+		"İş akışı kullanarak tüm servisleri yeni API'ye taşı",
+		"tüm servisleri yeni API'ye taşı, bir iş akışı kur",
+		"tüm servisleri iş akışıyla yeni API'ye taşı",
+		"/deep-research review every file in the repo",
+		"use a workflow to migrate every endpoint",
+		"ultracode: migrate every endpoint",
+	} {
+		if notice := fanOutNotice(hookOutput(t, onUserPromptSubmit, promptInput("s1", project, prompt), cfg)); notice != "" {
+			t.Errorf("%q, which asks for a workflow itself, brought a workflow suggestion: %q", prompt, notice)
+		}
+	}
+}
+
+func TestTheQueueWeighsTheWholeOfALongItemForAWorkflowSuggestion(t *testing.T) {
+	cfg, project := retiredProfileSandbox(t, object{"workflow": object{"suggest": true}}, 20)
+	fanOut := "after the release branch is cut and the changelog, the version bump and the docs site rebuild are merged and the staging smoke run is green, migrate every component under src/components to TypeScript"
+	oneFile := "migrate every function in the payments helper to the new error type, keeping the wrapped causes and the retry hints that the checkout flow reads as they are now, all of it inside src/payments/helpers.go"
+	for _, item := range []string{fanOut, oneFile} {
+		trustQueueFile(writeQueueFile(t, project, "# q\n- [ ] "+item+"\n- [ ] fix typo\n"), true)
+		if notice := fanOutNotice(hookOutput(t, onStop, stopInput("s1", project), cfg)); (notice != "") != (item == fanOut) {
+			t.Errorf("for the queue item of %d characters %q the workflow suggestion is %q", len([]rune(item)), item, notice)
+		}
+	}
+}
+
+func TestATurnClaudeCodeWritesItselfIsNeitherRoutedNorGivenAWorkflowSuggestion(t *testing.T) {
+	cfg, project := retiredProfileSandbox(t, object{"workflow": object{"suggest": true}, "router": object{"enabled": true}}, 20)
+	research := "research the best mechanical keyboards of 2026 on https://example.com/reviews"
+	fanOut := "migrate every component under src/components to TypeScript"
+	routed := func(sid string) bool {
+		return getMap(getMap(readState(), "routes"), sid) != nil || journaledAction(sid, "route")
+	}
+	hookOutput(t, onUserPromptSubmit, promptInput("typed-research", project, research), cfg)
+	if !routed("typed-research") {
+		t.Fatalf("the research prompt %q typed by the user was not routed", research)
+	}
+	if notice := fanOutNotice(hookOutput(t, onUserPromptSubmit, promptInput("typed-fan-out", project, fanOut), cfg)); notice == "" {
+		t.Fatalf("the fan-out prompt %q typed by the user brought no workflow suggestion", fanOut)
+	}
+	for index, prompt := range []string{
+		"[Subagent hand-back] I looked into it: " + research,
+		"Another Claude session sent a message: " + research,
+		"[SYSTEM NOTIFICATION] " + research,
+		"[Subagent hand-back] Next, " + fanOut,
+		"Another Claude session sent a message: " + fanOut,
+	} {
+		sid := "agent-turn-" + strconv.Itoa(index)
+		output := hookOutput(t, onUserPromptSubmit, promptInput(sid, project, prompt), cfg)
+		if routed(sid) {
+			t.Errorf("the turn Claude Code wrote %q was routed: %v", prompt, output)
+		}
+		if notice := fanOutNotice(output); notice != "" {
+			t.Errorf("the turn Claude Code wrote %q brought a workflow suggestion: %q", prompt, notice)
 		}
 	}
 }

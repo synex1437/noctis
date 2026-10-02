@@ -728,3 +728,31 @@ func TestAPromptThatSharesADeveloperTokenWithEnglishKeepsItsLanguage(t *testing.
 		}
 	}
 }
+
+var promptsThatQuoteJapanese = []languageSample{
+	{"en", "Change the login button label to ログイン and keep the English one as a fallback"},
+	{"en", "The title should read ようこそ on the Japanese page, please fix the translation file"},
+	{"en", "Use カート instead of バスケット in the Japanese strings, the client asked for it"},
+	{"en", "rename the menu item to 設定 and add the tooltip"},
+	{"de", "Ändere die Beschriftung des Buttons zu ログイン und behalte die englische als Fallback"},
+}
+
+var japanesePromptsWithLatinWords = []string{
+	"README.mdを更新して",
+	"getUserByIdをfindUserに全部リネームして",
+	"npm run buildが失敗する、webpack.config.jsのせいかも",
+	"このエラーを直して: TypeError: Cannot read properties of undefined (reading 'map') at UserList.render",
+}
+
+func TestAPromptThatQuotesAJapaneseWordKeepsItsOwnLanguage(t *testing.T) {
+	for _, sample := range promptsThatQuoteJapanese {
+		if got := detectLanguage(sample.prompt); got != sample.lang {
+			t.Errorf("%s prompt %q was read as %q, so the session would switch its notices and status line to that language", sample.lang, sample.prompt, got)
+		}
+	}
+	for _, prompt := range japanesePromptsWithLatinWords {
+		if got := detectLanguage(prompt); got != "ja" {
+			t.Errorf("Japanese prompt %q was read as %q", prompt, got)
+		}
+	}
+}

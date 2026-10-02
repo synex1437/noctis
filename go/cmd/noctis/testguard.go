@@ -91,7 +91,7 @@ func refuseTestEdits(input, cfg object) bool {
 		return false
 	}
 	content, _ := readQueueText(path)
-	items := queueSnapshotOf(path, content).items
+	items := queueSnapshotOf(path, content).itemTexts
 	if len(items) == 0 {
 		return false
 	}

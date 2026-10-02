@@ -96,7 +96,7 @@ var (
 		[]string{"write", "writing", "draft", "compose", "rewrite", "reword", "proofread", "copywriting", "copy for", "blog posts?", "press releases?", "newsletters?", "captions?", "taglines?", "slogans?", "essays?", "translate", "paraphrase", "outline"},
 	)
 	summaryWords        = newWordMatcher([]string{"özet"}, []string{"summari[sz]e", "summary", "tl;?dr"})
-	continuationPattern = lazyRegexp(`(?i)^\s*(devam|continue|evet|yes|ok(ay)?|tamam|hayır|no|peki|hmm|dur|stop|bekle|wait)\b`)
+	continuationPattern = lazyRegexp(`(?i)^\s*(devam|continue|evet|yes|ok(ay)?|tamam|hayır|no|peki|hmm|dur|stop|bekle|wait)(?:[^\p{L}\p{N}_]|$)`)
 	forcedLite          = lazyRegexp(`(?i)^lite:`)
 	forcedMain          = lazyRegexp(`(?i)^(fable|main):`)
 )
@@ -201,6 +201,9 @@ func classifyPrompt(cfg object, learned object, prompt, transcriptPath string, n
 	router := section(cfg, "router")
 	if !getBool(router, "enabled", false) {
 		return verdict{reason: "router-off"}
+	}
+	if agentWrittenTurn(text) != "" {
+		return verdict{reason: "agent-turn"}
 	}
 	if forcedLite.MatchString(text) {
 		return verdict{route: true, reason: "forced"}

@@ -132,3 +132,29 @@ func TestAFanOutWhoseAgentTypeRunsOnFableNeedsRoomInTheFableWindow(t *testing.T)
 	refused("a script that takes its agent type from a variable", withAgentType("kind"))
 	refused("a script naming an agent type whose model noctis cannot read", withAgentType("'code-reviewer'"))
 }
+
+func TestAWorkflowLaunchGoesAheadWhileTheGuardIsPausedUntilTheCeiling(t *testing.T) {
+	cfg, project, _ := limitSandbox(t, nil, 95, 20)
+	launch := func(sid string) object {
+		return hookOutput(t, onPreToolUse, agentHookInput("PreToolUse", sid, project, object{"tool_name": "Workflow", "tool_input": object{"script": opusOnlyWorkflow}}), cfg)
+	}
+	if output := launch("wp-on"); permissionOf(output) != "deny" {
+		t.Fatalf("setup: with the guard on, a workflow launch at 95%% (pause point 92%%) was not denied: %v", output)
+	}
+	updateState(func(state object) {
+		state["disabledUntil"], state["lastHookAt"] = float64(nowSec()+3600), float64(nowSec()-4000)
+	})
+	if output := launch("wp-off"); output != nil {
+		t.Fatalf("while noctis is off (no limit pauses, so no resume at the reset) a workflow launch at 95%% was denied: %v", output)
+	}
+	if runs := workflowLaunches(readState(), "wp-off"); len(runs) != 1 {
+		t.Fatalf("the workflow launched while noctis is off was not recorded for the checkpoint of a later pause: %v", runs)
+	}
+	if at := numberOr(readState(), "lastHookAt", 0); at < float64(nowSec()-60) {
+		t.Fatalf("the workflow launch let through while noctis is off left no hook pulse (lastHookAt %v)", at)
+	}
+	writeUsage(100, 20, 0)
+	if output := launch("wp-ceiling"); permissionOf(output) != "deny" {
+		t.Fatalf("a paused guard let a workflow fan out at the paid-credit ceiling: %v", output)
+	}
+}

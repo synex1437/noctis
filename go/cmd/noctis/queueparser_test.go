@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -50,6 +51,44 @@ func TestChecklistLinesInsideACodeFenceAreNotItems(t *testing.T) {
 	view = snapshotOf(t, "- write the parser\n~~~\n- [ ] fenced example\n~~~\n- ship it\n")
 	if !view.plain || view.total != 2 {
 		t.Fatalf("a fenced checkbox made a plain list a checkbox list: %+v", view)
+	}
+}
+
+func TestChecklistLinesInsideAnHTMLCommentAreNotItems(t *testing.T) {
+	view := snapshotOf(t, "# Tasks\n<!--\n- [ ] drop the legacy tables (not yet: the reports still read them)\n-->\n- [ ] migrate the users table\n<!-- - [ ] an example item -->\n- [ ] write the release notes\n")
+	if want := []string{"migrate the users table", "write the release notes"}; view.total != 2 || !slices.Equal(view.items, want) {
+		t.Fatalf("a checklist line inside an HTML comment was read as a task, or a comment joined an item: %+v", view)
+	}
+	view = snapshotOf(t, "- write the parser\n<!--\n- [ ] a commented-out box\n```\n-->\n- ship it\n")
+	if !view.plain || view.total != 2 {
+		t.Fatalf("a commented-out checkbox made a plain list a checkbox list, or a fence inside the comment hid the item after it: %+v", view)
+	}
+	view = snapshotOf(t, "```html\n<!--\n```\n- [ ] the real task\n")
+	if view.total != 1 || len(view.items) != 1 || view.items[0] != "the real task" {
+		t.Fatalf("a comment opened inside a code fence hid the item after the fence: %+v", view)
+	}
+}
+
+func TestAnItemCommentedOutIsNeverHandedToClaude(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, false)
+	path := writeQueueFile(t, project, "# Tasks\n<!--\n- [ ] drop the legacy tables (not yet: the reports still read them)\n-->\n- [ ] migrate the users table\n- [ ] write the release notes\n")
+	trustQueueFile(path, true)
+	reason := getString(stopHookOutput(t, stopInput("qp1", project), cfg), "reason")
+	if !strings.Contains(reason, "Queue continues: 2 open") || !strings.Contains(reason, `("migrate the users table")`) {
+		t.Fatalf("the Stop hook did not go on with the first item outside the comment: %q", reason)
+	}
+}
+
+func TestAProseLineThatStartsWithTheWordTodoIsNoItem(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, false)
+	path := writeQueueFile(t, project, "# Tareas para esta noche\nTodo cambio debe pasar `make test` antes de marcarse.\n\n- [ ] migrar la tabla de usuarios\nTODO: escribir las notas de la versión\ntodo: etiquetar la versión\nTODO anunciar la versión\n")
+	trustQueueFile(path, true)
+	want := []string{"migrar la tabla de usuarios", "escribir las notas de la versión", "etiquetar la versión", "anunciar la versión"}
+	if items := queueSnapshot(path).items; !slices.Equal(items, want) {
+		t.Fatalf("the open items are %q, want %q: a sentence that starts with the word todo was read as an item, or a TODO line was not", items, want)
+	}
+	if reason := getString(stopHookOutput(t, stopInput("qp2", project), cfg), "reason"); !strings.Contains(reason, `("migrar la tabla de usuarios")`) {
+		t.Fatalf("the Stop hook did not hand Claude the first checkbox item: %q", reason)
 	}
 }
 

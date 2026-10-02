@@ -107,7 +107,7 @@ func setupProfileTitle(setup string) string {
 // escalationTarget is the stronger model a stuck item goes to and the subagent that takes it there,
 // or "" when there is none: one step up from the model the item is tagged for, or else from the
 // session's model.
-func escalationTarget(cfg, state object, sid, item string) (model, agent string) {
+func escalationTarget(cfg, state object, sid, tagged string) (model, agent string) {
 	if !currentHost().agents {
 		return "", ""
 	}
@@ -116,7 +116,7 @@ func escalationTarget(cfg, state object, sid, item string) (model, agent string)
 	if setting == "fable" && getMap(state, "modelSwitched") != nil {
 		setting = "auto"
 	}
-	from := itemModel(item)
+	from := tagged
 	if from == "" {
 		from = modelFamily(resolveSessionModel(cfg, state, readJSON(files.usage), sid))
 	}
@@ -224,12 +224,12 @@ type stuckStep struct {
 // once when there is one, no pause is due and Claude Code's stop block cap leaves room for the one
 // continuation more that this takes; otherwise Claude is asked to set it aside. An item that went up
 // stays with its stronger model, and is set aside at that same last continuation.
-func stuckItemStep(cfg, state object, sid, path string, idle, maxIdle float64, items []string, pausing bool, now int64) stuckStep {
+func stuckItemStep(cfg, state object, sid, path string, idle, maxIdle float64, view queueView, pausing bool, now int64) stuckStep {
 	step := stuckStep{path: path, sid: sid, idle: idle}
-	if len(items) == 0 {
+	if len(view.items) == 0 {
 		return step
 	}
-	step.item = items[0]
+	step.item = view.items[0]
 	last := idle > 0 && idle+1 >= maxIdle
 	record := escalationRecord(state, path, step.item)
 	if record != nil && getString(record, "outcome") != "done" {
@@ -246,7 +246,7 @@ func stuckItemStep(cfg, state object, sid, path string, idle, maxIdle float64, i
 	if record != nil || pausing {
 		return step
 	}
-	model, agent := escalationTarget(cfg, state, sid, step.item)
+	model, agent := escalationTarget(cfg, state, sid, view.itemModels[0])
 	perDay := numberOr(section(cfg, "queue"), "maxEscalationsPerDay", 5)
 	if model == "" || perDay <= 0 {
 		return step

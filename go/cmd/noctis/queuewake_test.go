@@ -275,3 +275,124 @@ func TestAQueueWakeLongPastIsPruned(t *testing.T) {
 		t.Fatalf("a queue wake still to come was pruned: %v", wakes)
 	}
 }
+
+func TestASessionStartSetsTheRunnerOfAQueueWakeAgainWhenItIsGone(t *testing.T) {
+	cfg, project, frontend, _ := queueWakeSandbox(t)
+	defer func(previous int64) { timeOffset = previous }(timeOffset)
+	wake, _ := armedQueueWake(t, cfg, project, frontend, "qw10")
+	at := numberOr(wake, "at", 0)
+	gone := float64(deadPid(t))
+	updateState(func(next object) {
+		getMap(getMap(next, "queueWakes"), "qw10")["scheduled"] = object{"method": "sleeper", "pid": gone, "at": at}
+	})
+	timeOffset += 60
+
+	for range 2 {
+		hookOutput(t, onSessionStart, agentHookInput("SessionStart", "after-reboot", project, object{"source": "startup"}), cfg)
+	}
+
+	scheduled := getMap(getMap(getMap(readState(), "queueWakes"), "qw10"), "scheduled")
+	if getString(scheduled, "method") != "manual" || numberOr(scheduled, "at", 0) != at || journaledCount("qw10", "reschedule-queue-wake") != 1 {
+		t.Fatalf("two session starts after the sleeper of a queue wake due %s was killed left it with %v (journal %v), want its runner set again for that time, once",
+			localISO(at), scheduled, journaledFor("qw10"))
+	}
+}
+
+func TestWhyListsTheSettingOfAQueueWakeWhenItHappenedAndSaysWhenTheWakeIsDue(t *testing.T) {
+	cfg, project, frontend, _ := queueWakeSandbox(t)
+	defer func(previous int64) { timeOffset = previous }(timeOffset)
+	started := float64(nowSec())
+	wake, _ := armedQueueWake(t, cfg, project, frontend, "qw14")
+	due := numberOr(wake, "at", 0)
+	gone := float64(deadPid(t))
+	updateState(func(next object) {
+		getMap(getMap(next, "queueWakes"), "qw14")["scheduled"] = object{"method": "sleeper", "pid": gone, "at": due}
+	})
+	timeOffset += 60
+	hookOutput(t, onSessionStart, agentHookInput("SessionStart", "after-reboot", project, object{"source": "startup"}), cfg)
+	queueCommand(t, cfg, project, "note", "kept the old parser for the CLI")
+
+	for _, action := range []string{"arm-queue-wake", "reschedule-queue-wake"} {
+		entry := journaledEntry("qw14", action)
+		if at := numberOr(entry, "at", 0); at < started || at > float64(nowSec()) || numberOr(entry, "wakeAt", 0) != due {
+			t.Errorf("the journal dates %s of a queue wake due %s at %s, or does not say when the wake is due: %v", action, localISO(due), localISO(at), entry)
+		}
+	}
+	if lines := whyLines(50); getString(lines[len(lines)-1].entry, "action") != "note" {
+		t.Errorf("noctis why lists %s last, not the note taken after the queue wake was set", lines[len(lines)-1].raw)
+	}
+	if listed := whyOutput(t); !strings.Contains(listed, " TASKS.md [wakeAt="+formatTime(due)+"]\n") {
+		t.Errorf("noctis why does not say when the queue wake is due (%s):\n%s", formatTime(due), listed)
+	}
+}
+
+func TestAQueueWakeWhoseTimerNeverFiresIsSetAgainOnlyAFewTimes(t *testing.T) {
+	cfg, project, frontend, _ := queueWakeSandbox(t)
+	defer func(previous int64) { timeOffset = previous }(timeOffset)
+	armedQueueWake(t, cfg, project, frontend, "qw11")
+	timeOffset += 60
+	t.Setenv("NOCTIS_NO_TASKS", "")
+	withFakeScheduler(t, nil)
+	scheduleBackendOverride = "systemd"
+	t.Cleanup(func() { scheduleBackendOverride = "" })
+	updateState(func(next object) {
+		getMap(getMap(next, "queueWakes"), "qw11")["scheduled"] = object{"method": "systemd", "unit": systemdUnit(queueWakeKey("qw11"))}
+	})
+	for pass := 1; pass <= strandedRearmLimit+2; pass++ {
+		updateState(func(next object) {
+			wake := getMap(getMap(next, "queueWakes"), "qw11")
+			wake["at"] = float64(nowSec() - 700)
+			getMap(wake, "scheduled")["at"] = wake["at"]
+		})
+		repairOrphanWaits()
+		scheduled := getMap(getMap(getMap(readState(), "queueWakes"), "qw11"), "scheduled")
+		if want := min(pass, strandedRearmLimit); journaledCount("qw11", "reschedule-queue-wake") != want || getString(scheduled, "method") != "systemd" || numberOr(scheduled, "rearms", 0) != float64(want) {
+			t.Fatalf("pass %d over a queue wake whose timer never fires set it again %d time(s), leaving %v; want %d", pass, journaledCount("qw11", "reschedule-queue-wake"), scheduled, want)
+		}
+	}
+}
+
+func TestAQueueWakeThePausePutOffResumesTheSessionOnceNoctisIsOnAgain(t *testing.T) {
+	cfg, project, frontend, calls := queueWakeRelaunchSandbox(t)
+	defer func(previous int64) { timeOffset = previous }(timeOffset)
+	wake, _ := armedQueueWake(t, cfg, project, frontend, "qw12")
+	timeOffset += 3600
+	capturedStdout(t, func() { pauseGuard("1 day") })
+	timeOffset += int64(numberOr(wake, "at", 0)) - nowSec() + 30
+	fireQueueWake("qw12")
+	putOff := numberOr(getMap(getMap(readState(), "queueWakes"), "qw12"), "at", 0)
+	if paused := numberOr(readState(), "disabledUntil", 0); putOff <= paused || launchesOf(calls, "qw12") != 0 {
+		t.Fatalf("the queue wake that fired while noctis was paused until %s was set again for %s and relaunched the session %d time(s); want it put off past the pause", localISO(paused), localISO(putOff), launchesOf(calls, "qw12"))
+	}
+	timeOffset += 7200
+
+	capturedStdout(t, func() { resumeGuard() })
+
+	now := float64(nowSec())
+	again := getMap(getMap(readState(), "queueWakes"), "qw12")
+	if at := numberOr(again, "at", 0); again == nil || at > now+15 || numberOr(getMap(again, "scheduled"), "at", 0) != at {
+		t.Fatalf("noctis on ended the pause the queue wake was put off to the end of (%s), but the wake is set for %s, %s from now, with the runner %v; want both within 15 s",
+			localISO(putOff), localISO(at), durationText(at-now), getMap(again, "scheduled"))
+	}
+	timeOffset += 30
+	statusReadingFrom("qw12", nowSec(), 3, now+18000, 20, now+3*86400)
+	fireQueueWake("qw12")
+	if got := launchesOf(calls, "qw12"); got != 1 {
+		t.Fatalf("the queue wake noctis on set again relaunched the session %d time(s), want once (journal %v)", got, journaledFor("qw12"))
+	}
+}
+
+func TestNoctisOnLeavesAQueueWakeThePauseHasNotReachedAtItsTime(t *testing.T) {
+	cfg, project, frontend, _ := queueWakeSandbox(t)
+	defer func(previous int64) { timeOffset = previous }(timeOffset)
+	wake, _ := armedQueueWake(t, cfg, project, frontend, "qw13")
+	capturedStdout(t, func() { pauseGuard("1 day") })
+	timeOffset += 1800
+
+	capturedStdout(t, func() { resumeGuard() })
+
+	again := getMap(getMap(readState(), "queueWakes"), "qw13")
+	if at := numberOr(wake, "at", 0); numberOr(again, "at", 0) != at || numberOr(getMap(again, "scheduled"), "at", 0) != at || journaledCount("qw13", "arm-queue-wake") != 1 {
+		t.Fatalf("noctis on moved a queue wake set for %s, which the pause never reached: it is now %v (journal %v)", localISO(at), again, journaledFor("qw13"))
+	}
+}

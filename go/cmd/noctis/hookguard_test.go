@@ -149,6 +149,35 @@ func TestAnAgentSessionsMainThreadLearnsFromLiteResults(t *testing.T) {
 	}
 }
 
+func TestTheResearchRouteStepsAsideWhileTheGuardIsPaused(t *testing.T) {
+	cfg, project := agentSessionSandbox(t, 10)
+	section(cfg, "router")["enabled"] = true
+	webFetch := func(sid string) object {
+		return hookOutput(t, onPreToolUse, agentHookInput("PreToolUse", sid, project, object{"tool_name": "WebFetch", "tool_input": object{"url": "https://pkg.go.dev/strconv", "prompt": "ParseFloat"}}), cfg)
+	}
+	for _, sid := range []string{"rp-turn", "rp-next"} {
+		hookOutput(t, onUserPromptSubmit, agentHookInput("UserPromptSubmit", sid, project, object{"prompt": routedResearchPrompt}), cfg)
+		if getMap(getMap(readState(), "routes"), sid) == nil {
+			t.Fatalf("setup: %q was not routed", routedResearchPrompt)
+		}
+	}
+	updateState(func(state object) { state["disabledUntil"] = float64(nowSec() + 3600) })
+	if output := webFetch("rp-turn"); output != nil {
+		t.Fatalf("while noctis is off (no research routing), the turn of the routed prompt was still denied a WebFetch: %v", output)
+	}
+	hookOutput(t, onUserPromptSubmit, agentHookInput("UserPromptSubmit", "rp-next", project, object{"prompt": "fix the failing parser test in parser.go and look up the strconv docs online if you need to"}), cfg)
+	if output := webFetch("rp-next"); output != nil {
+		t.Fatalf("while noctis is off, a WebFetch for a prompt typed during the pause was denied by the route of the prompt before it: %v", output)
+	}
+	updateState(func(state object) { state["disabledUntil"] = float64(0) })
+	if output := webFetch("rp-next"); output != nil {
+		t.Fatalf("once noctis was on again, the route of the prompt before the pause denied a WebFetch for the prompt typed during it: %v", output)
+	}
+	if output := webFetch("rp-turn"); permissionOf(output) != "deny" {
+		t.Fatalf("once noctis was on again, the research of the routed prompt was no longer held to %s: %v", liteAgentType(cfg), output)
+	}
+}
+
 func TestTheRouterAgentsWritePolicyHoldsWhenTheyRunTheMainThread(t *testing.T) {
 	cfg, project := agentSessionSandbox(t, 10)
 	cases := []struct {

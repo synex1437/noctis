@@ -90,3 +90,45 @@ func TestAScheduledResumeFiresAtItsTimeWhateverTZTheProcessThatSchedulesItHas(t 
 			float64(offset-systemOffset)/3600, got["Month"], got["Day"], got["Hour"], got["Minute"], want.Format("01-02 15:04"))
 	}
 }
+
+func TestADigestRunnerTheSchedulerStartsKeepsTheDailyDigestAtItsTimeInTheUsersTZ(t *testing.T) {
+	cfg, _, _, _, inbox := digestSandbox(t, "08:00")
+	t.Setenv("NOCTIS_NO_TASKS", "")
+	recorded := withFakeScheduler(t, nil)
+	scheduleBackendOverride = "systemd"
+	t.Cleanup(func() { scheduleBackendOverride = "" })
+	defer func(previous int64) { timeOffset = previous }(timeOffset)
+	defer func(previous *time.Location) { time.Local = previous }(time.Local)
+	system := r1SystemZone(t)
+	_, systemOffset := time.Now().In(system).Zone()
+	offset := systemOffset - 19800
+	if systemOffset < 0 {
+		offset = systemOffset + 19800
+	}
+	zoneFile, user := r1ZoneFile(t, offset), time.FixedZone("user", offset)
+	t.Setenv("TZ", zoneFile)
+	time.Local = user
+	armDigest(cfg, "08:00", nowSec())
+
+	sent := []string{}
+	for range 2 {
+		digest := getMap(readState(), "digest")
+		due := numberOr(digest, "at", 0)
+		sent = append(sent, time.Unix(int64(due), 0).In(user).Format("Jan 02 15:04"))
+		runner := jobEnvironment(t, "systemd", *recorded, getMap(digest, "scheduled"), "")
+		t.Setenv("TZ", runner["TZ"])
+		time.Local = system
+		if runner["TZ"] == zoneFile {
+			time.Local = user
+		}
+		timeOffset += int64(due) - nowSec() + 1
+		fireDigest(cfg)
+		if next := numberOr(getMap(readState(), "digest"), "at", 0); next != due+86400 {
+			t.Fatalf("with a TZ %+.1f h off the system's zone, the digests went out at %v and the runner the scheduler started set the next for %s, not for 08:00 the day after (%d sent)",
+				float64(offset-systemOffset)/3600, sent, time.Unix(int64(next), 0).In(user).Format("Jan 02 15:04"), len(inbox.received()))
+		}
+	}
+	if len(inbox.received()) != 2 {
+		t.Fatalf("two runners sent %d digests, want 2", len(inbox.received()))
+	}
+}

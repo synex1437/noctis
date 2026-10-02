@@ -47,7 +47,7 @@ func fileQueueEntries(content string) []queueEntry {
 		return entries
 	}
 	entries := []queueEntry{}
-	fenced, front := false, false
+	blocks, front := hiddenBlocks{}, false
 	for index, raw := range strings.Split(strings.TrimPrefix(content, "\uFEFF"), "\n") {
 		line := strings.TrimSpace(strings.TrimRight(raw, "\r"))
 		switch {
@@ -55,9 +55,7 @@ func fileQueueEntries(content string) []queueEntry {
 			front = true
 		case front:
 			front = line != "---"
-		case queueFence(line):
-			fenced = !fenced
-		case fenced, line == "", queueHeading.MatchString(line), queueRule.MatchString(line), strings.HasPrefix(line, "<!--"), strings.HasSuffix(line, ":"):
+		case blocks.hides(line), line == "", queueHeading.MatchString(line), queueRule.MatchString(line), strings.HasSuffix(line, ":"):
 		default:
 			entries = append(entries, newQueueEntry(len(entries)+1, line, queueDoneMarker.MatchString(line)))
 		}

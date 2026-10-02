@@ -40,6 +40,8 @@ func TestOnlyTheHumanMarkerMakesAnItemTheUsers(t *testing.T) {
 		"(human) open the payment account": true,
 		"open the payment account (HUMAN)": true,
 		"ödeme hesabını aç (insan)":        true,
+		"(İNSAN) Stripe hesabını aç":       true,
+		"faturayı öde (İnsan)":             true,
 		"(humans) review the copy":         false,
 		"human review of the copy":         false,
 		"write the (human-readable) docs":  false,

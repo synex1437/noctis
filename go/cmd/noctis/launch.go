@@ -145,7 +145,8 @@ func closePreviousLaunch(cfg object, sid string, wait object) {
 
 var sessionProcessNames = map[string]bool{
 	"claude": true, "node": true, "node.exe": true, "codex": true, "agy": true, "droid": true,
-	"copilot": true, "cmd.exe": true, "claude.exe": true, "codex.exe": true,
+	"copilot": true, "cmd.exe": true, "claude.exe": true, "codex.exe": true, "agy.exe": true,
+	"droid.exe": true, "copilot.exe": true,
 }
 
 func looksLikeSessionName(raw string) bool {
@@ -379,10 +380,6 @@ func unixLaunchScript(launch launchSpec, claudePath string, claudeArgs []string,
 		"unset " + strings.Join(claudeSessionMarkers, " "),
 		configLine,
 	}
-	// The session's PATH, display, certificate and proxy variables, as the runner restored them from
-	// proxies/<session>.json or got them from its scheduler: a terminal that does not pass the
-	// runner's environment on (Terminal.app starts a login shell) would start claude without them. A
-	// proxy URL can hold a password, so the script is readable only by its owner, like that file.
 	for _, pair := range environmentOf(slices.Concat(carriedEnvNames, proxyEnvNames)) {
 		lines = append(lines, "export "+pair[0]+"="+shellQuote(pair[1]))
 	}
@@ -439,21 +436,23 @@ func launchInDesktopTerminal(cfg object, launch launchSpec, claudePath string, c
 	return waitForLaunchedSession(launch.running(), pidFile, "terminal")
 }
 
+var scriptPlaceholder = lazyRegexp(`(?i)\{script\}`)
+
 // desktopTerminal picks the window a relaunch on macOS or Linux opens in: the resume.terminal
 // template, a new window of the tmux session noctis runs in, Terminal on macOS, or a terminal of the
 // desktop. A server has no desktop, and a session in tmux outlives the user's login and is where the
 // user looks for it, so tmux comes first. name says which, for noctis doctor; opener is nil when there
 // is none, and the relaunch runs headless.
 func desktopTerminal(cfg object, script string) (name string, opener *exec.Cmd) {
-	preference := terminalPreference(cfg)
+	preference, template := terminalPreference(cfg), getString(section(cfg, "resume"), "terminal")
 	tmux := ""
 	if os.Getenv("TMUX") != "" {
 		tmux = locateExecutable("tmux")
 	}
 	switch {
 	case preference == "none" || os.Getenv("NOCTIS_NO_TERMINAL") != "":
-	case preference != "" && preference != "auto" && strings.Contains(preference, "{script}"):
-		return "resume.terminal", exec.Command("sh", "-c", strings.ReplaceAll(getString(section(cfg, "resume"), "terminal"), "{script}", shellQuote(script)))
+	case scriptPlaceholder.MatchString(template):
+		return "resume.terminal", exec.Command("sh", "-c", scriptPlaceholder.ReplaceAllLiteralString(template, shellQuote(script)))
 	case tmux != "":
 		// The window runs the command with tmux's shell; exec hands the window to claude, so it
 		// closes when the session ends, as a Terminal window does.

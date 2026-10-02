@@ -53,11 +53,6 @@ func paceNotesOf(record object) []paceNote {
 	return notes
 }
 
-// noteQueuePace notes the pace of the queue file at path when the items done in content are not the
-// number noted last. Unticked or removed items start the notes over, since the ones kept no longer
-// describe the list. The items ticked since the note before are credited to the setup session sid
-// runs on (noteFinished), and what they took is recorded (noteTicks). A checklist noctis wrote from a
-// prompt is left out.
 func noteQueuePace(cfg, state object, sid, path, content string, now int64) {
 	if isAutoQueue(path) {
 		return
@@ -71,6 +66,7 @@ func noteQueuePace(cfg, state object, sid, path, content string, now int64) {
 		used, resetsAt = week.used, week.resetsAt
 	}
 	setup, facts := sessionSetup(cfg, state, sid), tickFactsOf(state, sid, path)
+	sentBack := untickedForAFailedCheck(cfg, queueCheckRecord(state, path), path, content)
 	updateState(func(next object) {
 		paces := stateMap(next, "queuePace")
 		kept := paceNotesOf(toObject(paces[key]))
@@ -78,6 +74,9 @@ func noteQueuePace(cfg, state object, sid, path, content string, now int64) {
 			return
 		}
 		if len(kept) > 0 && kept[len(kept)-1].done > done {
+			if sentBack {
+				return
+			}
 			kept = nil
 		}
 		latest := paceNote{at: float64(now), done: done, used: used, resetsAt: resetsAt}
@@ -143,11 +142,9 @@ func paceOf(cfg, state object, path string, left int, usage usageView, now int64
 	return pace
 }
 
-// weeklyPausePoint is where noctis pauses work for the weekly limit: its threshold, or the limit
-// itself while that threshold is off.
 func weeklyPausePoint(cfg object) float64 {
-	if threshold, guarded := thresholdEnabled(cfg, "weeklyAll"); guarded {
-		return threshold
+	if stop, guarded := stopPoint(cfg, "weeklyAll"); guarded {
+		return stop
 	}
 	return 100
 }
@@ -243,6 +240,9 @@ func queuePaceStatus(cfg, state object, usage usageView, now int64) []string {
 		view := queueSnapshotOf(path, content)
 		pace := append(paceLines(paceOf(cfg, state, path, view.total+view.deferred, usage, now)), setupLines(state, path)...)
 		if text := unverifiedText(cfg, state, path, content); text != "" {
+			pace = append(pace, text)
+		}
+		if text := queueHoldText(cfg, state, path); text != "" {
 			pace = append(pace, text)
 		}
 		if len(pace) == 0 {

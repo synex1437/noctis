@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -28,6 +29,9 @@ type worktreeDigest struct {
 
 func worktreeFingerprint(cwd, leaveOut string) string {
 	raw, ok := gitStatusUncached(cwd)
+	if ok && slices.ContainsFunc(strings.Split(raw, "\n"), untrackedFolder) {
+		raw, ok = gitStatusUncached(cwd, "--untracked-files=all")
+	}
 	if !ok {
 		return ""
 	}
@@ -47,6 +51,10 @@ func worktreeFingerprint(cwd, leaveOut string) string {
 		return ""
 	}
 	return hex.EncodeToString(digest.Sum(nil)[:8])
+}
+
+func untrackedFolder(line string) bool {
+	return strings.HasPrefix(line, "?? ") && strings.HasSuffix(strings.TrimSuffix(line, `"`), "/")
 }
 
 func sameFileAs(cwd, name, target string) bool {

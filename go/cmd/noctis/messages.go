@@ -184,6 +184,8 @@ func baseCatalog() map[string]map[string]string {
 			"queue.stopProjectFileOpen": "☰ No queue was started in this session. %s in this folder drives it because queue.requireTrust is off; with it on, only files you trust drive sessions.",
 			"queue.usage":               "usage: noctis queue import [--repo owner/name] [--label name] [--author login,...] [--file TASKS.md] [--limit 200]\n       noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n       noctis queue defer <item> --reason \"...\" [--until 2d] | undefer <item> | undefer --all [--file TASKS.md]\n       noctis queue note \"<decision>\" [--file TASKS.md]",
 			"queue.ghFailed":            "gh issue list failed: %v (is the GitHub CLI installed and logged in?)",
+			"queue.ghRefused":           "gh issue list failed: %v",
+			"queue.importPlain":         "queue import wrote nothing: %[1]s is a list without checkboxes. An imported issue would be its first checkbox item; noctis would then read only checkbox items, and its %[2]d item(s) would drop out of the queue. Give them checkboxes (- [ ] …) first, then import again.",
 			"queue.importNone":          "nothing new: the %[1]d open issue(s) by %[2]s that gh listed are already in %[3]s",
 			"queue.importEmpty":         "nothing to import: gh listed no open issues by %s",
 			"queue.importLimit":         "gh listed %[1]s open issues by %[2]s, the most that --limit %[1]s allows, so older ones may be left out: run again with a higher --limit to take them",
@@ -250,7 +252,9 @@ func baseCatalog() map[string]map[string]string {
 			"status.usage":             "Usage        : %s",
 			"status.noData":            "(no data)",
 			"status.updated":           " (updated %s)",
-			"status.thresholds":        "Thresholds   : 5h ≥%s%% · weekly ≥%s%% · %s ≥%s%%",
+			"status.thresholds":        "Thresholds   : 5h %s · weekly %s · %s %s",
+			"status.thresholdAt":       "≥%s%%",
+			"status.thresholdOff":      "off",
 			"status.thresholdsBad":     "  ! no threshold: %s — those windows are NOT guarded",
 			"status.thresholdsFixed":   "  ! out of range (1-100): %s — the built-in default is used instead",
 			"status.credits":           "Credits      : %s",
@@ -464,6 +468,8 @@ func baseCatalog() map[string]map[string]string {
 			"install.modelKept":        "model setting kept (setup had not changed it)",
 			"install.modelRestored":    "model restored to %s",
 			"install.modelRemoved":     "model setting removed (there was none before setup)",
+			"install.modelChanged":     "model setting kept (changed after setup; before setup: %s)",
+			"install.modelChangedNone": "model setting kept (changed after setup; not set before setup)",
 			"install.configBroken":     "%s cannot be read (%s); nothing was changed — fix the file or move it aside, then run setup again",
 			"install.configUnwritable": "%s could not be written (%s); settings were left as they were — make its folder writable, then run setup again",
 			"install.uninstallBroken":  "%s cannot be read (%s); nothing was removed — fix it, then run the uninstall again",
@@ -844,6 +850,8 @@ func baseCatalog() map[string]map[string]string {
 			"queue.stopProjectFileOpen": "☰ Bu oturumda başlatılmış bir kuyruk yok. Bu klasördeki %s, queue.requireTrust kapalı olduğu için oturumu sürüklüyor; açıkken oturumları yalnızca güvendiğin dosyalar sürükler.",
 			"queue.usage":               "kullanım: noctis queue import [--repo sahip/depo] [--label etiket] [--author kullanıcı,...] [--file TASKS.md] [--limit 200]\n          noctis queue trust | untrust | status [--json] | verify [--file TASKS.md]\n          noctis queue defer <madde> --reason \"...\" [--until 2d] | undefer <madde> | undefer --all [--file TASKS.md]\n          noctis queue note \"<karar>\" [--file TASKS.md]",
 			"queue.ghFailed":            "gh issue list başarısız: %v (GitHub CLI kurulu ve giriş yapılmış mı?)",
+			"queue.ghRefused":           "gh issue list başarısız: %v",
+			"queue.importPlain":         "queue import hiçbir şey yazmadı: %[1]s onay kutusu olmayan bir liste. Aktarılan bir issue listenin ilk onay kutulu maddesi olurdu; noctis o zaman yalnızca onay kutulu maddeleri okurdu ve listedeki %[2]d madde kuyruktan düşerdi. Önce onlara onay kutusu ekle (- [ ] …), sonra yeniden aktar.",
 			"queue.importNone":          "yeni bir şey yok: gh'nin listelediği, %[2]s tarafından açılmış %[1]d açık issue'nun hepsi zaten %[3]s içinde",
 			"queue.importEmpty":         "aktarılacak bir şey yok: gh, %s tarafından açılmış açık bir issue listelemedi",
 			"queue.importLimit":         "gh, %[2]s tarafından açılmış %[1]s açık issue listeledi; --limit %[1]s en fazla bu kadarına izin veriyor, bu yüzden daha eskileri dışarıda kalmış olabilir: onları da almak için daha yüksek bir --limit ile yeniden çalıştır",
@@ -910,7 +918,9 @@ func baseCatalog() map[string]map[string]string {
 			"status.usage":             "Kullanım     : %s",
 			"status.noData":            "(veri yok)",
 			"status.updated":           " (güncelleme %s)",
-			"status.thresholds":        "Eşikler      : 5sa ≥%%%s · hafta ≥%%%s · %s ≥%%%s",
+			"status.thresholds":        "Eşikler      : 5sa %s · hafta %s · %s %s",
+			"status.thresholdAt":       "≥%%%s",
+			"status.thresholdOff":      "kapalı",
 			"status.thresholdsBad":     "  ! eşik yok: %s — bu pencereler KORUNMUYOR",
 			"status.thresholdsFixed":   "  ! aralık dışı (1-100): %s — yerine yerleşik varsayılan kullanılıyor",
 			"status.credits":           "Kredi        : %s",
@@ -1124,6 +1134,8 @@ func baseCatalog() map[string]map[string]string {
 			"install.modelKept":        "model ayarı bırakıldı (setup değiştirmemişti)",
 			"install.modelRestored":    "model %s olarak geri alındı",
 			"install.modelRemoved":     "model ayarı kaldırıldı (setup öncesinde yoktu)",
+			"install.modelChanged":     "model ayarı bırakıldı (setup'tan sonra değiştirildi; setup öncesinde: %s)",
+			"install.modelChangedNone": "model ayarı bırakıldı (setup'tan sonra değiştirildi; setup öncesinde ayarlı değildi)",
 			"install.configBroken":     "%s okunamıyor (%s); hiçbir şey değiştirilmedi — dosyayı düzeltin ya da bir kenara taşıyın, sonra setup'ı tekrar çalıştırın",
 			"install.configUnwritable": "%s yazılamadı (%s); ayarlara dokunulmadı — klasörünü yazılabilir yapıp setup'ı tekrar çalıştırın",
 			"install.uninstallBroken":  "%s okunamıyor (%s); hiçbir şey kaldırılmadı — dosyayı düzeltip kaldırmayı tekrar çalıştırın",
@@ -1385,8 +1397,7 @@ func catalogFor(code string) map[string]string {
 func detectLocale(cfg object) string {
 	candidates := []string{os.Getenv("NOCTIS_LANG"), getString(cfg, "locale")}
 	for _, candidate := range candidates {
-		code := strings.ToLower(strings.TrimSpace(candidate))
-		if knownLocale(code) {
+		if code := pinnedLocale(candidate); code != "" {
 			return code
 		}
 	}
@@ -1400,6 +1411,17 @@ func detectLocale(cfg object) string {
 		}
 	}
 	return "en"
+}
+
+func pinnedLocale(value string) string {
+	code := strings.ToLower(strings.TrimSpace(value))
+	if cut := strings.IndexAny(code, "_-.@"); cut >= 0 {
+		code = code[:cut]
+	}
+	if knownLocale(code) {
+		return code
+	}
+	return ""
 }
 
 func setLocale(cfg object) {

@@ -71,3 +71,11 @@ func TestWhyShowsCompactionsWhenNoDecisionWasMadeYet(t *testing.T) {
 		t.Fatalf("why said nothing about the compaction:\n%s", out)
 	}
 }
+
+func TestACountJustUnderAMillionIsShownInMillionsOnceItRoundsUpToAThousandThousands(t *testing.T) {
+	for value, want := range map[float64]string{999: "999", 1500: "2k", 999499: "999k", 999600: "1.0M", 1e6: "1.0M", 1049999: "1.0M"} {
+		if got := approxCount(value); got != want {
+			t.Errorf("approxCount(%.0f) = %q, want %q", value, got, want)
+		}
+	}
+}

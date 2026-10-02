@@ -1906,6 +1906,16 @@ async function scenarioCloneInstaller() {
     const result = install(system, machine);
     check(`clone installer: ${system} ${machine} runs bin/${platform}`, `${result.status} ${result.stdout.trim()}`, `0 ran ${platform} install --source ${root} --host codex`);
   }
+  const elsewhere = path.join(root, 'elsewhere');
+  fs.mkdirSync(path.join(elsewhere, 'scripts'), { recursive: true });
+  for (const [label, cdpath] of [['CDPATH exported', `.${path.delimiter}${root}`], ['a CDPATH folder that holds a scripts folder', elsewhere]]) {
+    const relative = spawnSync('scripts/install.sh', ['--host', 'codex'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, NOCTIS_LAB_UNAME_S: 'Linux', NOCTIS_LAB_UNAME_M: 'x86_64', CDPATH: cdpath },
+    });
+    check(`clone installer: run as scripts/install.sh with ${label}, it runs its own binary`, `${relative.status} ${`${relative.stdout}${relative.stderr}`.trim()}`, `0 ran linux-amd64 install --source ${root} --host codex`);
+  }
   // macOS has one universal binary, so the installer does not ask for the CPU there.
   fs.rmSync(unameLog, { force: true });
   install('Darwin', 'arm64');

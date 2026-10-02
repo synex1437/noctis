@@ -623,3 +623,45 @@ func TestUninstallSaysItSetTheValuesBack(t *testing.T) {
 		t.Fatalf("uninstall does not say it set the values back:\n%s", output)
 	}
 }
+
+func TestUninstallSaysWhenTheModelWasChangedAfterSetup(t *testing.T) {
+	sandboxFiles(t)
+	recordEnglish(t)
+	for _, c := range []struct {
+		name, before, byHand, want, says string
+	}{
+		{"haiku before setup, sonnet chosen after it", "haiku", "sonnet", "sonnet", "model setting kept (changed after setup; before setup: haiku)"},
+		{"haiku before setup, opus[1m] chosen after it", "haiku", "opus[1m]", "opus[1m]", "model setting kept (changed after setup; before setup: haiku)"},
+		{"no model before setup, sonnet chosen after it", "", "sonnet", "sonnet", "model setting kept (changed after setup; not set before setup)"},
+		{"haiku before setup, left as setup set it", "haiku", "", "haiku", "model restored to haiku"},
+		{"no model before setup, left as setup set it", "", "", "", "model setting removed (there was none before setup)"},
+		{"opus before setup, which setup keeps", "opus", "", "opus", "model setting kept (setup had not changed it)"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			settings := object{}
+			if c.before != "" {
+				settings["model"] = c.before
+			}
+			account := recordAccount(t, settings)
+			settingsFile := filepath.Join(account, "settings.json")
+			recordSetup(t, account, "max", "--permissions", "keep")
+			if got := getString(readJSON(settingsFile), "model"); got != "opus" {
+				t.Fatalf("setup left the model at %q, want opus", got)
+			}
+			if c.byHand != "" {
+				changed := readJSON(settingsFile)
+				changed["model"] = c.byHand
+				mustWriteJSON(settingsFile, changed)
+			}
+
+			after, output := recordUninstall(t, account)
+
+			if got := getString(after, "model"); got != c.want {
+				t.Errorf("uninstall left the model at %q, want %q", got, c.want)
+			}
+			if !strings.Contains(output, "; "+c.says+".") {
+				t.Errorf("uninstall does not say %q:\n%s", c.says, output)
+			}
+		})
+	}
+}
