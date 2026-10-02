@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { Lab, sleep, readJson, writeJson } = require('./harness');
+const { checkContinuations, pauseEndedWithoutReason } = require('./continuations');
 
 const options = { days: 7, seed: 1, sessionsPerDay: 4, turns: 6, hard: 0 };
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -32,6 +33,8 @@ function mulberry32(seed) {
 }
 
 const rng = mulberry32(options.seed);
+const PLAY = { seed: options.seed };
+const CONTINUING_MODES = ['answer', 'slow', 'silent', 'answer-fail'];
 const pick = (list) => list[Math.floor(rng() * list.length)];
 const between = (min, max) => min + rng() * (max - min);
 
@@ -68,6 +71,8 @@ const stats = {
   languageSwitches: 0,
   freshAccounts: 0,
   doubleResumes: 0,
+  ownWindowSkips: 0,
+  restoredPauseSkips: 0,
   priorityChecks: 0,
   workCallsToday: 0,
   startNotices: 0,
@@ -326,28 +331,42 @@ function checkRelaunchPrompt(entry, line) {
   if (/TASKS\.md/.test(line) && !/do not redo items already marked done/.test(line)) stats.anomalies.push(`relaunch prompt lost the queue instruction ${entry.acc.name}/${entry.sid}`);
 }
 
+function resumeOnce(acc, sid) {
+  const before = (acc.state().waits || {})[sid];
+  const mark = acc.journalMark();
+  const callsBefore = lab.calls().length;
+  acc.run(['resume', '--sid', sid, '--account', acc.dir]);
+  const calls = lab.calls().slice(callsBefore);
+  const state = acc.state();
+  const after = (state.waits || {})[sid];
+  const journal = acc.journalSince(mark);
+  const silent = pauseEndedWithoutReason({ key: sid, before, after, launched: calls.length > 0, journal });
+  return { before, after, calls, state, journal, silent: silent && `${silent} (${acc.name})` };
+}
+
+function requeue(entry, wait) {
+  pendingResumes.push({ acc: entry.acc, sid: entry.sid, resumeAt: Number(wait.resumeAt), kind: wait.kind });
+}
+
 function processResumes(accounts) {
   const due = pendingResumes.filter((entry) => entry.resumeAt <= T);
   for (const entry of due) {
     pendingResumes.splice(pendingResumes.indexOf(entry), 1);
     rollWindows(entry.acc);
     publishTruth(entry.acc);
-    const callsBefore = lab.calls().length;
-    entry.acc.run(['resume', '--sid', entry.sid, '--account', entry.acc.dir]);
-    const state = entry.acc.state();
-    const launched = lab.calls().length - callsBefore;
+    const outcome = resumeOnce(entry.acc, entry.sid);
+    const launched = outcome.calls.length;
     if (launched > 1) stats.anomalies.push(`double launch ${entry.acc.name}/${entry.sid}`);
     if (launched === 1) {
       stats.relaunches += 1;
-      const call = lab.calls()[callsBefore];
+      const call = outcome.calls[0];
       if (!call.includes(`CONFIG=${entry.acc.dir}`)) stats.anomalies.push(`relaunch on wrong account ${entry.acc.name}/${entry.sid}`);
-      if (Object.keys(state.handedOff || {}).length) stats.anomalies.push(`handoff not released ${entry.acc.name}/${entry.sid}`);
+      if (Object.keys(outcome.state.handedOff || {}).length) stats.anomalies.push(`handoff not released ${entry.acc.name}/${entry.sid}`);
       checkRelaunchPrompt(entry, call);
-    } else if (state.waits && state.waits[entry.sid]) {
-      pendingResumes.push({ acc: entry.acc, sid: entry.sid, resumeAt: Number(state.waits[entry.sid].resumeAt) });
-    } else {
-      stats.anomalies.push(`resume neither launched nor rescheduled ${entry.acc.name}/${entry.sid}`);
     }
+    if (outcome.after) requeue(entry, outcome.after);
+    else if (!launched && !outcome.before) stats.anomalies.push(`resume neither launched nor rescheduled ${entry.acc.name}/${entry.sid}`);
+    else if (outcome.silent) stats.anomalies.push(outcome.silent);
   }
 }
 
@@ -533,7 +552,7 @@ function corruptFile(file) {
   }
 }
 
-const CHAOS_KINDS = ['state-corrupt', 'usage-corrupt', 'fable-corrupt', 'api-error', 'api-garbage', 'api-timeout', 'statusline-blackout', 'stale-lock', 'hook-kill', 'clock-back', 'big-transcript', 'parallel-subagents', 'overload-storm', 'workspace-edit', 'queue-priorities', 'language-switch', 'workflow-launch', 'fresh-account-99', 'double-resume', 'overload-giveup'];
+const CHAOS_KINDS = ['state-corrupt', 'usage-corrupt', 'fable-corrupt', 'api-error', 'api-garbage', 'api-timeout', 'statusline-blackout', 'stale-lock', 'hook-kill', 'clock-back', 'big-transcript', 'parallel-subagents', 'overload-storm', 'workspace-edit', 'queue-priorities', 'language-switch', 'workflow-launch', 'fresh-account-99', 'double-resume', 'overload-giveup', 'own-window', 'restored-pause'];
 const LANGUAGE_SAMPLES = [
   ['de', 'Bitte behebe den Fehler in der Datei und führe die Tests danach erneut aus'],
   ['fr', "Corrige l'erreur dans le fichier et relance les tests s'il te plaît"],
@@ -569,6 +588,7 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
   const serial = chaosSerial;
   switch (kind) {
     case 'overload-storm': {
+      lab.playClaude({ ...PLAY, force: CONTINUING_MODES });
       stats.overloadStorms += 1;
       const rounds = 3 + Math.floor(rng() * 3);
       let previousDelay = 0;
@@ -605,6 +625,7 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       break;
     }
     case 'overload-giveup': {
+      lab.playClaude({ ...PLAY, force: CONTINUING_MODES });
       stats.overloadStorms += 1;
       let gaveUp = false;
       for (let i = 0; i < 40 && !gaveUp; i += 1) {
@@ -715,7 +736,47 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       if (fresh.state().waits[sid]) anomaly('fresh account: cancel left the wait');
       break;
     }
+    case 'own-window': {
+      if (forceWall(acc, session)) {
+        const wait = acc.state().waits[session.sid];
+        setClock(accounts, Math.ceil(Number(wait.resumeAt)) + 2);
+        for (const account of accounts) rollWindows(account);
+        publishTruth(acc);
+        lab.writeAnswer(session.transcript, acc.timeOffset);
+        const outcome = resumeOnce(acc, session.sid);
+        if (outcome.calls.length) anomaly(`relaunched a session that had gone on in its own window ${acc.name}/${session.sid}`);
+        else if (outcome.after) anomaly(`kept the pause of a session that had gone on in its own window ${acc.name}/${session.sid}`);
+        else if (outcome.silent) anomaly(outcome.silent);
+        else stats.ownWindowSkips += 1;
+      }
+      break;
+    }
+    case 'restored-pause': {
+      lab.playClaude({ ...PLAY, force: ['answer'] });
+      if (forceWall(acc, session)) {
+        const wait = acc.state().waits[session.sid];
+        setClock(accounts, Math.ceil(Number(wait.resumeAt)) + 2);
+        for (const account of accounts) rollWindows(account);
+        publishTruth(acc);
+        const first = resumeOnce(acc, session.sid);
+        if (first.calls.length !== 1 || first.after) {
+          anomaly(`restored pause: the relaunch did not take the pause ${acc.name}/${session.sid}`);
+          break;
+        }
+        const backup = readJson(`${acc.stateFile}.bak`);
+        if (!backup || !backup.waits || !backup.waits[session.sid]) break;
+        corruptFile(acc.stateFile);
+        const second = resumeOnce(acc, session.sid);
+        const reason = second.journal.find((row) => row.sid === session.sid && row.action === 'skip-launch');
+        if (second.calls.length) anomaly(`relaunched a pause that came back with the state backup after its relaunch answered ${acc.name}/${session.sid}`);
+        else if (second.after) anomaly(`kept a pause that came back with the state backup after its relaunch answered ${acc.name}/${session.sid}`);
+        else if (!reason) anomaly(`a pause that came back with the state backup ended with no reason in the journal ${acc.name}/${session.sid}`);
+        else stats.restoredPauseSkips += 1;
+      }
+      break;
+    }
     case 'double-resume': {
+      lab.playClaude({ ...PLAY, force: ['answer', 'slow'] });
       if (forceWall(acc, session)) {
         const wait = acc.state().waits[session.sid];
         setClock(accounts, Math.ceil(Number(wait.resumeAt)) + 2);
@@ -822,6 +883,7 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
     default:
       break;
   }
+  lab.playClaude(PLAY);
   return kind;
 }
 
@@ -953,25 +1015,29 @@ async function runMarathonDay(accounts, day) {
       pendingResumes.splice(pendingResumes.indexOf(entry), 1);
       rollWindows(entry.acc);
       publishTruth(entry.acc);
-      const callsBefore = lab.calls().length;
-      entry.acc.run(['resume', '--sid', entry.sid, '--account', entry.acc.dir]);
-      const launched = lab.calls().slice(callsBefore).filter((line) => line.includes(`--resume ${entry.sid} `));
+      const outcome = resumeOnce(entry.acc, entry.sid);
+      const launched = outcome.calls.filter((line) => line.includes(`--resume ${entry.sid} `));
       const owner = slotForResume(slots, entry.sid);
       if (launched.length > 1) stats.anomalies.push(`double launch ${entry.acc.name}/${entry.sid}`);
-      if (!launched.length) {
-        const state = entry.acc.state();
-        if (state.waits && state.waits[entry.sid]) {
-          pendingResumes.push({ acc: entry.acc, sid: entry.sid, resumeAt: Number(state.waits[entry.sid].resumeAt), kind: state.waits[entry.sid].kind });
-        } else if (owner) {
-          stats.anomalies.push(`resume neither launched nor rescheduled ${entry.acc.name}/${entry.sid}`);
-          owner.session = newSession(owner.home);
-          owner.acc = owner.home;
-          owner.stopped = false;
-        }
+      if (launched.length) {
+        stats.relaunches += 1;
+        checkRelaunchPrompt(entry, launched[0]);
+      }
+      if (outcome.after) {
+        requeue(entry, outcome.after);
         continue;
       }
-      stats.relaunches += 1;
-      checkRelaunchPrompt(entry, launched[0]);
+      if (!launched.length) {
+        const vanished = owner && (!outcome.before || outcome.calls.length) ? `resume neither launched nor rescheduled ${entry.acc.name}/${entry.sid}` : '';
+        const lost = vanished || outcome.silent;
+        if (lost) stats.anomalies.push(lost);
+        if (owner && lost) {
+          owner.session = newSession(owner.home);
+          owner.acc = owner.home;
+        }
+        if (owner) owner.stopped = false;
+        continue;
+      }
       const match = /CONFIG=(\S+)/.exec(launched[0]);
       const targetDir = match ? match[1] : entry.acc.dir;
       const target = accounts.find((acc) => acc.dir === targetDir) || entry.acc;
@@ -1000,6 +1066,7 @@ async function runMarathonDay(accounts, day) {
 
 async function main() {
   await lab.startMock();
+  lab.playClaude(PLAY);
   const sloppy = (i) => {
     const box = i < 20 ? 'x' : ' ';
     switch (i % 9) {
@@ -1043,6 +1110,9 @@ async function main() {
   }
   sweepWorks(accounts);
   lab.stopMock();
+  const unsettledPlayers = await lab.settlePlayers();
+  const continuations = checkContinuations(lab.playRecords());
+  for (const line of continuations.problems) stats.anomalies.push(`continuation: ${line}`);
   const slowest = (list) => list.slice().sort((a, b) => b.ms - a.ms).slice(0, 20).map((entry) => `${entry.event}/${entry.sid} ${entry.ms}ms`).join(', ');
   const guarding = stats.timings.filter((entry) => entry.event !== 'StopFailure');
   const pausing = stats.timings.filter((entry) => entry.event === 'StopFailure');
@@ -1076,6 +1146,9 @@ async function main() {
     languageSwitches: stats.languageSwitches,
     freshAccounts: stats.freshAccounts,
     doubleResumes: stats.doubleResumes,
+    ownWindowSkips: stats.ownWindowSkips,
+    restoredPauseSkips: stats.restoredPauseSkips,
+    continuations: { ...continuations.summary, unsettledPlayers },
     priorityChecks: stats.priorityChecks,
     startNotices: stats.startNotices,
     queueNotices: stats.queueNotices,

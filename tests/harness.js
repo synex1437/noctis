@@ -5,9 +5,11 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn, spawnSync, fork } = require('child_process');
+const { appendAnswer, readPlay, unsettledPlayers } = require('./play');
 
 const PLUGIN_NAME = 'noctis';
 const SOURCE_ROOT = path.resolve(__dirname, '..');
+const PLAYER = path.join(__dirname, 'play.js');
 
 // The folder of bin/ with this platform's binary: macOS has one universal binary for both CPUs,
 // every other system one binary per CPU.
@@ -23,6 +25,10 @@ const IS_WINDOWS = process.platform === 'win32';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shellQuote(text) {
+  return `'${String(text).replace(/'/g, "'\\''")}'`;
 }
 
 function nowSec() {
@@ -138,6 +144,7 @@ class Lab {
     this.mockDir = path.join(this.root, 'mock');
     this.mockPort = 0;
     this.mockProcess = null;
+    this.playSettings = path.join(this.root, 'play.json');
     fs.rmSync(this.root, { recursive: true, force: true });
     fs.mkdirSync(this.root, { recursive: true });
     this.snapshotSource();
@@ -257,7 +264,9 @@ class Lab {
         'echo FAKE_CLAUDE args=[%*] HANDOFF=%NOCTIS_HANDOFF% CONFIG=%CLAUDE_CONFIG_DIR% EFFORT=%CLAUDE_CODE_EFFORT_LEVEL% CHILD=%CLAUDE_CODE_CHILD_SESSION% CONFIG_SET=%NOCTIS_LAB_CONFIG_SET%>> "%NOCTIS_LAB_CALLS%"',
         'if defined NOCTIS_LAB_STOP_INPUT "%NOCTIS_LAB_NOCTIS%" hook < "%NOCTIS_LAB_STOP_INPUT%" >> "%NOCTIS_LAB_STOP_OUTPUT%" 2>nul',
         'if "%NOCTIS_LAB_FAST%"=="" ping -n 2 127.0.0.1 >nul',
-        'exit /b 0',
+        `if not exist "${this.playSettings}" exit /b 0`,
+        `"${process.execPath}" "${PLAYER}" "${this.root}"`,
+        'exit /b %ERRORLEVEL%',
         '',
       ].join('\r\n'));
       return;
@@ -270,6 +279,7 @@ class Lab {
       '[ -n "$NOCTIS_LAB_STOP_INPUT" ] && "$NOCTIS_LAB_NOCTIS" hook < "$NOCTIS_LAB_STOP_INPUT" >> "$NOCTIS_LAB_STOP_OUTPUT" 2>/dev/null',
       '[ -z "$NOCTIS_LAB_FAST" ] && sleep 1',
       '[ -n "$NOCTIS_LAB_ANSWER" ] && printf \'{"type":"assistant","timestamp":"%s","message":{"role":"assistant","content":[{"type":"text","text":"Resumed."}]}}\\n\' "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" >> "$NOCTIS_LAB_ANSWER"',
+      `[ -f ${shellQuote(this.playSettings)} ] && exec ${shellQuote(process.execPath)} ${shellQuote(PLAYER)} ${shellQuote(this.root)}`,
       'exit 0',
       '',
     ].join('\n'));
@@ -363,6 +373,28 @@ class Lab {
 
   resetCalls() {
     fs.rmSync(this.callsFile, { force: true });
+  }
+
+  playClaude(settings) {
+    writeJson(this.playSettings, settings);
+  }
+
+  writeAnswer(transcript, offset = 0) {
+    return appendAnswer(this.root, transcript, offset, 'session');
+  }
+
+  playRecords() {
+    return readPlay(this.root);
+  }
+
+  async settlePlayers(limitMs = 15000) {
+    const deadline = Date.now() + limitMs;
+    let open = unsettledPlayers(this.root);
+    while (open && Date.now() < deadline) {
+      await sleep(100);
+      open = unsettledPlayers(this.root);
+    }
+    return open;
   }
 
   account(name, options) {
@@ -562,6 +594,31 @@ class Account {
 
   state() {
     return readJson(this.stateFile) || {};
+  }
+
+  journalMark() {
+    try {
+      return fs.statSync(path.join(this.guardDir, 'decisions.jsonl')).size;
+    } catch {
+      return 0;
+    }
+  }
+
+  journalSince(mark) {
+    let text = '';
+    try {
+      const whole = fs.readFileSync(path.join(this.guardDir, 'decisions.jsonl'));
+      text = whole.subarray(whole.length >= mark ? mark : 0).toString('utf8');
+    } catch {
+      return [];
+    }
+    return text.split('\n').filter(Boolean).map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
   }
 
   // The record of sid's checkpoint wherever noctis keeps it: in state.json while it is still to be

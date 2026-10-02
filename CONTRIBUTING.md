@@ -35,7 +35,7 @@ node tests/coverage.js                     # statement coverage of the lab plus 
 
 `tests/gotest.js` builds the Go test binary once and spreads its tests over parallel processes, four per CPU (at most 16), balanced by the seconds in `tests/gotest-durations.json`; each process has its own temporary folder. `(cd go && go test ./...)` runs the same tests one after another, in about four minutes. The processes run side by side, so a test must not listen on a fixed port or write outside its own temporary folders (`t.TempDir()`). After adding a slow test, or changing how long one takes, run `node tests/gotest.js --record` and commit the file: it is rewritten only when every test passed, and a test it does not list counts as 0.1 s until then.
 
-The soak invariant is the contract: no model call above 100 %, no leaked locks or temp files, no session without a resume path, no `fatal`. A change that needs a new rule needs a lab check for it.
+The soak invariant is the contract: no model call above 100 %, no leaked locks or temp files, no session without a resume path, no `fatal`, no pause continued twice, no session relaunched after it went on by itself, and no pause ended without its reason in the journal. A change that needs a new rule needs a lab check for it.
 
 ## Rules of the engine
 
