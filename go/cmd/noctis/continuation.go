@@ -22,6 +22,16 @@ func continuedElsewhere(state object, sid string, startedAt float64, holder stri
 	return ""
 }
 
+func resumedByAnEarlierRunner(state object, sid string, wait object) bool {
+	mark := getMap(getMap(state, "continuedBy"), sid)
+	claimedAt := numberOr(mark, "at", 0)
+	if getString(mark, "by") != "runner" || claimedAt <= 0 || !sameWait(mark, numberOr(wait, "startedAt", -1), getString(wait, "holder")) {
+		return false
+	}
+	answered, _ := relaunchAnswered(wait, claimedAt)
+	return answered
+}
+
 func markContinued(state object, sid string, record object, by string) {
 	stateMap(state, "continuedBy")[sid] = object{"startedAt": numberOr(record, "startedAt", -1), "holder": getString(record, "holder"), "by": by, "at": float64(nowSec())}
 }

@@ -259,6 +259,15 @@ the pause still held the wake until the time it would have ended, a day later af
 job gone. On macOS and Linux the job's wrapper now passes SIGTERM, SIGINT and SIGHUP on to the
 command and what it started, and `job list` says the job was ended by a signal.
 
+**A session a runner had relaunched could be relaunched again.** When a pause came back after its
+runner relaunched the session, because noctis found `state.json` damaged and put back its backup
+(the file as it was one write earlier), or because the runner was killed after the session answered,
+the next status line refresh or session start a minute later set a runner for it again. That runner
+relaunched the session a second time when the first relaunch had switched it to another model at
+Fable's pause point, or had come before the pause's planned end, after an early reset or once fresh
+data showed room. A runner now drops a pause an earlier runner relaunched when the session answered
+that runner (`skip-launch` in `noctis why`).
+
 **`resume.terminal` with `{SCRIPT}` or `{Script}` relaunched without a window.** The placeholder
 counted in any letter case but was replaced only as `{script}`, so the window got no script and the
 relaunch ran headless. It is now replaced in any letter case.
