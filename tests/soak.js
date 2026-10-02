@@ -46,7 +46,6 @@ const stats = {
   statuslines: 0,
   calls: 0,
   stops: 0,
-  fableSwitches: 0,
   reverts: 0,
   routes: 0,
   denies: 0,
@@ -258,6 +257,24 @@ function recentDecisions(acc, sid, count = 8) {
   return rows.filter((row) => row && row.sid === sid).slice(-count).map((row) => [row.event, row.action, row.hit, row.five !== undefined ? `five=${row.five}` : row.used !== undefined ? `used=${row.used}` : '', row.reason].filter(Boolean).join(' '));
 }
 
+function journaledFableSwitches(acc) {
+  const lines = ['decisions.jsonl.1', 'decisions.jsonl'].flatMap((name) => {
+    try {
+      return fs.readFileSync(path.join(acc.guardDir, name), 'utf8').split('\n');
+    } catch {
+      return [];
+    }
+  });
+  return lines.filter((line) => {
+    try {
+      const row = JSON.parse(line);
+      return row.action === 'switch-model' || (row.event === 'StopFailure' && row.action === 'schedule-resume' && row.window === 'fable');
+    } catch {
+      return false;
+    }
+  }).length;
+}
+
 // A prompt the user typed goes ahead past the pause point with a warning, and its turn runs on
 // until the ceiling: those calls are the user's choice, so they answer to the ceiling alone.
 function typedTurnFor(acc, sid) {
@@ -418,7 +435,6 @@ async function runTurn(acc, session) {
   const prompt = roll < 0.7 ? pick(CODING_PROMPTS) : roll < 0.9 ? pick(RESEARCH_PROMPTS) : pick(OTHER_PROMPTS);
   let out = parseOutput(timedHook(acc, { hook_event_name: 'UserPromptSubmit', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, prompt }));
   if (out.decision === 'block' && /\/model/.test(out.reason)) {
-    stats.fableSwitches += 1;
     timedHook(acc, { hook_event_name: 'PostModelSwitch', session_id: session.sid, from_model: session.model, to_model: 'claude-opus-5' });
     session.model = 'claude-opus-5';
     out = parseOutput(timedHook(acc, { hook_event_name: 'UserPromptSubmit', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, prompt }));
@@ -457,7 +473,6 @@ async function runTurn(acc, session) {
     if (batch.continue === false) {
       const stopReason = batch.stopReason || '';
       if (/🔁/.test(stopReason)) {
-        stats.fableSwitches += 1;
         timedHook(acc, { hook_event_name: 'PostModelSwitch', session_id: session.sid, from_model: session.model, to_model: 'claude-opus-5' });
         session.model = 'claude-opus-5';
         return 'worked';
@@ -921,7 +936,6 @@ async function marathonTurn(acc, session, turn, accounts) {
     if (gate.hookSpecificOutput && gate.hookSpecificOutput.permissionDecision === 'deny') {
       const gateReason = gate.hookSpecificOutput.permissionDecisionReason || '';
       if (/🔁/.test(gateReason)) {
-        stats.fableSwitches += 1;
         timedHook(acc, { hook_event_name: 'PostModelSwitch', session_id: session.sid, from_model: session.model, to_model: 'claude-opus-5' });
         session.model = 'claude-opus-5';
         return 'worked';
@@ -933,7 +947,6 @@ async function marathonTurn(acc, session, turn, accounts) {
   const prompt = rng() < 0.75 ? pick(CODING_PROMPTS) : pick(RESEARCH_PROMPTS);
   let out = parseOutput(timedHook(acc, { hook_event_name: 'UserPromptSubmit', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, prompt }));
   if (out.decision === 'block' && /\/model/.test(out.reason)) {
-    stats.fableSwitches += 1;
     timedHook(acc, { hook_event_name: 'PostModelSwitch', session_id: session.sid, from_model: session.model, to_model: 'claude-opus-5' });
     session.model = 'claude-opus-5';
     out = parseOutput(timedHook(acc, { hook_event_name: 'UserPromptSubmit', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, prompt }));
@@ -961,7 +974,6 @@ async function marathonTurn(acc, session, turn, accounts) {
     if (batch.continue === false) {
       const stopReason = batch.stopReason || '';
       if (/🔁/.test(stopReason)) {
-        stats.fableSwitches += 1;
         timedHook(acc, { hook_event_name: 'PostModelSwitch', session_id: session.sid, from_model: session.model, to_model: 'claude-opus-5' });
         session.model = 'claude-opus-5';
         return 'worked';
@@ -1146,6 +1158,19 @@ async function main() {
   const pastHungPauseBudget = pausingOnAHungEndpoint.filter((entry) => entry.ms > hungPauseBudget);
   if (pastHungPauseBudget.length) stats.anomalies.push(`StopFailure held the host past ${hungPauseBudget} ms while the usage endpoint hung (${slowest(pastHungPauseBudget)})`);
   if (stats.corruptions > 0 && stats.recoveries === 0) stats.anomalies.push(`${stats.corruptions} file corruption(s) and not one recovery from a backup`);
+  const fableSwitches = accounts.reduce((sum, acc) => sum + journaledFableSwitches(acc), 0);
+  if (options.days >= 7) {
+    const required = [
+      ['stops', stats.stops, 5],
+      ['relaunches', stats.relaunches, 5],
+      ['moves off Fable', fableSwitches, 1],
+      ['compactions', stats.compactions, 1],
+    ];
+    if (options.hard) required.push(['chaos injections', stats.chaos, 10]);
+    for (const [name, value, least] of required) {
+      if (value < least) stats.anomalies.push(`this run exercised too few ${name} (${value} < ${least}) to prove anything about them`);
+    }
+  }
   const summary = {
     simulatedDays: options.days,
     hooks: stats.hooks,
@@ -1175,7 +1200,7 @@ async function main() {
     priorityChecks: stats.priorityChecks,
     startNotices: stats.startNotices,
     queueNotices: stats.queueNotices,
-    fableSwitches: stats.fableSwitches,
+    fableSwitches,
     reverts: stats.reverts,
     routes: stats.routes,
     denies: stats.denies,
@@ -1201,18 +1226,6 @@ async function main() {
     anomalies: stats.anomalies.slice(0, 20),
   };
   process.stdout.write(`\n${JSON.stringify(summary, null, 2)}\n`);
-  if (options.days >= 7) {
-    const required = [
-      ['stops', stats.stops, 5],
-      ['relaunches', stats.relaunches, 5],
-      ['scoped-model switches', stats.fableSwitches, 1],
-      ['compactions', stats.compactions, 1],
-    ];
-    if (options.hard) required.push(['chaos injections', stats.chaosInjections, 10]);
-    for (const [name, value, least] of required) {
-      if (value < least) stats.anomalies.push(`this run exercised no ${name} (${value} < ${least}), so it proves nothing about them`);
-    }
-  }
   const failed = stats.breaches.length || stats.anomalies.length
     || stats.maxAllowedFive > THRESHOLDS.five + MAX_OVERSHOOT
     || stats.maxAllowedWeek > THRESHOLDS.week + MAX_OVERSHOOT;
