@@ -532,3 +532,7 @@ Each fix comes with a test that fails without it: a Go test, or for `scripts/ins
 `CDPATH` checks in the lab's installer scenario and for lean compaction one test of the
 unchanged-file note in the lean kit. A few more Go tests hold what the fixes must leave as it was.
 The results of the local rounds on this release are in its commit message.
+
+The monkey's check that every pause has a way to resume counts a runner that took the pause over,
+while it runs and for the minute noctis gives one that is gone, as noctis does. On a slow machine it
+flagged a pause in the middle of its relaunch.

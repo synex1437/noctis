@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
-const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, waitKey } = require('./harness');
+const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, waitKey, isAlive } = require('./harness');
 
 const args = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -15,6 +15,7 @@ const flag = (name, fallback) => {
 const SEED = Number(flag('seed', '7'));
 const ROUNDS = Number(flag('rounds', '400'));
 const VERBOSE = args.includes('--verbose');
+const HANDOFF_GRACE_SECONDS = 60;
 
 let rngState = SEED >>> 0;
 function random() {
@@ -260,6 +261,7 @@ const ACTIONS = [
 ];
 
 function invariants(round) {
+  const checkStartedAt = nowSec();
   runEngine(['on']); 
   const recovery = runEngine(['hook'], { hook_event_name: 'PostToolBatch', session_id: 'invariant', cwd: lab.projectDir, transcript_path: lab.transcript });
   checkResult(round, 'recovery hook', recovery);
@@ -272,7 +274,10 @@ function invariants(round) {
   for (const [sid, wait] of Object.entries(state.waits || {})) {
     if (typeof wait !== 'object' || wait === null) { problem(round, 'state', `wait ${sid} is not an object`); continue; }
     if (!wait.resumeAt || Number.isNaN(Number(wait.resumeAt))) problem(round, 'state', `wait ${sid} has no usable resumeAt`);
-    if (!wait.scheduled && !wait.inHook) problem(round, 'state', `wait ${sid} has no resume path (no scheduler, not in a hook)`);
+    const handoff = (state.handedOff || {})[sid];
+    const heldByHandOff = Boolean(handoff && typeof handoff === 'object'
+      && (isAlive(Number(handoff.pid)) || checkStartedAt - Number(handoff.at) < HANDOFF_GRACE_SECONDS));
+    if (!wait.scheduled && !wait.inHook && !heldByHandOff) problem(round, 'state', `wait ${sid} has no resume path (no scheduler, not in a hook, no hand-off holding it)`);
   }
   for (const file of ['state.json', 'usage.json']) {
     const full = path.join(acc.guardDir, file);
