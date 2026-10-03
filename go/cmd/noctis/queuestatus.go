@@ -121,7 +121,11 @@ func verifyQueueNow(cfg object, cwd, target string) int {
 		fmt.Fprintln(os.Stderr, T("queue.verifyNone", filepath.Base(target)))
 		return 1
 	}
-	folder := queueFolder(cfg, object{"cwd": cwd}, "", target)
+	recorded := recordedCheckFolder(target)
+	folder := recorded
+	if folder == "" {
+		folder = queueFolder(cfg, object{"cwd": cwd}, "", target)
+	}
 	shown := printableItem(truncateText(command, 120))
 	tree := queueCheckTree(cfg, folder, target)
 	began := time.Now()
@@ -136,7 +140,7 @@ func verifyQueueNow(cfg object, cwd, target string) int {
 	fmt.Println(T("queue.verifyPassed", shown, folder, formatNumber(math.Round(time.Since(began).Seconds()))))
 	held, key, ticked := queueHeld(cfg, readState(), target), queueTrustKey(target), queueTicks(content)
 	updateState(func(next object) {
-		stateMap(next, "queueVerify")[key] = queueCheckPass(nil, fullQueueCheck, ticked, tree, float64(nowSec()))
+		stateMap(next, "queueVerify")[key] = queueCheckPass(nil, fullQueueCheck, ticked, tree, recorded, float64(nowSec()))
 	})
 	syncDoneIssues(cfg, target, content, cwd)
 	if held {

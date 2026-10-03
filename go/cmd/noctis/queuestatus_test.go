@@ -167,6 +167,30 @@ func TestQueueVerifyFromAnotherFolderRunsTheCheckWhereTheStopHookDoes(t *testing
 	}
 }
 
+func TestQueueVerifyTypedInTheQueueFilesFolderRunsTheCheckWhereTheStopHookRanIt(t *testing.T) {
+	t.Setenv("CLAUDE_PROJECT_DIR", "")
+	for _, folder := range []string{"docs", ".claude"} {
+		t.Run(folder, func(t *testing.T) {
+			cfg, project := queueTrustSandbox(t, false)
+			inside := filepath.Join(project, folder)
+			if err := os.MkdirAll(inside, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			queuePath := writeQueueFile(t, inside, "# q\n- [x] migrate the users table\n- [ ] write the release notes\n")
+			trustQueueFile(queuePath, true)
+			section(cfg, "queue")["verifyCommand"] = "echo checked> verified.txt"
+			stopHookOutput(t, stopInput("qv-"+folder, project), cfg)
+			if err := os.Remove(filepath.Join(project, "verified.txt")); err != nil {
+				t.Fatalf("the Stop hook of a session in %s did not run the check there: %v", project, err)
+			}
+			printed := queueCommand(t, cfg, inside, "verify")
+			if _, err := os.Stat(filepath.Join(project, "verified.txt")); err != nil {
+				t.Fatalf("noctis queue verify typed in %s did not run the check in %s, where the Stop hook ran it (%v):\n%s", inside, project, err, printed)
+			}
+		})
+	}
+}
+
 func mustReadText(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)
