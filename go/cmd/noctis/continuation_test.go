@@ -303,7 +303,7 @@ func TestOnlyTheLinesWrittenAfterThePauseWasRecordedAreReadAsWrittenSince(t *tes
 		if err := os.WriteFile(transcript, []byte(tc.content), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		lines, first, ok := transcriptTailSince(object{"transcript": transcript, "transcriptSize": float64(tc.size)})
+		lines, first, _, ok := transcriptTailSince(object{"transcript": transcript, "transcriptSize": float64(tc.size)}, 0)
 		if !ok {
 			t.Fatalf("%s: the transcript was not read", tc.name)
 		}
@@ -320,7 +320,7 @@ func TestOnlyTheLinesWrittenAfterThePauseWasRecordedAreReadAsWrittenSince(t *tes
 	if err := os.WriteFile(transcript, []byte(before+padding+after), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if lines, first, _ := transcriptTailSince(object{"transcript": transcript, "transcriptSize": float64(len(before))}); first != 0 || len(lines) < 2 || lines[len(lines)-2] != `{"n":4}` {
+	if lines, first, _, _ := transcriptTailSince(object{"transcript": transcript, "transcriptSize": float64(len(before))}, 0); first != 0 || len(lines) < 2 || lines[len(lines)-2] != `{"n":4}` {
 		t.Errorf("a size recorded before the tail starts left out lines of the tail: first %d of %d", first, len(lines))
 	}
 }
