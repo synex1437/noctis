@@ -191,9 +191,11 @@ func execJob() {
 	} else {
 		passSignalsToTree(child.Process)
 		pid := child.Process.Pid
+		started := processStarted(pid)
 		updateState(func(next object) {
 			if record := getMap(getMap(next, "jobs"), id); record != nil {
 				record["child"] = float64(pid)
+				record["childStarted"] = started
 			}
 		})
 		code = exitStatus(child.Wait())
@@ -222,8 +224,8 @@ func exitStatus(err error) int {
 	return -1
 }
 
-// jobGone tells a job whose end noctis has no record of whether its wrapper is gone: killed, or the
-// machine restarted. A pid that now names another process counts as gone.
+// jobGone tells a job whose end noctis has no record of whether its wrapper and its command are
+// gone: killed, or the machine restarted. A pid that now names another process counts as gone.
 func jobGone(record object, now int64) bool {
 	pid := int(numberOr(record, "pid", 0))
 	if pid == 0 {
@@ -231,11 +233,15 @@ func jobGone(record object, now int64) bool {
 		// minute.
 		return float64(now)-numberOr(record, "at", 0) > 60
 	}
-	if !processAlive(pid) {
-		return true
+	if stillRuns(pid, getString(record, "started")) {
+		return false
 	}
-	started := getString(record, "started")
-	return started != "" && processStarted(pid) != started
+	started := getString(record, "childStarted")
+	return started == "" || !stillRuns(int(numberOr(record, "child", 0)), started)
+}
+
+func stillRuns(pid int, started string) bool {
+	return processAlive(pid) && (started == "" || processStarted(pid) == started)
 }
 
 func jobOf(id string, record object, now int64) jobView {
@@ -529,7 +535,7 @@ func stopJob() {
 	now := nowSec()
 	job := jobOf(id, record, now)
 	target := int(numberOr(record, "child", 0))
-	if !processAlive(target) {
+	if !stillRuns(target, getString(record, "childStarted")) {
 		target = int(numberOr(record, "pid", 0))
 	}
 	if !job.running || !processAlive(target) {
@@ -546,7 +552,7 @@ func stopJob() {
 	}
 	// The wrapper records the end as the command exits: wait a moment, so the answer is final.
 	for deadline := time.Now().Add(jobStopGrace); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
-		if numberOr(getMap(getMap(peekState(), "jobs"), id), "ended", 0) > 0 {
+		if current := getMap(getMap(peekState(), "jobs"), id); numberOr(current, "ended", 0) > 0 || jobGone(current, nowSec()) {
 			break
 		}
 	}
