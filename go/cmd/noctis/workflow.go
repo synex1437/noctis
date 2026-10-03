@@ -292,8 +292,18 @@ func gateWorkflowLaunch(cfg object, result decision, launch object) string {
 			usage.fable = nil
 		}
 		if room, label := headroomLeft(cfg, usage); room < needed {
-			return fmt.Sprintf("[noctis] only %s points of the %s window are left before the pause point, and a workflow fans out many agents at once: between two checks they can burn through the rest, and past the subscription limit the account pays for the overflow in usage credits. A workflow needs %s points of room. Do this as a single-agent job now, or launch the workflow after the reset.", formatNumber(roundTo(room, 1)), label, formatNumber(needed))
+			return fmt.Sprintf("[noctis] %s, and a workflow fans out many agents at once: between two checks they can burn through the rest, and past the subscription limit the account pays for the overflow in usage credits. A workflow needs %s points of room. Do this as a single-agent job now, or launch the workflow after the reset.", roomLeftText(room, label), formatNumber(needed))
 		}
 	}
 	return ""
+}
+
+func roomLeftText(room float64, label string) string {
+	switch shown := roundTo(room, 1); {
+	case shown > 0:
+		return fmt.Sprintf("only %s points of the %s window are left before the pause point", formatNumber(shown), label)
+	case shown < 0:
+		return fmt.Sprintf("the %s window is already past its pause point", label)
+	}
+	return fmt.Sprintf("the %s window is at its pause point", label)
 }
