@@ -195,6 +195,38 @@ func rearmQueueCheck(cfg, input object, sid string) {
 	logInfo("queue %s held: %q runs again at the next stop of %s", path, recordedCheckCommand(cfg, queueCheckRecord(readState(), path), path, ""), sid)
 }
 
+func forgetUntickedChecks(input, cfg object) {
+	file, cwd := getString(getMap(input, "tool_input"), "file_path"), getString(input, "cwd")
+	if !mayWriteQueueFile(cfg, file, cwd) {
+		return
+	}
+	state := peekState()
+	if len(getMap(state, "queueVerify")) == 0 {
+		return
+	}
+	path := drivenQueueFile(cfg, state, input, sessionKey(input))
+	if path == "" {
+		return
+	}
+	record := queueCheckRecord(state, path)
+	if record == nil || numberOr(record, "failures", 0) > 0 || !writesTo(file, cwd, path) {
+		return
+	}
+	current, _ := readQueueText(path)
+	ticked := queueTicks(editedText(input, current))
+	if _, changed := withoutUnticked(record, ticked); !changed {
+		return
+	}
+	key := queueTrustKey(path)
+	updateState(func(next object) {
+		records := stateMap(next, "queueVerify")
+		latest := getMap(records, key)
+		if kept, changed := withoutUnticked(latest, ticked); changed && numberOr(latest, "failures", 0) == 0 {
+			records[key] = kept
+		}
+	})
+}
+
 func queueTicks(content string) []any {
 	ticked := []any{}
 	entries, _ := parseQueueEntries(content)
