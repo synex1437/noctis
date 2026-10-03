@@ -1181,7 +1181,7 @@ async function scenarioQueueContinuation(acc) {
     config.report = { pricing: {} };
   });
   const htmlReport = acc.run(['report', '--days', '3', '--html']);
-  check('report html has the cost column', htmlReport.includes('<th>cost</th>') && htmlReport.includes('$0.127'), true);
+  check('report html has the cost column', htmlReport.includes('<th>maliyet</th>') && htmlReport.includes('$0.127'), true);
   const selftest = acc.run(['selftest']);
   check('selftest runs end to end', selftest.includes('hook hızı') && (process.platform === 'win32' || selftest.includes('marker yazdı: evet')), true);
 }
