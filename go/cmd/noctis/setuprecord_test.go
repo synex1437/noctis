@@ -466,6 +466,40 @@ func TestAStatusLineRemovedAfterAnUninstallIsNeitherChainedNorPutBackByTheNextOn
 	}
 }
 
+func TestSetupChainsAndUninstallPutsBackAStatusLineThatOnlyMentionsNoctis(t *testing.T) {
+	sandboxFiles(t)
+	for _, own := range []string{"bash ~/bin/noctis-line.sh", `"/home/me/noctis/bar" --short`} {
+		account := recordAccount(t, object{"statusLine": object{"type": "command", "command": own}})
+		configFile := filepath.Join(account, pluginName, "config.json")
+
+		recordSetup(t, account, "max", "--permissions", "keep")
+		if chain := getString(section(readJSON(configFile), "statusline"), "chainCommand"); chain != own {
+			t.Errorf("setup put noctis's status line in place of %q without chaining it: the chain is %q", own, chain)
+		}
+		after, _ := recordUninstall(t, account)
+
+		if got := getString(getMap(after, "statusLine"), "command"); got != own {
+			t.Errorf("setup replaced the status line %q, and uninstall left %q", own, got)
+		}
+	}
+}
+
+func TestUninstallLeavesAStatusLineSetAfterSetupThatOnlyMentionsNoctis(t *testing.T) {
+	sandboxFiles(t)
+	account := recordAccount(t, object{"statusLine": object{"type": "command", "command": "my-old-line"}})
+	settingsFile := filepath.Join(account, "settings.json")
+	recordSetup(t, account, "max", "--permissions", "keep")
+	settings := readJSON(settingsFile)
+	settings["statusLine"] = object{"type": "command", "command": "bash ~/bin/noctis-line.sh"}
+	mustWriteJSON(settingsFile, settings)
+
+	after, _ := recordUninstall(t, account)
+
+	if got := getString(getMap(after, "statusLine"), "command"); got != "bash ~/bin/noctis-line.sh" {
+		t.Fatalf("the status line set by hand after setup became %q on uninstall", got)
+	}
+}
+
 func TestASetupWhileTheFallbackRoleStandsInKeepsTheModelAndEffortFromBeforeTheFirstSetup(t *testing.T) {
 	sandboxFiles(t)
 	account := recordAccount(t, object{"env": object{"CLAUDE_CODE_EFFORT_LEVEL": "medium"}})

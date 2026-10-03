@@ -60,3 +60,23 @@ func TestSetupChainsAStatusLineSetAfterInstallInsteadOfDroppingIt(t *testing.T) 
 		t.Fatalf("setup did not say which status line it chained:\n%s", printed)
 	}
 }
+
+func TestOnlyACommandThatRunsNoctisStatuslineIsTheStatusLineSetupWrote(t *testing.T) {
+	for command, wrote := range map[string]bool{
+		`"/home/me/.claude/plugins/cache/noctis/noctis/8.5.2/bin/noctis" statusline`:        true,
+		`"C:/Users/me/.claude/plugins/cache/noctis/noctis/8.5.2/bin/noctis.exe" statusline`: true,
+		`"C:\Users\me\.claude\plugins\cache\noctis\noctis\8.5.2\bin\noctis.exe" statusline`: true,
+		`NOCTIS_LANG=tr "/opt/noctis/bin/noctis" statusline`:                                true,
+		`node "/home/me/.claude/plugins/noctis/hooks/guard.js" statusline`:                  true,
+		"noctis statusline":                  true,
+		"bash ~/bin/noctis-line.sh":          false,
+		`"/home/me/noctis/bar" --short`:      false,
+		`"/opt/noctis/bin/noctis" hook Stop`: false,
+		"npx -y ccstatusline@latest":         false,
+		"":                                   false,
+	} {
+		if got := noctisWroteStatusLine(command); got != wrote {
+			t.Errorf("noctisWroteStatusLine(%q) = %v, want %v", command, got, wrote)
+		}
+	}
+}
