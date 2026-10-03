@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -35,7 +36,12 @@ func lockRaceChild(dir, role, key string) int {
 
 func plantDeadOwnersLock(t *testing.T, lock string, age time.Duration) {
 	t.Helper()
-	if err := os.WriteFile(lock, []byte("2147483646"), 0o600); err != nil {
+	plantLock(t, lock, "2147483646", age)
+}
+
+func plantLock(t *testing.T, lock, owner string, age time.Duration) {
+	t.Helper()
+	if err := os.WriteFile(lock, []byte(owner), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	old := time.Now().Add(-age)
@@ -74,10 +80,13 @@ func TestReleasingALockLeavesASuccessorsLockInPlace(t *testing.T) {
 }
 
 func TestAStaleLookingLockThatIsStillHeldIsNeitherSweptNorTakenOver(t *testing.T) {
-	for _, age := range []time.Duration{time.Minute, 3 * time.Minute} {
-		t.Run(age.String()+" old", func(t *testing.T) {
+	for _, held := range []struct {
+		owner string
+		age   time.Duration
+	}{{"2147483646", time.Minute}, {"2147483646", 3 * time.Minute}, {"", 3 * time.Second}} {
+		t.Run(fmt.Sprintf("%s old, naming %q", held.age, held.owner), func(t *testing.T) {
 			sandboxFiles(t)
-			plantDeadOwnersLock(t, files.stateLock, age)
+			plantLock(t, files.stateLock, held.owner, held.age)
 			handle, err := os.OpenFile(files.stateLock, os.O_RDWR, 0)
 			if err != nil {
 				t.Fatal(err)
@@ -173,6 +182,16 @@ func TestALockThatNamesNoProcessIsTakenOverAsSoonAsOneWhoseHolderDied(t *testing
 	}
 	if waited := time.Since(started); waited > time.Second {
 		t.Errorf("a writer waited %s for a 3 s old usage.lock that names no process; one whose holder died goes after 2 s", waited)
+	}
+}
+
+func TestAnEmptyLockAWriterKilledBeforeItNamedItselfLeftIsTakenOverAsSoonAsOneWhoseHolderDied(t *testing.T) {
+	sandboxFiles(t)
+	plantLock(t, files.stateLock, "", 3*time.Second)
+	started := time.Now()
+	ran := withFileLock(files.stateLock, func() {})
+	if waited := time.Since(started); !ran || waited > time.Second {
+		t.Errorf("a hook waited %s on the empty state.lock a writer killed before it named itself left 3 s ago, and its write ran: %t; a lock whose holder died goes after 2 s", waited.Round(time.Millisecond), ran)
 	}
 }
 
