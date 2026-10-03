@@ -45,19 +45,39 @@ func takeWait(sid string, seen object, by string, consume bool) bool {
 			return
 		}
 		taken = current
-		delete(stateMap(next, "waits"), sid)
-		if entry := getMap(getMap(next, "checkpoints"), sid); consume && entry != nil {
-			entry["consumed"] = true
-		}
-		if by != "" {
-			markContinued(next, sid, current, by)
-		}
+		dropWait(next, sid, current, by, consume)
 	})
 	if taken == nil {
 		return false
 	}
 	cancelScheduled(sid, getMap(taken, "scheduled"))
 	return true
+}
+
+func dropWait(state object, sid string, wait object, by string, consume bool) {
+	delete(stateMap(state, "waits"), sid)
+	if entry := getMap(getMap(state, "checkpoints"), sid); consume && entry != nil {
+		entry["consumed"] = true
+	}
+	if by != "" {
+		markContinued(state, sid, wait, by)
+	}
+}
+
+func promptTakesOver(sid string) (handoff, taken object) {
+	updateState(func(next object) {
+		if handoff = getMap(getMap(next, "handedOff"), sid); handoff != nil {
+			return
+		}
+		if wait := getMap(getMap(next, "waits"), sid); getString(wait, "kind") == "fable" && !hookSleeping(wait) {
+			taken = wait
+			dropWait(next, sid, wait, "session", true)
+		}
+	})
+	if taken != nil {
+		cancelScheduled(sid, getMap(taken, "scheduled"))
+	}
+	return handoff, taken
 }
 
 func clearWait(sid string, state object) bool {
