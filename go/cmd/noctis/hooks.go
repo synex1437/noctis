@@ -2188,19 +2188,23 @@ func overloadEpisode(cfg object, sid string, now int64) (attempt float64, ok boo
 	return attempt, ok
 }
 
-func failureRetry(cfg object, sid string, now int64) (retry int, firstAt float64) {
+func failureRetry(cfg object, sid, errorType string, now int64) (retry int, firstAt float64) {
 	updateState(func(state object) {
 		episodes := stateMap(state, "failureRetries")
 		episode := getMap(episodes, sid)
-		if episode == nil || float64(now)-numberOr(episode, "lastAt", 0) > retryDelaySeconds(cfg, int(numberOr(episode, "retries", 1)))+failureEpisodeSlack {
+		if !failureEpisodeLive(cfg, episode, now) {
 			episode = object{"retries": float64(0), "firstAt": float64(now)}
 		}
 		episode["retries"] = numberOr(episode, "retries", 0) + 1
-		episode["lastAt"] = float64(now)
+		episode["lastAt"], episode["error"] = float64(now), errorType
 		episodes[sid] = episode
 		retry, firstAt = int(numberOr(episode, "retries", 1)), numberOr(episode, "firstAt", float64(now))
 	})
 	return retry, firstAt
+}
+
+func failureEpisodeLive(cfg, episode object, now int64) bool {
+	return episode != nil && float64(now)-numberOr(episode, "lastAt", 0) <= retryDelaySeconds(cfg, int(numberOr(episode, "retries", 1)))+failureEpisodeSlack
 }
 
 func clearFailureRetries(state object, sid string) {
@@ -2324,7 +2328,9 @@ func onStopFailure(input, cfg object) {
 	weeklyCulprit := hint == "seven_day" || (hint == "" && nearCap(usage.sevenDay) && (!nearCap(usage.fiveHour) || usage.sevenDay.resetsAt > usage.fiveHour.resetsAt))
 	fiveCulprit := hint == "five_hour" || (hint == "" && nearCap(usage.fiveHour))
 	// A cloud session has no runner to relaunch it on the fallback model.
-	fableCulprit := !cloud && scopedModelPattern(cfg).MatchString(result.model) && usage.fable != nil && (hint == "fable" || (hint == "" && usage.fable.used >= culpritFloor))
+	lastFailure := getMap(getMap(state, "failureRetries"), sid)
+	failedAgain := failureEpisodeLive(cfg, lastFailure, now) && getString(lastFailure, "error") == errorType
+	fableCulprit := !cloud && scopedModelPattern(cfg).MatchString(result.model) && usage.fable != nil && (hint == "fable" || (hint == "" && fableExplainsUnnamedLimit(cfg, usage.fable, failedAgain)))
 	waitCfg := section(cfg, "wait")
 	margin := math.Max(0, numberOr(waitCfg, "resetMarginSeconds", 0)) + math.Max(0, numberOr(waitCfg, "builtinGraceSeconds", 0))
 	record := object{"kind": "stopfailure", "threshold": nil}
@@ -2352,7 +2358,7 @@ func onStopFailure(input, cfg object) {
 		record["until"], record["resumeAt"] = failureEnded, float64(now+120)
 		record["modelOverride"] = fallback
 	default:
-		retry, firstAt := failureRetry(cfg, sid, now)
+		retry, firstAt := failureRetry(cfg, sid, errorType, now)
 		delay, spent := retryDelaySeconds(cfg, retry), retry > stopFailureMaxAttempts
 		if cloud {
 			// Without usage data the wall's reset is unknown, so the retries go

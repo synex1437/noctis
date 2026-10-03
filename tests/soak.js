@@ -996,6 +996,8 @@ async function marathonTurn(acc, session, turn, accounts) {
   }
   if (rng() < 0.03 && acc.truth.five.used < 85 && acc.truth.week.used < 85) {
     timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error: 'rate_limit' });
+    const wait = acc.state().waits[session.sid];
+    if (acc.truth.fable.used < THRESHOLDS.fable && (!wait || wait.window !== 'unknown')) stats.anomalies.push(`transient 429 below the Fable switch point (fable ${acc.truth.fable.used.toFixed(1)}%) filed as ${wait && wait.window} ${acc.name}/${session.sid}`);
     stats.transient429 += 1;
     queueResume(acc, session);
     return 'stopped';
