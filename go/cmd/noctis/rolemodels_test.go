@@ -189,6 +189,24 @@ func TestAProviderModelIDWithAColonIsTakenWithOrWithoutAnEffort(t *testing.T) {
 	}
 }
 
+func TestAMistypedEffortAfterAKnownModelIsNamedOnAProviderAccount(t *testing.T) {
+	for value, typo := range map[string]string{
+		"opus:hgih":            "hgih",
+		"sonnet:meduim":        "meduim",
+		"claude-opus-4-1:xhig": "xhig",
+		"us.anthropic.claude-opus-4-1-20250805-v1:0:hihg": "hihg",
+	} {
+		if spec, err := parseRoleFlag("code", value, true); err == nil || !strings.Contains(err.Error(), "'"+typo+"'") {
+			t.Errorf("--code %s on a provider account gave the model %q, not an error naming the effort %q (err %v)", value, getString(spec, "model"), typo, err)
+		}
+	}
+	for _, value := range []string{"claude-opus-4-1:latest", "claude-sonnet-4-5:free", "llama3:hgih"} {
+		if spec, err := parseRoleFlag("code", value, true); err != nil || getString(spec, "model") != value || getString(spec, "effort") != "" {
+			t.Errorf("--code %s on a provider account gave model %q effort %q (err %v), want the whole id as the model", value, getString(spec, "model"), getString(spec, "effort"), err)
+		}
+	}
+}
+
 func TestPressingEnterKeepsAProviderModelIDTheSetupOffers(t *testing.T) {
 	inLocale(t, "en")
 	current := object{"profile": "custom"}
