@@ -734,22 +734,35 @@ func transcriptSize(file string) float64 {
 	return 0
 }
 
-func transcriptTailSince(record object) ([]string, int, bool) {
+func transcriptTailSince(record object, unstampedPast float64) ([]string, int, int, bool) {
 	lines, end, ok := tailLinesWithEnd(getString(record, "transcript"), transcriptTailBytes)
-	from := int64(numberOr(record, "transcriptSize", 0))
-	if !ok || from <= 0 || from > end {
-		return lines, 0, ok
+	return lines, firstLinePast(lines, end, numberOr(record, "transcriptSize", 0), 0), firstLinePast(lines, end, unstampedPast, len(lines)), ok
+}
+
+func firstLinePast(lines []string, end int64, size float64, unknown int) int {
+	from := int64(size)
+	if from <= 0 || from > end {
+		return unknown
 	}
 	first := len(lines)
 	for first > 0 && end-int64(len(lines[first-1])) >= from {
 		end -= int64(len(lines[first-1])) + 1
 		first--
 	}
-	return lines, first, ok
+	return first
+}
+
+func writtenAfter(line int, stamp string, epoch float64, unstamped int) bool {
+	at, err := time.Parse(time.RFC3339Nano, stamp)
+	return line >= unstamped || (err == nil && float64(at.UnixMilli())/1000 > epoch)
 }
 
 func sessionContinuedAfter(wait object, epoch float64) bool {
-	lines, first, ok := transcriptTailSince(wait)
+	return sessionContinuedPast(wait, epoch, 0)
+}
+
+func sessionContinuedPast(wait object, epoch, unstampedPast float64) bool {
+	lines, first, unstamped, ok := transcriptTailSince(wait, unstampedPast)
 	parsedAny := false
 	for i := len(lines) - 1; ok && i >= 0 && (i >= first || !parsedAny); i-- {
 		entry, parsed := parseTranscriptLine(lines[i])
@@ -757,8 +770,7 @@ func sessionContinuedAfter(wait object, epoch float64) bool {
 			continue
 		}
 		parsedAny = true
-		at, err := time.Parse(time.RFC3339Nano, entry.timestamp)
-		if i < first || err != nil || float64(at.UnixMilli())/1000 <= epoch || entry.sidechain || entry.isMeta || entry.isCompact {
+		if i < first || !writtenAfter(i, entry.timestamp, epoch, unstamped) || entry.sidechain || entry.isMeta || entry.isCompact {
 			continue
 		}
 		switch entry.entryType {
@@ -788,15 +800,18 @@ func carriesToolResult(content []any) bool {
 }
 
 func relaunchAnswered(wait object, since float64) (answered, known bool) {
-	lines, first, ok := transcriptTailSince(wait)
+	return relaunchAnsweredPast(wait, since, 0)
+}
+
+func relaunchAnsweredPast(wait object, since, unstampedPast float64) (answered, known bool) {
+	lines, first, unstamped, ok := transcriptTailSince(wait, unstampedPast)
 	for i := len(lines) - 1; ok && i >= 0 && (i >= first || !known); i-- {
 		entry, parsed := parseTranscriptLine(lines[i])
 		if !parsed {
 			continue
 		}
 		known = true
-		at, err := time.Parse(time.RFC3339Nano, entry.timestamp)
-		if i >= first && err == nil && float64(at.UnixMilli())/1000 > since && entry.entryType == "assistant" && !entry.apiError && !entry.sidechain {
+		if i >= first && writtenAfter(i, entry.timestamp, since, unstamped) && entry.entryType == "assistant" && !entry.apiError && !entry.sidechain {
 			return true, true
 		}
 	}
@@ -818,6 +833,13 @@ func relaunchDidNothing(wait object, start time.Time, result launchResult) bool 
 
 func waitContinued(wait object) bool {
 	until := numberOr(wait, "until", 0)
+	failedLaunchEnd := 0.0
+	if getString(wait, "hit") == "relaunch" {
+		failedLaunchEnd = numberOr(wait, "transcriptSizeAfterLaunch", 0)
+		if answered, _ := relaunchAnsweredPast(wait, until-1, failedLaunchEnd); answered {
+			return true
+		}
+	}
 	if getString(wait, "kind") == "fable" {
 		if numberOr(wait, "transcriptSize", 0) <= 0 {
 			return false
@@ -825,12 +847,7 @@ func waitContinued(wait object) bool {
 		answered, _ := relaunchAnswered(wait, until+1)
 		return answered
 	}
-	if getString(wait, "hit") == "relaunch" {
-		if answered, _ := relaunchAnswered(wait, until-1); answered {
-			return true
-		}
-	}
-	return sessionContinuedAfter(wait, until)
+	return sessionContinuedPast(wait, until, failedLaunchEnd)
 }
 
 func mergeInto(target, source object) {
@@ -1250,6 +1267,7 @@ func resumeWait(sid, release string) {
 		reportLaunchFailure(cfg, sid, model, launch.cwd, "")
 		return
 	}
+	sizeAfterLaunch := transcriptSize(getString(wait, "transcript"))
 	progress := wait
 	if plan.sid != "" {
 		progress = freshProgress(wait, plan.sid)
@@ -1270,6 +1288,7 @@ func resumeWait(sid, release string) {
 	if !rescheduleOwnWait(sid, startedAt, func(record object) {
 		record["launchAttempts"], record["hit"], record["inHook"] = float64(attempts), "relaunch", false
 		record["startedAt"], record["until"], record["resumeAt"] = ended, ended, retryAt
+		record["transcriptSizeAfterLaunch"] = sizeAfterLaunch
 		if plan.sid != "" {
 			record["freshFailed"] = true
 		}
