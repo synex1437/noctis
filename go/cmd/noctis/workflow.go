@@ -280,9 +280,9 @@ func gateWorkflowLaunch(cfg object, result decision, launch object) string {
 	}
 	switch {
 	case result.wait != nil:
-		return fmt.Sprintf("[noctis] usage is at the pause threshold (%s %s%%); a workflow would fan out many agents into the wall. Wait for the reset at %s — the plugin continues the session on its own — then launch the same script.", result.wait.label, formatNumber(result.wait.used), formatTime(result.wait.until))
+		return fmt.Sprintf("[noctis] usage is at the pause threshold (%s %s%%); a workflow would fan out many agents into the wall. Wait for the reset at %s — the plugin continues the session on its own — then launch the same script.", result.wait.englishLabel(), formatNumber(result.wait.used), formatTime(result.wait.until))
 	case result.warnWindow != nil:
-		return fmt.Sprintf("[noctis] %s usage is %s%% (auto-pause at %s%%): too close to the limit to fan out a workflow. Do the task as a single-agent job now, or wait for the reset at %s and launch the workflow then.", result.warnWindow.label, formatNumber(result.warnWindow.used), formatNumber(result.warnWindow.threshold), formatTime(result.warnWindow.resetsAt))
+		return fmt.Sprintf("[noctis] %s usage is %s%% (auto-pause at %s%%): too close to the limit to fan out a workflow. Do the task as a single-agent job now, or wait for the reset at %s and launch the workflow then.", englishWindowLabel(result.warnWindow.window), formatNumber(result.warnWindow.used), formatNumber(result.warnWindow.threshold), formatTime(result.warnWindow.resetsAt))
 	case result.fableHit:
 		return "[noctis] the scoped model quota is out; the plugin is switching the default model. Launch the workflow after the switch, on the fallback model."
 	}

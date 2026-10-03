@@ -1340,13 +1340,28 @@ type decision struct {
 }
 
 func windowLabel(key string) string {
+	return T(windowLabelKey(key))
+}
+
+func englishWindowLabel(key string) string {
+	return catalogFor("en")[windowLabelKey(key)]
+}
+
+func windowLabelKey(key string) string {
 	switch key {
 	case "five_hour":
-		return T("win.five")
+		return "win.five"
 	case "seven_day":
-		return T("win.week")
+		return "win.week"
 	}
-	return T("win.unknown")
+	return "win.unknown"
+}
+
+func (plan *waitPlan) englishLabel() string {
+	if plan.window == "fable" {
+		return plan.label
+	}
+	return englishWindowLabel(plan.window)
 }
 
 func evaluate(cfg object, usage usageView, model string, contextPercent float64, hasContext bool) decision {
