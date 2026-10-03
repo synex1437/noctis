@@ -1414,6 +1414,7 @@ func onPreToolUse(input, cfg object) {
 		if denyOwnFileWrite(input, cfg) || refuseHumanTicks(input, cfg) || refuseJobsNotInPrompt(input, cfg) || refuseTestEdits(input, cfg) {
 			return
 		}
+		forgetUntickedChecks(input, cfg)
 		if toolName != "Write" {
 			return
 		}

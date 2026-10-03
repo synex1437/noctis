@@ -328,3 +328,43 @@ func TestAnItemTickedAgainAfterItWasUntickedIsCheckedAgain(t *testing.T) {
 		t.Fatalf("after the check %d of %d ticked items count as unchecked, want 0 of 1", unverified, ticked)
 	}
 }
+
+func TestAnItemUntickedAndTickedAgainWithinOneTurnIsCheckedAgain(t *testing.T) {
+	cfg, project, counter := checkTierSandbox(t, 3, false)
+	section(cfg, "queue")["verifyCommand"] = countingCheck(counter, "full", "")
+	tickTiered(t, project, 3, 1)
+	continues(t, stopHookOutput(t, stopInput("again2", project), cfg), 2)
+	ticked, unticked := "- [x] "+tieredItems[0], "- [ ] "+tieredItems[0]
+	hookOutput(t, onPreToolUse, queueEdit("again2", project, project, ticked, unticked), cfg)
+	tickTiered(t, project, 3, 0)
+	hookOutput(t, onPreToolUse, queueEdit("again2", project, project, unticked, ticked), cfg)
+	tickTiered(t, project, 3, 1)
+	continues(t, stopHookOutput(t, stopInput("again2", project), cfg), 2)
+	if runs := checkRuns(counter, "full"); runs != 2 {
+		t.Fatalf("an item Claude unticked and ticked again with Edit between two stops ran the check %d time(s) in all, want 2: once for each tick", runs)
+	}
+}
+
+func TestPassedItemsUntickedWithAFileToolWhileTheCheckFailsStartThePaceOver(t *testing.T) {
+	cfg, project, frontend := queueCheckSandbox(t, shellFor("test -f fixed.txt", "type fixed.txt"))
+	path := writeQueueFile(t, project, tickQueue)
+	trustQueueFile(path, true)
+	writeRepoFile(t, project, "fixed.txt", "ok\n")
+	continues(t, stopHookOutput(t, stopInput("again3", frontend), cfg), 4)
+	writeQueueFile(t, project, tickedQueue(2))
+	continues(t, stopHookOutput(t, stopAgain("again3", frontend), cfg), 2)
+	if err := os.Remove(filepath.Join(project, "fixed.txt")); err != nil {
+		t.Fatal(err)
+	}
+	writeQueueFile(t, project, tickedQueue(3))
+	if failed := getString(stopHookOutput(t, stopAgain("again3", frontend), cfg), "reason"); !strings.Contains(failed, "Queue check failed") {
+		t.Fatalf("setup: the check did not fail: %q", failed)
+	}
+	untick := agentHookInput("PreToolUse", "again3", frontend, object{"tool_name": "Write", "tool_input": object{"file_path": path, "content": tickQueue}})
+	hookOutput(t, onPreToolUse, untick, cfg)
+	writeQueueFile(t, project, tickQueue)
+	stopHookOutput(t, stopAgain("again3", frontend), cfg)
+	if notes := paceNotesIn(path); len(notes) != 1 || notes[0].done != 0 {
+		t.Fatalf("Claude unticked every item with Write while the check failed, also the two that passed it, but the pace notes did not start over: %v", notes)
+	}
+}
