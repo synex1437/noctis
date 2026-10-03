@@ -43,6 +43,26 @@ func TestTheHigherReadingOfTheSameWindowWins(t *testing.T) {
 	}
 }
 
+func TestALowerEndpointReadingCountsOnceTheStatusLineHasGoneQuiet(t *testing.T) {
+	sandboxFiles(t)
+	cfg := releaseConfig()
+	now := nowSec()
+	reset, weekReset := float64(now+3*3600), float64(now+3*86400)
+	statusReading(now-600, 93, reset, 20, weekReset)
+	oauthReading(now-30, 40, reset, 20, weekReset)
+	usage := currentUsage(now)
+	if usage.fiveHour == nil || usage.fiveHour.used != 40 || usage.fiveHour.staleness != 30 {
+		t.Fatalf("the status line last read the 5-hour window at 93%% ten minutes ago, and the usage endpoint read the same window at 40%% 30 seconds ago, as after a plan upgrade: the guard decided on %+v", usage.fiveHour)
+	}
+	if plan := evaluate(cfg, usage, "claude-opus-5-5", 0, false).wait; plan != nil {
+		t.Fatalf("at 40%% of the 5-hour window the session was paused: %+v", plan)
+	}
+	statusReading(now-200, 93, reset, 20, weekReset)
+	if usage := currentUsage(now); usage.fiveHour == nil || usage.fiveHour.used != 93 {
+		t.Fatalf("the status line read the window at 93%% less than five minutes before the endpoint's lower reading, and the lower one won: %+v", usage.fiveHour)
+	}
+}
+
 func TestANewWindowStillReplacesTheOldOne(t *testing.T) {
 	sandboxFiles(t)
 	now := nowSec()
