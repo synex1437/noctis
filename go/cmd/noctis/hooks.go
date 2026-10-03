@@ -528,7 +528,7 @@ func letTypedPromptThrough(cfg, state object, sid string, result decision, now i
 	if wait.used < wait.threshold {
 		where = fmt.Sprintf("is under its auto-pause point (%s%%), but noctis pauses unattended work now because %s", formatNumber(wait.threshold), earlyPauseCause(wait.hit))
 	}
-	context := fmt.Sprintf("[noctis] %s usage %d%% %s: the user's own prompt goes ahead. Do what they asked; start no big new work beyond it.", wait.label, int(math.Round(wait.used)), where)
+	context := fmt.Sprintf("[noctis] %s usage %d%% %s: the user's own prompt goes ahead. Do what they asked; start no big new work beyond it.", wait.englishLabel(), int(math.Round(wait.used)), where)
 	return notice, context
 }
 
@@ -642,7 +642,7 @@ func onUserPromptSubmit(input, cfg object) {
 		if getMap(state, "notified")[warnKey] == nil {
 			updateState(func(next object) { stateMap(next, "notified")[warnKey] = float64(now) })
 			journal(sid, "UserPromptSubmit", "warn", result.warnWindow.label+" "+formatNumber(result.warnWindow.used)+"%", usageFacts(result.usage))
-			contexts = append(contexts, fmt.Sprintf("[noctis] %s usage %d%% (auto-pause at %s%%): finish the current step cleanly, avoid big new work.", result.warnWindow.label, int(math.Round(result.warnWindow.used)), formatNumber(result.warnWindow.threshold)))
+			contexts = append(contexts, fmt.Sprintf("[noctis] %s usage %d%% (auto-pause at %s%%): finish the current step cleanly, avoid big new work.", englishWindowLabel(result.warnWindow.window), int(math.Round(result.warnWindow.used)), formatNumber(result.warnWindow.threshold)))
 			logInfo("warn band for %s: %s %%%s", sid, result.warnWindow.window, formatNumber(result.warnWindow.used))
 		}
 	}
@@ -1207,13 +1207,13 @@ func subagentLimitReason(wait, ceiling *waitPlan) string {
 		if ceiling.used < ceiling.threshold {
 			where = "close enough to the paid-credit ceiling to cross it at the current burn rate"
 		}
-		return fmt.Sprintf("[noctis] %s usage is %s%%, %s (%s%%): past it the account pays for the overflow in usage credits, so this agent stops now. %s", ceiling.label, formatNumber(ceiling.used), where, formatNumber(ceiling.threshold), resume)
+		return fmt.Sprintf("[noctis] %s usage is %s%%, %s (%s%%): past it the account pays for the overflow in usage credits, so this agent stops now. %s", ceiling.englishLabel(), formatNumber(ceiling.used), where, formatNumber(ceiling.threshold), resume)
 	}
 	point := formatNumber(wait.threshold) + "%"
 	if wait.used < wait.threshold {
 		point += ", reached early at the current burn rate"
 	}
-	return fmt.Sprintf("[noctis] %s usage is %s%% (pause point %s): start no new work. Return what you have the way you normally deliver your report, and name what is unfinished. %s", wait.label, formatNumber(wait.used), point, resume)
+	return fmt.Sprintf("[noctis] %s usage is %s%% (pause point %s): start no new work. Return what you have the way you normally deliver your report, and name what is unfinished. %s", wait.englishLabel(), formatNumber(wait.used), point, resume)
 }
 
 func shownLimit(wait, ceiling *waitPlan) *waitPlan {

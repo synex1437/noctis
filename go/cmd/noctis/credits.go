@@ -98,7 +98,7 @@ func headroomLeft(cfg object, usage usageView) (float64, string) {
 		key, threshold string
 	}{{"five_hour", "session5h"}, {"seven_day", "weeklyAll"}} {
 		if limit, guarded := stopPoint(cfg, spec.threshold); guarded {
-			consider(usage.byKey(spec.key), limit, windowLabel(spec.key))
+			consider(usage.byKey(spec.key), limit, englishWindowLabel(spec.key))
 		}
 	}
 	if value := scopedThresholdValue(cfg); validThreshold(value) && usage.fable != nil {
