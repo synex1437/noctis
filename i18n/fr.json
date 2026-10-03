@@ -359,6 +359,8 @@
   "report.header": "%s derniers jours · %d transcriptions · compte %s",
   "report.byModel": "Par modèle (entrée / sortie / cache lu / cache écrit · appels) :",
   "report.byDay": "Par jour (tokens au total · appels) :",
+  "report.title": "Rapport noctis",
+  "report.columns": "modèle|entrée|sortie|cache lu|cache écrit|appels|coût",
   "report.keptOff": "Évité sur %s : %s tokens dans %d appels de sous-agents sur d'autres modèles ; autres tokens de sous-agents : %s",
   "report.events": "Événements : %d routés · %d attentes · %d bascules de modèle · %d reprises de file · %d lancements automatiques",
   "report.errors": "Erreurs récentes (%s) :",

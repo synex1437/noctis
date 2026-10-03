@@ -359,6 +359,8 @@
   "report.header": "Letzte %s Tage · %d Transkripte · Konto %s",
   "report.byModel": "Nach Modell (Eingabe / Ausgabe / Cache gelesen / Cache geschrieben · Aufrufe):",
   "report.byDay": "Nach Tag (Tokens gesamt · Aufrufe):",
+  "report.title": "noctis-Bericht",
+  "report.columns": "Modell|Eingabe|Ausgabe|Cache gelesen|Cache geschrieben|Aufrufe|Kosten",
   "report.keptOff": "Von %s ferngehalten: %s Tokens in %d Subagent-Aufrufen auf anderen Modellen; weitere Subagent-Tokens: %s",
   "report.events": "Ereignisse: %d geroutet · %d Wartezeiten · %d Modellwechsel · %d Warteschlangen-Fortsetzungen · %d automatische Starts",
   "report.errors": "Letzte Fehler (%s):",

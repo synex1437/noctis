@@ -1391,7 +1391,11 @@ func reportHTML(cfg object, data reportData) string {
 	for _, model := range sortedModels(data.byModel) {
 		body.WriteString(bar(data.byModel[model].total(), maxModel, model))
 	}
-	write(`</section><section><table><thead><tr><th>model</th><th>in</th><th>out</th><th>cache read</th><th>cache write</th><th>calls</th><th>cost</th></tr></thead><tbody>`)
+	write(`</section><section><table><thead><tr>`)
+	for _, column := range strings.Split(T("report.columns"), "|") {
+		write(`<th>%s</th>`, html.EscapeString(column))
+	}
+	write(`</tr></thead><tbody>`)
 	for _, model := range sortedModels(data.byModel) {
 		bucket := data.byModel[model]
 		costText := "-"
@@ -1406,7 +1410,7 @@ func reportHTML(cfg object, data reportData) string {
 		saved = `<p>` + html.EscapeString(T("report.saved", formatUSD(onPrimary-actual), formatUSD(actual), formatUSD(onPrimary))) + `</p>`
 	}
 	write(`</tbody></table><p>%s</p></section><section><p>%s</p>%s<p>%s</p></section>`, html.EscapeString(T("report.cost", formatUSD(data.totalCost()))), html.EscapeString(T("report.keptOff", getString(section(cfg, "models"), "primary"), formatTokens(data.keptOff.total()), data.keptOff.calls, formatTokens(data.otherSub.total()))), saved, html.EscapeString(T("report.events", data.events["route"], data.events["wait"], data.events["scoped"], data.events["continue"], data.events["resume"])))
-	return fmt.Sprintf(`<!doctype html><html lang="%s"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>noctis report</title><style>
+	return fmt.Sprintf(`<!doctype html><html lang="%s"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>%s</title><style>
 :root{color-scheme:light dark;--surface:#fcfcfb;--text:#0b0b0b;--muted:#52514e;--track:#e6e5e1;--bar:#2a78d6}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--surface:#1a1a19;--text:#ffffff;--muted:#c3c2b7;--track:#2c2c2a;--bar:#3987e5}}
 :root[data-theme="dark"]{--surface:#1a1a19;--text:#ffffff;--muted:#c3c2b7;--track:#2c2c2a;--bar:#3987e5}
@@ -1419,7 +1423,7 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:24px 0 8px;color:var(-
 .bar{display:block;height:100%%;background:var(--bar);border-radius:0 4px 4px 0}
 .value{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
 table{border-collapse:collapse;width:100%%;font-variant-numeric:tabular-nums}th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--track)}th:first-child,td:first-child{text-align:left}th{color:var(--muted);font-weight:600}
-</style></head><body><h1>noctis</h1><p class="sub">%s</p>%s</body></html>`, localeNow(), html.EscapeString(T("report.header", formatNumber(data.days), data.transcripts, files.configDir)), body.String())
+</style></head><body><h1>noctis</h1><p class="sub">%s</p>%s</body></html>`, localeNow(), html.EscapeString(T("report.title")), html.EscapeString(T("report.header", formatNumber(data.days), data.transcripts, files.configDir)), body.String())
 }
 
 func runReport() {

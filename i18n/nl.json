@@ -359,6 +359,8 @@
   "report.header": "Laatste %s dagen · %d transcripten · account %s",
   "report.byModel": "Per model (invoer / uitvoer / cache gelezen / cache geschreven · aanroepen):",
   "report.byDay": "Per dag (tokens totaal · aanroepen):",
+  "report.title": "noctis-rapport",
+  "report.columns": "model|invoer|uitvoer|cache gelezen|cache geschreven|aanroepen|kosten",
   "report.keptOff": "Weggehouden van %s: %s tokens in %d subagent-aanroepen op andere modellen; overige subagent-tokens: %s",
   "report.events": "Gebeurtenissen: %d gerouteerd · %d wachttijden · %d modelwissels · %d wachtrij-hervattingen · %d automatische starts",
   "report.errors": "Recente fouten (%s):",

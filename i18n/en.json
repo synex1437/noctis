@@ -359,6 +359,8 @@
   "report.header": "Last %s days · %d transcripts · account %s",
   "report.byModel": "By model (input / output / cache read / cache write · calls):",
   "report.byDay": "By day (total tokens · calls):",
+  "report.title": "noctis report",
+  "report.columns": "model|in|out|cache read|cache write|calls|cost",
   "report.keptOff": "Kept off %s: %s tokens in %d subagent calls on other models; other subagent tokens: %s",
   "report.events": "Events: %d routed · %d waits · %d scoped switches · %d queue continues · %d auto-launches",
   "report.errors": "Recent errors (%s):",

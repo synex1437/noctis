@@ -359,6 +359,8 @@
   "report.header": "최근 %s일 · 기록 %d건 · 계정 %s",
   "report.byModel": "모델별(입력 / 출력 / 캐시 읽기 / 캐시 쓰기 · 호출):",
   "report.byDay": "날짜별(총 토큰 · 호출):",
+  "report.title": "noctis 보고서",
+  "report.columns": "모델|입력|출력|캐시 읽기|캐시 쓰기|호출|비용",
   "report.keptOff": "%[1]s에서 덜어낸 분량: 다른 모델의 서브에이전트 호출 %[3]d건에서 %[2]s 토큰. 그 밖의 서브에이전트 토큰: %[4]s",
   "report.events": "이벤트: 라우팅 %d · 대기 %d · 모델 전환 %d · 큐 계속 %d · 자동 시작 %d",
   "report.errors": "최근 오류(%s):",

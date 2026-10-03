@@ -359,6 +359,8 @@
   "report.header": "Son %s gün · %d transcript · hesap %s",
   "report.byModel": "Model bazında (giriş / çıkış / önbellek okuma / önbellek yazma · çağrı):",
   "report.byDay": "Gün bazında (toplam token · çağrı):",
+  "report.title": "noctis raporu",
+  "report.columns": "model|giriş|çıkış|önbellek okuma|önbellek yazma|çağrı|maliyet",
   "report.keptOff": "%s modelinden uzak tutulan: %s token, %d alt-ajan çağrısı başka modellerde; diğer alt-ajan token'ı: %s",
   "report.events": "Olaylar: %d yönlendirme · %d bekleme · %d kapsamlı model geçişi · %d kuyruk devamı · %d otomatik başlatma",
   "report.errors": "Son hatalar (%s):",

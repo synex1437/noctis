@@ -359,6 +359,8 @@
   "report.header": "Ostatnie %s dni · %d transkryptów · konto %s",
   "report.byModel": "Wg modelu (wejście / wyjście / odczyt cache / zapis cache · wywołania):",
   "report.byDay": "Wg dnia (tokeny łącznie · wywołania):",
+  "report.title": "Raport noctis",
+  "report.columns": "model|wejście|wyjście|odczyt cache|zapis cache|wywołania|koszt",
   "report.keptOff": "Odciążono %s: %s tokenów w %d wywołaniach podagentów na innych modelach; pozostałe tokeny podagentów: %s",
   "report.events": "Zdarzenia: %d przekierowań · %d oczekiwań · %d przełączeń modelu · %d wznowień kolejki · %d automatycznych startów",
   "report.errors": "Ostatnie błędy (%s):",
