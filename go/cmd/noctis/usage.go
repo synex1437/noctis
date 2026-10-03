@@ -1501,6 +1501,17 @@ func limitHint(message, scoped string, usage usageView) string {
 	return ""
 }
 
+func fableExplainsUnnamedLimit(cfg object, fable *window, failedAgain bool) bool {
+	if fable == nil || fable.used < culpritFloor {
+		return false
+	}
+	switchPoint, guarded := scopedThresholdEnabled(cfg)
+	if !guarded {
+		switchPoint = 100
+	}
+	return fable.used >= switchPoint || failedAgain
+}
+
 func refreshCodexUsage(cached object, now int64, reason string) object {
 	exe := hostExecutable("codex")
 	windows, err := fetchCodexRateLimits(exe, fetchTimeout+3*time.Second)
