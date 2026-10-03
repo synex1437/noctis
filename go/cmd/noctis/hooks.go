@@ -1213,11 +1213,14 @@ func windowStale(usage usageView, staleSeconds float64) bool {
 func subagentLimit(cfg object, now int64) decision {
 	usage := currentUsage(now)
 	edge := nearEdge(cfg, usage)
-	if staleSeconds := usageStaleSeconds(cfg); edge || float64(now)-usage.updatedAt > staleSeconds || windowStale(usage, staleSeconds) {
+	projecting := projectionAhead(cfg, usage)
+	if staleSeconds := usageStaleSeconds(cfg); edge || projecting || float64(now)-usage.updatedAt > staleSeconds || windowStale(usage, staleSeconds) {
 		maxAge, wait := -1.0, time.Duration(0)
 		if edge {
 			// Near an edge the agent's next step is decided on this answer, so the hook waits for it.
 			maxAge, wait = edgePollSeconds(cfg, usage), refreshWait
+		} else if projecting {
+			maxAge, wait = projectionMinStaleness, refreshWait
 		}
 		refreshFableWaiting(cfg, now, "subagent", maxAge, false, wait)
 		usage = currentUsage(now)

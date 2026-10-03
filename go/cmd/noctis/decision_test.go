@@ -119,6 +119,30 @@ func TestEdgePollGetsStricterCloserToTheWall(t *testing.T) {
 	}
 }
 
+func TestEdgePollTightensWhenOneMoreJumpWouldCrossThePausePoint(t *testing.T) {
+	cfg := testConfig()
+	fiveHour, weekly := usageFrom(87, 10, 1000), usageFrom(10, 86, 1000)
+	for _, tc := range []struct {
+		name       string
+		usage      usageView
+		jumpy      *window
+		jump       float64
+		pausePoint float64
+	}{
+		{"5-hour window at 87%", fiveHour, fiveHour.fiveHour, 4.5, 92},
+		{"weekly window at 86%", weekly, weekly.sevenDay, 3, 89},
+	} {
+		tc.jumpy.burst = tc.jump
+		if got := edgePollSeconds(cfg, tc.usage); got > nearEdgePollClose {
+			t.Errorf("the %s jumped %v points at its last reading, so one more such jump takes it past the %v%% pause point, yet it is polled every %v s, want at most %v s", tc.name, tc.jump, tc.pausePoint, got, nearEdgePollClose)
+		}
+		tc.jumpy.burst = 1
+		if got := edgePollSeconds(cfg, tc.usage); got <= nearEdgePollClose {
+			t.Errorf("the %s moves a point at a time, more than a jump from the %v%% pause point, yet it is polled every %v s like a window at the wall", tc.name, tc.pausePoint, got)
+		}
+	}
+}
+
 func TestNearEdgeIsSymmetricAcrossWindows(t *testing.T) {
 	cfg := testConfig()
 	if nearEdge(cfg, usageFrom(50, 50, 1000)) {

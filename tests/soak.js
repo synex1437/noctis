@@ -282,9 +282,19 @@ function typedTurnFor(acc, sid) {
   return Boolean((acc.state().typedTurns || {})[sid]);
 }
 
+function guardReading(acc) {
+  const usage = readJson(path.join(acc.guardDir, 'usage.json')) || {};
+  const fable = readJson(path.join(acc.guardDir, 'fable.json')) || {};
+  const ofThisWindow = (reading) => reading && Math.abs((reading.resetsAt || 0) - acc.truth.five.resetsAt) < 300;
+  const readings = {};
+  if (ofThisWindow(usage.five_hour)) readings.statusLine = { used: usage.five_hour.used, age: T - Math.min(usage.five_hour.at || usage.updatedAt || 0, usage.updatedAt || 0) };
+  if (ofThisWindow(fable.five_hour)) readings.endpoint = { used: fable.five_hour.used, age: T - (fable.fetchedAt || 0) };
+  return readings;
+}
+
 function recordBreach(acc, session, cost, typed) {
   const truth = acc.truth;
-  stats.breaches.push({ day: Math.floor((T - realStart) / DAY) + 1, account: acc.name, sid: session.sid, five: truth.five.used, week: truth.week.used, cost, typed, trail: recentDecisions(acc, session.sid) });
+  stats.breaches.push({ day: Math.floor((T - realStart) / DAY) + 1, account: acc.name, sid: session.sid, five: truth.five.used, week: truth.week.used, cost, typed, reading: guardReading(acc), trail: recentDecisions(acc, session.sid) });
 }
 
 function applyCall(acc, session, cost) {

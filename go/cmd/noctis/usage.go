@@ -1425,16 +1425,28 @@ func nearEdge(cfg object, usage usageView) bool {
 		nearCeiling(cfg, usage)
 }
 
-func projectionAhead(cfg object, usage usageView) bool {
+func anyGuardedWindow(cfg object, usage usageView, matches func(win *window, limit float64) bool) bool {
 	for _, guarded := range []struct {
 		win       *window
 		threshold string
 	}{{usage.fiveHour, "session5h"}, {usage.sevenDay, "weeklyAll"}} {
-		if limit, enabled := stopPoint(cfg, guarded.threshold); enabled && windowHit(guarded.win, limit) == "projection" {
+		if limit, enabled := stopPoint(cfg, guarded.threshold); enabled && guarded.win != nil && matches(guarded.win, limit) {
 			return true
 		}
 	}
 	return false
+}
+
+func projectionAhead(cfg object, usage usageView) bool {
+	return anyGuardedWindow(cfg, usage, func(win *window, limit float64) bool {
+		return win.used < limit && win.staleness >= projectionMinStaleness && win.projected >= limit-nearEdgeBand
+	})
+}
+
+func oneBurstFromStop(cfg object, usage usageView) bool {
+	return anyGuardedWindow(cfg, usage, func(win *window, limit float64) bool {
+		return win.burst > 0 && limit-win.used <= win.burst*burstSafety
+	})
 }
 
 func edgePollSeconds(cfg object, usage usageView) float64 {
@@ -1467,7 +1479,7 @@ func edgePollSeconds(cfg object, usage usageView) float64 {
 		seconds = nearEdgePollNormal
 	}
 	switch {
-	case gap <= 2:
+	case gap <= 2 || oneBurstFromStop(cfg, usage):
 		seconds = math.Min(seconds, nearEdgePollClose)
 	case gap <= 4:
 		seconds = math.Min(seconds, nearEdgePollFast)
