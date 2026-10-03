@@ -143,6 +143,14 @@ func queueCheckRecord(state object, path string) object {
 	return getMap(getMap(state, "queueVerify"), queueTrustKey(path))
 }
 
+func recordedCheckFolder(path string) string {
+	folder := getString(queueCheckRecord(readState(), path), "folder")
+	if info := statSafe(folder); info == nil || !info.IsDir() || !isAutoQueue(path) && pathInside(path, folder) == "" {
+		return ""
+	}
+	return folder
+}
+
 func queueHeld(cfg, state object, path string) bool {
 	return numberOr(queueCheckRecord(state, path), "held", 0) > 0 && queueCheckCommand(cfg, path) != ""
 }
@@ -311,24 +319,28 @@ func queueCheckPassedOn(record object, tier, tree string) bool {
 	return getString(record, "tree") == tree
 }
 
-func queueCheckPass(record object, tier string, ticked []any, tree string, now float64) object {
+func queueCheckPass(record object, tier string, ticked []any, tree, folder string, now float64) object {
+	var passed object
 	if tier == fullQueueCheck {
-		passed := object{"ticked": ticked, "at": now}
+		passed = object{"ticked": ticked, "at": now}
 		if tree != "" {
 			passed["tree"] = tree
 		}
-		return passed
+	} else {
+		checked := getList(record, "ticked")
+		if checked == nil {
+			checked = []any{}
+		}
+		passed = object{"ticked": checked, "eachTicked": queueChecksPending(record, ticked), "at": now, "tier": eachQueueCheck}
+		if tree != "" {
+			passed["eachTree"] = tree
+		}
+		if fullTree := getString(record, "tree"); fullTree != "" {
+			passed["tree"] = fullTree
+		}
 	}
-	checked := getList(record, "ticked")
-	if checked == nil {
-		checked = []any{}
-	}
-	passed := object{"ticked": checked, "eachTicked": queueChecksPending(record, ticked), "at": now, "tier": eachQueueCheck}
-	if tree != "" {
-		passed["eachTree"] = tree
-	}
-	if fullTree := getString(record, "tree"); fullTree != "" {
-		passed["tree"] = fullTree
+	if folder != "" {
+		passed["folder"] = folder
 	}
 	return passed
 }
@@ -497,7 +509,7 @@ func gateQueue(cfg, input object, sid, path, content, label string, snapshot que
 	markEachTier(facts, tier)
 	tree := queueCheckTree(cfg, folder, path)
 	if tree != "" && queueCheckPassedOn(record, tier, tree) {
-		storeQueueCheck(key, queueCheckPass(record, tier, ticked, tree, now))
+		storeQueueCheck(key, queueCheckPass(record, tier, ticked, tree, folder, now))
 		facts["skipped"] = true
 		journal(sid, "Stop", "verify-queue", "skipped: the working tree is as it was when it last passed", facts)
 		logInfo("queue check %q for %s skipped: the working tree is as it was when it last passed", command, sid)
@@ -527,7 +539,7 @@ func gateQueue(cfg, input object, sid, path, content, label string, snapshot que
 				if numberOr(stored, "at", 0) == 0 {
 					stored["at"] = now
 				}
-				stored["retried"], stored["rerun"] = now, now
+				stored["retried"], stored["rerun"], stored["folder"] = now, now, folder
 				markEachTier(stored, tier)
 				stateMap(next, "queueVerify")[key] = stored
 			})
@@ -537,7 +549,7 @@ func gateQueue(cfg, input object, sid, path, content, label string, snapshot que
 		}
 	}
 	if outcome == "" {
-		storeQueueCheck(key, queueCheckPass(record, tier, ticked, tree, now))
+		storeQueueCheck(key, queueCheckPass(record, tier, ticked, tree, folder, now))
 		journal(sid, "Stop", "verify-queue", "passed", facts)
 		logInfo("queue check %q passed for %s in %s", command, sid, folder)
 		if tier == fullQueueCheck {
@@ -551,7 +563,7 @@ func gateQueue(cfg, input object, sid, path, content, label string, snapshot que
 	if kept == nil {
 		kept = []any{}
 	}
-	stored := object{"ticked": kept, "failures": failures, "at": now}
+	stored := object{"ticked": kept, "failures": failures, "at": now, "folder": folder}
 	markEachTier(stored, tier)
 	if escalated := numberOr(record, "escalated", 0); escalated > 0 {
 		stored["escalated"] = escalated
