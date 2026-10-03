@@ -91,6 +91,40 @@ func TestAProjectionStillPausesWhenTheUsageEndpointCannotBeAsked(t *testing.T) {
 	}
 }
 
+func TestAQuietReadingWhoseBurnNearsThePausePointIsCheckedAgainstTheUsageEndpoint(t *testing.T) {
+	for _, check := range []struct {
+		name string
+		run  func(t *testing.T, cfg object, now int64) decision
+	}{
+		{"a pause decision", func(t *testing.T, cfg object, now int64) decision {
+			return decide(cfg, readState(), object{"session_id": "a", "cwd": t.TempDir()}, now, decideOptions{})
+		}},
+		{"a subagent's check", func(_ *testing.T, cfg object, now int64) decision {
+			return subagentLimit(cfg, now)
+		}},
+	} {
+		t.Run(check.name, func(t *testing.T) {
+			sandboxFiles(t)
+			now := nowSec()
+			reset, weekReset := float64(now+4*3600), float64(now+3*86400)
+			served := limitsServer(t, limitsBody(93, reset, 20, weekReset))
+			cfg := releaseConfig()
+			cfg["fable"] = object{"source": "oauth"}
+			statusReadingFrom("a", now-900, 70, reset, 20, weekReset)
+			statusReadingFrom("a", now-480, 80, reset, 20, weekReset)
+			if projected := currentUsage(now).fiveHour.projected; projected < 92-nearEdgeBand || projected >= 92 {
+				t.Fatalf("setup: ten points in seven minutes, then eight minutes without a reading, should project within 8 points of the 92%% pause point, short of it: projected %.1f%%", projected)
+			}
+
+			result := check.run(t, cfg, now)
+
+			if served.Load() != 1 || result.wait == nil || result.wait.hit != "threshold" || result.wait.used != 93 {
+				t.Fatalf("the status line last read 80%% eight minutes ago, at a burn that projects 91%%; the usage endpoint, asked %d time(s), says 93%%, and %s ends in %+v, want one fetch and a pause at 93%%", served.Load(), check.name, result.wait)
+			}
+		})
+	}
+}
+
 func TestAClockSetBackDoesNotStopTheUsageFetches(t *testing.T) {
 	sandboxFiles(t)
 	previous := timeOffset
