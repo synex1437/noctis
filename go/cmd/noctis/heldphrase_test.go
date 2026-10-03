@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestAnOtherWordInTheNextSentenceOrInsideAWordDoesNotUndoAProhibition(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, false)
@@ -65,9 +68,120 @@ func TestTheImperativeFormsOfThoseProhibitionsStillHoldTheJobBack(t *testing.T) 
 		"Am Code bitte nichts ändern, nur schätzen.",
 		"Ne change rien pour l'instant, donne-moi juste une estimation.",
 		"Non fare nulla per ora, stima solo ogni punto.",
+		"Por favor, não faz nada ainda; primeiro quero revisar a lista.",
+		"Por favor no cambie nada todavía; primero revisaré la lista.",
+		"Surtout ne modifie rien, je relis tout demain.",
+		"Pendant la démo ne touche à rien.",
+		"Durante a demo não mexa em nada, primeiro vou revisar.",
+		"Bitte noch nicht anfangen, ich muss erst mit dem Team reden.",
+		"Sie können noch nicht anfangen, ich prüfe erst alles.",
 	} {
 		if items, held := heldJob(lead + heldBackItems); items != 4 || held == "" {
 			t.Errorf("%q is no longer read as a prohibition: %d items, held %q", lead, items, held)
+		}
+	}
+}
+
+func TestARuleOnOnePartOfTheWorkInAPhraseLanguageKeepsTheChecklist(t *testing.T) {
+	cfg, project := queueTrustSandbox(t, false)
+	for _, lead := range []string{
+		"Сделай все пункты по порядку, но не трогай файлы миграций.",
+		"按顺序完成下面所有任务，不要修改任何迁移文件。",
+		"Haz todos estos puntos en orden y no toques los archivos de migración.",
+		"Fais tous ces points dans l'ordre et ne touche à aucun fichier de migration.",
+		"Faça todos os itens em ordem e não mexa nos arquivos de migração.",
+		"Fai tutti i punti in ordine e non toccare i file di migrazione.",
+		"Arbeite die Liste der Reihe nach ab und ändere keine Dateien im Migrationsordner.",
+		"Werk de lijst op volgorde af en wijzig geen bestanden in de migratiemap.",
+		"Zrób wszystkie punkty po kolei i nie ruszaj plików migracji.",
+		"نفذ كل البنود بالترتيب ولا تعدل أي ملف في مجلد الترحيل.",
+		"Kerjakan semua tugas secara berurutan dan jangan ubah file migrasi.",
+		"順番にすべての項目を実装してください。マイグレーションファイルを変更しないでください。",
+		"아래 항목을 순서대로 모두 구현해 주세요. 마이그레이션 파일은 수정하지 마세요.",
+		"Haz todos estos puntos en orden y no toques los archivos del proyecto de migración.",
+		"Fais tous ces points dans l'ordre et ne touche pas aux fichiers qui gèrent les migrations.",
+		"Fais tous ces points dans l'ordre et ne touche à aucun test.",
+		"Fai tutti i punti in ordine e non toccare il codice del modulo di pagamento.",
+		"Kerjakan semua tugas secara berurutan dan jangan ubah file di folder migrasi.",
+	} {
+		if items, held := heldJob(lead + heldBackItems); items != 4 || held != "" {
+			t.Errorf("%q: a rule on one part of the work held the job back: %d items, held %q", lead, items, held)
+		}
+	}
+	startQueue(t, cfg, "narrow-ru", project, "Сделай все пункты по порядку, но не трогай файлы миграций."+heldBackItems)
+	if record := getMap(getMap(readState(), "autoQueues"), "narrow-ru"); numberOr(record, "items", 0) != 4 {
+		t.Errorf("the 4-step job with a rule on the migration files got no checklist; noctis why: %q", journaledReason("narrow-ru", "no-auto-queue"))
+	}
+}
+
+func TestARuleOnAllTheFilesOrTheCodeStillHoldsTheListBack(t *testing.T) {
+	for _, lead := range []string{
+		"Пока не трогай файлы, я сначала всё проверю.",
+		"不要修改任何文件，我先自己看一下。",
+		"No toques los archivos todavía, primero quiero revisarlos yo.",
+		"Ne touche à aucun fichier pour l'instant, je dois d'abord les relire.",
+		"Não mexa nos arquivos ainda, primeiro vou revisar tudo.",
+		"Non toccare il codice per ora, prima devo rivedere tutto.",
+		"Schreib noch keinen Code, ich muss das erst mit dem Team besprechen.",
+		"Schrijf nog geen code, ik moet het eerst met het team bespreken.",
+		"Nie ruszaj kodu na razie, najpierw muszę to przejrzeć.",
+		"لا تلمس أي ملف الآن، سأراجع كل شيء أولاً.",
+		"Jangan ubah file apa pun dulu, saya mau cek semuanya.",
+		"既存のファイルを変更しないでください。まず全体を確認します。",
+		"아직 파일을 수정하지 마세요. 먼저 전체를 검토하겠습니다.",
+		"No toques los archivos en absoluto, primero quiero revisarlos.",
+		"No toques el código de ninguna manera; primero lo reviso yo.",
+		"No toques los archivos mientras reviso la lista.",
+		"No toques los archivos del proyecto todavía, primero quiero revisarlos.",
+		"No toques ningún archivo del repositorio por ahora.",
+		"No implementes ninguna funcionalidad por ahora.",
+		"Não mexa nos arquivos de jeito nenhum, primeiro vou revisar.",
+		"Não mexa no código enquanto eu reviso a lista.",
+		"Não mexa nos arquivos do projeto ainda.",
+		"Ne touche pas aux fichiers du tout, je dois d'abord les relire.",
+		"Ne touche pas au code tant que je n'ai pas relu la liste.",
+		"Ne touche pas au code sous aucun prétexte.",
+		"Ne modifie aucune ligne de code pour l'instant.",
+		"N'implémente aucune fonctionnalité pour l'instant.",
+		"Non toccare il codice per nessun motivo, prima devo rivedere tutto.",
+		"Non toccare il codice mentre rivedo la lista.",
+		"Non toccare i file del progetto per ora.",
+		"Schreib keinen Code solange ich die Liste prüfe.",
+		"Ändere keine Dateien im Projekt, ich prüfe erst alles.",
+		"Wijzig geen bestanden terwijl ik de lijst nakijk.",
+		"Wijzig geen bestanden in het project, ik kijk eerst alles na.",
+		"Nie ruszaj kodu w żadnym wypadku.",
+		"Nie ruszaj plików projektu, najpierw sprawdzę.",
+		"Не трогай код совсем.",
+		"Не трогай код во время ревью.",
+		"Не трогай файлы проекта, я сначала всё проверю.",
+		"لا تلمس الملفات على الإطلاق.",
+		"لا تعدل الملفات أثناء المراجعة.",
+		"لا تعدل الملفات في المشروع الآن.",
+		"Jangan ubah file selama saya meninjau.",
+		"Jangan ubah file proyek dulu.",
+		"当面ファイルを変更しないでください。",
+		"プロジェクトのファイルを変更しないでください。",
+		"오늘 파일을 수정하지 마세요.",
+		"프로젝트 파일을 수정하지 마세요.",
+		"不要修改任何现有文件。",
+		"不要修改任何源代码。",
+	} {
+		if items, held := heldJob(lead + heldBackItems); items != 4 || !strings.HasPrefix(held, "the prompt forbids") {
+			t.Errorf("%q no longer holds the job back: %d items, held %q", lead, items, held)
+		}
+	}
+}
+
+func TestAStatementThatReadsLikeAProhibitionKeepsTheChecklist(t *testing.T) {
+	for _, lead := range []string{
+		"O botão não faz nada quando clico em Salvar. Corrija estes problemas em ordem:",
+		"Necesito que el nuevo script no cambie nada en producción. Haz estos puntos en orden:",
+		"Le nouveau cache ne modifie rien, la page reste lente. Corrige ces problèmes dans l'ordre :",
+		"Die Tests können noch nicht anfangen, solange der Server fehlt. Erledige deshalb diese Punkte der Reihe nach:",
+	} {
+		if items, held := heldJob(lead + heldBackItems); items != 4 || held != "" {
+			t.Errorf("%q: a statement held the job back: %d items, held %q", lead, items, held)
 		}
 	}
 }

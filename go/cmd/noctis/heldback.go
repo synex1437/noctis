@@ -1128,12 +1128,12 @@ func latinOrCyrillic(r rune) bool {
 }
 
 // heldPhrase finds a phrase at the start of a word of the normalized text; a
-// forbidding phrase that goes on to "anything else" in its own language is a
-// limit on the job, not a hold on it.
+// forbidding phrase is no hold on the job when it goes on to "anything else",
+// names one part of the work or tells what something else does.
 func heldPhrase(lower string, phrases []string, forbids bool) string {
 	for _, phrase := range phrases {
 		for at := phraseIndex(lower, phrase, 0); at >= 0; at = phraseIndex(lower, phrase, at+len(phrase)) {
-			if !forbids || !heldElse(lower, at, at+len(phrase)) && !heldStatement(lower[:at]) {
+			if !forbids || !heldElse(lower, at, at+len(phrase)) && !heldStatement(lower[:at], phrase) && !heldNarrowed(lower, at, phrase) {
 				return phrase
 			}
 		}
@@ -1159,14 +1159,250 @@ func phraseIndex(text, phrase string, from int) int {
 
 var heldStatementLeads = []string{"sich", "ça", "cela", "sembra", "sembrano"}
 
-func heldStatement(before string) bool {
-	before = strings.TrimRight(before, " ")
+var (
+	germanInfinitives = lazyWordSet(`umsetzen implementieren ändern schreiben anfangen`)
+	germanModals      = lazyWordSet(`kann können konnte konnten könnte könnten wird werden`)
+	germanSpeakers    = lazyWordSet(`ich wir du ihr sie`)
+	romanceNegations  = lazyWordSet(`no não ne`)
+	romanceThirdForms = lazyWordSet(`faz implementa implemente implementem implementen faça façam haga hagan toque toquen mexa altere modifique
+		mude cambie escriba escreva comece implémente touche modifie change code commence fais`)
+	romanceFillers = lazyWordSet(`todavía aún ahora ya hoy mañana momento rato semana mes día sprint por el la los las este esta de del al
+		ainda agora já hoje amanhã enquanto pelo pela mês dia do da no na neste nesta encore maintenant l'instant instant moment pour le ce cette
+		semaine mois jour aujourd'hui demain d'ici lunes martes miércoles jueves viernes sábado domingo segunda terça quarta quinta sexta
+		lundi mardi mercredi jeudi vendredi samedi dimanche`)
+	romanceLeads = lazyWordSet(`que favor plaît plait svp stp porfa y e et o ou mais mas pero pues então entonces alors donc puis luego
+		ensuite surtout sobretudo todo simplemente simplesmente simplement juste solo sólo só apenas también também aussi tampoco nem ni`)
+	romanceSubjects = lazyWordSet(`je il elle ils elles ça cela ceci qu'il qu'elle qu'ils qu'elles yo él ella ello ellos ellas esto eso eu ele
+		ela eles elas isso isto`)
+	romanceDeterminers = lazyWordSet(`le la les un une ce cet cette ces mon ma mes son sa ses notre nos leur leurs du des el los las unos unas
+		este esta estos estas ese esa esos esas mi mis su sus nuestro nuestra o a os as um uma uns umas estes esse essa esses essas meu minha
+		seu sua nosso nossa dos das do da no na`)
+	romancePrepositions = lazyWordSet(`a à durante antes después despues tras en con sin para por hasta desde sobre según entre hacia contra depois em
+		com sem até ate após apos pendant avant après dans avec sans par pour jusqu'à depuis sur sous vers lors chez`)
+)
+
+func heldStatement(before, phrase string) bool {
+	trimmed := strings.TrimRight(before, " ")
 	for _, lead := range heldStatementLeads {
-		if strings.HasSuffix(before, lead) && phraseIndex(before, lead, len(before)-len(lead)) >= 0 {
+		if strings.HasSuffix(trimmed, lead) && phraseIndex(trimmed, lead, len(trimmed)-len(lead)) >= 0 {
 			return true
 		}
 	}
+	words := strings.Fields(phrase)
+	switch {
+	case germanInfinitives(words[len(words)-1]):
+		return germanStatement(heldWords(heldTokens(clauseBefore(before))))
+	case romanceThirdForms(romanceVerb(words)):
+		return romanceStatement(heldWords(heldTokens(clauseBefore(before))))
+	}
 	return false
+}
+
+func romanceVerb(words []string) string {
+	if romanceNegations(words[0]) {
+		return wordAt(words, 1)
+	}
+	return strings.TrimPrefix(words[0], "n'")
+}
+
+func germanStatement(words []string) bool {
+	modal := false
+	for _, word := range words {
+		if germanSpeakers(word) {
+			return false
+		}
+		modal = modal || germanModals(word)
+	}
+	return modal
+}
+
+func romanceStatement(words []string) bool {
+	last := len(words) - 1
+	for last >= 0 && romanceFillers(words[last]) {
+		last--
+	}
+	switch {
+	case last < 0 || romanceLeads(words[last]):
+		return false
+	case romanceSubjects(words[last]):
+		return true
+	case strings.HasPrefix(words[last], "l'"):
+		return !romancePrepositions(wordAt(words, last-1))
+	}
+	for _, at := range []int{last - 1, last - 2} {
+		if romanceDeterminers(wordAt(words, at)) {
+			return !romancePrepositions(wordAt(words, at-1))
+		}
+	}
+	return false
+}
+
+const heldWindow = 200
+
+func clauseBefore(text string) string {
+	start := max(0, len(text)-heldWindow)
+	for start < len(text) && !utf8.RuneStart(text[start]) {
+		start++
+	}
+	text = text[start:]
+	if stop := strings.LastIndexAny(text, sentenceStops+clauseStops); stop >= 0 {
+		_, size := utf8.DecodeRuneInString(text[stop:])
+		text = text[stop+size:]
+	}
+	return text
+}
+
+func clauseAfter(text string) string {
+	end := min(len(text), heldWindow)
+	for end < len(text) && !utf8.RuneStart(text[end]) {
+		end++
+	}
+	text = text[:end]
+	if stop := strings.IndexAny(text, sentenceStops+clauseStops); stop >= 0 {
+		text = text[:stop]
+	}
+	return text
+}
+
+var (
+	narrowObjects     = lazyWordSet(`файлы код plików kodu file codice archivos código arquivos fichiers code bestanden dateien kode الملفات الكود كود شيفرة`)
+	narrowQuantifiers = lazyWordSet(`aucun aucune ningún ninguna ninguno nenhum nenhuma nessun nessuno nessuna أي`)
+	narrowOfWords     = lazyWordSet(`de des du di dei degli delle della del dos das do da من los las les gli le os as el la il lo i`)
+	narrowListWords   = lazyWordSet(`estas estos esas esos ces cette ce cet d'entre questi queste quelle quegli quei esses essas estes destes destas desses
+		dessas isto isso هذه هذا هؤلاء`)
+	narrowWholeObjects = lazyWordSet(`fichier fichiers archivo archivos arquivo arquivos file files codice código code kode ملف ملفات الملفات كود
+		الكود شيفرة شيء أمر cambio cambios changement changements modification modifications mudança mudanças alteração alterações modifica
+		modifiche cambiamento cambiamenti tarea tareas tâche tâches tarefa tarefas compito compiti punto puntos punti ponto pontos point points
+		élément éléments elemento elementos elementi item items البنود بند المهام مهمة النقاط تعديل تغيير cosa cosas coisa coisas chose choses
+		cose funcionalidad funcionalidades funcionalidade fonctionnalité fonctionnalités funzionalità función funciones função funções fonction
+		fonctions funzione funzioni paso pasos passo passos passi passaggio passaggi étape étapes etapa etapas fase fasi ticket tickets bug bugs
+		bogue error errores erro erros erreur erreurs errore errori corrección correcciones correção correções correction corrections
+		correzione correzioni parte partes parti partie parties línea líneas linha linhas ligne lignes riga righe linea linee mejora mejoras
+		melhoria melhorias amélioration améliorations miglioramento miglioramenti requisito requisitos requisiti exigence exigences feature
+		features story stories issue issues ميزة ميزات خطوة خطوات خطأ أخطاء إصلاح جزء أجزاء سطر عمل`)
+	narrowEnders = lazyWordSet(`todavía todavia aún aun ahora ya hoy nunca jamás jamas tampoco ainda agora já ja hoje jamais também tambem tampouco
+		encore maintenant aujourd'hui ancora ora adesso mai oggi neanche nemmeno noch jetzt heute vorerst erstmal erst mehr nog nu vandaag
+		voorlopig eerst jeszcze teraz dziś dzisiaj nigdy пока сейчас ещё еще сегодня никогда вообще الآن بعد أبدا أبدًا أبداً مطلقا مطلقًا
+		مطلقاً dulu sekarang lagi apa apapun apa-apa sama bitte alsjeblieft alstublieft proszę пожалуйста svp stp s'il tolong mohon please pls y
+		e et und i и а но или ни ou oder of lub albo ani pero mas mais aber maar ale sino sondern ni nem né ma tapi dan atau hasta até ate
+		jusqu'à jusqu'au jusqu'aux fino finché bis tot dopóki póki aż до حتى sampai hingga sebelum antes avant prima bevor voordat zanim перед
+		قبل porque parce perché weil omdat bo ponieważ потому لأن karena car puisque denn want poiché sin sem sans senza ohne zonder bez без
+		بدون دون tanpa mientras enquanto durante pendant tant lorsque mentre solange während zolang terwijl podczas selama sementara أثناء
+		خلال بينما ريثما aquí aqui acá aca ahí ici hier tutaj tu здесь тут هنا inmediatamente enseguida imediatamente immédiatement tout
+		subito immediatamente sofort meteen direct natychmiast сразу немедленно فورا فوراً فورًا langsung segera absolutamente absolument
+		assolutamente affatto überhaupt keinesfalls helemaal absoluut wcale absolutnie совсем абсолютно إطلاقا إطلاقاً إطلاقًا نهائيا نهائياً
+		نهائيًا بتاتا بتاتاً بتاتًا sequer حاليا حالياً حاليًا hari minggu التالية أدناه suivants suivantes ci-dessous ci-dessus siguientes
+		seguintes abaixo seguenti elencati folgenden unten volgende onderstaande poniższych następujących следующие ниже berikut esistente
+		esistenti existente existentes existant existants existante existantes vorhandenen bestehenden bestaande istniejącego istniejących
+		istniejące существующий существующие существующего существующих الحالي الحالية الموجودة actual actuales atual atuais actuel actuels
+		actuelle actuelles attuale attuali aktuellen huidige obecny obecnego obecnych aktualnego текущий текущие текущего текущих aan an um`)
+	narrowAsideLeads = lazyWordSet(`por pour per de na w voor на من en para bajo sous unter onder pod od em in auf во على di yang du`)
+	narrowArticles   = lazyWordSet(`el le il la lo`)
+	narrowAsideWords = lazyWordSet(`ahora momento enquanto agora ora adesso l'instant instant moment maintenant razie ogóle nu данный сегодня
+		favor favore فضلك absoluto nada niente nulla manera forma modo jeito hipótese tout inmediato imediato razu żadnym żadnej keinen keinem
+		geen время الإطلاق sini ada`)
+	narrowReferenceLeads = lazyWordSet(`en dans no na nos nas em nel nella nello nei negli nelle in im w we в во في di dem den der die het deze dit
+		diesem dieser dieses este esta estos estas ese esa esos esas ce cette ces cet questo questa questi queste neste nesta nestes nestas deste
+		desta destes destas`)
+	narrowProjects = lazyWordSet(`proyecto proyectos projeto projetos projet projets progetto progetti projekt projekts projektes projekte project
+		projecten projektu projekcie проект проекта проекте проекту المشروع مشروع proyek projek repositorio repositório dépôt repository
+		repositorys repo repos repozytorium репозиторий репозитория репозитории репо المستودع مستودع repositori codebase aplicación aplicação
+		aplicativo application applicazione anwendung applicatie aplikacja aplikacji приложение приложения التطبيق aplikasi app`)
+	koreanHolds = lazyWordSet(`아직 절대 절대로 당분간 일단 우선 제발 그냥 지금 지금은 또 또한 그리고 먼저 아예 전혀 모든 어떤 아무 기존 이 그 저 전체 오늘 내일
+		당장 이번 현재 결코 함부로 마음대로 임의로 전부 일체 어떠한 어느 각 프로젝트 저장소 리포지토리`)
+)
+
+var japaneseHolds = []string{
+	"全", "各", "全ての", "すべての", "既存の", "どの", "この", "これらの", "その", "それらの", "あらゆる", "いかなる", "一切の", "以下の", "上記の", "今", "今日",
+	"当面", "当分", "絶対", "一切", "全然", "現在", "本日", "今週", "今回", "現時点", "現段階", "プロジェクトの", "リポジトリの",
+}
+
+var chineseHolds = []string{
+	"文件", "代码", "代碼", "程式", "东西", "東西", "事", "改动", "改動", "修改", "变更", "變更", "更改", "功能", "任务", "任務", "项", "項", "一项", "一項",
+	"一个", "一個", "内容", "內容", "部分", "工作", "檔案", "地方", "条", "條", "一条", "一條", "实现", "實作", "操作", "步骤", "步驟", "计划", "計劃", "需求",
+	"现有", "現有", "已有", "既有", "原有", "当前", "當前", "目前", "源代码", "源代碼", "源码", "源碼", "改变", "改變", "仓库", "倉庫", "新功能",
+}
+
+func heldNarrowed(lower string, at int, phrase string) bool {
+	switch {
+	case strings.HasPrefix(phrase, "파일") || strings.HasPrefix(phrase, "코드"):
+		return koreanNarrowed(heldWords(heldTokens(clauseBefore(lower[:at]))))
+	case strings.HasPrefix(phrase, "ファイル") || strings.HasPrefix(phrase, "コード"):
+		return japaneseNarrowed(lower[:at])
+	case strings.HasSuffix(phrase, "任何"):
+		return chineseNarrowed(lower[at+len(phrase):])
+	}
+	count := len(strings.Fields(phrase))
+	words := heldWords(heldTokens(clauseAfter(lower[at:])))
+	if len(words) < count {
+		return false
+	}
+	tail := words[count:]
+	switch last := words[count-1]; {
+	case narrowQuantifiers(last):
+		for len(tail) > 0 && narrowOfWords(tail[0]) {
+			tail = tail[1:]
+		}
+		if len(tail) == 0 || narrowListWords(tail[0]) {
+			return false
+		}
+		if !narrowWholeObjects(tail[0]) {
+			return true
+		}
+		tail = tail[1:]
+	case !narrowObjects(last):
+		return false
+	}
+	return len(tail) > 0 && !narrowEnd(tail)
+}
+
+func narrowEnd(tail []string) bool {
+	first, next := tail[0], wordAt(tail, 1)
+	if narrowEnders(first) || strings.HasPrefix(first, "و") {
+		return true
+	}
+	if narrowArticles(next) {
+		next = wordAt(tail, 2)
+	}
+	if narrowAsideLeads(first) && (narrowAsideWords(next) || narrowQuantifiers(next)) {
+		return true
+	}
+	for len(tail) > 1 && (narrowOfWords(tail[0]) || narrowReferenceLeads(tail[0])) {
+		tail = tail[1:]
+	}
+	return (narrowObjects(tail[0]) || narrowProjects(tail[0])) && (len(tail) == 1 || narrowEnd(tail[1:]))
+}
+
+func koreanNarrowed(words []string) bool {
+	if len(words) == 0 {
+		return false
+	}
+	last := words[len(words)-1]
+	final, _ := utf8.DecodeLastRuneInString(last)
+	return !koreanHolds(last) && !strings.ContainsRune("은는도에서고요면만을를이가과와며", final)
+}
+
+func japaneseNarrowed(before string) bool {
+	for _, hold := range japaneseHolds {
+		if strings.HasSuffix(before, hold) {
+			return false
+		}
+	}
+	last, _ := utf8.DecodeLastRuneInString(before)
+	return last == 'の' || last == 'ー' || unicode.IsDigit(last) || unicode.In(last, unicode.Katakana, unicode.Han, unicode.Latin)
+}
+
+func chineseNarrowed(rest string) bool {
+	first, _ := utf8.DecodeRuneInString(rest)
+	if !unicode.Is(unicode.Han, first) {
+		return false
+	}
+	for _, hold := range chineseHolds {
+		if strings.HasPrefix(rest, hold) {
+			return false
+		}
+	}
+	return true
 }
 
 func heldElse(lower string, start, end int) bool {
