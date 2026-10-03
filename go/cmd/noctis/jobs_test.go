@@ -194,6 +194,44 @@ func TestAJobStopEndsTheCommandAndWhatItStarted(t *testing.T) {
 	}
 }
 
+func TestAJobWhoseWrapperIsKilledAloneGoesOnUntilItsCommandEnds(t *testing.T) {
+	lab := newJobLab(t, "jw-e2e")
+	if run := lab.noctis("job", "run", "--label", "orphan", "--", shellFor("sleep 60", "ping -n 60 127.0.0.1 > nul")); run.code != 0 {
+		t.Fatalf("noctis job run failed:\n%s", run)
+	}
+	record := lab.waitFor("1", "child", 30*time.Second)
+	wrapper, child := int(numberOr(record, "pid", 0)), int(numberOr(record, "child", 0))
+	process, err := os.FindProcess(wrapper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(10 * time.Second); processAlive(wrapper); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the job's wrapper (pid %d) still runs 10 s after it was killed", wrapper)
+		}
+	}
+	if !processAlive(child) {
+		t.Fatalf("setup: the job's command (pid %d) ended with its wrapper", child)
+	}
+	if list := lab.noctis("job", "list"); !strings.Contains(list.stdout, "1  running  ") {
+		t.Fatalf("the job's wrapper was killed alone, as kill -9 or taskkill /F without /T does, and its command (pid %d) still runs, but noctis job list says:\n%s", child, list)
+	}
+	if stop := lab.noctis("job", "stop", "1"); stop.code != 0 || !strings.Contains(stop.stdout, "job 1 (orphan) stopped") {
+		t.Fatalf("noctis job stop did not stop the job whose wrapper was killed:\n%s", stop)
+	}
+	for deadline := time.Now().Add(10 * time.Second); processAlive(child); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the job's command (pid %d) still runs 10 s after noctis job stop", child)
+		}
+	}
+	if list := lab.noctis("job", "list"); !strings.Contains(list.stdout, "1  stopped  ") {
+		t.Fatalf("noctis job list does not show the job as stopped:\n%s", list)
+	}
+}
+
 func TestADoubleDashEndsWhatNoctisReadsAsItsOwn(t *testing.T) {
 	previous := args
 	t.Cleanup(func() { args = previous })
