@@ -230,12 +230,16 @@ func TestTheHeldBackPhrasesAreWrittenAsTheyAreMatched(t *testing.T) {
 }
 
 func TestAHugePromptIsReadQuickly(t *testing.T) {
-	prompt := strings.Repeat("Do not touch the migrations folder, and never write to the production database. ", 1200) + heldBackItems
-	started := time.Now()
-	job := promptJobOf(prompt)
-	heldBackWork(job.text, job.prose, job.lead)
-	heldBackWork(prompt, prompt, true)
-	if elapsed := time.Since(started); elapsed > 2*time.Second {
-		t.Errorf("reading a %d-byte prompt took %s", len(prompt), elapsed)
+	for _, prompt := range []string{
+		strings.Repeat("Do not touch the migrations folder, and never write to the production database. ", 1200) + heldBackItems,
+		"Here is the backlog. " + strings.Repeat("and after our call ", 8000) + "don't implement any of these yet." + heldBackItems,
+	} {
+		started := time.Now()
+		job := promptJobOf(prompt)
+		heldBackWork(job.text, job.prose, job.lead)
+		heldBackWork(prompt, prompt, true)
+		if elapsed := time.Since(started); elapsed > 2*time.Second {
+			t.Errorf("reading a %d-byte prompt took %s", len(prompt), elapsed)
+		}
 	}
 }

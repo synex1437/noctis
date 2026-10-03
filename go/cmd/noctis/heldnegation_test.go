@@ -38,6 +38,14 @@ func TestALeadInBeforeAProhibitionIsNotAConditionOnIt(t *testing.T) {
 		"Whether the tests pass or not, don't implement any of these yet.",
 		"After all, it is only a draft, so don't implement any of these yet.",
 		"Ask me if anything is unclear, but don't implement any of these yet.",
+		"After our call, don't implement any of these yet.",
+		"After we talked yesterday, I would rather wait, so don't implement any of these yet.",
+		"Unless I say otherwise, don't implement any of these yet.",
+		"Unless I tell you so, do not start on any of these.",
+		"When you have time, read through these, but don't implement any of them yet.",
+		"Whenever you get a chance, look these over, but do not start on any of them yet.",
+		"In case it wasn't clear, don't implement any of these yet.",
+		"In case you missed it, don't implement any of these yet.",
 	} {
 		if items, held := heldJob(intro + lead + heldBackItems); items != 4 || held == "" {
 			t.Errorf("%q is not read as a prohibition: %d items, held %q", lead, items, held)
@@ -55,6 +63,13 @@ func TestAConditionBeforeAProhibitionStillMakesItARuleOnTheWork(t *testing.T) {
 		"Do these in order. Except for the docs, don't touch any files.",
 		"Do these in order but if a test fails don't change any of these files.",
 		"Do these in order. Even if a test fails, don't touch any of the files.",
+		"Work through these in order. In case the build breaks, don't touch any of these until it is green again.",
+		"Do these in order. After the migration, don't touch any of these files.",
+		"Do these in order. Unless a test fails, don't change any of these files.",
+		"Do these in order. If the build fails or otherwise breaks, don't touch any of these files.",
+		"Do these in order. When you have the results, don't change any of these files.",
+		"Do these in order. If you missed a step, don't change any of these files.",
+		"Do these in order. If the test output wasn't clear, don't touch any of these files and ask me first.",
 	} {
 		if items, held := heldJob(lead + heldBackItems); items != 4 || held != "" {
 			t.Errorf("%q: a conditional rule held the job back: %d items, held %q", lead, items, held)
