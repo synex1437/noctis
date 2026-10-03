@@ -107,6 +107,20 @@ func TestATickThatChangesNothingElseSkipsTheCheckThatPassedOnTheSameTree(t *test
 	}
 }
 
+func TestANewFileRunsTheCheckAgainWhereGitHidesUntrackedFiles(t *testing.T) {
+	cfg, project, counter := checkTierSandbox(t, 3, true)
+	gitIn(t, project, "config", "status.showUntrackedFiles", "no")
+	section(cfg, "queue")["verifyCommand"] = countingCheck(counter, "full", "")
+	tickTiered(t, project, 3, 1)
+	continues(t, stopHookOutput(t, stopInput("tier6", project), cfg), 2)
+	writeRepoFile(t, project, "src/new.txt", "new\n")
+	tickTiered(t, project, 3, 2)
+	continues(t, stopHookOutput(t, stopInput("tier6", project), cfg), 1)
+	if runs := checkRuns(counter, "full"); runs != 2 {
+		t.Fatalf("with status.showUntrackedFiles no, the check ran %d time(s) for two items, the second of which only added a file: it was skipped as unchanged", runs)
+	}
+}
+
 func TestTheSkipNeedsARepositoryAndCanBeTurnedOff(t *testing.T) {
 	for _, setting := range []struct {
 		name       string

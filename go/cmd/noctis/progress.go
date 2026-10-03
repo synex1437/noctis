@@ -28,7 +28,7 @@ type worktreeDigest struct {
 }
 
 func worktreeFingerprint(cwd, leaveOut string) string {
-	raw, ok := gitStatusUncached(cwd)
+	raw, ok := gitStatusUncached(cwd, "--untracked-files=normal")
 	if ok && slices.ContainsFunc(strings.Split(raw, "\n"), untrackedFolder) {
 		raw, ok = gitStatusUncached(cwd, "--untracked-files=all")
 	}
