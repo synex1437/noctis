@@ -1169,7 +1169,9 @@ var (
 	romanceFillers = lazyWordSet(`todavía aún ahora ya hoy mañana momento rato semana mes día sprint por el la los las este esta de del al
 		ainda agora já hoje amanhã enquanto pelo pela mês dia do da no na neste nesta encore maintenant l'instant instant moment pour le ce cette
 		semaine mois jour aujourd'hui demain d'ici lunes martes miércoles jueves viernes sábado domingo segunda terça quarta quinta sexta
-		lundi mardi mercredi jeudi vendredi samedi dimanche`)
+		lundi mardi mercredi jeudi vendredi samedi dimanche noche tarde madrugada mediodía fin vez hora año días semanas meses próximo próxima
+		siguiente noite manhã fim ano dias seguinte soir soirée matin matinée nuit midi après-midi l'après-midi week-end weekend fois heure
+		année an l'an l'année jours journée semaines prochain prochaine suivant suivante`)
 	romanceLeads = lazyWordSet(`que favor plaît plait svp stp porfa y e et o ou mais mas pero pues então entonces alors donc puis luego
 		ensuite surtout sobretudo todo simplemente simplesmente simplement juste solo sólo só apenas también também aussi tampoco nem ni`)
 	romanceSubjects = lazyWordSet(`je il elle ils elles ça cela ceci qu'il qu'elle qu'ils qu'elles yo él ella ello ellos ellas esto eso eu ele
