@@ -75,6 +75,13 @@ func TestTheImperativeFormsOfThoseProhibitionsStillHoldTheJobBack(t *testing.T) 
 		"Durante a demo não mexa em nada, primeiro vou revisar.",
 		"Bitte noch nicht anfangen, ich muss erst mit dem Team reden.",
 		"Sie können noch nicht anfangen, ich prüfe erst alles.",
+		"Ce soir ne modifie rien, je relis tout demain.",
+		"La semaine prochaine ne modifie rien, on gèle le code.",
+		"L'après-midi ne touche à rien, la démo est à 16 h.",
+		"Esta noche no cambie nada; primero revisaré la lista.",
+		"Este año no haga nada con la base de datos.",
+		"Este fim de semana não mexa em nada, primeiro vou revisar.",
+		"Esta tarde não altere nada, a demo é às 16 h.",
 	} {
 		if items, held := heldJob(lead + heldBackItems); items != 4 || held == "" {
 			t.Errorf("%q is no longer read as a prohibition: %d items, held %q", lead, items, held)
@@ -178,6 +185,7 @@ func TestAStatementThatReadsLikeAProhibitionKeepsTheChecklist(t *testing.T) {
 		"O botão não faz nada quando clico em Salvar. Corrija estes problemas em ordem:",
 		"Necesito que el nuevo script no cambie nada en producción. Haz estos puntos en orden:",
 		"Le nouveau cache ne modifie rien, la page reste lente. Corrige ces problèmes dans l'ordre :",
+		"Ce soir le nouveau cache ne modifie rien, la page reste lente. Corrige ces problèmes dans l'ordre :",
 		"Die Tests können noch nicht anfangen, solange der Server fehlt. Erledige deshalb diese Punkte der Reihe nach:",
 	} {
 		if items, held := heldJob(lead + heldBackItems); items != 4 || held != "" {
