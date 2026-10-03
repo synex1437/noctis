@@ -1073,7 +1073,7 @@ func holderStale(owner string, age time.Duration) bool {
 		return leftByDeadHolder(age)
 	case parsed && pid != os.Getpid():
 		return age > lockLiveHolderMs*time.Millisecond
-	case !parsed && owner != "":
+	case !parsed:
 		return leftByDeadHolder(age)
 	}
 	return age > lockStaleMs*time.Millisecond

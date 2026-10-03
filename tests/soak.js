@@ -870,13 +870,15 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       break;
     case 'stale-lock': {
       const lock = path.join(guardDir, 'state.lock');
-      fs.writeFileSync(lock, rng() < 0.5 ? '' : '999999');
-      const old = new Date(Date.now() - 60000);
+      const owner = rng() < 0.5 ? '' : '999999';
+      const age = owner ? 60000 : 3000;
+      fs.writeFileSync(lock, owner);
+      const old = new Date(Date.now() - age);
       fs.utimesSync(lock, old, old);
       timedHook(acc, { hook_event_name: 'PostToolBatch', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript }, { NOCTIS_NO_QUIET: '1' });
       if (acc.lastRunMs > 3000) anomaly(`a stale lock cost the hook ${Math.round(acc.lastRunMs)} ms ${acc.name}`);
       acc.run(['on']);
-      if (fs.existsSync(lock) && Date.now() - fs.statSync(lock).mtimeMs > 30000) anomaly(`stale lock survived a state write ${acc.name}`);
+      if (fs.existsSync(lock) && Date.now() - fs.statSync(lock).mtimeMs > age / 2) anomaly(`stale lock survived a state write ${acc.name}`);
       break;
     }
     case 'hook-kill': {
