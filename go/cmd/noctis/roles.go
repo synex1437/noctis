@@ -15,6 +15,8 @@ var roleNames = []string{"code", "research", "planning", "digest", "explore", "f
 
 var validEfforts = map[string]bool{"low": true, "medium": true, "high": true, "xhigh": true, "max": true}
 
+var effortNames = []string{"low", "medium", "high", "xhigh", "max"}
+
 var effortlessRoles = map[string]bool{"planning": true, "explore": true}
 
 var roleModelPattern = lazyRegexp(`^[A-Za-z0-9._:@/\[\]-]+$`)
@@ -156,10 +158,14 @@ func roleValueParts(value string, anyModel bool) (model, effort string, hasEffor
 	if cut < 0 {
 		return value, "", false
 	}
-	if tail := strings.ToLower(strings.TrimSpace(value[cut+1:])); anyModel && tail != "" && !validEfforts[tail] {
+	if tail := strings.ToLower(strings.TrimSpace(value[cut+1:])); anyModel && tail != "" && !validEfforts[tail] && !mistypedEffort(value[:cut], tail) {
 		return value, "", false
 	}
 	return strings.TrimSpace(value[:cut]), value[cut+1:], true
+}
+
+func mistypedEffort(model, tail string) bool {
+	return knownModelName(model) && closestFlag(tail, effortNames) != ""
 }
 
 func roleFlagError(role, value string, anyModel bool) error {
