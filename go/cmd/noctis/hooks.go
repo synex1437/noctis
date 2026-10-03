@@ -584,8 +584,11 @@ func onUserPromptSubmit(input, cfg object) {
 		if getMap(state, "routes")[sid] != nil {
 			updateState(func(next object) { delete(stateMap(next, "routes"), sid) })
 		}
-		if controlCommand(getString(input, "prompt")) == "/"+pluginName+":start" {
+		switch controlCommand(getString(input, "prompt")) {
+		case "/" + pluginName + ":start":
 			emit(object{"decision": "block", "reason": T("queue.startPaused", formatTime(numberOr(state, "disabledUntil", 0)), pluginName)})
+		case "":
+			takeOverOrRefuse(sid, state)
 		}
 		return
 	}
@@ -631,6 +634,9 @@ func onUserPromptSubmit(input, cfg object) {
 		waitContext = withCutOffNote(sid, outcome.context)
 	case promptFromPlugin:
 		forgetCutOffs(sid)
+	}
+	if takeOverOrRefuse(sid, state) {
+		return
 	}
 	retireOwnCheckpoint(state, sid)
 	contexts := []string{}
@@ -735,6 +741,25 @@ func onUserPromptSubmit(input, cfg object) {
 	if len(output) > 0 {
 		emit(output)
 	}
+}
+
+func takeOverOrRefuse(sid string, state object) bool {
+	if observing || promptFromPlugin || isHandoffSession(sid) {
+		return false
+	}
+	if parked := getMap(getMap(state, "waits"), sid); parked == nil || hookSleeping(parked) {
+		return false
+	}
+	handoff, taken := promptTakesOver(sid)
+	if handoff != nil {
+		emit(object{"decision": "block", "reason": T("handoff.blocked", formatTime(numberOr(handoff, "at", 0)), getString(handoff, "model"), sid)})
+		return true
+	}
+	if taken != nil {
+		journal(sid, "UserPromptSubmit", "skip-launch", "the session went on in its own window after the model switch", nil)
+		logInfo("prompt for %s: the session goes on in its own window, so its relaunch on the fallback model is dropped", sid)
+	}
+	return false
 }
 
 func pinnedSubagentModel(cfg, input object) string {
