@@ -86,6 +86,17 @@ func TestStopsWithoutEditsAreStuckAsBefore(t *testing.T) {
 	}
 }
 
+func TestNewFilesBetweenStopsAreProgressWhereGitHidesUntrackedFiles(t *testing.T) {
+	cfg, project := progressSandbox(t, true)
+	gitIn(t, project, "config", "status.showUntrackedFiles", "no")
+	steps := stopSteps(t, cfg, "tp9", project, 9, func(stop int) {
+		writeRepoFile(t, project, fmt.Sprintf("work/%d.txt", stop), fmt.Sprintf("step %d\n", stop))
+	})
+	if want := []string{"continue", "continue", "continue", "continue", "continue", "escalate", "set aside", "let go"}; !slices.Equal(steps, want) {
+		t.Fatalf("with status.showUntrackedFiles no, a session that adds a file before every stop got %v, want %v, as where git lists untracked files", steps, want)
+	}
+}
+
 func TestATreeThatReturnsToAnEarlierStateIsNotProgress(t *testing.T) {
 	cfg, project := progressSandbox(t, true)
 	steps := stopSteps(t, cfg, "tp3", project, 9, func(stop int) {
