@@ -384,10 +384,90 @@ func englishForbids(sentence []heldToken, listOnly, codeIsPart bool) string {
 func opensCondition(words []string, index int) bool {
 	word, next, prev := words[index], wordAt(words, index+1), wordAt(words, index-1)
 	switch {
+	case word == "in" && next == "case":
+		index++
 	case !conditionWords(word), word == "once" && (next == "again" || next == "more"), word == "after" && next == "all":
 		return false
 	}
-	return prev == "" || clauseJoins(prev) || conditionLeads(prev)
+	return (prev == "" || clauseJoins(prev) || conditionLeads(prev)) && !leadIn(words, index)
+}
+
+var (
+	sayVerbs        = lazyWordSet(`say says said tell tells told state stated note noted instruct instructed specify specified ask asked`)
+	clarityWords    = lazyWordSet(`clear obvious explicit`)
+	clarityLeads    = lazyWordSet(`it that this i`)
+	pastNegations   = lazyWordSet(`wasn't weren't didn't haven't hasn't hadn't wasnt werent didnt havent hasnt hadnt`)
+	pastAuxiliaries = lazyWordSet(`was were did have has had`)
+	asideVerbs      = lazyWordSet(`missed wondering wondered forgot forgotten`)
+	asideObjects    = lazyWordSet(`it this that why`)
+	addressees      = lazyWordSet(`you you've you're`)
+	meetingOwners   = lazyWordSet(`our the my your this that today's yesterday's last`)
+	meetingNouns    = lazyWordSet(`call calls meeting meetings chat talk discussion conversation sync standup stand-up catch-up catchup`)
+	talkingVerbs    = lazyWordSet(`talking speaking discussing meeting chatting`)
+	talkedVerbs     = lazyWordSet(`talked spoke met discussed chatted agreed decided synced`)
+	spareVerbs      = lazyWordSet(`have get got find`)
+	spareNouns      = lazyWordSet(`time chance moment minute sec second`)
+)
+
+const leadInMaxWords = 8
+
+func leadIn(words []string, index int) bool {
+	end := index + 1
+	for end < len(words) && words[end] != "" && englishNegationEnd(words, end) < 0 {
+		if end-index > leadInMaxWords {
+			return false
+		}
+		end++
+	}
+	opener, clause := words[index], words[index+1:end]
+	first := wordAt(clause, 0)
+	for at, word := range clause {
+		switch {
+		case word == "otherwise" || word == "so":
+			if (opener == "unless" || opener == "except") && (sayVerbs(wordAt(clause, at-1)) || sayVerbs(wordAt(clause, at-2))) {
+				return true
+			}
+		case clarityWords(word):
+			if clarityLeads(first) && pastNegation(clause[:at]) {
+				return true
+			}
+		case asideVerbs(word):
+			if addressees(first) && (at == len(clause)-1 || at == len(clause)-2 && asideObjects(clause[at+1])) {
+				return true
+			}
+		}
+	}
+	switch opener {
+	case "after":
+		noun := first
+		if meetingOwners(noun) {
+			noun = wordAt(clause, 1)
+		}
+		return meetingNouns(noun) || talkingVerbs(first) || (first == "we" || first == "i") && talkedVerbs(wordAt(clause, 1))
+	case "when", "whenever":
+		return spareTime(clause)
+	}
+	return false
+}
+
+func pastNegation(words []string) bool {
+	for at, word := range words {
+		if pastNegations(word) || word == "not" && pastAuxiliaries(wordAt(words, at-1)) {
+			return true
+		}
+	}
+	return false
+}
+
+func spareTime(clause []string) bool {
+	switch strings.Join(clause, " ") {
+	case "possible", "you can", "you're free", "you are free":
+		return true
+	}
+	if len(clause) < 3 || len(clause) > 4 || !addressees(clause[0]) || !spareVerbs(clause[1]) || !spareNouns(clause[len(clause)-1]) {
+		return false
+	}
+	return len(clause) == 3 || clause[2] == "a" || clause[2] == "the" || clause[2] == "some"
 }
 
 var (
