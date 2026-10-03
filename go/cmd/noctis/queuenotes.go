@@ -78,8 +78,9 @@ func runQueueNote(target string) {
 		for _, note := range queueNotesOf(notes, target) {
 			kept = append(kept, []any{note.at, note.text})
 		}
+		count := queueNotesCount(notes, target, len(kept)) + 1
 		kept = append(kept, []any{now, text})
-		notes[queueTrustKey(target)] = object{"path": target, "at": now, "notes": kept[max(0, len(kept)-queueNotesKept):]}
+		notes[queueTrustKey(target)] = object{"path": target, "at": now, "count": count, "notes": kept[max(0, len(kept)-queueNotesKept):]}
 		if err := writeJSONAtomic(queueNotesFile(), notes); err != nil {
 			fail("queue-notes.json not written: %v", err)
 			return
@@ -97,8 +98,13 @@ func runQueueNote(target string) {
 // lastQueueNotes is the last decisions noted on the queue file at path, oldest first, and how many
 // were noted in all.
 func lastQueueNotes(path string) ([]queueNote, int) {
-	notes := queueNotesOf(readJSON(queueNotesFile()), path)
-	return notes[max(0, len(notes)-queueNotesShown):], len(notes)
+	stored := readJSON(queueNotesFile())
+	notes := queueNotesOf(stored, path)
+	return notes[max(0, len(notes)-queueNotesShown):], queueNotesCount(stored, path, len(notes))
+}
+
+func queueNotesCount(notes object, path string, kept int) int {
+	return max(kept, int(numberOr(getMap(notes, queueTrustKey(path)), "count", 0)))
 }
 
 // printQueueNotes prints the last decisions noted on the queue file at target, for noctis queue

@@ -43,6 +43,22 @@ func TestAQueueFileKeepsItsLastDecisionsAndDropsAFileLeftForAMonth(t *testing.T)
 	}
 }
 
+func TestQueueStatusAndTheQueueDirectiveCountEveryDecisionNotedNotOnlyTheOnesKept(t *testing.T) {
+	cfg, project, _, _ := deferSandbox(t)
+	noted := queueNotesKept + 10
+	for index := 1; index <= noted; index++ {
+		queueCommand(t, cfg, project, "note", fmt.Sprintf("decision %d", index))
+	}
+	if status := queueCommand(t, cfg, project, "status"); !strings.Contains(status, T("queue.notes", noted)) {
+		t.Errorf("after %d decisions noctis queue status says:\n%s", noted, status)
+	}
+	start := object{"hook_event_name": "SessionStart", "source": "startup", "session_id": "qn1", "cwd": project}
+	context := getString(getMap(hookOutput(t, onSessionStart, start, cfg), "hookSpecificOutput"), "additionalContext")
+	if want := fmt.Sprintf("(the last %d of %d)", queueNotesShown, noted); !strings.Contains(context, want) {
+		t.Errorf("after %d decisions the queue directive does not say %q:\n%s", noted, want, context)
+	}
+}
+
 func TestTheQueueDirectiveAsksForDecisionsAndGivesTheLastOnes(t *testing.T) {
 	cfg, project, _, _ := deferSandbox(t)
 	start := object{"hook_event_name": "SessionStart", "source": "startup", "session_id": "qn1", "cwd": project}
