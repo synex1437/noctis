@@ -16,6 +16,8 @@ import (
 
 var keepModelPattern = lazyRegexp(`(?i)fable|opus`)
 
+var shellAssignment = lazyRegexp(`^[A-Za-z_][A-Za-z0-9_]*=`)
+
 var thresholdPresets = map[string]object{
 	"conservative": {"session5h": float64(85), "weeklyAll": float64(82), "weeklyFable": float64(90)},
 	"balanced":     {"session5h": float64(92), "weeklyAll": float64(95), "weeklyFable": float64(97)},
@@ -512,6 +514,21 @@ func ownStatusLine(command string) bool {
 	return strings.Contains(command, "guard.js") || strings.Contains(command, pluginName)
 }
 
+func noctisWroteStatusLine(command string) bool {
+	if strings.Contains(command, "guard.js") {
+		return true
+	}
+	segments := readShellCommand(command, bashDialect, true).segments
+	if len(segments) != 1 {
+		return false
+	}
+	words := segments[0]
+	for len(words) > 0 && shellAssignment.MatchString(words[0].text) {
+		words = words[1:]
+	}
+	return len(words) >= 2 && namesNoctis(words[0]) && words[1].text == "statusline"
+}
+
 func goneBinary(binary string) string {
 	if strings.Contains(binary, pluginName) && filepath.IsAbs(filepath.FromSlash(binary)) && statSafe(binary) == nil {
 		return binary
@@ -614,7 +631,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	asRead := copyObject(data)
 	chained := ""
 	previous := getString(getMap(data, "statusLine"), "command")
-	if previous != "" && !strings.Contains(previous, "guard.js") && !strings.Contains(previous, "noctis") && getString(section(config, "statusline"), "chainCommand") != previous {
+	if previous != "" && !noctisWroteStatusLine(previous) && getString(section(config, "statusline"), "chainCommand") != previous {
 		statusline := section(config, "statusline")
 		statusline["chainCommand"] = previous
 		config["statusline"] = statusline
@@ -1050,7 +1067,7 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 	asRead := copyObject(data)
 	chain := getString(section(guardConfig, "statusline"), "chainCommand")
 	statusLine := getString(getMap(data, "statusLine"), "command")
-	if strings.Contains(statusLine, "guard.js") || strings.Contains(statusLine, "noctis") {
+	if noctisWroteStatusLine(statusLine) {
 		if chain != "" {
 			line := getMap(data, "statusLine")
 			line["type"], line["command"] = "command", chain
