@@ -359,6 +359,8 @@
   "report.header": "%s hari terakhir · %d transkrip · akun %s",
   "report.byModel": "Per model (input / output / cache read / cache write · panggilan):",
   "report.byDay": "Per hari (total token · panggilan):",
+  "report.title": "Laporan noctis",
+  "report.columns": "model|input|output|cache read|cache write|panggilan|biaya",
   "report.keptOff": "Dijauhkan dari %s: %s token dalam %d panggilan subagen pada model lain; token subagen lainnya: %s",
   "report.events": "Peristiwa: %d dialihkan · %d penantian · %d peralihan cakupan · %d lanjutan antrean · %d peluncuran otomatis",
   "report.errors": "Kesalahan terbaru (%s):",

@@ -359,6 +359,8 @@
   "report.header": "最近 %s 天 · %d 份记录 · 账户 %s",
   "report.byModel": "按模型（输入 / 输出 / 缓存读取 / 缓存写入 · 调用次数）：",
   "report.byDay": "按日期（总 token · 调用次数）：",
+  "report.title": "noctis 报告",
+  "report.columns": "模型|输入|输出|缓存读取|缓存写入|调用次数|成本",
   "report.keptOff": "从 %[1]s 分流出去的：在其他模型上的 %[3]d 次子代理调用共 %[2]s token；其他子代理 token：%[4]s",
   "report.events": "事件：路由 %d · 等待 %d · 模型切换 %d · 队列继续 %d · 自动启动 %d",
   "report.errors": "最近的错误（%s）：",
