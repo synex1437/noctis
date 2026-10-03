@@ -1170,11 +1170,11 @@ func heldStatement(before string) bool {
 }
 
 func heldElse(lower string, start, end int) bool {
-	after := []rune(lower[end:])
+	after := []rune(lower[end:min(len(lower), end+16*utf8.UTFMax)])
 	if len(after) > 16 {
 		after = after[:16]
 	}
-	before := []rune(lower[:start])
+	before := []rune(lower[max(0, start-8*utf8.UTFMax):start])
 	if len(before) > 8 {
 		before = before[len(before)-8:]
 	}

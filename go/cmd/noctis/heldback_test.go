@@ -233,6 +233,7 @@ func TestAHugePromptIsReadQuickly(t *testing.T) {
 	for _, prompt := range []string{
 		strings.Repeat("Do not touch the migrations folder, and never write to the production database. ", 1200) + heldBackItems,
 		"Here is the backlog. " + strings.Repeat("and after our call ", 8000) + "don't implement any of these yet." + heldBackItems,
+		"Hier ist die Liste. " + strings.Repeat("Ändere nichts anderes. ", 8000) + heldBackItems,
 	} {
 		started := time.Now()
 		job := promptJobOf(prompt)
