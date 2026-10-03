@@ -269,7 +269,7 @@ function journaledFableSwitches(acc) {
   return lines.filter((line) => {
     try {
       const row = JSON.parse(line);
-      return row.action === 'switch-model' || (row.event === 'StopFailure' && row.action === 'schedule-resume' && row.window === 'fable');
+      return row.action === 'switch-model';
     } catch {
       return false;
     }

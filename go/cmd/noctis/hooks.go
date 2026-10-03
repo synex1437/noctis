@@ -2321,9 +2321,11 @@ func onStopFailure(input, cfg object) {
 			return
 		}
 		persistModelSwitch(cfg, usage.fable.resetsAt, now)
+		fallback := getString(section(cfg, "models"), "fallback")
+		journal(sid, "StopFailure", "switch-model", scopedLabel(cfg)+" "+formatNumber(usage.fable.used)+"%", object{"to": fallback, "scoped": usage.fable.used})
 		record["window"], record["label"], record["used"] = "fable", scopedLabel(cfg), usage.fable.used
 		record["until"], record["resumeAt"] = failureEnded, float64(now+120)
-		record["modelOverride"] = getString(section(cfg, "models"), "fallback")
+		record["modelOverride"] = fallback
 	default:
 		retry, firstAt := failureRetry(cfg, sid, now)
 		delay, spent := retryDelaySeconds(cfg, retry), retry > stopFailureMaxAttempts
