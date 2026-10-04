@@ -32,6 +32,11 @@ func TestAProhibitionThatGoesOnToAnythingElseIsStillALimitOnTheWork(t *testing.T
 		"Kerjakan semua tugas di bawah ini secara berurutan dan jangan ubah file lain.",
 		"Arbeite die Liste der Reihe nach ab und ändere nichts anderes.",
 		"按顺序完成下面所有任务，不要修改任何其他文件。",
+		"Ändere nichts anderes als die README.",
+		"Ändere keine Dateien bis auf die README.",
+		"No toques nada excepto el README.",
+		"Raak geen bestanden aan behalve de README.",
+		"Non toccare nient'altro.",
 	} {
 		if items, held := heldJob(lead + heldBackItems); items != 4 || held != "" {
 			t.Errorf("%q: a limit on the work held the job back: %d items, held %q", lead, items, held)
@@ -82,6 +87,14 @@ func TestTheImperativeFormsOfThoseProhibitionsStillHoldTheJobBack(t *testing.T) 
 		"Este año no haga nada con la base de datos.",
 		"Este fim de semana não mexa em nada, primeiro vou revisar.",
 		"Esta tarde não altere nada, a demo é às 16 h.",
+		"Mejor no toques nada.",
+		"No projeto não mexa em nada.",
+		"No hagas nada excepto estimar cada punto.",
+		"Ne touche à rien sauf si je te le dis.",
+		"Hier ist die Liste. Ändere nichts anderes als zu schätzen.",
+		"このスクリプトは何も変更しないでください。",
+		"今日は何も変更しない。",
+		"لا تنفذ أي شيء قبل مراجعة التغييرات.",
 	} {
 		if items, held := heldJob(lead + heldBackItems); items != 4 || held == "" {
 			t.Errorf("%q is no longer read as a prohibition: %d items, held %q", lead, items, held)
@@ -110,6 +123,30 @@ func TestARuleOnOnePartOfTheWorkInAPhraseLanguageKeepsTheChecklist(t *testing.T)
 		"Fais tous ces points dans l'ordre et ne touche à aucun test.",
 		"Fai tutti i punti in ordine e non toccare il codice del modulo di pagamento.",
 		"Kerjakan semua tugas secara berurutan dan jangan ubah file di folder migrasi.",
+		"Не трогай файлы, связанные с миграциями.",
+		"Ne touche pas aux fichiers de configuration.",
+		"Ändere die Dateien nicht, die schon getestet sind.",
+		"Ändere die Dateien nicht im Ordner tests.",
+		"No modifiques ningún archivo de configuración.",
+		"Не меняй никакие файлы конфигурации.",
+		"Jangan ubah file konfigurasi.",
+		"로그인 버그를 수정하지 마세요.",
+		"ログイン画面を変更しないでください。",
+		"不要修改登录页面。",
+		"Ändere keine Dateien am Login-Modul.",
+		"No toques los archivos de la próxima versión.",
+		"Не трогай файлы на сервере.",
+		"Ne pas modifier les fichiers de migration.",
+		"No tocar los archivos de configuración.",
+		"Не трогать файлы миграций.",
+		"Nie ruszać plików konfiguracyjnych.",
+		"De bestanden niet aanpassen in de map tests.",
+		"Keine Änderungen am Login-Modul vornehmen.",
+		"Tidak usah mengubah file konfigurasi.",
+		"يرجى عدم تعديل ملفات الترحيل.",
+		"ログイン画面の変更禁止。",
+		"禁止修改登录页面。",
+		"로그인 페이지 수정 금지.",
 	} {
 		if items, held := heldJob(lead + heldBackItems); items != 4 || held != "" {
 			t.Errorf("%q: a rule on one part of the work held the job back: %d items, held %q", lead, items, held)
@@ -173,6 +210,11 @@ func TestARuleOnAllTheFilesOrTheCodeStillHoldsTheListBack(t *testing.T) {
 		"프로젝트 파일을 수정하지 마세요.",
 		"不要修改任何现有文件。",
 		"不要修改任何源代码。",
+		"No toques los archivos del proyecto Atlas.",
+		"No modifiques ninguna línea del código.",
+		"لا تعدل ملفات المشروع.",
+		"Не трогай файлы.",
+		"Jangan ubah file di proyek ini.",
 	} {
 		if items, held := heldJob(lead + heldBackItems); items != 4 || !strings.HasPrefix(held, "the prompt forbids") {
 			t.Errorf("%q no longer holds the job back: %d items, held %q", lead, items, held)
@@ -187,9 +229,267 @@ func TestAStatementThatReadsLikeAProhibitionKeepsTheChecklist(t *testing.T) {
 		"Le nouveau cache ne modifie rien, la page reste lente. Corrige ces problèmes dans l'ordre :",
 		"Ce soir le nouveau cache ne modifie rien, la page reste lente. Corrige ces problèmes dans l'ordre :",
 		"Die Tests können noch nicht anfangen, solange der Server fehlt. Erledige deshalb diese Punkte der Reihe nach:",
+		"Der Login-Knopf geht nicht, sie können noch nicht anfangen.",
+		"O botão de salvar não faz nada quando clico.",
+		"A API não faz nada.",
+		"El botón de guardar no hace nada.",
+		"Le bouton ne fait rien.",
+		"Il pulsante non fa niente.",
+		"الصفحة الجديدة لا تغير شيئا.",
+		"このスクリプトは何も変更しない。",
+		"Het script kan niets aanpassen.",
+		"Das Tool kann keine Änderungen vornehmen.",
 	} {
 		if items, held := heldJob(lead + heldBackItems); items != 4 || held != "" {
 			t.Errorf("%q: a statement held the job back: %d items, held %q", lead, items, held)
+		}
+	}
+}
+
+func TestTheWiderPhraseListsHoldTheJobBack(t *testing.T) {
+	for _, lead := range []string{
+		"Implementeer nog niets.",
+		"Raak de bestanden niet aan.",
+		"Nie ruszaj plików.",
+		"Не меняй ни строчки.",
+		"Ничего не надо делать.",
+		"Не надо ничего делать.",
+		"Non toccare il codice.",
+		"N'écrivez pas de code.",
+		"Ne mettez rien en œuvre pour l'instant.",
+		"Ne code rien.",
+		"Ne commencez pas encore.",
+		"Fang bitte noch nicht an.",
+		"Setz das noch nicht um.",
+		"Ändere die Dateien nicht.",
+		"Jangan ubah kode dulu.",
+		"Jangan sentuh file apa pun.",
+		"Jangan ubah filenya dulu.",
+		"これらを実装しないでください。",
+		"コードには触れないでください。",
+		"이것들을 구현하지 마세요.",
+		"파일을 수정하지 마세요.",
+		"这些先不要实现。",
+		"不要实现这些。",
+	} {
+		if items, held := heldJob(lead + heldBackItems); items != 4 || !strings.HasPrefix(held, "the prompt forbids") {
+			t.Errorf("%q is not read as a prohibition: %d items, held %q", lead, items, held)
+		}
+	}
+}
+
+func TestAnInfinitiveOrAFormalProhibitionHoldsTheJobBack(t *testing.T) {
+	for _, lead := range []string{
+		"Merci de ne rien modifier.",
+		"Veuillez ne pas toucher au code.",
+		"Ne pas modifier les fichiers.",
+		"Ne rien implémenter pour l'instant.",
+		"N'implémente pas pour l'instant.",
+		"Ne pas encore implémenter.",
+		"Ne toucher à rien.",
+		"Ne rien faire pour le moment.",
+		"No tocar nada.",
+		"Favor de no modificar nada.",
+		"Por favor, no implementar nada todavía.",
+		"No tocar los archivos.",
+		"Favor não mexer em nada.",
+		"Por favor, não alterar nada ainda.",
+		"Não implementar nada por enquanto.",
+		"Peço para não mexer em nada.",
+		"Ничего не трогать.",
+		"Просьба ничего не менять.",
+		"Прошу не трогать файлы.",
+		"Пока ничего не реализовывать.",
+		"Proszę nic nie zmieniać.",
+		"Nie ruszać plików.",
+		"Na razie nic nie implementować.",
+		"Nie zmieniać kodu.",
+		"Graag niets aanpassen.",
+		"Gelieve niets te wijzigen.",
+		"De bestanden niet aanpassen.",
+		"Geen code aanpassen.",
+		"Bitte keine Änderungen vornehmen.",
+		"Nichts verändern.",
+		"Tidak usah mengubah apa pun.",
+		"Jangan melakukan perubahan apa pun.",
+		"يرجى عدم تعديل الملفات.",
+		"الرجاء عدم تنفيذ أي شيء الآن.",
+		"これらは実装しないこと。",
+		"コード変更禁止。",
+		"禁止修改任何文件。",
+		"不得修改代码。",
+		"코드 수정 금지.",
+	} {
+		if items, held := heldJob(lead + heldBackItems); items != 4 || !strings.HasPrefix(held, "the prompt forbids") {
+			t.Errorf("%q is not read as a prohibition: %d items, held %q", lead, items, held)
+		}
+	}
+}
+
+func TestAProhibitionInAPurposeClauseOrAfterSeemsKeepsTheChecklist(t *testing.T) {
+	for _, lead := range []string{
+		"Travaille sur une copie pour ne rien modifier dans la base.",
+		"Travaille sur une copie afin de ne pas toucher au code.",
+		"Crea una rama nueva para no tocar nada en main.",
+		"Trabaja en una copia para no modificar los archivos.",
+		"Usa uma branch nova para não mexer em nada.",
+		"Usa uma cópia pra não mexer nos arquivos.",
+		"Lavora su una copia per non toccare il codice.",
+		"Lavora su un branch separato in modo da non toccare il codice.",
+		"Работай в отдельной ветке, чтобы ничего не менять.",
+		"Pracuj na kopii, żeby nic nie zmieniać.",
+		"Pracuj na kopii, aby nie ruszać plików.",
+		"Haz todo en orden, de forma que no toques nada en producción.",
+		"Faça tudo em ordem, para que não mexa em nada na produção.",
+		"Le bouton Enregistrer semble ne rien faire.",
+		"El botón parece no hacer nada.",
+		"O botão parece não fazer nada.",
+	} {
+		if items, held := heldJob(lead + heldBackItems); items != 4 || held != "" {
+			t.Errorf("%q: a purpose clause or a statement held the job back: %d items, held %q", lead, items, held)
+		}
+	}
+}
+
+func TestAStatementWithCanOrShouldBeforeAnInfinitiveKeepsTheChecklist(t *testing.T) {
+	for _, lead := range []string{
+		"Ça risque de ne rien changer.",
+		"Le script risque de ne rien changer.",
+		"Cette option permet de ne rien modifier.",
+		"Le correctif devrait ne rien changer.",
+		"Le bouton peut ne rien faire.",
+		"El botón puede no hacer nada.",
+		"El cambio podría no hacer nada.",
+		"El script suele no tocar nada.",
+		"O botão pode não fazer nada.",
+		"A atualização deve não alterar nada.",
+		"Il pulsante potrebbe non fare niente.",
+		"Il pulsante può non fare nulla.",
+		"Скрипт может ничего не менять.",
+		"Кнопка может ничего не делать.",
+		"Skrypt może nic nie zmieniać.",
+		"Przycisk może nic nie robić.",
+	} {
+		if items, held := heldJob(lead + heldBackItems); items != 4 || held != "" {
+			t.Errorf("%q: a statement held the job back: %d items, held %q", lead, items, held)
+		}
+	}
+}
+
+func TestAnInfinitiveAfterAMustOrAnAskStillHoldsTheJobBack(t *testing.T) {
+	for _, lead := range []string{
+		"Vous devez ne rien modifier.",
+		"Tu dois ne rien toucher.",
+		"Claude peut ne rien modifier.",
+		"Il faut ne rien modifier.",
+		"Il est important de ne rien modifier.",
+		"Je te demande de ne rien modifier.",
+		"Debe no tocar nada.",
+		"Usted debe no tocar nada.",
+		"Debes no tocar nada.",
+		"Hay que no tocar nada.",
+		"Te pido no tocar nada.",
+		"Você deve não mexer em nada.",
+		"Ti chiedo di non toccare nulla.",
+		"Ты должен ничего не трогать.",
+		"Нужно ничего не трогать.",
+		"Важно, чтобы ничего не менять.",
+		"Musisz nic nie zmieniać.",
+		"Trzeba nic nie zmieniać.",
+		"Ważne, żeby nic nie zmieniać.",
+		"Proszę, żeby nic nie zmieniać.",
+	} {
+		if items, held := heldJob(lead + heldBackItems); items != 4 || !strings.HasPrefix(held, "the prompt forbids") {
+			t.Errorf("%q is not read as a prohibition: %d items, held %q", lead, items, held)
+		}
+	}
+}
+
+func TestAProhibitionWithoutItsAccentsOrWithAWordInsideIsQuotedAsWritten(t *testing.T) {
+	for _, tc := range []struct{ lead, quote string }{
+		{"No implementes nada todavia.", "No implementes nada"},
+		{"Nao mexa em nada ainda.", "Nao mexa em nada"},
+		{"Nie wdrazaj jeszcze.", "Nie wdrazaj jeszcze"},
+		{"NO TOQUES NADA TODAVÍA.", "NO TOQUES NADA"},
+		{"No toques todavía nada.", "No toques todavía nada"},
+		{"Ändere bitte nichts.", "Ändere bitte nichts"},
+		{"Ничего пока не трогай.", "Ничего пока не трогай"},
+		{"这些先不要实现。", "先不要实现"},
+	} {
+		if items, held := heldJob(tc.lead + heldBackItems); items != 4 || !strings.Contains(held, `"`+tc.quote+`"`) {
+			t.Errorf("%q: want the quote %q: %d items, held %q", tc.lead, tc.quote, items, held)
+		}
+	}
+}
+
+func TestAProhibitionUntilALaterTimeStillHoldsTheJobBack(t *testing.T) {
+	for _, lead := range []string{
+		"No cambies nada hasta mañana.",
+		"No toques los archivos esta semana.",
+		"Não altere nada até amanhã.",
+		"N'implémente rien avant demain.",
+		"Non modificare nulla fino a domani.",
+		"Ändere nichts bis morgen.",
+		"Ändere keine Dateien bis auf weiteres.",
+		"Verander niets tot morgen.",
+		"Nic nie zmieniaj do jutra.",
+		"Ничего не меняй до завтра.",
+		"Не трогай файлы до понедельника.",
+		"Jangan ubah apa pun sampai besok.",
+		"Nie ruszaj plików do jutra.",
+		"Não mexa nos arquivos amanhã.",
+		"Ne touche pas aux fichiers demain.",
+		"Non toccare i file domani.",
+		"Не трогай файлы завтра.",
+		"Jangan ubah file besok.",
+		"لا تعدل الملفات غدا.",
+		"No toques los archivos el lunes.",
+		"Ändere keine Dateien am Montag.",
+		"No toques los archivos la próxima semana.",
+		"Non toccare i file la prossima settimana.",
+		"Ändere keine Dateien nächste Woche.",
+		"Raak de bestanden niet aan volgende week.",
+		"Nie ruszaj plików w przyszłym tygodniu.",
+		"Не трогай файлы на следующей неделе.",
+	} {
+		if items, held := heldJob(lead + heldBackItems); items != 4 || !strings.HasPrefix(held, "the prompt forbids") {
+			t.Errorf("%q is not read as a prohibition: %d items, held %q", lead, items, held)
+		}
+	}
+}
+
+func TestAnArabicPhraseIsMatchedOnlyAsAWholeWordOrWithAnEnding(t *testing.T) {
+	for _, tc := range []struct {
+		lead string
+		held bool
+	}{
+		{"لا تفعل شيئا الآن.", true},
+		{"لا تفعل شيء الآن.", true},
+		{"لا تعدل ملفاتي.", true},
+		{"ولا تنفذ أي بند.", true},
+		{"لا تنفذ أيضا الخطوة الثالثة قبل الاجتماع.", false},
+		{"لا تبدأ العملية الجديدة.", false},
+	} {
+		if items, held := heldJob(tc.lead + heldBackItems); items != 4 || (held != "") != tc.held {
+			t.Errorf("%q: want held %v: %d items, held %q", tc.lead, tc.held, items, held)
+		}
+	}
+}
+
+func TestARequestForOnlyAnEstimateInAPhraseLanguageHoldsTheJobBack(t *testing.T) {
+	for _, lead := range []string{
+		"Ich brauche nur eine Schätzung für diese Punkte.",
+		"Ik wil alleen een schatting voor deze punten.",
+		"Potrzebuję tylko wyceny tych punktów.",
+		"Мне нужна только оценка по этим пунктам.",
+		"Solo quiero una estimación de estos puntos.",
+		"Só quero uma estimativa destes itens.",
+		"Je veux juste une estimation pour ces points.",
+		"Voglio solo una stima per questi punti.",
+		"Saya hanya butuh perkiraan untuk tugas-tugas ini.",
+	} {
+		if items, held := heldJob(lead + heldBackItems); items != 4 || !strings.HasPrefix(held, "the prompt asks only") {
+			t.Errorf("%q is not read as a request for an estimate: %d items, held %q", lead, items, held)
 		}
 	}
 }
