@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 const heldBackItems = "\n- add a login endpoint with rate limiting to the auth service\n- rewrite the payment module so it uses the new billing client\n- migrate all tables to the new schema with a rollback script\n- remove the legacy logging from the worker and the scheduler\n"
@@ -220,10 +223,23 @@ func TestAListedLineThatHoldsBackTheWholeListStillGetsNoChecklist(t *testing.T) 
 }
 
 func TestTheHeldBackPhrasesAreWrittenAsTheyAreMatched(t *testing.T) {
-	for _, list := range [][]string{heldForbidPhrases, heldAskPhrases} {
-		for _, phrase := range list {
-			if heldNormal(phrase) != phrase {
-				t.Errorf("phrase %q is matched against lower-case text but is not written that way", phrase)
+	for _, language := range heldLanguages {
+		for _, list := range [][]string{slices.Concat(language.forbids, language.bare), language.asks} {
+			listed := map[string]string{}
+			for _, pattern := range list {
+				for _, phrase := range heldExpand(pattern) {
+					if heldNormal(phrase) != phrase || strings.ContainsAny(phrase, "{|}") {
+						t.Errorf("%s: phrase %q is matched against lower-case text but is not written that way", language.code, phrase)
+					}
+					if first, _ := utf8.DecodeRuneInString(phrase); unicode.In(first, unicode.Latin, unicode.Cyrillic) && len(strings.Fields(phrase)) < 2 {
+						t.Errorf("%s: phrase %q is matched word by word but has a single word", language.code, phrase)
+					}
+					folded := heldFold(phrase)
+					if earlier, found := listed[folded]; found {
+						t.Errorf("%s: phrase %q matches the same words as %q", language.code, phrase, earlier)
+					}
+					listed[folded] = phrase
+				}
 			}
 		}
 	}
@@ -235,6 +251,9 @@ func TestAHugePromptIsReadQuickly(t *testing.T) {
 		"Here is the backlog. " + strings.Repeat("and after our call ", 8000) + "don't implement any of these yet." + heldBackItems,
 		"Hier ist die Liste. " + strings.Repeat("Ändere nichts anderes. ", 8000) + heldBackItems,
 		"Haz estos puntos en orden. " + strings.Repeat("No toques los archivos del proyecto de migración. Le nouveau cache ne modifie rien. ", 3000) + heldBackItems,
+		"Haz estos puntos en orden. " + strings.Repeat("no no no no no no no no no no ", 4000) + heldBackItems,
+		"按顺序完成下面所有任务。" + strings.Repeat("不要修改登录页面。别动这个文件。", 2000) + heldBackItems,
+		"قائمة المهام. " + strings.Repeat("الصفحة الجديدة لا تغير شيئا. ", 2000) + heldBackItems,
 	} {
 		started := time.Now()
 		job := promptJobOf(prompt)

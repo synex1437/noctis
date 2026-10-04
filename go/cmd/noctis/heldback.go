@@ -175,7 +175,6 @@ func englishNegationEnd(words []string, index int) int {
 			return index + 2
 		}
 	case "not":
-		// "I'm not asking you to do these"
 		if next := wordAt(words, index+1); next == "asking" || next == "expecting" || next == "requesting" {
 			return index + 2
 		}
@@ -187,8 +186,15 @@ func englishNegationEnd(words []string, index int) int {
 		if wordAt(words, index+1) == "from" {
 			return index + 2
 		}
+	case "let's", "lets":
+		if wordAt(words, index+1) == "not" {
+			return index + 2
+		}
+	case "let":
+		if wordAt(words, index+1) == "us" && wordAt(words, index+2) == "not" {
+			return index + 3
+		}
 	case "hold":
-		// "hold off on implementing these"; "don't hold off" asks for the work.
 		if prev := wordAt(words, index-1); wordAt(words, index+1) == "off" && prev != "don't" && prev != "dont" && prev != "not" && prev != "never" {
 			if particle := wordAt(words, index+2); (particle == "on" || particle == "with") && englishWorkVerbs(wordAt(words, index+3)) {
 				return index + 3
@@ -407,11 +413,18 @@ var (
 	talkedVerbs     = lazyWordSet(`talked spoke met discussed chatted agreed decided synced`)
 	spareVerbs      = lazyWordSet(`have get got find`)
 	spareNouns      = lazyWordSet(`time chance moment minute sec second`)
+	breakSizes      = lazyWordSet(`short quick long brief little late early`)
+	breakNouns      = lazyWordSet(`lunch breakfast dinner supper brunch coffee break breaks weekend holiday holidays vacation nap lunchtime`)
+	readVerbs       = lazyWordSet(`read see get receive open check`)
+	readObjects     = lazyWordSet(`message note email mail prompt list`)
 )
 
 const leadInMaxWords = 8
 
 func leadIn(words []string, index int) bool {
+	if words[index] == "after" && afterBreak(words[index+1:]) {
+		return true
+	}
 	end := index + 1
 	for end < len(words) && words[end] != "" && englishNegationEnd(words, end) < 0 {
 		if end-index > leadInMaxWords {
@@ -439,15 +452,33 @@ func leadIn(words []string, index int) bool {
 	}
 	switch opener {
 	case "after":
-		noun := first
-		if meetingOwners(noun) {
-			noun = wordAt(clause, 1)
-		}
-		return meetingNouns(noun) || talkingVerbs(first) || (first == "we" || first == "i") && talkedVerbs(wordAt(clause, 1))
+		return talkingVerbs(first) || (first == "we" || first == "i") && talkedVerbs(wordAt(clause, 1))
 	case "when", "whenever":
-		return spareTime(clause)
+		return spareTime(clause) || readsThis(clause)
 	}
 	return false
+}
+
+func afterBreak(words []string) bool {
+	at := 0
+	if word := wordAt(words, at); meetingOwners(word) || word == "a" || word == "an" {
+		at++
+	}
+	if breakSizes(wordAt(words, at)) {
+		at++
+	}
+	noun := wordAt(words, at)
+	return meetingNouns(noun) || breakNouns(noun)
+}
+
+func readsThis(clause []string) bool {
+	if len(clause) < 3 || len(clause) > 4 || clause[0] != "you" || !readVerbs(clause[1]) {
+		return false
+	}
+	if len(clause) == 3 {
+		return clause[2] == "this"
+	}
+	return (clause[2] == "this" || clause[2] == "my") && readObjects(clause[3])
 }
 
 func pastNegation(words []string) bool {
@@ -698,15 +729,18 @@ var (
 	turkishWithoutWork = normalWordSet(`uygulamadan kodlamadan yapmadan dokunmadan değiştirmeden ellemeden düzenlemeden`)
 	turkishWholeWork   = normalWordSet(`hiçbirini hiçbirine hiçbiri hiçbir hiçbirinde hiçbirşey herhangi bunları bunlara bunlardan bunu buna
 		onları onlara şunları şunlara maddeleri maddelere maddelerin maddelerden işleri işlere görevleri görevlere adımları
-		dosyalara dosyaları dosyaya dosyayı koda kodu kod kodlara kodları projeye projeyi depoya repoya uygulamaya kodlamaya işe`)
-	turkishPlaceNouns = normalWordSet(`dosyalara dosyaları dosyaya dosyayı koda kodu kod kodlara kodları projeye projeyi depoya repoya`)
-	turkishNow        = normalWordSet(`şimdi şimdilik henüz`)
-	turkishExcept     = normalWordSet(`dışında dışındaki haricinde hariç başka`)
-	turkishLeadEnds   = normalWordSet(`için diye deyişle göre kadar rağmen dolayı yüzünden nedeniyle sebebiyle`)
-	turkishBefore     = normalWordSet(`önce evvel`)
-	turkishOnly       = normalWordSet(`sadece yalnızca yalnız`)
-	turkishJoins      = normalWordSet(`ve ama fakat ancak sonra ardından veya`)
-	turkishTalkVerbs  = normalWordSet(`planla planlayın incele inceleyin açıkla açıklayın değerlendir değerlendirin öner önerin özetle özetleyin
+		dosyalara dosyaları dosyaya dosyayı dosyalarda koda kodu kod kodlara kodları kodda kodlarda projeye projeyi projede depoya
+		depoda repoya repoda uygulamaya kodlamaya işe`)
+	turkishPlaceNouns = normalWordSet(`dosyalara dosyaları dosyaya dosyayı dosyalarda koda kodu kod kodlara kodları kodda kodlarda projeye
+		projeyi projede depoya depoda repoya repoda`)
+	turkishNow         = normalWordSet(`şimdi şimdilik henüz`)
+	turkishChangeNouns = normalWordSet(`değişiklik değişiklikler değişikliği değişiklikleri`)
+	turkishExcept      = normalWordSet(`dışında dışındaki haricinde hariç başka diğer`)
+	turkishLeadEnds    = normalWordSet(`için diye deyişle göre kadar rağmen dolayı yüzünden nedeniyle sebebiyle`)
+	turkishBefore      = normalWordSet(`önce evvel`)
+	turkishOnly        = normalWordSet(`sadece yalnızca yalnız`)
+	turkishJoins       = normalWordSet(`ve ama fakat ancak sonra ardından veya`)
+	turkishTalkVerbs   = normalWordSet(`planla planlayın incele inceleyin açıkla açıklayın değerlendir değerlendirin öner önerin özetle özetleyin
 		karşılaştır karşılaştırın söyle söyleyin anlat anlatın önceliklendir önceliklendirin puanla puanlayın yorumla yorumlayın
 		listele listeleyin belirt belirtin`)
 	turkishTalkNouns = normalWordSet(`tahmin tahmini tahminini tahminleri analiz analizi plan planı planını değerlendirme değerlendirmesi
@@ -727,36 +761,30 @@ var (
 )
 
 var (
-	turkishCode       = normalWordSet(`kod koda kodu kodlara kodları`)
+	turkishCode       = normalWordSet(`kod koda kodu kodlara kodları kodda kodlarda`)
 	turkishNowFillers = normalWordSet(`lütfen sakın daha hiç sen siz de da bir şey`)
 	turkishListWork   = normalWordSet(`hiçbirini hiçbirine hiçbiri hiçbirinde bunları bunlara bunlardan onları onlara şunları şunlara
 		maddeleri maddelere maddelerin maddelerden işleri işlere görevleri görevlere adımları`)
 )
 
-// turkishWholeWorkIn reports whether the words before a Turkish verb name the
-// whole job: "hiçbirini", "bunları", "dosyalara". Unless strong, a bare
-// "şimdi" or "henüz" does too ("şimdi yapma"), but not beside a named action:
-// "şimdilik deploy yapma" leaves the deploy for later, not the job. With
-// codeIsPart the code is such a named part of the work ("mevcut kodu
-// değiştirme", "şimdilik koda dokunma" in a prompt that asks for tests).
 func turkishWholeWorkIn(words []string, strong, codeIsPart bool) bool {
 	if turkishExceptIn(words) {
 		return false
 	}
-	now, named := false, false
+	broad, named := false, false
 	for index, word := range words {
 		switch {
 		case codeIsPart && turkishCode(word):
 			named = true
 		case turkishWholeWork(word) && !(turkishPlaceNouns(word) && index > 0 && strings.HasSuffix(words[index-1], "ki")):
 			return true
-		case turkishNow(word):
-			now = true
+		case turkishNow(word) || turkishChangeNouns(word):
+			broad = true
 		case !turkishNowFillers(word):
 			named = true
 		}
 	}
-	return !strong && now && !named
+	return !strong && broad && !named
 }
 
 // turkishListWorkIn tells words that name the listed work itself, "bunların
@@ -782,9 +810,6 @@ func turkishExceptIn(words []string) bool {
 	return false
 }
 
-// turkishForbids finds "hiçbirini şimdi yapma", "dosyalara dokunma",
-// "bunları uygulamadan", "bunları yapmanı istemiyorum" in one clause; listOnly
-// and codeIsPart as for englishForbids.
 func turkishForbids(clause []heldToken, listOnly, codeIsPart bool) string {
 	words := heldWords(clause)
 	if len(words) == 0 {
@@ -803,6 +828,9 @@ func turkishForbids(clause []heldToken, listOnly, codeIsPart bool) string {
 	if turkishNotWanted(last) && len(words) > 1 && turkishUnwantedWork(words[len(words)-2]) && whole(words[:len(words)-2], false) {
 		return heldQuote(clause)
 	}
+	if len(words) > 1 && turkishNegatedCompound(words[len(words)-2], last) && whole(words[:len(words)-2], false) {
+		return heldQuote(clause)
+	}
 	if !listOnly && (last == "geçme" || last == "geçmeyin") && len(words) > 1 && (words[len(words)-2] == "uygulamaya" || words[len(words)-2] == "koda" || words[len(words)-2] == "kodlamaya") {
 		return heldQuote(clause)
 	}
@@ -812,6 +840,16 @@ func turkishForbids(clause []heldToken, listOnly, codeIsPart bool) string {
 		}
 	}
 	return ""
+}
+
+var (
+	turkishCompoundNouns = normalWordSet(`müdahale implemente`)
+	turkishNegatedDo     = normalWordSet(`etme etmeyin etmeyiniz`)
+	turkishHandNegated   = normalWordSet(`sürme sürmeyin sürmeyiniz`)
+)
+
+func turkishNegatedCompound(noun, verb string) bool {
+	return turkishCompoundNouns(noun) && turkishNegatedDo(verb) || noun == "el" && turkishHandNegated(verb)
 }
 
 func turkishTalkEnd(words []string) bool {
@@ -992,457 +1030,11 @@ func turkishAboutTheList(words []string) bool {
 	return about
 }
 
-// heldForbidPhrases and heldAskPhrases hold the words of the other catalog
-// languages that forbid the work or ask only for a plan or an estimate. Each
-// is matched at the start of a word, so a phrase also covers its longer forms.
-var heldForbidPhrases = []string{
-	"nichts davon umsetzen", "nichts davon implementieren", "noch nichts umsetzen", "noch nichts implementieren", "noch nicht implementieren",
-	"noch nicht umsetzen", "setze noch nichts", "setz noch nichts", "setze nichts davon", "setz nichts davon", "setzen sie noch nichts",
-	"implementiere noch nichts", "implementiere nichts", "implementiere noch nicht", "implementieren sie noch nicht", "implementieren sie nichts",
-	"mach noch nichts", "mache noch nichts", "mach nichts davon", "mache nichts davon", "ändere nichts", "ändern sie nichts", "nichts ändern",
-	"keine dateien ändern", "ändere keine dateien", "fass keine dateien an", "fasse keine dateien an", "fass nichts an", "fasse nichts an",
-	"fassen sie nichts an", "fass den code nicht an", "fasse den code nicht an", "rühr nichts an", "rühre nichts an", "keinen code schreiben",
-	"schreib keinen code", "schreibe keinen code", "schreib noch keinen code", "schreibe noch keinen code", "schreiben sie keinen code",
-	"fang noch nicht an", "fange noch nicht an", "noch nicht anfangen", "noch nicht damit anfangen",
-	"setze das noch nicht um", "setz das noch nicht um", "setze es noch nicht um", "setze sie noch nicht um", "setzen sie das noch nicht um",
-	"implementiere das noch nicht", "implementiere das bitte noch nicht", "implementiere es noch nicht", "implementiere sie noch nicht",
-	"implementiere bitte noch nicht", "implementieren sie das noch nicht",
-	"n'implémente rien", "n'implémentez rien", "n'implémente pas encore", "n'implémentez pas encore", "n'implémente aucun", "n'implémentez aucun",
-	"ne fais rien", "ne faites rien", "ne fais pas encore", "ne faites pas encore", "ne touche à aucun", "ne touchez à aucun", "ne touche à rien",
-	"ne touchez à rien", "ne touche pas aux fichiers", "ne touchez pas aux fichiers", "ne touche pas au code", "ne touchez pas au code",
-	"ne modifie rien", "ne modifiez rien", "ne modifie aucun", "ne modifiez aucun", "ne change rien", "ne changez rien", "n'écris pas de code",
-	"n'écrivez pas de code", "n'écris aucun code", "n'écrivez aucun code", "ne code rien", "ne codez rien", "ne commence pas encore",
-	"ne commencez pas encore",
-	"no implementes nada", "no implemente nada", "no implementen nada", "no implementes todavía", "no implementes aún", "no implementes ninguno",
-	"no implementes ninguna", "no hagas nada", "no haga nada", "no hagan nada", "no hagas ninguno", "no hagas ninguna", "no hagas todavía",
-	"no toques ningún", "no toques ninguna", "no toques nada", "no toque ningún", "no toque nada", "no toquen nada", "no toques los archivos",
-	"no toques el código", "no modifiques nada", "no modifique nada", "no modifiques ningún", "no modifiques los archivos",
-	"no modifiques el código", "no cambies nada", "no cambie nada", "no escribas código", "no escriba código", "no escribas ningún código",
-	"no empieces todavía", "no empieces aún", "no comiences todavía", "no comiences aún", "no implementes estas tareas",
-	"no implementes estos puntos", "no implementes estos cambios", "no implemente estas tareas", "no implemente estos puntos",
-	"não implemente nada", "não implementa nada", "não implementem nada", "não implemente ainda", "não implemente nenhum",
-	"não implemente nenhuma", "não faça nada", "não faz nada", "não façam nada", "não faça nenhum", "não faça nenhuma", "não faça ainda",
-	"não toque em nenhum", "não toque em nenhuma", "não toque em nada", "não toque nos arquivos", "não toque no código", "não mexa em nada",
-	"não mexa em nenhum", "não mexa em nenhuma", "não mexa nos arquivos", "não mexa no código", "não altere nada", "não altere nenhum",
-	"não modifique nada", "não modifique nenhum", "não mude nada", "não escreva código", "não escreva nenhum código", "não comece ainda",
-	"non implementare nulla", "non implementare niente", "non implementate nulla", "non implementate niente", "non implementare ancora",
-	"non implementare nessun", "non fare nulla", "non fare niente", "non fate nulla", "non fate niente", "non fare ancora",
-	"non toccare nessun", "non toccare nulla", "non toccare niente", "non toccare i file", "non toccare il codice", "non modificare nulla",
-	"non modificare niente", "non modificare nessun", "non modificare i file", "non modificare il codice", "non cambiare nulla",
-	"non cambiare niente", "non scrivere codice", "non scrivere alcun codice", "non scrivere ancora codice", "non iniziare ancora",
-	"non cominciare ancora",
-	"implementeer nog niets", "implementeer niets", "implementeer nog niet", "niets implementeren", "nog niets implementeren",
-	"nog niet implementeren", "doe nog niets", "doe niets", "doe er nog niets", "doe er niets", "raak geen bestanden", "raak niets aan",
-	"raak de code niet", "raak de bestanden niet", "verander niets", "wijzig niets", "wijzig geen bestanden", "pas niets aan",
-	"schrijf geen code", "schrijf nog geen code", "begin nog niet",
-	"nie implementuj jeszcze", "nie implementuj niczego", "nie implementuj nic", "niczego nie implementuj", "nic nie implementuj",
-	"nie wdrażaj jeszcze", "nie wdrażaj niczego", "nic nie rób", "nie rób nic", "nie rób niczego", "nie rób jeszcze", "niczego nie rób",
-	"nie ruszaj plików", "nie ruszaj kodu", "nie ruszaj niczego", "niczego nie ruszaj", "nic nie ruszaj", "nie dotykaj plików",
-	"nie dotykaj kodu", "nie dotykaj niczego", "nie zmieniaj niczego", "nie zmieniaj nic", "niczego nie zmieniaj", "nic nie zmieniaj",
-	"nie zmieniaj plików", "nie zmieniaj kodu", "nie modyfikuj plików", "nie modyfikuj kodu", "nie modyfikuj niczego", "nie pisz kodu",
-	"nie pisz jeszcze kodu", "nie zaczynaj jeszcze",
-	"ничего не реализуй", "не реализуй пока", "не реализуйте пока", "пока не реализуй", "пока ничего не пиши", "пока ничего не изменяй",
-	"пока ничего не начинай", "пока ничего не правь", "пока ничего не исправляй", "не реализуй ничего",
-	"не реализуйте ничего", "ничего не делай", "не делай ничего", "не делайте ничего", "пока не делай", "не трогай файлы",
-	"не трогайте файлы", "не трогай код", "не трогайте код", "ничего не трогай", "не трогай ничего", "не трогайте ничего", "ничего не меняй",
-	"не меняй ничего", "не меняйте ничего", "не меняй файлы", "не меняйте файлы", "не изменяй файлы", "не изменяйте файлы", "не изменяй код",
-	"не изменяйте код", "не пиши код", "не пишите код", "не пиши пока код", "не начинай пока", "не начинайте пока", "пока не начинай",
-	"не надо ничего делать", "ничего не надо делать", "не нужно ничего делать", "ничего не нужно делать",
-	"まだ実装しない", "何も実装しない", "実装はまだ", "実装は不要", "実装せずに", "ファイルを変更しない", "ファイルは変更しない", "ファイルに触れない",
-	"ファイルには触れない", "ファイルにも触れない", "ファイルに触らない", "ファイルを編集しない", "コードを書かない", "コードは書かない", "コードを変更しない",
-	"コードには触れない", "何も変更しない", "手を付けない", "手をつけない", "着手しない",
-	"先不要实现", "暂时不要实现", "还不要实现", "不要实现任何", "不要实施任何", "不要修改任何", "不要改动任何", "不要动任何", "不要碰任何", "不要写代码",
-	"不要编写代码", "不要写任何代码", "不要做任何", "不要开始实现", "先别实现", "不要动代码", "不要修改代码", "不要修改文件", "不要改代码", "不要改文件",
-	"先不要實作", "先不要實現", "不要實作任何", "不要寫任何程式碼", "不要改任何",
-	"아직 구현하지 마", "아직 구현하지 말", "아무것도 구현하지 마", "아무것도 구현하지 말", "하나도 구현하지 마", "하나도 구현하지 말", "구현은 아직",
-	"구현은 하지 마", "구현은 하지 말", "파일을 수정하지 마", "파일은 수정하지 마",
-	"파일을 건드리지 마", "파일은 건드리지 마", "파일도 건드리지 마", "파일도 건드리지 말", "아무것도 수정하지 마", "아무것도 건드리지 마",
-	"코드를 작성하지 마", "코드를 수정하지 마", "코드는 건드리지 마", "코드를 건드리지 마",
-	"لا تنفذ أي", "لا تنفّذ أي", "لا تنفذ شيئ", "لا تنفذ الآن", "لا تنفذها", "لا تطبق أي", "لا تطبق شيئ", "لا تقم بتنفيذ", "لا تقم بأي",
-	"لا تلمس أي", "لا تلمس الملفات", "لا تلمس الكود", "لا تعدل أي", "لا تعدّل أي", "لا تعدل الملفات", "لا تعدل الكود", "لا تغير أي",
-	"لا تغيّر أي", "لا تغير شيئ", "لا تكتب أي كود", "لا تكتب كود", "لا تكتب أي شيفرة", "لا تبدأ بعد", "لا تبدأ الآن",
-	"jangan implementasikan", "jangan diimplementasikan", "jangan mengimplementasikan", "jangan implementasi dulu", "belum perlu diimplementasikan",
-	"belum usah diimplementasikan", "tidak usah diimplementasikan", "tidak perlu diimplementasikan", "jangan lakukan apa pun", "jangan lakukan apa-apa",
-	"jangan lakukan apapun", "jangan lakukan dulu", "jangan dilakukan dulu", "jangan kerjakan dulu", "jangan dikerjakan dulu", "jangan kerjakan apa pun",
-	"jangan kerjakan apa-apa", "jangan kerjakan apapun", "jangan dulu dikerjakan", "belum usah dikerjakan", "tidak usah dikerjakan", "tidak perlu dikerjakan",
-	"jangan ubah apa pun", "jangan ubah apa-apa", "jangan ubah apapun", "jangan ubah dulu", "jangan ubah file", "jangan ubah kode", "jangan diubah dulu",
-	"jangan mengubah apa pun", "jangan mengubah apa-apa", "jangan mengubah apapun", "jangan mengubah file", "jangan mengubah kode", "tidak usah diubah",
-	"tidak perlu diubah", "jangan sentuh apa pun", "jangan sentuh apa-apa", "jangan sentuh apapun", "jangan sentuh file", "jangan sentuh kode",
-	"jangan menyentuh apa pun", "jangan menyentuh file", "jangan menyentuh kode", "jangan modifikasi", "jangan memodifikasi", "jangan edit file",
-	"jangan mengedit file", "jangan tulis kode", "jangan menulis kode", "jangan buat kode", "jangan membuat kode", "jangan mulai dulu", "jangan dimulai dulu",
-	"jangan mulai sekarang", "belum usah dimulai", "jangan dieksekusi", "jangan eksekusi dulu",
-}
-
-var heldAskPhrases = []string{
-	"nur schätzen", "nur einschätzen", "schätze nur", "schätz nur", "nur eine schätzung", "nur eine einschätzung", "nur einen plan",
-	"nur planen", "plane nur", "nur erklären", "erkläre nur", "nur bewerten", "bewerte nur", "ohne zu implementieren",
-	"ohne etwas zu implementieren", "ohne etwas zu ändern", "ohne etwas umzusetzen", "ohne code zu schreiben", "ohne es umzusetzen",
-	"ohne sie umzusetzen", "ohne dateien zu ändern", "ohne dateien anzufassen", "ohne die dateien anzufassen", "ohne den code anzufassen",
-	"estime seulement", "estimez seulement", "estime juste", "estimez juste", "juste estimer", "seulement estimer", "juste une estimation",
-	"seulement une estimation", "uniquement une estimation", "juste un plan", "seulement un plan", "uniquement un plan", "juste planifier",
-	"planifie seulement", "planifiez seulement", "sans implémenter", "sans rien implémenter", "sans rien modifier", "sans rien changer",
-	"sans toucher au code", "sans toucher aux fichiers", "sans écrire de code", "sans modifier les fichiers", "sans modifier le code",
-	"solo estima", "sólo estima", "solo estimar", "sólo estimar", "solo una estimación", "sólo una estimación", "solamente una estimación",
-	"solo un plan", "sólo un plan", "solamente un plan", "únicamente un plan", "solo planifica", "sólo planifica", "solo planea",
-	"sin implementar", "sin modificar nada", "sin tocar nada", "sin tocar el código", "sin tocar los archivos", "sin escribir código",
-	"sin cambiar nada",
-	"apenas estime", "só estime", "somente estime", "apenas estimar", "apenas uma estimativa", "só uma estimativa", "somente uma estimativa",
-	"apenas um plano", "só um plano", "somente um plano", "apenas planeje", "só planeje", "sem implementar", "sem alterar nada",
-	"sem modificar nada", "sem mexer em nada", "sem mexer no código", "sem mexer nos arquivos", "sem tocar em nada", "sem tocar no código",
-	"sem escrever código", "sem mudar nada",
-	"stima solo", "stimate solo", "solo una stima", "soltanto una stima", "solo stimare", "solo un piano", "soltanto un piano",
-	"pianifica solo", "solo pianificare", "senza implementare", "senza modificare nulla", "senza modificare niente", "senza toccare il codice",
-	"senza toccare i file", "senza scrivere codice", "senza cambiare nulla", "senza cambiare niente",
-	"alleen schatten", "schat alleen", "alleen een schatting", "enkel een schatting", "alleen een plan", "enkel een plan", "alleen plannen",
-	"zonder te implementeren", "zonder iets te wijzigen", "zonder iets te veranderen", "zonder code te schrijven", "zonder bestanden te wijzigen",
-	"tylko oszacuj", "tylko oszacowanie", "tylko wycena", "tylko wyceń", "tylko plan", "tylko zaplanuj", "tylko oceń", "bez implementacji",
-	"bez implementowania", "bez wdrażania", "bez zmian w kodzie", "bez zmieniania czegokolwiek", "bez zmieniania plików",
-	"bez zmieniania kodu", "bez pisania kodu",
-	"только оцени", "только оценку", "только оценка", "только план", "только спланируй", "просто оцени", "без реализации", "без внесения изменений",
-	"без написания кода", "не внося изменений", "ничего не меняя", "ничего не реализуя",
-	"見積もりだけ", "見積もりのみ", "見積りだけ", "見積りのみ", "見積だけ", "見積のみ", "計画だけ", "計画のみ", "プランだけ", "プランのみ", "レビューだけ",
-	"レビューのみ", "説明だけ", "説明のみ", "見積もるだけ",
-	"只估算", "只需估算", "只要估算", "仅估算", "只做估算", "只给出估算", "只需要估算", "只要计划", "只需计划", "只做计划", "只给出计划", "只评估",
-	"只需评估", "只给我一个计划", "只要一个计划", "不用实现", "无需实现", "不需要实现", "不必实现", "只估計", "只需估計", "只要計劃", "只評估",
-	"不用實作", "無需實作",
-	"견적만", "추정만", "계획만", "예상 시간만", "검토만", "설명만", "구현하지 않고", "구현 없이", "코드 변경 없이",
-	"تقدير فقط", "فقط تقدير", "فقط قدر", "فقط قدّر", "قدر فقط", "قدّر فقط", "خطة فقط", "فقط خطة", "دون تنفيذ", "بدون تنفيذ",
-	"دون أي تعديل", "بدون أي تعديل", "دون كتابة كود", "بدون كتابة كود",
-	"hanya perkirakan", "perkirakan saja", "cukup perkirakan", "hanya perkiraan", "perkiraan saja", "cukup perkiraan", "beri perkiraan saja",
-	"berikan perkiraan saja", "hanya estimasi", "estimasi saja", "cukup estimasi", "beri estimasi saja", "berikan estimasi saja", "hanya rencanakan",
-	"rencanakan saja", "cukup rencanakan", "hanya rencana", "rencana saja", "cukup rencana", "hanya buat rencana", "buat rencana saja",
-	"cukup buat rencana", "hanya buatkan rencana", "buatkan rencana saja", "hanya jelaskan", "jelaskan saja", "cukup jelaskan", "hanya tinjau",
-	"tinjau saja", "cukup tinjau", "hanya review", "review saja", "cukup review", "hanya nilai", "nilai saja", "tanpa mengimplementasikan",
-	"tanpa implementasi", "tanpa mengubah apa pun", "tanpa mengubah apa-apa", "tanpa mengubah apapun", "tanpa mengubah kode", "tanpa mengubah file",
-	"tanpa menyentuh kode", "tanpa menyentuh file", "tanpa menyentuh apa pun", "tanpa menulis kode", "tanpa mengerjakan", "tanpa perubahan kode",
-}
-
-var heldElseMarkers = []string{
-	"d'autre", "autre", "más", "además", "otro", "otra", "otros", "otras", "outro", "outra", "altro", "altri", "altra", "nient'altro", "anderes",
-	"andere", "anders", "weiter", "więcej", "innego", "innych", "inne", "больше", "друг", "他の", "ほかの", "其他", "别的", "其它", "다른",
-	"آخر", "أخرى", "غير", "lain", "lainnya", "selain", "selebihnya",
-}
-
-func latinOrCyrillic(r rune) bool {
-	return unicode.In(r, unicode.Latin, unicode.Cyrillic)
-}
-
-// heldPhrase finds a phrase at the start of a word of the normalized text; a
-// forbidding phrase is no hold on the job when it goes on to "anything else",
-// names one part of the work or tells what something else does.
-func heldPhrase(lower string, phrases []string, forbids bool) string {
-	for _, phrase := range phrases {
-		for at := phraseIndex(lower, phrase, 0); at >= 0; at = phraseIndex(lower, phrase, at+len(phrase)) {
-			if !forbids || !heldElse(lower, at, at+len(phrase)) && !heldStatement(lower[:at], phrase) && !heldNarrowed(lower, at, phrase) {
-				return phrase
-			}
-		}
-	}
-	return ""
-}
-
-func phraseIndex(text, phrase string, from int) int {
-	first, _ := utf8.DecodeRuneInString(phrase)
-	for from < len(text) {
-		at := strings.Index(text[from:], phrase)
-		if at < 0 {
-			return -1
-		}
-		at += from
-		if before, _ := utf8.DecodeLastRuneInString(text[:at]); !latinOrCyrillic(first) || !unicode.IsLetter(before) && before != '\'' {
-			return at
-		}
-		from = at + len(phrase)
-	}
-	return -1
-}
-
-var heldStatementLeads = []string{"sich", "ça", "cela", "sembra", "sembrano"}
-
-var (
-	germanInfinitives = lazyWordSet(`umsetzen implementieren ändern schreiben anfangen`)
-	germanModals      = lazyWordSet(`kann können konnte konnten könnte könnten wird werden`)
-	germanSpeakers    = lazyWordSet(`ich wir du ihr sie`)
-	romanceNegations  = lazyWordSet(`no não ne`)
-	romanceThirdForms = lazyWordSet(`faz implementa implemente implementem implementen faça façam haga hagan toque toquen mexa altere modifique
-		mude cambie escriba escreva comece implémente touche modifie change code commence fais`)
-	romanceFillers = lazyWordSet(`todavía aún ahora ya hoy mañana momento rato semana mes día sprint por el la los las este esta de del al
-		ainda agora já hoje amanhã enquanto pelo pela mês dia do da no na neste nesta encore maintenant l'instant instant moment pour le ce cette
-		semaine mois jour aujourd'hui demain d'ici lunes martes miércoles jueves viernes sábado domingo segunda terça quarta quinta sexta
-		lundi mardi mercredi jeudi vendredi samedi dimanche noche tarde madrugada mediodía fin vez hora año días semanas meses próximo próxima
-		siguiente noite manhã fim ano dias seguinte soir soirée matin matinée nuit midi après-midi l'après-midi week-end weekend fois heure
-		année an l'an l'année jours journée semaines prochain prochaine suivant suivante`)
-	romanceLeads = lazyWordSet(`que favor plaît plait svp stp porfa y e et o ou mais mas pero pues então entonces alors donc puis luego
-		ensuite surtout sobretudo todo simplemente simplesmente simplement juste solo sólo só apenas también também aussi tampoco nem ni`)
-	romanceSubjects = lazyWordSet(`je il elle ils elles ça cela ceci qu'il qu'elle qu'ils qu'elles yo él ella ello ellos ellas esto eso eu ele
-		ela eles elas isso isto`)
-	romanceDeterminers = lazyWordSet(`le la les un une ce cet cette ces mon ma mes son sa ses notre nos leur leurs du des el los las unos unas
-		este esta estos estas ese esa esos esas mi mis su sus nuestro nuestra o a os as um uma uns umas estes esse essa esses essas meu minha
-		seu sua nosso nossa dos das do da no na`)
-	romancePrepositions = lazyWordSet(`a à durante antes después despues tras en con sin para por hasta desde sobre según entre hacia contra depois em
-		com sem até ate após apos pendant avant après dans avec sans par pour jusqu'à depuis sur sous vers lors chez`)
-)
-
-func heldStatement(before, phrase string) bool {
-	trimmed := strings.TrimRight(before, " ")
-	for _, lead := range heldStatementLeads {
-		if strings.HasSuffix(trimmed, lead) && phraseIndex(trimmed, lead, len(trimmed)-len(lead)) >= 0 {
-			return true
-		}
-	}
-	words := strings.Fields(phrase)
-	switch {
-	case germanInfinitives(words[len(words)-1]):
-		return germanStatement(heldWords(heldTokens(clauseBefore(before))))
-	case romanceThirdForms(romanceVerb(words)):
-		return romanceStatement(heldWords(heldTokens(clauseBefore(before))))
-	}
-	return false
-}
-
-func romanceVerb(words []string) string {
-	if romanceNegations(words[0]) {
-		return wordAt(words, 1)
-	}
-	return strings.TrimPrefix(words[0], "n'")
-}
-
-func germanStatement(words []string) bool {
-	modal := false
-	for _, word := range words {
-		if germanSpeakers(word) {
-			return false
-		}
-		modal = modal || germanModals(word)
-	}
-	return modal
-}
-
-func romanceStatement(words []string) bool {
-	last := len(words) - 1
-	for last >= 0 && romanceFillers(words[last]) {
-		last--
-	}
-	switch {
-	case last < 0 || romanceLeads(words[last]):
-		return false
-	case romanceSubjects(words[last]):
-		return true
-	case strings.HasPrefix(words[last], "l'"):
-		return !romancePrepositions(wordAt(words, last-1))
-	}
-	for _, at := range []int{last - 1, last - 2} {
-		if romanceDeterminers(wordAt(words, at)) {
-			return !romancePrepositions(wordAt(words, at-1))
-		}
-	}
-	return false
-}
-
-const heldWindow = 200
-
-func clauseBefore(text string) string {
-	start := max(0, len(text)-heldWindow)
-	for start < len(text) && !utf8.RuneStart(text[start]) {
-		start++
-	}
-	text = text[start:]
-	if stop := strings.LastIndexAny(text, sentenceStops+clauseStops); stop >= 0 {
-		_, size := utf8.DecodeRuneInString(text[stop:])
-		text = text[stop+size:]
-	}
-	return text
-}
-
-func clauseAfter(text string) string {
-	end := min(len(text), heldWindow)
-	for end < len(text) && !utf8.RuneStart(text[end]) {
-		end++
-	}
-	text = text[:end]
-	if stop := strings.IndexAny(text, sentenceStops+clauseStops); stop >= 0 {
-		text = text[:stop]
-	}
-	return text
-}
-
-var (
-	narrowObjects     = lazyWordSet(`файлы код plików kodu file codice archivos código arquivos fichiers code bestanden dateien kode الملفات الكود كود شيفرة`)
-	narrowQuantifiers = lazyWordSet(`aucun aucune ningún ninguna ninguno nenhum nenhuma nessun nessuno nessuna أي`)
-	narrowOfWords     = lazyWordSet(`de des du di dei degli delle della del dos das do da من los las les gli le os as el la il lo i`)
-	narrowListWords   = lazyWordSet(`estas estos esas esos ces cette ce cet d'entre questi queste quelle quegli quei esses essas estes destes destas desses
-		dessas isto isso هذه هذا هؤلاء`)
-	narrowWholeObjects = lazyWordSet(`fichier fichiers archivo archivos arquivo arquivos file files codice código code kode ملف ملفات الملفات كود
-		الكود شيفرة شيء أمر cambio cambios changement changements modification modifications mudança mudanças alteração alterações modifica
-		modifiche cambiamento cambiamenti tarea tareas tâche tâches tarefa tarefas compito compiti punto puntos punti ponto pontos point points
-		élément éléments elemento elementos elementi item items البنود بند المهام مهمة النقاط تعديل تغيير cosa cosas coisa coisas chose choses
-		cose funcionalidad funcionalidades funcionalidade fonctionnalité fonctionnalités funzionalità función funciones função funções fonction
-		fonctions funzione funzioni paso pasos passo passos passi passaggio passaggi étape étapes etapa etapas fase fasi ticket tickets bug bugs
-		bogue error errores erro erros erreur erreurs errore errori corrección correcciones correção correções correction corrections
-		correzione correzioni parte partes parti partie parties línea líneas linha linhas ligne lignes riga righe linea linee mejora mejoras
-		melhoria melhorias amélioration améliorations miglioramento miglioramenti requisito requisitos requisiti exigence exigences feature
-		features story stories issue issues ميزة ميزات خطوة خطوات خطأ أخطاء إصلاح جزء أجزاء سطر عمل`)
-	narrowEnders = lazyWordSet(`todavía todavia aún aun ahora ya hoy nunca jamás jamas tampoco ainda agora já ja hoje jamais também tambem tampouco
-		encore maintenant aujourd'hui ancora ora adesso mai oggi neanche nemmeno noch jetzt heute vorerst erstmal erst mehr nog nu vandaag
-		voorlopig eerst jeszcze teraz dziś dzisiaj nigdy пока сейчас ещё еще сегодня никогда вообще الآن بعد أبدا أبدًا أبداً مطلقا مطلقًا
-		مطلقاً dulu sekarang lagi apa apapun apa-apa sama bitte alsjeblieft alstublieft proszę пожалуйста svp stp s'il tolong mohon please pls y
-		e et und i и а но или ни ou oder of lub albo ani pero mas mais aber maar ale sino sondern ni nem né ma tapi dan atau hasta até ate
-		jusqu'à jusqu'au jusqu'aux fino finché bis tot dopóki póki aż до حتى sampai hingga sebelum antes avant prima bevor voordat zanim перед
-		قبل porque parce perché weil omdat bo ponieważ потому لأن karena car puisque denn want poiché sin sem sans senza ohne zonder bez без
-		بدون دون tanpa mientras enquanto durante pendant tant lorsque mentre solange während zolang terwijl podczas selama sementara أثناء
-		خلال بينما ريثما aquí aqui acá aca ahí ici hier tutaj tu здесь тут هنا inmediatamente enseguida imediatamente immédiatement tout
-		subito immediatamente sofort meteen direct natychmiast сразу немедленно فورا فوراً فورًا langsung segera absolutamente absolument
-		assolutamente affatto überhaupt keinesfalls helemaal absoluut wcale absolutnie совсем абсолютно إطلاقا إطلاقاً إطلاقًا نهائيا نهائياً
-		نهائيًا بتاتا بتاتاً بتاتًا sequer حاليا حالياً حاليًا hari minggu التالية أدناه suivants suivantes ci-dessous ci-dessus siguientes
-		seguintes abaixo seguenti elencati folgenden unten volgende onderstaande poniższych następujących следующие ниже berikut esistente
-		esistenti existente existentes existant existants existante existantes vorhandenen bestehenden bestaande istniejącego istniejących
-		istniejące существующий существующие существующего существующих الحالي الحالية الموجودة actual actuales atual atuais actuel actuels
-		actuelle actuelles attuale attuali aktuellen huidige obecny obecnego obecnych aktualnego текущий текущие текущего текущих aan an um`)
-	narrowAsideLeads = lazyWordSet(`por pour per de na w voor на من en para bajo sous unter onder pod od em in auf во على di yang du`)
-	narrowArticles   = lazyWordSet(`el le il la lo`)
-	narrowAsideWords = lazyWordSet(`ahora momento enquanto agora ora adesso l'instant instant moment maintenant razie ogóle nu данный сегодня
-		favor favore فضلك absoluto nada niente nulla manera forma modo jeito hipótese tout inmediato imediato razu żadnym żadnej keinen keinem
-		geen время الإطلاق sini ada`)
-	narrowReferenceLeads = lazyWordSet(`en dans no na nos nas em nel nella nello nei negli nelle in im w we в во في di dem den der die het deze dit
-		diesem dieser dieses este esta estos estas ese esa esos esas ce cette ces cet questo questa questi queste neste nesta nestes nestas deste
-		desta destes destas`)
-	narrowProjects = lazyWordSet(`proyecto proyectos projeto projetos projet projets progetto progetti projekt projekts projektes projekte project
-		projecten projektu projekcie проект проекта проекте проекту المشروع مشروع proyek projek repositorio repositório dépôt repository
-		repositorys repo repos repozytorium репозиторий репозитория репозитории репо المستودع مستودع repositori codebase aplicación aplicação
-		aplicativo application applicazione anwendung applicatie aplikacja aplikacji приложение приложения التطبيق aplikasi app`)
-	koreanHolds = lazyWordSet(`아직 절대 절대로 당분간 일단 우선 제발 그냥 지금 지금은 또 또한 그리고 먼저 아예 전혀 모든 어떤 아무 기존 이 그 저 전체 오늘 내일
-		당장 이번 현재 결코 함부로 마음대로 임의로 전부 일체 어떠한 어느 각 프로젝트 저장소 리포지토리`)
-)
-
-var japaneseHolds = []string{
-	"全", "各", "全ての", "すべての", "既存の", "どの", "この", "これらの", "その", "それらの", "あらゆる", "いかなる", "一切の", "以下の", "上記の", "今", "今日",
-	"当面", "当分", "絶対", "一切", "全然", "現在", "本日", "今週", "今回", "現時点", "現段階", "プロジェクトの", "リポジトリの",
-}
-
-var chineseHolds = []string{
-	"文件", "代码", "代碼", "程式", "东西", "東西", "事", "改动", "改動", "修改", "变更", "變更", "更改", "功能", "任务", "任務", "项", "項", "一项", "一項",
-	"一个", "一個", "内容", "內容", "部分", "工作", "檔案", "地方", "条", "條", "一条", "一條", "实现", "實作", "操作", "步骤", "步驟", "计划", "計劃", "需求",
-	"现有", "現有", "已有", "既有", "原有", "当前", "當前", "目前", "源代码", "源代碼", "源码", "源碼", "改变", "改變", "仓库", "倉庫", "新功能",
-}
-
-func heldNarrowed(lower string, at int, phrase string) bool {
-	switch {
-	case strings.HasPrefix(phrase, "파일") || strings.HasPrefix(phrase, "코드"):
-		return koreanNarrowed(heldWords(heldTokens(clauseBefore(lower[:at]))))
-	case strings.HasPrefix(phrase, "ファイル") || strings.HasPrefix(phrase, "コード"):
-		return japaneseNarrowed(lower[:at])
-	case strings.HasSuffix(phrase, "任何"):
-		return chineseNarrowed(lower[at+len(phrase):])
-	}
-	count := len(strings.Fields(phrase))
-	words := heldWords(heldTokens(clauseAfter(lower[at:])))
-	if len(words) < count {
-		return false
-	}
-	tail := words[count:]
-	switch last := words[count-1]; {
-	case narrowQuantifiers(last):
-		for len(tail) > 0 && narrowOfWords(tail[0]) {
-			tail = tail[1:]
-		}
-		if len(tail) == 0 || narrowListWords(tail[0]) {
-			return false
-		}
-		if !narrowWholeObjects(tail[0]) {
-			return true
-		}
-		tail = tail[1:]
-	case !narrowObjects(last):
-		return false
-	}
-	return len(tail) > 0 && !narrowEnd(tail)
-}
-
-func narrowEnd(tail []string) bool {
-	first, next := tail[0], wordAt(tail, 1)
-	if narrowEnders(first) || strings.HasPrefix(first, "و") {
-		return true
-	}
-	if narrowArticles(next) {
-		next = wordAt(tail, 2)
-	}
-	if narrowAsideLeads(first) && (narrowAsideWords(next) || narrowQuantifiers(next)) {
-		return true
-	}
-	for len(tail) > 1 && (narrowOfWords(tail[0]) || narrowReferenceLeads(tail[0])) {
-		tail = tail[1:]
-	}
-	return (narrowObjects(tail[0]) || narrowProjects(tail[0])) && (len(tail) == 1 || narrowEnd(tail[1:]))
-}
-
-func koreanNarrowed(words []string) bool {
-	if len(words) == 0 {
-		return false
-	}
-	last := words[len(words)-1]
-	final, _ := utf8.DecodeLastRuneInString(last)
-	return !koreanHolds(last) && !strings.ContainsRune("은는도에서고요면만을를이가과와며", final)
-}
-
-func japaneseNarrowed(before string) bool {
-	for _, hold := range japaneseHolds {
-		if strings.HasSuffix(before, hold) {
-			return false
-		}
-	}
-	last, _ := utf8.DecodeLastRuneInString(before)
-	return last == 'の' || last == 'ー' || unicode.IsDigit(last) || unicode.In(last, unicode.Katakana, unicode.Han, unicode.Latin)
-}
-
-func chineseNarrowed(rest string) bool {
-	first, _ := utf8.DecodeRuneInString(rest)
-	if !unicode.Is(unicode.Han, first) {
-		return false
-	}
-	for _, hold := range chineseHolds {
-		if strings.HasPrefix(rest, hold) {
-			return false
-		}
-	}
-	return true
-}
-
-func heldElse(lower string, start, end int) bool {
-	after := []rune(lower[end:min(len(lower), end+16*utf8.UTFMax)])
-	if len(after) > 16 {
-		after = after[:16]
-	}
-	before := []rune(lower[max(0, start-8*utf8.UTFMax):start])
-	if len(before) > 8 {
-		before = before[len(before)-8:]
-	}
-	next, last := string(after), string(before)
-	if stop := strings.IndexAny(next, sentenceStops+clauseStops); stop >= 0 {
-		next = next[:stop]
-	}
-	if stop := strings.LastIndexAny(last, sentenceStops+clauseStops); stop >= 0 {
-		last = last[stop:]
-	}
-	for _, marker := range heldElseMarkers {
-		first, _ := utf8.DecodeRuneInString(marker)
-		if phraseIndex(next, marker, 0) >= 0 || !latinOrCyrillic(first) && strings.Contains(last, marker) {
-			return true
-		}
-	}
-	return false
-}
-
-// heldBackWork returns why a prompt that reads like a job is not one: its
-// words forbid the work, or ask only for a plan, estimate, review or
-// explanation of it. text is the whole prompt; prose is the part around the
-// listed steps, and lead says whether its leading verbs alone may decide. A
-// rule inside a step ("update the docs, don't change the code here") is about
-// that step, so the listed lines count only where they hold back the list
-// itself ("don't implement any of these yet").
 func heldBackWork(text, prose string, lead bool) string {
 	tokens := heldTokens(text)
 	codeIsPart := namesTestsOrDocs(tokens)
-	sentences := heldSentences(heldTokens(prose))
+	proseTokens := heldTokens(prose)
+	sentences := heldSentences(proseTokens)
 	for _, sentence := range sentences {
 		if quote := englishForbids(sentence, false, codeIsPart); quote != "" {
 			return forbidsReason(quote)
@@ -1453,7 +1045,8 @@ func heldBackWork(text, prose string, lead bool) string {
 			}
 		}
 	}
-	if phrase := heldPhrase(heldNormal(prose), heldForbidPhrases, true); phrase != "" {
+	phrases := newHeldText(prose, proseTokens)
+	if phrase := phrases.find(&heldPatterns().forbids, true); phrase != "" {
 		return forbidsReason(phrase)
 	}
 	for _, sentence := range heldSentences(tokens) {
@@ -1474,7 +1067,7 @@ func heldBackWork(text, prose string, lead bool) string {
 			return asksReason(quote)
 		}
 	}
-	if phrase := heldPhrase(heldNormal(prose), heldAskPhrases, false); phrase != "" {
+	if phrase := phrases.find(&heldPatterns().asks, false); phrase != "" {
 		return asksReason(phrase)
 	}
 	if !lead {

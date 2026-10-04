@@ -46,6 +46,11 @@ func TestALeadInBeforeAProhibitionIsNotAConditionOnIt(t *testing.T) {
 		"Whenever you get a chance, look these over, but do not start on any of them yet.",
 		"In case it wasn't clear, don't implement any of these yet.",
 		"In case you missed it, don't implement any of these yet.",
+		"After lunch, don't implement any of these yet.",
+		"After a quick coffee break, don't implement any of these yet.",
+		"After our call with the whole design team and the product people yesterday, don't implement any of these yet.",
+		"When you read this, don't implement any of these yet.",
+		"When you see my message, don't implement any of these yet.",
 	} {
 		if items, held := heldJob(intro + lead + heldBackItems); items != 4 || held == "" {
 			t.Errorf("%q is not read as a prohibition: %d items, held %q", lead, items, held)
@@ -70,6 +75,8 @@ func TestAConditionBeforeAProhibitionStillMakesItARuleOnTheWork(t *testing.T) {
 		"Do these in order. When you have the results, don't change any of these files.",
 		"Do these in order. If you missed a step, don't change any of these files.",
 		"Do these in order. If the test output wasn't clear, don't touch any of these files and ask me first.",
+		"Do these in order. After the rest of the tasks are done, don't touch any of these files.",
+		"Do these in order. When you read the logs, don't change any of these files.",
 	} {
 		if items, held := heldJob(lead + heldBackItems); items != 4 || held != "" {
 			t.Errorf("%q: a conditional rule held the job back: %d items, held %q", lead, items, held)
@@ -119,9 +126,46 @@ func TestATurkishReasonClauseThatSaysOtherOrExceptStillHoldsTheListBack(t *testi
 	for _, lead := range []string{
 		"Sadece şu dört maddeyi yap, başka bir şeye dokunma.",
 		"Şu maddeleri sırayla yap; bunlar için README dışında hiçbir dosyaya dokunma.",
+		"Diğer dosyalara dokunma.",
 	} {
 		if items, held := heldJob(lead + heldBackItemsTr); items != 4 || held != "" {
 			t.Errorf("%q: a limit on the work held the job back: %d items, held %q", lead, items, held)
+		}
+	}
+}
+
+func TestLetUsNotBeforeTheWorkIsAProhibition(t *testing.T) {
+	for _, lead := range []string{
+		"Let's not implement any of these yet.",
+		"Lets not implement any of these yet.",
+		"Let’s not start on any of these yet.",
+		"Let us not implement any of these yet.",
+	} {
+		if items, held := heldJob("Here is the backlog for next sprint. " + lead + heldBackItems); items != 4 || held == "" {
+			t.Errorf("%q is not read as a prohibition: %d items, held %q", lead, items, held)
+		}
+	}
+}
+
+func TestATurkishCompoundVerbOrAChangeNounStillHoldsTheListBack(t *testing.T) {
+	for _, lead := range []string{
+		"Koda müdahale etme.",
+		"Bunlara el sürme.",
+		"Hiçbirini implemente etme.",
+		"Değişiklik yapma.",
+		"Şimdilik değişiklik yapma.",
+		"Kodda değişiklik yapma.",
+	} {
+		if items, held := heldJob(lead + heldBackItemsTr); items != 4 || held == "" {
+			t.Errorf("%q is not read as a prohibition: %d items, held %q", lead, items, held)
+		}
+	}
+	for _, lead := range []string{
+		"README'de değişiklik yapma.",
+		"Testleri yaz ama kodda değişiklik yapma.",
+	} {
+		if items, held := heldJob(lead + heldBackItemsTr); items != 4 || held != "" {
+			t.Errorf("%q: a rule on one part of the work held the job back: %d items, held %q", lead, items, held)
 		}
 	}
 }
