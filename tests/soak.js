@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { Lab, sleep, readJson, writeJson } = require('./harness');
+const { Lab, sleep, readJson, writeJson, MODEL_WINDOWS, COMPACT_REPLY_TOKENS, THRASHING, OTHER_REQUEST_ERRORS, claudeCompactionPoint } = require('./harness');
 const { checkContinuations, pauseEndedWithoutReason } = require('./continuations');
 
 const options = { days: 7, seed: 1, sessionsPerDay: 4, turns: 6, hard: 0 };
@@ -39,6 +39,17 @@ const CONTINUING_MODES = ['answer', 'slow', 'silent', 'answer-fail'];
 const pick = (list) => list[Math.floor(rng() * list.length)];
 const between = (min, max) => min + rng() * (max - min);
 
+// The context of a marathon session is counted in tokens, as Claude Code counts it, in the window of the
+// session's model; its draws come from a stream of their own.
+const contextRng = mulberry32(options.seed * 7919 + 104729);
+const contextBetween = (min, max) => min + contextRng() * (max - min);
+const contextPick = (list) => list[Math.floor(contextRng() * list.length)];
+// Where a person may have Claude Code compact, in settings.json: at the window setup writes for
+// compaction.compactAt 280000, at a percent of their own, at a window of one model's own as /autocompact
+// writes it, or not by itself at all.
+const COMPACTION_CHOICES = ['managed', 'percent', 'model', 'off'];
+const MANAGED_COMPACT_WINDOW = 313000;
+
 const realStart = Math.floor(Date.now() / 1000);
 let T = realStart;
 const lab = new Lab('noctis-soak');
@@ -63,6 +74,7 @@ const stats = {
   subagentStops: 0,
   overloadStorms: 0,
   overloadRetries: 0,
+  overloadHolds: 0,
   overloadGiveups: 0,
   inHookHolds: 0,
   workspaceFlags: 0,
@@ -72,6 +84,9 @@ const stats = {
   freshAccounts: 0,
   doubleResumes: 0,
   ownWindowSkips: 0,
+  ownWindowStops: 0,
+  ownWindowRepauses: 0,
+  daysWaitedOut: 0,
   restoredPauseSkips: 0,
   priorityChecks: 0,
   workCallsToday: 0,
@@ -87,6 +102,11 @@ const stats = {
   latencies: [],
   timings: [],
   labWaitMs: 0,
+  compactionChoices: {},
+  contextChecks: 0,
+  contextFulls: { thrashing: 0, tooLong: 0, cloud: 0, giveups: 0, inPlace: 0 },
+  freshStarts: 0,
+  otherRequestErrors: 0,
 };
 const pendingResumes = [];
 
@@ -329,8 +349,66 @@ function callCost() {
 function emitStatusline(acc, session) {
   if (rng() < 0.1) return;
   const truth = acc.truth;
-  acc.statusline(session.sid, session.model, Number(truth.five.used.toFixed(1)), truth.five.resetsAt, Number(truth.week.used.toFixed(1)), truth.week.resetsAt, Math.round(session.context));
+  const line = acc.statusline(session.sid, session.model, Number(truth.five.used.toFixed(1)), truth.five.resetsAt, Number(truth.week.used.toFixed(1)), truth.week.resetsAt, contextOf(session));
   stats.statuslines += 1;
+  checkContextShare(acc, session, line);
+}
+
+// What the status line hands noctis of a session's context: tokens in the model's window for a marathon
+// session, a share of the window for any other.
+function contextOf(session) {
+  return session.tokens === undefined ? Math.round(session.context) : { tokens: Math.round(session.tokens), window: session.window };
+}
+
+function settingsOf(acc) {
+  return readJson(path.join(acc.dir, 'settings.json')) || {};
+}
+
+// Where Claude Code compacts a session, in tokens of context, read from settings.json.
+function compactionPointOf(acc, session) {
+  return claudeCompactionPoint(settingsOf(acc), session.model, session.window);
+}
+
+// The status line shows how far a session's context is to where Claude Code compacts it, or how much of
+// the window it fills while Claude Code compacts nothing by itself.
+function checkContextShare(acc, session, line) {
+  if (session.tokens === undefined || !line) return;
+  const shown = /ctx %(\d+)/.exec(line);
+  const point = compactionPointOf(acc, session);
+  const tokens = Math.round(session.tokens);
+  const expected = point === null ? Math.min(100, Math.round((100 * tokens) / session.window)) : Math.round((100 * tokens) / point);
+  stats.contextChecks += 1;
+  if (!shown || Number(shown[1]) !== expected) {
+    anomaly(`status line shows ${shown ? `ctx %${shown[1]}` : 'no context'} for ${tokens} tokens of a ${session.window} window where Claude Code compacts at ${point === null ? 'no point' : point} (${acc.compaction}): ctx %${expected} expected ${acc.name}/${session.sid}`);
+  }
+}
+
+// The person sets where Claude Code compacts between days, while no session of the account runs: a
+// Claude Code started later takes the env of settings.json along, and reads the rest as it changes.
+function chooseCompaction(acc, choice) {
+  const settings = settingsOf(acc);
+  const env = { ...(settings.env || {}) };
+  delete env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE;
+  delete env.DISABLE_AUTO_COMPACT;
+  for (const entry of Object.values(settings.modelSettings || {})) {
+    if (entry && typeof entry === 'object') delete entry.autoCompactWindow;
+  }
+  if (choice === 'managed') settings.autoCompactWindow = MANAGED_COMPACT_WINDOW;
+  if (choice === 'percent') env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = String(contextPick([55, 70, 85]));
+  if (choice === 'model') setModelCompactWindow(acc, settings, contextPick(Object.keys(MODEL_WINDOWS)));
+  if (choice === 'off') env.DISABLE_AUTO_COMPACT = '1';
+  settings.env = env;
+  writeJson(path.join(acc.dir, 'settings.json'), settings);
+  acc.compaction = choice;
+  stats.compactionChoices[choice] = (stats.compactionChoices[choice] || 0) + 1;
+}
+
+// /autocompact in a session saves a window for the session's model in modelSettings.
+function setModelCompactWindow(acc, settings, model) {
+  const window = contextPick([150000, 250000, 400000, 600000]);
+  settings.modelSettings = { ...(settings.modelSettings || {}) };
+  settings.modelSettings[model] = { ...(settings.modelSettings[model] || {}), autoCompactWindow: window };
+  return window;
 }
 
 function queueResume(acc, session, expect = {}, reason = '') {
@@ -350,7 +428,7 @@ function queueResume(acc, session, expect = {}, reason = '') {
     if (!traced) stats.anomalies.push(`stop without wait record or journal trace ${acc.name}/${session.sid}: ${String(reason).slice(0, 160)}`);
     return;
   }
-  const entry = { acc, sid: session.sid, resumeAt: Number(wait.resumeAt), kind: wait.kind, ...expect };
+  const entry = { acc, sid: session.sid, resumeAt: Number(wait.resumeAt), kind: wait.kind, contextFull: wait.contextFull === true, ...expect };
   if (session.workflow) {
     entry.expectWorkflow = session.workflow;
     const checkpoint = acc.checkpoint(session.sid);
@@ -372,6 +450,43 @@ function checkRelaunchPrompt(entry, line) {
   if (entry.expectWorkflow && !(line.includes(entry.expectWorkflow) && /relaunch|never start it over/i.test(line))) stats.anomalies.push(`relaunch prompt lacks the workflow resume note ${entry.acc.name}/${entry.sid}`);
   if (entry.expectWorkflow) stats.workflowNotes += 1;
   if (/TASKS\.md/.test(line) && !/do not redo items already marked done/.test(line)) stats.anomalies.push(`relaunch prompt lost the queue instruction ${entry.acc.name}/${entry.sid}`);
+  if (entry.contextFull) {
+    const fresh = Boolean(freshSessionOf(line));
+    if (!fresh) stats.contextFulls.inPlace += 1;
+    if (!(fresh ? /which stopped with its context full/ : /The session stopped with its context full/).test(line)) anomaly(`relaunch of a session that stopped with its context full lacks its note ${entry.acc.name}/${entry.sid}: ${line.slice(0, 200)}`);
+  }
+}
+
+// The fresh session a launch starts with --session-id in place of the one it took over from.
+function freshSessionOf(line) {
+  const match = /--session-id (\S+)/.exec(line);
+  return match ? match[1] : '';
+}
+
+// The launches that go on with sid: its resume, or a fresh session that takes over from it.
+function launchesOf(calls, sid) {
+  return calls.filter((line) => line.includes(`--resume ${sid} `) || (line.includes(`HANDOFF=${sid} `) && Boolean(freshSessionOf(line))));
+}
+
+// The sessions fresh ones took over from, and which took over; the ids of fresh sessions are noctis's own.
+const takenOver = new Map();
+const takenOverBy = new Set();
+
+// A launch that goes on with a session the soak drives in a window drives it twice at once, and so does
+// one that goes on with a session a fresh one took over from.
+function noteLaunch(entry, line, driving = new Set()) {
+  stats.relaunches += 1;
+  checkRelaunchPrompt(entry, line);
+  const fresh = freshSessionOf(line);
+  if (fresh) {
+    stats.freshStarts += 1;
+    takenOverBy.add(fresh);
+  }
+  if (takenOver.has(entry.sid)) anomaly(`${entry.acc.name}/${entry.sid} relaunched after the fresh session ${takenOver.get(entry.sid)} took over from it`);
+  for (const sid of [entry.sid, fresh].filter(Boolean)) {
+    if (driving.has(sid)) anomaly(`${entry.acc.name}/${sid} launched while it still works in its window`);
+  }
+  return fresh;
 }
 
 function resumeOnce(acc, sid) {
@@ -384,11 +499,17 @@ function resumeOnce(acc, sid) {
   const after = (state.waits || {})[sid];
   const journal = acc.journalSince(mark);
   const silent = pauseEndedWithoutReason({ key: sid, before, after, launched: calls.length > 0, journal });
+  // A session that stopped with its context full starts afresh from its handoff note: no compaction is
+  // near in the fresh session, so none holds it back.
+  const workflow = ((state.workflows || {})[sid] || []).some((run) => run && !run.agent);
+  if (before && before.contextFull && !before.freshFailed && !workflow && after && after.hit === 'compaction') {
+    anomaly(`${acc.name}/${sid} stopped with its context full and its fresh start was held for a compaction until ${new Date(Number(after.resumeAt) * 1000).toISOString()}`);
+  }
   return { before, after, calls, state, journal, silent: silent && `${silent} (${acc.name})` };
 }
 
 function requeue(entry, wait) {
-  pendingResumes.push({ acc: entry.acc, sid: entry.sid, resumeAt: Number(wait.resumeAt), kind: wait.kind });
+  pendingResumes.push({ acc: entry.acc, sid: entry.sid, resumeAt: Number(wait.resumeAt), kind: wait.kind, contextFull: wait.contextFull === true });
 }
 
 function processResumes(accounts) {
@@ -399,14 +520,15 @@ function processResumes(accounts) {
     publishTruth(entry.acc);
     const outcome = resumeOnce(entry.acc, entry.sid);
     const launched = outcome.calls.length;
+    let fresh = '';
     if (launched > 1) stats.anomalies.push(`double launch ${entry.acc.name}/${entry.sid}`);
     if (launched === 1) {
-      stats.relaunches += 1;
       const call = outcome.calls[0];
       if (!call.includes(`CONFIG=${entry.acc.dir}`)) stats.anomalies.push(`relaunch on wrong account ${entry.acc.name}/${entry.sid}`);
       if (Object.keys(outcome.state.handedOff || {}).length) stats.anomalies.push(`handoff not released ${entry.acc.name}/${entry.sid}`);
-      checkRelaunchPrompt(entry, call);
+      fresh = noteLaunch(entry, call);
     }
+    if (fresh && !outcome.after) takenOver.set(entry.sid, fresh);
     if (outcome.after) requeue(entry, outcome.after);
     else if (!launched && !outcome.before) stats.anomalies.push(`resume neither launched nor rescheduled ${entry.acc.name}/${entry.sid}`);
     else if (outcome.silent) stats.anomalies.push(outcome.silent);
@@ -424,7 +546,16 @@ function newSession(acc) {
   const sid = `${acc.prefix}-${Math.floor(rng() * 1e9).toString(16)}`;
   const model = acc.settingsModel() === 'opus' ? 'claude-opus-5' : 'claude-fable-5-1';
   const session = { sid, model, context: between(15, 45), transcript: transcriptFor(acc, sid) };
-  const out = parseOutput(timedHook(acc, { hook_event_name: 'SessionStart', source: 'startup', session_id: sid, cwd: lab.projectDir }));
+  if (options.hard) Object.assign(session, { window: MODEL_WINDOWS[model], tokens: Math.round(contextBetween(15000, 45000)), refills: 0 });
+  return startSession(acc, session);
+}
+
+// Claude Code starts a session: in a marathon, noctis ensure first, as hooks.json has it, then the
+// SessionStart hook.
+function startSession(acc, session, source = 'startup') {
+  const sid = session.sid;
+  if (options.hard && source === 'startup') acc.run(['ensure']);
+  const out = parseOutput(timedHook(acc, { hook_event_name: 'SessionStart', source, session_id: sid, cwd: lab.projectDir, transcript_path: session.transcript }));
   if (out.systemMessage && /^☰ /.test(out.systemMessage)) stats.queueNotices += 1;
   else if (out.systemMessage && /yeniden fable/.test(out.systemMessage)) stats.reverts += 1;
   else if (out.systemMessage && /^⏸ .*zaten/.test(out.systemMessage)) {
@@ -568,8 +699,11 @@ function dailyInvariants(accounts, day) {
     }
     if (staleLeftovers(acc.guardDir)) stats.anomalies.push(`day ${day} ${acc.name} leftover lock/tmp`);
     const state = acc.state();
-    const foreign = Object.keys(state.modelOverrides || {}).concat(Object.keys(state.waits || {})).filter((sid) => !sid.startsWith(acc.prefix) && sid !== 'unknown');
+    const foreign = Object.keys(state.modelOverrides || {}).concat(Object.keys(state.waits || {})).filter((sid) => !sid.startsWith(acc.prefix) && sid !== 'unknown' && !takenOverBy.has(sid));
     if (foreign.length) stats.anomalies.push(`day ${day} ${acc.name} foreign session ids ${foreign.join(',')}`);
+    for (const [sid, wait] of Object.entries(state.waits || {})) {
+      if (wait && wait.contextFull === true && !wait.scheduled) stats.anomalies.push(`day ${day} ${acc.name} ${sid} stopped with its context full and waits with nothing scheduled`);
+    }
     const errors = fs.existsSync(path.join(acc.guardDir, 'errors.log')) ? fs.readFileSync(path.join(acc.guardDir, 'errors.log'), 'utf8') : '';
     if (/fatal/.test(errors)) stats.anomalies.push(`day ${day} ${acc.name} fatal in errors.log`);
     stats.recoveries += (errors.match(/recovered from backup|restored from the backup/g) || []).length;
@@ -620,13 +754,19 @@ function forceWall(acc, session) {
   if (acc.truth.five.resetsAt - T <= IN_HOOK_HOLD_MS / 1000 || typedTurnFor(acc, session.sid)) return false;
   acc.truth.five.used = Math.max(acc.truth.five.used, THRESHOLDS.five + 2);
   publishTruth(acc);
-  acc.statusline(session.sid, session.model, Number(acc.truth.five.used.toFixed(1)), acc.truth.five.resetsAt, Number(acc.truth.week.used.toFixed(1)), acc.truth.week.resetsAt, Math.round(session.context));
+  acc.statusline(session.sid, session.model, Number(acc.truth.five.used.toFixed(1)), acc.truth.five.resetsAt, Number(acc.truth.week.used.toFixed(1)), acc.truth.week.resetsAt, contextOf(session));
   const batch = parseOutput(timedHook(acc, { hook_event_name: 'PostToolBatch', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript }));
   if (batch.continue !== false) {
     anomaly(`forced wall not honoured ${acc.name}/${session.sid}: ${JSON.stringify(batch)}`);
     return false;
   }
   return Boolean(acc.state().waits[session.sid]);
+}
+
+// One pause seen twice: a pause noctis makes later for the same session starts at another time or for
+// another reason.
+function samePause(a, b) {
+  return Number(a.startedAt) === Number(b.startedAt) && a.kind === b.kind && Number(a.until) === Number(b.until);
 }
 
 async function injectChaos(acc, session, kindIndex, turn, accounts) {
@@ -643,6 +783,8 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       let previousDelay = 0;
       for (let i = 0; i < rounds; i += 1) {
         const type = rng() < 0.5 ? 'overloaded' : 'server_error';
+        // The failed request was just written to the transcript, so the session is not idle.
+        fs.utimesSync(session.transcript, T, T);
         timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error: type });
         const wait = acc.state().waits[session.sid];
         if (!wait || wait.overload !== true || wait.window !== 'unknown') {
@@ -661,6 +803,13 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
           const before = lab.calls().length;
           acc.run(['resume', '--sid', session.sid, '--account', acc.dir]);
           const launched = lab.calls().slice(before).filter((line) => line.includes(`--resume ${session.sid} `));
+          const held = acc.state().waits[session.sid];
+          if (!launched.length && held && Number(held.resumeAt) > T && nearLimit(acc)) {
+            // The account reached its limit, or the band before a compaction, during the storm: the
+            // retry waits for the reset like any other pause.
+            stats.overloadHolds += 1;
+            continue;
+          }
           if (launched.length !== 1) anomaly(`overload retry launched ${launched.length} times ${acc.name}/${session.sid}`);
           else if (!/API (overloaded|server_error) durumundaydı|The API was (overloaded|server_error)/.test(launched[0])) anomaly(`overload retry prompt lacks the retry note ${acc.name}/${session.sid}: ${launched[0].slice(0, 200)}`);
           stats.overloadRetries += 1;
@@ -678,6 +827,7 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       stats.overloadStorms += 1;
       let gaveUp = false;
       for (let i = 0; i < 40 && !gaveUp; i += 1) {
+        fs.utimesSync(session.transcript, T, T);
         timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error: 'overloaded' });
         const wait = acc.state().waits[session.sid];
         if (!wait) {
@@ -738,7 +888,7 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
           session.stoppedByChaos = true;
         }
       }
-      const line = acc.run(['statusline'], acc.statuslineInput(session.sid, session.model, Number(acc.truth.five.used.toFixed(1)), acc.truth.five.resetsAt, Number(acc.truth.week.used.toFixed(1)), acc.truth.week.resetsAt), { NOCTIS_LANG: '' });
+      const line = acc.run(['statusline'], acc.statuslineInput(session.sid, session.model, Number(acc.truth.five.used.toFixed(1)), acc.truth.five.resetsAt, Number(acc.truth.week.used.toFixed(1)), acc.truth.week.resetsAt, contextOf(session)), { NOCTIS_LANG: '' });
       if (!line) anomaly(`statusline empty in ${lang} ${acc.name}/${session.sid}`);
       break;
     }
@@ -758,6 +908,10 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
     }
     case 'fresh-account-99': {
       stats.freshAccounts += 1;
+      // A fresh account learns its usage from the endpoint alone: an outage another session's chaos left on
+      // would give it no data to warn from, so the endpoint answers while the fresh account is checked.
+      const held = outage;
+      if (held) setOutage('');
       const fresh = account(`C${serial}`);
       fresh.timeOffset = acc.timeOffset;
       fresh.truth.week.used = 99;
@@ -783,6 +937,7 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       if (!fresh.run(['status'])) anomaly('fresh account: status printed nothing');
       fresh.run(['cancel', sid]);
       if (fresh.state().waits[sid]) anomaly('fresh account: cancel left the wait');
+      if (held) setOutage(held);
       break;
     }
     case 'own-window': {
@@ -792,6 +947,33 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
         for (const account of accounts) rollWindows(account);
         publishTruth(acc);
         lab.writeAnswer(session.transcript, acc.timeOffset);
+        if (rng() < 0.5) {
+          // The turn that went on in the window ends before the runner comes: the queue goes on from it,
+          // as from any other turn, and the pause is over.
+          const mark = acc.journalMark();
+          const stop = parseOutput(timedHook(acc, { hook_event_name: 'Stop', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, stop_hook_active: (session.forced || 0) > 0 }));
+          stats.ownWindowStops += 1;
+          const after = acc.state().waits[session.sid];
+          if (after && !samePause(after, wait)) {
+            // The Stop retired the pause the turn went past, and the queue it went on with met a limit
+            // that still holds (Fable over its threshold moves the session to the fallback model): that
+            // is a pause of its own, and the runner resumes it like any other.
+            if (!acc.journalSince(mark).some((row) => row.sid === session.sid && row.event === 'Stop' && row.action === 'skip-launch')) {
+              anomaly(`a Stop made a new pause without retiring the one its session went past ${acc.name}/${session.sid}`);
+            }
+            stats.ownWindowRepauses += 1;
+            queueResume(acc, session);
+            session.stoppedByChaos = true;
+            break;
+          }
+          if (after) anomaly(`the pause of a session that went on in its own window outlived the end of that turn ${acc.name}/${session.sid}`);
+          if (stop.decision === 'block') {
+            stats.queueContinues += 1;
+            session.forced = (session.forced || 0) + 1;
+          } else if (openQueueItems() > 0 && !stop.systemMessage && !acc.journalSince(mark).some((row) => row.sid === session.sid && row.event === 'Stop' && row.action !== 'skip-launch')) {
+            anomaly(`a Stop with ${openQueueItems()} open items in a window that went on after the reset neither continued the queue nor said why ${acc.name}/${session.sid}`);
+          }
+        }
         const outcome = resumeOnce(acc, session.sid);
         if (outcome.calls.length) anomaly(`relaunched a session that had gone on in its own window ${acc.name}/${session.sid}`);
         else if (outcome.after) anomaly(`kept the pause of a session that had gone on in its own window ${acc.name}/${session.sid}`);
@@ -813,14 +995,16 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
           break;
         }
         const backup = readJson(`${acc.stateFile}.bak`);
-        if (!backup || !backup.waits || !backup.waits[session.sid]) break;
-        corruptFile(acc.stateFile);
-        const second = resumeOnce(acc, session.sid);
-        const reason = second.journal.find((row) => row.sid === session.sid && row.action === 'skip-launch');
-        if (second.calls.length) anomaly(`relaunched a pause that came back with the state backup after its relaunch answered ${acc.name}/${session.sid}`);
-        else if (second.after) anomaly(`kept a pause that came back with the state backup after its relaunch answered ${acc.name}/${session.sid}`);
-        else if (!reason) anomaly(`a pause that came back with the state backup ended with no reason in the journal ${acc.name}/${session.sid}`);
-        else stats.restoredPauseSkips += 1;
+        if (backup && backup.waits && backup.waits[session.sid]) {
+          corruptFile(acc.stateFile);
+          const second = resumeOnce(acc, session.sid);
+          const reason = second.journal.find((row) => row.sid === session.sid && row.action === 'skip-launch');
+          if (second.calls.length) anomaly(`relaunched a pause that came back with the state backup after its relaunch answered ${acc.name}/${session.sid}`);
+          else if (second.after) anomaly(`kept a pause that came back with the state backup after its relaunch answered ${acc.name}/${session.sid}`);
+          else if (!reason) anomaly(`a pause that came back with the state backup ended with no reason in the journal ${acc.name}/${session.sid}`);
+          else stats.restoredPauseSkips += 1;
+        }
+        followFreshStart(acc, session, first.calls);
       }
       break;
     }
@@ -833,11 +1017,13 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
         publishTruth(acc);
         const before = lab.calls().length;
         await Promise.all([acc.runPromise(['resume', '--sid', session.sid, '--account', acc.dir]), acc.runPromise(['resume', '--sid', session.sid, '--account', acc.dir])]);
-        const launched = lab.calls().slice(before).filter((line) => line.includes(`--resume ${session.sid} `));
+        const calls = lab.calls().slice(before);
+        const launched = launchesOf(calls, session.sid);
         if (launched.length !== 1) anomaly(`double resume launched ${launched.length} times ${acc.name}/${session.sid}`);
         else stats.doubleResumes += 1;
         if (acc.state().waits[session.sid]) anomaly(`double resume left the wait record ${acc.name}/${session.sid}`);
         if (Object.keys(acc.state().handedOff || {}).length) anomaly(`double resume left a handoff ${acc.name}/${session.sid}`);
+        followFreshStart(acc, session, calls);
       }
       break;
     }
@@ -934,6 +1120,141 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
   return kind;
 }
 
+// Before a request Claude Code compacts a context that reached its compaction point: PreCompact, then
+// SessionStart from compact, after which the context holds the summary. A context that fills up again
+// right after three compactions in a row, or one that outgrows its window while Claude Code compacts
+// nothing by itself (or that a single read fills), ends the turn with invalid_request instead.
+function beforeRequest(acc, session) {
+  if (session.tokens === undefined) return '';
+  const point = compactionPointOf(acc, session);
+  if (session.tokens >= session.window - COMPACT_REPLY_TOKENS && (point === null || session.overflows)) return contextFull(acc, session, 'tooLong');
+  if (point === null || session.tokens < point) return '';
+  if (session.bigReads && session.refills >= 3) return contextFull(acc, session, 'thrashing');
+  compact(acc, session, point);
+  return 'compacted';
+}
+
+function compact(acc, session, point) {
+  const label = `${acc.name}/${session.sid}`;
+  const pre = parseOutput(timedHook(acc, { hook_event_name: 'PreCompact', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, trigger: 'auto', custom_instructions: '' }));
+  if (pre.decision === 'block' || pre.continue === false) anomaly(`PreCompact held up a compaction ${label}: ${JSON.stringify(pre).slice(0, 160)}`);
+  const out = parseOutput(timedHook(acc, { hook_event_name: 'SessionStart', source: 'compact', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript }));
+  const context = (out.hookSpecificOutput || {}).additionalContext || '';
+  const directive = /Queue mode \(TASKS\.md: (\d+) open\)/.exec(context);
+  const open = openQueueItems();
+  if (!directive) anomaly(`queue directive missing after a compaction ${label}`);
+  else if (Number(directive[1]) !== open) anomaly(`queue count ${directive[1]} after a compaction but the file has ${open} open boxes ${label}`);
+  if (open > 0 && !/After the compaction/.test(context)) anomaly(`no note of the item in hand after a compaction ${label}`);
+  session.refills = session.bigReads ? session.refills + 1 : 0;
+  session.tokens = session.bigReads ? Math.round(point * contextBetween(0.8, 0.95)) : Math.round(contextBetween(18000, 42000));
+  stats.compactions += 1;
+}
+
+// A request adds its tool results to the context; a read too large for it refills the context up to the
+// compaction point at once.
+function growContext(acc, session) {
+  if (session.tokens === undefined) return;
+  const step = Math.round(contextBetween(0.01, 0.06) * session.window);
+  const point = session.bigReads ? compactionPointOf(acc, session) : null;
+  session.tokens += point === null ? step : Math.max(step, point - session.tokens);
+  // The transcript grows as the session works, so its age tells how long the session has been idle.
+  fs.utimesSync(session.transcript, T, T);
+}
+
+// The turn ends with invalid_request and the text Claude Code gives a context it cannot bring below its
+// limit. noctis starts the session afresh soon, gives up on it with a notification once fresh starts kept
+// filling up, or, in a cloud session, leaves it to the person with a notice: never does it leave the
+// session waiting with nothing scheduled.
+function contextFull(acc, session, kind) {
+  const label = `${acc.name}/${session.sid}`;
+  const cloud = contextRng() < 0.08;
+  const input = { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error: 'invalid_request' };
+  if (kind === 'thrashing') input.last_assistant_message = THRASHING;
+  else Object.assign(input, { last_assistant_message: 'Prompt is too long', error_details: `prompt is too long: ${Math.round(session.tokens)} tokens > ${session.window} maximum` });
+  const mark = acc.journalMark();
+  const log = path.join(acc.guardDir, 'guard.log');
+  let logFrom = 0;
+  try {
+    logFrom = fs.statSync(log).size;
+  } catch {}
+  timedHook(acc, input, cloud ? { CLAUDE_CODE_REMOTE: 'true' } : {});
+  stats.contextFulls[kind] += 1;
+  const wait = (acc.state().waits || {})[session.sid];
+  const rows = acc.journalSince(mark).filter((row) => row.sid === session.sid);
+  const notified = /notify: /.test(logSince(log, logFrom));
+  if (cloud) {
+    stats.contextFulls.cloud += 1;
+    if (wait) anomaly(`a cloud session that stopped with its context full waits ${label}`);
+    if (!rows.some((row) => row.action === 'context-full' && row.cloud) || !notified) anomaly(`a cloud session that stopped with its context full was left without a notice ${label}`);
+    return clearSession(acc, session);
+  }
+  if (rows.some((row) => row.action === 'retry-giveup' && row.contextFull)) {
+    stats.contextFulls.giveups += 1;
+    if (wait) anomaly(`a session given up on after its context kept filling up still waits ${label}`);
+    if (!notified) anomaly(`a session whose context kept filling up was given up on without a notification ${label}`);
+    return clearSession(acc, session);
+  }
+  if (!wait || wait.contextFull !== true) {
+    anomaly(`a session that stopped with its context full was neither set to start afresh, given up on nor left with a notice ${label}: ${JSON.stringify(rows.map((row) => row.action))}`);
+    return clearSession(acc, session);
+  }
+  if (!wait.scheduled) anomaly(`a session that stopped with its context full waits with nothing scheduled ${label}`);
+  const delay = Number(wait.resumeAt) - T;
+  if (!(delay > 0 && delay <= (Number(wait.retry) > 1 ? 3600 : 30) + 60)) anomaly(`a session that stopped with its context full goes on in ${delay} s (stop ${wait.retry}) ${label}`);
+  if (session.bigReads && session.stubborn === undefined) session.stubborn = contextRng() < 0.3;
+  queueResume(acc, session, {}, kind);
+  return 'stopped';
+}
+
+// The person clears a session noctis left to them: /clear starts a new one in the window, which has
+// launched no workflow of its own.
+function clearSession(acc, session) {
+  const sid = `${acc.prefix}-${Math.floor(contextRng() * 1e9).toString(16)}`;
+  Object.assign(session, { sid, transcript: transcriptFor(acc, sid), tokens: Math.round(contextBetween(15000, 30000)), refills: 0, bigReads: false, stubborn: undefined, overflows: false, forced: 0, workflow: undefined });
+  startSession(acc, session, 'clear');
+  stats.clears += 1;
+  return 'worked';
+}
+
+// The fresh session a runner started in place of from goes on in the window: Claude Code started it
+// with the model the launch names, in a transcript beside the one it took over from. Work whose reads
+// fill a context at once fills the fresh one too.
+function freshSession(acc, from, fresh, line) {
+  const model = /--model \S*opus/.test(line) ? 'claude-opus-5' : 'claude-fable-5-1';
+  const transcript = path.join(path.dirname(from.transcript), `${fresh}.jsonl`);
+  if (!fs.existsSync(transcript)) fs.copyFileSync(lab.transcript, transcript);
+  const session = { ...from, sid: fresh, model, context: 25, transcript, window: MODEL_WINDOWS[model], tokens: Math.round(contextBetween(20000, 45000)), refills: 0, forced: 0, typedTurn: false, workflow: undefined, bigReads: false, overflows: false };
+  if (from.stubborn) Object.assign(session, { bigReads: true, overflows: true, tokens: session.window });
+  return startSession(acc, session);
+}
+
+// A runner a chaos started may have started a fresh session in place of the window's: the window goes
+// on in it.
+function followFreshStart(acc, session, calls) {
+  const line = launchesOf(calls, session.sid).find((call) => freshSessionOf(call));
+  if (!line) return;
+  const fresh = freshSessionOf(line);
+  stats.freshStarts += 1;
+  takenOver.set(session.sid, fresh);
+  takenOverBy.add(fresh);
+  Object.assign(session, freshSession(acc, session, fresh, line));
+}
+
+// Claude Code also ends a turn with invalid_request when the API turns a request down for another
+// reason. That is the session's to deal with: noctis neither pauses it nor schedules anything for it.
+function otherRequestError(acc, session) {
+  const message = contextPick(OTHER_REQUEST_ERRORS);
+  const label = `${acc.name}/${session.sid}`;
+  const before = (acc.state().waits || {})[session.sid];
+  const mark = acc.journalMark();
+  timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error: 'invalid_request', error_details: message, last_assistant_message: `API Error: 400 ${JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message } })}` });
+  const after = (acc.state().waits || {})[session.sid];
+  const acted = acc.journalSince(mark).filter((row) => row.sid === session.sid && row.event === 'StopFailure');
+  if (after && (!before || after.startedAt !== before.startedAt)) anomaly(`a request the API turned down for another reason set the session to wait ${label}: ${message}`);
+  if (acted.length) anomaly(`a request the API turned down for another reason was acted on (${acted.map((row) => row.action).join(', ')}) ${label}`);
+  stats.otherRequestErrors += 1;
+}
+
 async function marathonTurn(acc, session, turn, accounts) {
   rollWindows(acc);
   publishTruth(acc);
@@ -976,8 +1297,15 @@ async function marathonTurn(acc, session, turn, accounts) {
   session.typedTurn = typedTurnFor(acc, session.sid);
   if (out.systemMessage && /yeniden fable/.test(out.systemMessage)) stats.reverts += 1;
   if (out.hookSpecificOutput && /Non-code research/.test(out.hookSpecificOutput.additionalContext || '')) stats.routes += 1;
-  applyCall(acc, session, callCost());
+  // Now and then the work reads something too large for the context.
+  if (!session.bigReads && compactionPointOf(acc, session) !== null && contextRng() < 0.025) session.bigReads = true;
+  let opening = callCost();
+  const first = beforeRequest(acc, session);
+  if (first === 'stopped' || first === 'worked') return first;
+  if (first === 'compacted') opening += 6;
+  applyCall(acc, session, opening);
   stats.workCallsToday += 1;
+  growContext(acc, session);
   if (!blackout) emitStatusline(acc, session);
   const batches = 1 + Math.floor(rng() * 4);
   for (let i = 0; i < batches; i += 1) {
@@ -995,16 +1323,18 @@ async function marathonTurn(acc, session, turn, accounts) {
       return 'stopped';
     }
     let cost = callCost();
-    if (session.context >= 85) {
-      cost += 6;
-      session.context = 25;
-      stats.compactions += 1;
-      timedHook(acc, { hook_event_name: 'SessionStart', source: 'compact', session_id: session.sid, cwd: lab.projectDir });
-    }
+    const step = beforeRequest(acc, session);
+    if (step === 'stopped' || step === 'worked') return step;
+    if (step === 'compacted') cost += 6;
     applyCall(acc, session, cost);
     stats.workCallsToday += 1;
     session.context = Math.min(95, session.context + between(2, 10));
+    growContext(acc, session);
     if (!blackout) emitStatusline(acc, session);
+  }
+  if (contextRng() < 0.012) {
+    otherRequestError(acc, session);
+    return 'ok';
   }
   if (rng() < 0.03 && acc.truth.five.used < 85 && acc.truth.week.used < 85) {
     timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error: 'rate_limit' });
@@ -1016,6 +1346,7 @@ async function marathonTurn(acc, session, turn, accounts) {
   }
   if (rng() < 0.4) markQueueProgress();
   if (rng() < 0.3) {
+    const mark = acc.journalMark();
     const stop = parseOutput(timedHook(acc, { hook_event_name: 'Stop', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, stop_hook_active: (session.forced || 0) > 0 }));
     const wait = acc.state().waits[session.sid];
     if (stop.decision === 'block') {
@@ -1030,6 +1361,10 @@ async function marathonTurn(acc, session, turn, accounts) {
       return 'stopped';
     } else if (stop.systemMessage && /ilerlemiyor/.test(stop.systemMessage)) {
       stats.stuckStops += 1;
+    } else if (options.hard && openQueueItems() > 0 && !stop.systemMessage && !acc.journalSince(mark).some((row) => row.sid === session.sid && row.event === 'Stop')) {
+      // A queue goes on after a compaction, or a fresh start, as after any other turn: when it does
+      // not, noctis says why.
+      anomaly(`a Stop with ${openQueueItems()} open items neither continued the queue nor said why ${acc.name}/${session.sid}`);
     }
   }
   return 'ok';
@@ -1052,27 +1387,37 @@ function slotForResume(slots, sid) {
 
 async function runMarathonDay(accounts, day) {
   const turnsPerDay = 28;
+  for (const acc of accounts) chooseCompaction(acc, day === 1 ? 'managed' : contextPick(COMPACTION_CHOICES));
   const slots = accounts.map((acc) => ({ home: acc, acc, session: newSession(acc), stopped: false }));
   for (let turn = 0; turn < turnsPerDay; turn += 1) {
     setClock(accounts, T + Math.floor(between(120, 420)));
     for (const acc of accounts) rollWindows(acc);
+    if (turn === 14) {
+      // Midway through the day the person runs /autocompact in a window, which takes at once.
+      const slot = contextPick(slots);
+      const settings = settingsOf(slot.acc);
+      if (slot.acc.compaction !== 'off') {
+        setModelCompactWindow(slot.acc, settings, slot.session.model);
+        writeJson(path.join(slot.acc.dir, 'settings.json'), settings);
+        stats.compactionChoices.autocompact = (stats.compactionChoices.autocompact || 0) + 1;
+      }
+    }
     const due = pendingResumes.filter((entry) => entry.resumeAt <= T);
     for (const entry of due) {
       pendingResumes.splice(pendingResumes.indexOf(entry), 1);
       rollWindows(entry.acc);
       publishTruth(entry.acc);
+      const driving = new Set(slots.filter((slot) => !slot.stopped).map((slot) => slot.session.sid));
       const outcome = resumeOnce(entry.acc, entry.sid);
-      const launched = outcome.calls.filter((line) => line.includes(`--resume ${entry.sid} `));
+      const launched = launchesOf(outcome.calls, entry.sid);
       const owner = slotForResume(slots, entry.sid);
       if (launched.length > 1) stats.anomalies.push(`double launch ${entry.acc.name}/${entry.sid}`);
-      if (launched.length) {
-        stats.relaunches += 1;
-        checkRelaunchPrompt(entry, launched[0]);
-      }
+      const fresh = launched.length ? noteLaunch(entry, launched[0], driving) : '';
       if (outcome.after) {
         requeue(entry, outcome.after);
         continue;
       }
+      if (fresh) takenOver.set(entry.sid, fresh);
       if (!launched.length) {
         const vanished = owner && (!outcome.before || outcome.calls.length) ? `resume neither launched nor rescheduled ${entry.acc.name}/${entry.sid}` : '';
         const lost = vanished || outcome.silent;
@@ -1090,6 +1435,9 @@ async function runMarathonDay(accounts, day) {
       if (owner) {
         owner.acc = target;
         owner.stopped = false;
+        // A relaunched Claude Code counts the compactions that refilled its context from nought.
+        if (fresh) owner.session = freshSession(target, owner.session, fresh, launched[0]);
+        else owner.session.refills = 0;
       }
     }
     for (const slot of slots) {
@@ -1106,8 +1454,12 @@ async function runMarathonDay(accounts, day) {
       if (result === 'stopped') slot.stopped = true;
     }
   }
+  // A day can pass wholly inside limits the accounts reached: every session stopped at one, to go on at
+  // a reset after the day. A day with no work is then noctis keeping to the limits, not holding work back.
+  const waitedOut = slots.every((slot) => slot.stopped && pendingResumes.some((entry) => entry.sid === slot.session.sid && entry.resumeAt > T && nearLimit(entry.acc)));
   for (const slot of slots) timedHook(slot.acc, { hook_event_name: 'SessionEnd', session_id: slot.session.sid, reason: 'exit' });
   setOutage('');
+  return waitedOut;
 }
 
 async function main() {
@@ -1136,7 +1488,8 @@ async function main() {
   const dayLog = [];
   for (let day = 1; day <= options.days; day += 1) {
     stats.workCallsToday = 0;
-    if (options.hard) await runMarathonDay(accounts, day);
+    let waitedOut = false;
+    if (options.hard) waitedOut = await runMarathonDay(accounts, day);
     else {
       for (let s = 0; s < options.sessionsPerDay; s += 1) {
         setClock(accounts, T + Math.floor(between(30 * 60, 90 * 60)));
@@ -1146,7 +1499,10 @@ async function main() {
         else await runSession(accounts[rng() < 0.75 ? 0 : 1]);
       }
     }
-    if (options.hard && stats.workCallsToday === 0) stats.anomalies.push(`day ${day}: no work progressed`);
+    if (options.hard && stats.workCallsToday === 0) {
+      if (waitedOut) stats.daysWaitedOut += 1;
+      else stats.anomalies.push(`day ${day}: no work progressed`);
+    }
     setClock(accounts, Math.max(T + 60, realStart + day * DAY));
     for (const acc of accounts) rollWindows(acc);
     processResumes(accounts);
@@ -1201,6 +1557,7 @@ async function main() {
     subagentStops: stats.subagentStops,
     overloadStorms: stats.overloadStorms,
     overloadRetries: stats.overloadRetries,
+    overloadHolds: stats.overloadHolds,
     overloadGiveups: stats.overloadGiveups,
     inHookHolds: stats.inHookHolds,
     workspaceFlags: stats.workspaceFlags,
@@ -1210,6 +1567,9 @@ async function main() {
     freshAccounts: stats.freshAccounts,
     doubleResumes: stats.doubleResumes,
     ownWindowSkips: stats.ownWindowSkips,
+    ownWindowStops: stats.ownWindowStops,
+    ownWindowRepauses: stats.ownWindowRepauses,
+    daysWaitedOut: stats.daysWaitedOut,
     restoredPauseSkips: stats.restoredPauseSkips,
     continuations: { ...continuations.summary, unsettledPlayers },
     priorityChecks: stats.priorityChecks,
@@ -1221,6 +1581,11 @@ async function main() {
     denies: stats.denies,
     clears: stats.clears,
     compactions: stats.compactions,
+    compactionChoices: stats.compactionChoices,
+    contextChecks: stats.contextChecks,
+    contextFulls: stats.contextFulls,
+    freshStarts: stats.freshStarts,
+    otherRequestErrors: stats.otherRequestErrors,
     transient429: stats.transient429,
     maxUsageWhenAllowed: { five: Number(stats.maxAllowedFive.toFixed(1)), week: Number(stats.maxAllowedWeek.toFixed(1)) },
     typedTurnCalls: { calls: stats.typedCalls, maxFive: Number(stats.maxTypedFive.toFixed(1)) },

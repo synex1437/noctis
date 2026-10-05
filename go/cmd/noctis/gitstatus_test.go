@@ -91,7 +91,7 @@ func TestAStopFailureThatGivesUpLeavesNoGitStatusRunning(t *testing.T) {
 	cfg := waitEngineConfig()
 	cfg["fable"] = object{"source": "off"}
 	sid := "gives-up-in-a-repository"
-	input := object{"session_id": sid, "cwd": repo, "error_type": "invalid_request", "error_message": "prompt is too long"}
+	input := object{"session_id": sid, "cwd": repo, "error_type": "unknown", "error_message": "API Error: Request timed out"}
 	writeRepoFile(t, repo, "dirty.txt", "not committed\n")
 	for step := 1; step <= stopFailureMaxAttempts; step++ {
 		updateState(func(state object) { delete(stateMap(state, "waits"), sid) })

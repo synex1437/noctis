@@ -31,7 +31,13 @@ func removeStaleLock(lockFile string) error {
 	if !holderStale(owner, age) {
 		return errLockLive
 	}
-	if errors.Is(syscall.Flock(int(handle.Fd()), syscall.LOCK_EX|syscall.LOCK_NB), syscall.EWOULDBLOCK) && !holderHung(owner, age) {
+	switch err := syscall.Flock(int(handle.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); {
+	case errors.Is(err, syscall.EWOULDBLOCK):
+		if !holderHung(owner, age) {
+			return errLockLive
+		}
+	case err != nil && !leftByDeadHolder(age):
+		// A file system that keeps no flock cannot show that the holder let go.
 		return errLockLive
 	}
 	current, err := os.Stat(lockFile)

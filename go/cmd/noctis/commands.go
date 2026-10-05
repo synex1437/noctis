@@ -612,7 +612,7 @@ func doctorLines(cfg object) []string {
 	}
 	claudePath := claudeLookup()
 	lines = append(lines, fixLine(claudePath != "", T("doctor.claude", orDefault(claudePath, T("doctor.notFound"))), "doctor.fixClaude")...)
-	settings := readJSONStrict(files.settings)
+	settings := readConfigStrict(files.settings)
 	settingsText := settings.err
 	if settings.ok {
 		settingsText = T("doctor.settingsMissing")
@@ -639,6 +639,7 @@ func doctorLines(cfg object) []string {
 	thresholdText, thresholdsGuarded := thresholdDoctorText(cfg)
 	lines = append(lines, fixLine(thresholdsGuarded, thresholdText, "doctor.fixThresholds")...)
 	lines = append(lines, leanDoctorLines(cfg)...)
+	lines = append(lines, compactWindowDoctorLines(cfg)...)
 	lines = append(lines, fixLine(!paidCreditsAllowed(cfg), T("doctor.credits", creditsText(cfg)), "doctor.fixCredits")...)
 	lines = append(lines, "    "+T("doctor.creditsNote"))
 	// Fast mode draws from usage credits from its first request, where no pause point of noctis's

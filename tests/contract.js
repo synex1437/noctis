@@ -130,6 +130,15 @@ function checkPreToolUseMatcher(entries) {
   }
 }
 
+function checkStopFailureMatcher(entries) {
+  const matchers = entries.filter((entry) => entry.event === 'StopFailure').map((entry) => entry.matcher || '');
+  // invalid_request is how Claude Code ends a turn with the context full, which noctis starts afresh.
+  for (const error of ['rate_limit', 'overloaded', 'server_error', 'model_not_found', 'billing_error', 'account_on_hold', 'authentication_failed', 'invalid_request']) {
+    check(`StopFailure matcher starts the hook for ${error}`,
+      matchers.some((matcher) => !matcher || new RegExp(`^(${matcher})$`).test(error)), matchers.join(' ; ') || '(none)');
+  }
+}
+
 function binaryHandlerNames() {
   const source = fs.readFileSync(path.join(ROOT, 'go', 'cmd', 'noctis', 'hooks.go'), 'utf8');
   const table = source.slice(source.indexOf('handlers := map[string]func(object, object){'));
@@ -294,6 +303,7 @@ async function main() {
     check('handler table was parsed out of hooks.go', handlers.size >= 10, `found ${handlers.size}`);
     checkManifestShape(entries, handlers);
     checkPreToolUseMatcher(entries);
+    checkStopFailureMatcher(entries);
 
     const sampleCommand = entries[0].command.replace('${CLAUDE_PLUGIN_ROOT}', pluginRootOf(account));
     let executable = false;

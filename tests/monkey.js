@@ -5,7 +5,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
-const { PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, waitKey, isAlive } = require('./harness');
+const {
+  PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, waitKey, isAlive, MODEL_WINDOWS, THRASHING, OTHER_REQUEST_ERRORS, claudeCompactionPoint,
+} = require('./harness');
 const { checkContinuations, pauseEndedWithoutReason } = require('./continuations');
 
 const args = process.argv.slice(2);
@@ -70,6 +72,12 @@ const QUEUE_CONTENTS = [
   Array.from({ length: 300 }, (_, i) => `- [ ] item ${i}`).join('\n'),
   '\u0000binary\u0001garbage\u0002',
 ];
+
+// Sessions whose context the monkey counts in tokens, as Claude Code hands it to the status line, in the
+// window of a model whose window it knows: the context grows with each request, starts over when Claude
+// Code compacts it at the point settings.json sets, and fills up where Claude Code does not.
+const CONTEXT_SESSIONS = ['m1', 'm2', 'm3'];
+const contexts = {};
 
 function runEngine(argv, input, extraEnv = {}) {
   const [binary, prefix] = acc.engine();
@@ -146,6 +154,141 @@ function checkResult(round, action, result, { allowExit = [0], since = 0, sid = 
     } catch {
     }
   }
+}
+
+function readText(file) {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+function sizeOf(file) {
+  try {
+    return fs.statSync(file).size;
+  } catch {
+    return 0;
+  }
+}
+
+// What was written to file from a byte offset on: all of it once it was rotated and started over.
+function textSince(file, offset) {
+  try {
+    const whole = fs.readFileSync(file);
+    return whole.subarray(whole.length >= offset ? offset : 0).toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
+function hookOutput(result) {
+  try {
+    return JSON.parse((result.stdout || '').trim() || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+const claudeSettingsFile = () => path.join(acc.dir, 'settings.json');
+const guardLog = () => path.join(acc.guardDir, 'guard.log');
+
+function contextOf(sid) {
+  if (!contexts[sid]) {
+    const model = pick(Object.keys(MODEL_WINDOWS));
+    contexts[sid] = { model, window: MODEL_WINDOWS[model], tokens: between(15000, 45000) };
+  }
+  return contexts[sid];
+}
+
+// The status line shows how far a session's context is to where Claude Code compacts it, by the
+// settings.json the status line ran with, or how much of the window it fills while Claude Code compacts
+// nothing by itself.
+function checkContextShare(round, sid, session, line, settingsText) {
+  let settings;
+  try {
+    settings = JSON.parse(settingsText || '{}') || {};
+  } catch {
+    return;
+  }
+  const point = claudeCompactionPoint(settings, session.model, session.window);
+  const expected = point === null ? Math.min(100, Math.round((100 * session.tokens) / session.window)) : Math.round((100 * session.tokens) / point);
+  const shown = /ctx %(\d+)/.exec(line || '');
+  note('context-check');
+  if (!shown || Number(shown[1]) !== expected) {
+    problem(round, 'context', `the status line shows ${shown ? `ctx %${shown[1]}` : 'no context'} for ${session.tokens} tokens of ${sid}'s ${session.window} window where Claude Code compacts at ${point === null ? 'no point' : point}: ctx %${expected} expected`);
+  }
+}
+
+// Claude Code compacts a session whose context reached the point: PreCompact, then SessionStart with
+// source compact, and the context starts over from the summary. Neither hook holds the compaction up or
+// stops the session.
+function compactSession(round, sid, session) {
+  const since = clock();
+  const pre = runEngine(['hook'], { hook_event_name: 'PreCompact', session_id: sid, cwd: lab.projectDir, transcript_path: lab.transcript, trigger: 'auto', custom_instructions: '' });
+  checkResult(round, 'hook PreCompact', pre, { since, sid });
+  const held = hookOutput(pre);
+  if (held.decision === 'block' || held.continue === false) problem(round, 'hook PreCompact', `held up the compaction of ${sid}: ${(pre.stdout || '').trim().slice(0, 160)}`);
+  const start = runEngine(['hook'], { hook_event_name: 'SessionStart', source: 'compact', session_id: sid, cwd: lab.projectDir, transcript_path: lab.transcript, model: session.model });
+  checkResult(round, 'hook SessionStart compact', start, { since, sid });
+  if (hookOutput(start).continue === false) problem(round, 'hook SessionStart compact', `stopped ${sid} after its compaction`);
+  session.tokens = between(15000, 45000);
+  note('compaction');
+}
+
+function waitOf(sid) {
+  return ((currentState() || {}).waits || {})[waitKey(sid)];
+}
+
+// A turn ends with invalid_request and the text Claude Code gives a context it cannot bring below its
+// limit. noctis sets the session to start afresh, gives up on it with a notification once its fresh
+// starts kept filling up, or leaves it to the person: a cloud session with a notice, in observe mode
+// with what it would have done in the journal, a pause it could not store with a notice. Never does it
+// leave the session waiting with nothing scheduled.
+function contextFullStop(round, sid, session, kind, cloud) {
+  const action = `context-full ${kind}${cloud ? ' cloud' : ''}`;
+  const input = { hook_event_name: 'StopFailure', session_id: sid, cwd: lab.projectDir, transcript_path: lab.transcript, error: 'invalid_request' };
+  if (kind === 'thrashing') input.last_assistant_message = THRASHING;
+  else Object.assign(input, { last_assistant_message: 'Prompt is too long', error_details: `prompt is too long: ${session.tokens} tokens > ${session.window} maximum` });
+  const mark = acc.journalMark();
+  const logFrom = sizeOf(guardLog());
+  const since = clock();
+  const result = runEngine(['hook'], input, cloud ? { CLAUDE_CODE_REMOTE: 'true' } : {});
+  checkResult(round, action, result, { since, sid });
+  note(`context-full:${kind}`);
+  if (result.error || result.status !== 0) return;
+  const after = waitOf(sid);
+  // A wait this stop stored, which records the process that stored it.
+  const waits = Boolean(after && after.contextFull === true && Number(after.storedBy) === result.pid);
+  const rows = acc.journalSince(mark).filter((row) => row.sid === waitKey(sid) && row.event === 'StopFailure');
+  const notified = /notify: /.test(textSince(guardLog(), logFrom));
+  if (cloud) {
+    if (waits) problem(round, action, `a cloud session ${sid} that stopped with its context full was set to wait`);
+    if (!rows.some((row) => row.action === 'context-full' && row.cloud) || !notified) problem(round, action, `a cloud session ${sid} that stopped with its context full was left without a notice: ${JSON.stringify(rows.map((row) => row.action))}`);
+  } else if (rows.some((row) => row.action === 'retry-giveup' && row.contextFull)) {
+    if (waits) problem(round, action, `${sid} was given up on after its context kept filling up, yet set to wait`);
+    if (!notified) problem(round, action, `${sid} was given up on after its context kept filling up without a notification`);
+    if (rows.some((row) => row.action === 'retry-giveup' && row.observe)) problem(round, action, `observe mode, which starts no fresh session, gave ${sid} up after its fresh starts`);
+    note('context-full:giveup');
+  } else if (rows.some((row) => row.action === 'would-schedule-resume')) {
+    if (waits) problem(round, action, `observe mode set ${sid} to wait after its context filled up`);
+  } else if (rows.some((row) => row.action === 'schedule-resume')) {
+    if (!waits) problem(round, action, `${sid} stopped with its context full and was journaled to start afresh, yet no wait holds it: ${JSON.stringify(after || null).slice(0, 200)}`);
+    else if (!after.scheduled) problem(round, action, `${sid} stopped with its context full and waits with nothing scheduled`);
+    if (!notified) problem(round, action, `${sid} stopped with its context full and was set to start afresh without a notice`);
+    note('context-full:stopped');
+  } else if (!hookOutput(result).systemMessage) {
+    problem(round, action, `${sid} stopped with its context full and was neither set to start afresh, given up on nor left with a notice: ${JSON.stringify(rows.map((row) => row.action))}`);
+  }
+}
+
+// A session that stopped with its context full starts afresh from its handoff note when it can: no
+// compaction is near in the fresh session, so none holds it back.
+function freshStartHeld(state, sid, before, after) {
+  if (!before || before.contextFull !== true || before.freshFailed || !after || after.hit !== 'compaction') return false;
+  const workflows = (state.workflows || {})[sid] || [];
+  const checkpoint = (state.checkpoints || {})[sid] || {};
+  return !(Array.isArray(workflows) && workflows.some((run) => run && !run.agent)) && Boolean(checkpoint.path) && !checkpoint.consumed && fs.existsSync(String(checkpoint.path));
 }
 
 const ACTIONS = [
@@ -262,7 +405,8 @@ const ACTIONS = [
   ['resume', (round) => {
     const waiting = Object.keys((currentState() || {}).waits || {});
     const sid = waiting.length && chance(0.6) ? pick(waiting) : pick(SESSIONS);
-    const before = sid ? ((currentState() || {}).waits || {})[sid] : undefined;
+    const state = currentState() || {};
+    const before = sid ? (state.waits || {})[sid] : undefined;
     const mark = acc.journalMark();
     const startedReal = Date.now();
     const result = runEngine(['resume', '--sid', sid, '--account', acc.dir]);
@@ -272,8 +416,77 @@ const ACTIONS = [
       const launched = lab.playRecords().launches.some((launch) => launch.key === sid && (!launch.done || launch.done.real >= startedReal - LAUNCH_OVERLAP_MS));
       const silent = pauseEndedWithoutReason({ key: sid, before, after, launched, journal: acc.journalSince(mark) });
       if (silent) problem(round, 'resume', silent);
+      if (freshStartHeld(state, sid, before, after)) problem(round, 'resume', `${sid} stopped with its context full and its fresh start was held for a compaction until ${new Date(Number(after.resumeAt) * 1000).toISOString()}`);
     }
     note('resume');
+  }],
+  ['context', (round) => {
+    const sid = pick(CONTEXT_SESSIONS);
+    const session = contextOf(sid);
+    const point = claudeCompactionPoint(readJson(claudeSettingsFile()) || {}, session.model, session.window);
+    if (point !== null && session.tokens >= point) {
+      compactSession(round, sid, session);
+    } else if (session.tokens >= session.window - 20000) {
+      // Claude Code compacts nothing by itself and the request is too long for the window: the session
+      // starts over, afresh or cleared by the person.
+      contextFullStop(round, sid, session, 'tooLong', chance(0.1));
+      session.tokens = between(15000, 45000);
+      return;
+    }
+    session.tokens = Math.min(session.window, session.tokens + Math.round((between(2, 14) * session.window) / 100));
+    const settings = readText(claudeSettingsFile());
+    // Now and then the five-hour window is in the band before the shipped pause point, where a compaction
+    // that comes near holds a session back.
+    const five = chance(0.2) ? between(86, 91) : between(0, 85);
+    const input = acc.statuslineInput(sid, session.model, five, clock() + between(600, 18000), between(0, 84), clock() + between(3600, 5 * 86400), { tokens: session.tokens, window: session.window });
+    const result = runEngine(['statusline'], input);
+    checkResult(round, 'context statusline', result);
+    // A status line that changed settings.json may have read where Claude Code compacts before or after.
+    if (!result.error && result.status === 0 && readText(claudeSettingsFile()) === settings) checkContextShare(round, sid, session, result.stdout, settings);
+    note('context');
+  }],
+  ['compaction-settings', () => {
+    // The person sets where Claude Code compacts, in settings.json: at the window setup writes, at a
+    // percent, at a window for one model as /autocompact writes it, or not by itself at all.
+    const settings = readJson(claudeSettingsFile());
+    if (!settings || typeof settings !== 'object') return;
+    const env = { ...(settings.env || {}) };
+    pick([
+      () => { settings.autoCompactWindow = 313000; },
+      () => { delete settings.autoCompactWindow; },
+      () => { env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = String(pick([55, 70, 85])); },
+      () => { delete env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE; },
+      () => {
+        const model = pick(Object.keys(MODEL_WINDOWS));
+        settings.modelSettings = { ...(settings.modelSettings || {}), [model]: { ...((settings.modelSettings || {})[model] || {}), autoCompactWindow: pick([150000, 250000, 400000, 600000]) } };
+      },
+      () => { delete settings.modelSettings; },
+      () => { env.DISABLE_AUTO_COMPACT = '1'; },
+      () => { delete env.DISABLE_AUTO_COMPACT; },
+    ])();
+    settings.env = env;
+    writeJson(claudeSettingsFile(), settings);
+    note('compaction-settings');
+  }],
+  ['context-full', (round) => {
+    const sid = pick(CONTEXT_SESSIONS);
+    contextFullStop(round, sid, contextOf(sid), pick(['thrashing', 'tooLong']), chance(0.15));
+  }],
+  ['other-request-error', (round) => {
+    // The API turned a request down for another reason: that is the session's to deal with, and noctis
+    // neither pauses it nor acts on it.
+    const sid = pick(CONTEXT_SESSIONS);
+    const message = pick(OTHER_REQUEST_ERRORS);
+    const mark = acc.journalMark();
+    const since = clock();
+    const input = { hook_event_name: 'StopFailure', session_id: sid, cwd: lab.projectDir, transcript_path: lab.transcript, error: 'invalid_request', error_details: message, last_assistant_message: `API Error: 400 ${JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message } })}` };
+    const result = runEngine(['hook'], input, chance(0.15) ? { CLAUDE_CODE_REMOTE: 'true' } : {});
+    checkResult(round, 'other request error', result, { since, sid });
+    const after = waitOf(sid);
+    const acted = acc.journalSince(mark).filter((row) => row.sid === sid && row.event === 'StopFailure');
+    if (after && Number(after.storedBy) === result.pid) problem(round, 'other request error', `${sid} was set to wait after a request the API turned down: ${message}`);
+    if (acted.length) problem(round, 'other request error', `a request the API turned down was acted on (${acted.map((row) => row.action).join(', ')}): ${message}`);
+    note('other-request-error');
   }],
   ['time-passes', () => {
     lab.settleLateAnswers();

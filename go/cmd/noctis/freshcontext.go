@@ -66,15 +66,18 @@ type freshPlan struct {
 	note   string
 	tokens float64
 	idle   float64
+	full   bool
 }
 
 // freshStartDue tells whether the session a wait stopped holds enough context, and has been idle
 // long enough, that its relaunch would start fresh from a handoff note: resume.freshAboveTokens and
-// resume.freshAfterMinutes.
+// resume.freshAfterMinutes. A session that stopped with its context full starts fresh whatever they
+// say, since resumed it would send the same full context again; one whose fresh start failed resumes.
 func freshStartDue(cfg, wait object, sid string, now int64) (tokens, idle float64, due bool) {
 	resume := section(cfg, "resume")
 	after, above := numberOr(resume, "freshAfterMinutes", 60), numberOr(resume, "freshAboveTokens", 100000)
-	if currentHost().id != "claude" || after <= 0 || above <= 0 || getBool(wait, "freshFailed", false) {
+	full := getBool(wait, "contextFull", false)
+	if currentHost().id != "claude" || !full && (after <= 0 || above <= 0) || getBool(wait, "freshFailed", false) {
 		return 0, 0, false
 	}
 	tokens, known := getNumber(wait, "contextTokens")
@@ -82,7 +85,7 @@ func freshStartDue(cfg, wait object, sid string, now int64) (tokens, idle float6
 		tokens, known = sessionContextTokens(sid)
 	}
 	idle = float64(now) - lastActiveAt(wait)
-	return tokens, idle, known && tokens >= above && idle >= after*60
+	return tokens, idle, full || known && tokens >= above && idle >= after*60
 }
 
 func freshStartFor(cfg, state, wait object, sid string, now int64) freshPlan {
@@ -99,7 +102,7 @@ func freshStartFor(cfg, state, wait object, sid string, now int64) freshPlan {
 	if fresh == "" {
 		return freshPlan{}
 	}
-	return freshPlan{sid: fresh, note: note, tokens: tokens, idle: idle}
+	return freshPlan{sid: fresh, note: note, tokens: tokens, idle: idle, full: getBool(wait, "contextFull", false)}
 }
 
 func lastActiveAt(wait object) float64 {
@@ -126,15 +129,28 @@ func pauseLength(seconds float64) string {
 	return strconv.FormatFloat(math.Round(seconds/360)/10, 'f', -1, 64) + " hours"
 }
 
+// readInParts is what a session that stopped with its context full is asked to do from then on.
+const readInParts = "Read large files and command output in parts (a range of lines, head, grep), so that the context does not fill up again."
+
+// contextFullNote leads the prompt that resumes a session which stopped with its context full, when no
+// fresh session can take over from it: Claude Code compacts the context first.
+const contextFullNote = "[noctis] The session stopped with its context full: Claude Code could not compact it below its limit. " + readInParts
+
 func freshPrompt(sid string, plan freshPlan, transcript string) string {
 	prompt := fmt.Sprintf("[noctis] This is a fresh session taking over from session %s, which paused for %s with about %s tokens of context: resuming it would have read all of that again with a cold cache, so this session starts clean. First read the handoff note %s.", sid, pauseLength(plan.idle), approxCount(plan.tokens), plan.note)
+	if plan.full {
+		prompt = fmt.Sprintf("[noctis] This is a fresh session taking over from session %s, which stopped with its context full: Claude Code could not compact it below its limit, so this session starts clean. First read the handoff note %s. %s", sid, plan.note, readInParts)
+	}
 	if transcript != "" {
 		prompt += " The earlier conversation is in " + transcript + "; search it for a detail you need instead of reading it whole."
 	}
 	return prompt + " "
 }
 
-var freshSessionRecords = []string{"autoQueues", "stopGuard", "stopDay"}
+// freshSessionRecords move to the fresh session that takes over from a session. contextFulls goes along
+// so that work whose context fills up again in every fresh start is given up on after
+// stopFailureMaxAttempts of them.
+var freshSessionRecords = []string{"autoQueues", "stopGuard", "stopDay", "contextFulls"}
 
 func moveSessionRecords(state object, from, to string) {
 	for _, name := range freshSessionRecords {

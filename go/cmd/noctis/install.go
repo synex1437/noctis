@@ -276,13 +276,15 @@ func writeInstallConfig(configFile string, config object) error {
 }
 
 func mergeConfig(configFile string, defaults object) (object, map[string]bool, error) {
-	current, err := readInstallConfig(configFile)
-	if err != nil {
-		return nil, nil, err
+	stored := readConfigStrict(configFile)
+	if !stored.ok {
+		return nil, nil, errors.New(T("install.configBroken", configFile, stored.err))
 	}
+	current := stored.data
 	if current == nil {
 		current = object{}
 	}
+	migrateCompaction(current)
 	added := map[string]bool{}
 	merged := object{}
 	for name, base := range defaults {
@@ -308,10 +310,26 @@ func mergeConfig(configFile string, defaults object) (object, map[string]bool, e
 			merged[name] = own
 		}
 	}
+	// A config.json that holds the merge already is not written again: ensure merges at each session start, and
+	// writing back what it read would undo what another process wrote to config.json meanwhile.
+	if stored.exists && bytes.Equal(marshalPretty(merged), stored.raw) {
+		return merged, added, nil
+	}
 	if err := writeInstallConfig(configFile, merged); err != nil {
 		return nil, nil, err
 	}
 	return merged, added, nil
+}
+
+// mergeConfigLocked is mergeConfig for a session start, under the lock syncCompaction holds while it records in
+// config.json what it writes to settings.json: sessions that start together would otherwise write back a
+// config.json read before that record, and the window noctis wrote would pass for the user's own.
+func mergeConfigLocked(defaults object) (added map[string]bool, err error) {
+	err = errors.New("settings.lock is held by another process")
+	withFileLock(files.settingsLock, func() {
+		_, added, err = mergeConfig(files.config, defaults)
+	})
+	return added, err
 }
 
 func placeBinary(pluginRoot string) (string, error) {
@@ -380,7 +398,7 @@ func firstRunSetup(defaults object) {
 	fresh := statSafe(files.config) == nil
 	if fresh {
 		ensureDir(files.guardDir)
-		if _, _, err := mergeConfig(files.config, defaults); err != nil {
+		if _, err := mergeConfigLocked(defaults); err != nil {
 			return
 		}
 	}
@@ -442,18 +460,24 @@ func runEnsure() {
 	firstRunSetup(defaults)
 
 	if len(defaults) > 0 && statSafe(files.config) != nil {
-		if _, added, err := mergeConfig(files.config, defaults); err == nil && len(added) > 0 {
+		if added, err := mergeConfigLocked(defaults); err == nil && len(added) > 0 {
 			logInfo("ensure: %d new config section(s) added: %s", len(added), strings.Join(sortedKeys(added), ", "))
 		}
 	}
-	if cfg := loadConfig(); getString(cfg, "configError") == "" {
-		if roles := section(cfg, "roles"); len(roles) > 0 {
-			if changed := syncAgentFiles(files.pluginRoot, roles, providerModels(readJSONStrict(files.settings).data)); changed > 0 {
-				logInfo("ensure: %d agent file(s) synced with the roles profile", changed)
-			}
+	cfg := loadConfig()
+	readable := getString(cfg, "configError") == ""
+	if roles := section(cfg, "roles"); readable && len(roles) > 0 {
+		if changed := syncAgentFiles(files.pluginRoot, roles, providerModels(readJSONStrict(files.settings).data)); changed > 0 {
+			logInfo("ensure: %d agent file(s) synced with the roles profile", changed)
 		}
 	}
 	healStatusLine()
+	if !readable {
+		return
+	}
+	if note := syncCompaction(cfg); note != "" {
+		emit(object{"systemMessage": note})
+	}
 }
 
 func healStatusLine() {
@@ -620,14 +644,11 @@ func applyPreset(configFile string, config object, preset string) error {
 
 func wireSettings(configDir, binary string, config object, configFile string, defaults object, noModel bool) error {
 	settingsFile := filepath.Join(configDir, "settings.json")
-	settings := readJSONStrict(settingsFile)
+	settings := readConfigStrict(settingsFile)
 	if !settings.ok {
 		return errors.New(T("install.settingsBroken", settings.err))
 	}
 	data := settings.data
-	if data == nil {
-		data = object{}
-	}
 	asRead := copyObject(data)
 	chained := ""
 	previous := getString(getMap(data, "statusLine"), "command")
@@ -716,6 +737,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		delete(config, "managedEffort")
 	}
 	leanNote := wireLeanSwitch(config, env)
+	compactNote := wireCompaction(config, data, env)
 	if len(env) > 0 {
 		placeSetupObject(data, config, "env", env)
 	} else if _, had := data["env"]; had {
@@ -744,6 +766,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		config["resume"] = resume
 		permissionNote = T("install.relaunchInherit")
 	}
+	recorded := readJSONStrict(configFile)
 	if err := writeInstallConfig(configFile, config); err != nil {
 		return err
 	}
@@ -753,6 +776,8 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		applySettingsChanges(fresh, asRead, data)
 		data = fresh
 	}); failed != "" {
+		// The records go back to what settings.json still holds, so a setup run again knows its own values.
+		putBack(configFile, recorded)
 		return errors.New(T("install.settingsUnsaved", settingsFile, failed))
 	}
 	model := getString(data, "model")
@@ -778,6 +803,7 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		fmt.Println(T("install.settingsNoEffort", backupText, getString(data, "model"), orDefault(getString(getMap(data, "env"), "CLAUDE_CODE_EFFORT_LEVEL"), T("doctor.none"))))
 	}
 	fmt.Println(leanNote)
+	fmt.Println(compactNote)
 	return nil
 }
 
@@ -1041,7 +1067,7 @@ func settleStateDir(configDir string) {
 	fmt.Println(T("install.purged", guardDir))
 }
 
-var setupRecords = []string{"managedModel", "managedEffort", "managedModelEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep", "managedFunctionHooks", "managedAutoUpdate", "managedCreated"}
+var setupRecords = []string{"managedModel", "managedEffort", "managedModelEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep", "managedFunctionHooks", managedWindowKey, managedPercentKey, takenPercentKey, "managedAutoUpdate", "managedCreated"}
 
 func forgetSetupRecords(configFile string, config object) {
 	forgotten := false
@@ -1081,7 +1107,9 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 	takeBackModelEfforts(data, getMap(guardConfig, "managedModelEffort"), "")
 	if env := getMap(data, "env"); env != nil {
 		takeBackLeanSwitch(guardConfig, env)
+		takeBackCompactPercent(guardConfig, env)
 	}
+	takeBackCompactWindow(guardConfig, data)
 	managed := getString(guardConfig, "managedPermissionMode")
 	found, foundRecorded := guardConfig["managedPermissionPrevious"]
 	if permissions := getMap(data, "permissions"); permissions != nil && managed != "" && foundRecorded && getString(permissions, "defaultMode") == managed {
@@ -1145,7 +1173,8 @@ func lockedSettingsChange(configDir string, change func(fresh object)) string {
 }
 
 // applySettingsChanges makes in fresh the changes that turned before into after: only the keys whose
-// values changed and, inside an object, only the entries that did. Every other key and entry keeps what
+// values changed and, inside an object at any depth, only the entries that did, so a model's entry in
+// modelSettings keeps the window /autocompact saved in it meanwhile. Every other key and entry keeps what
 // fresh holds; an object setup or uninstall removed keeps the entries added to it since, if there are any.
 func applySettingsChanges(fresh, before, after object) {
 	for key, value := range after {
@@ -1163,16 +1192,7 @@ func applySettingsChanges(fresh, before, after object) {
 			fresh[key] = current
 		}
 		previous, _ := before[key].(object)
-		for entry, entryValue := range changed {
-			if old, had := previous[entry]; !had || !reflect.DeepEqual(old, entryValue) {
-				current[entry] = entryValue
-			}
-		}
-		for entry := range previous {
-			if _, kept := changed[entry]; !kept {
-				delete(current, entry)
-			}
-		}
+		applySettingsChanges(current, previous, changed)
 	}
 	for key, old := range before {
 		if _, kept := after[key]; kept {
@@ -1184,16 +1204,14 @@ func applySettingsChanges(fresh, before, after object) {
 			delete(fresh, key)
 			continue
 		}
-		for entry := range previous {
-			delete(current, entry)
-		}
+		applySettingsChanges(current, previous, object{})
 		if len(current) == 0 {
 			delete(fresh, key)
 		}
 	}
 }
 
-var setupFlags = []string{"profile", "preset", "permissions", "updates", "router", "no-model", "no-lean", "no-ask", "config-dir", "account", "host", "code", "research", "planning", "digest", "explore", "fallback"}
+var setupFlags = []string{"profile", "preset", "permissions", "updates", "router", "no-model", "no-lean", "compact-at", "no-ask", "config-dir", "account", "host", "code", "research", "planning", "digest", "explore", "fallback"}
 
 var installFlags = append([]string{"source", "uninstall", "purge"}, setupFlags...)
 
@@ -1375,6 +1393,11 @@ func setupValueError() error {
 	for _, profile := range args.values["profile"] {
 		if name := profileAlias(strings.ToLower(profile)); roleProfiles[name] == nil {
 			return errors.New(T("roles.unknownProfile", name))
+		}
+	}
+	for _, value := range args.values["compact-at"] {
+		if _, ok := compactAtOf(value); !ok {
+			return errors.New(T("setup.badCompactAt", value))
 		}
 	}
 	anyModel := true

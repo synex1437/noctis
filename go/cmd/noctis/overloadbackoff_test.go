@@ -60,3 +60,80 @@ func TestARetryPromptOrTheEndOfARelaunchDoesNotRestartTheOverloadBackoff(t *test
 		t.Fatalf("a batch of tools after the retry did not end the overload episode: %v", episode)
 	}
 }
+
+func TestObserveModeOnlyJournalsTheGiveUpsOfFailuresItNeverRetried(t *testing.T) {
+	cfg, project := h1OverloadSandbox(t)
+	previous := observing
+	t.Cleanup(func() { observing = previous })
+	observing = true
+	now := float64(nowSec())
+	// The person sent each turn again by hand: an overload that has lasted past maxTotalMinutes, and a
+	// failure noctis cannot place that came back as often as noctis retries one.
+	updateState(func(state object) {
+		stateMap(state, "overload")["observed-overload"] = object{"firstAt": now - 3*3600, "lastAt": now - 60, "attempts": float64(7)}
+		stateMap(state, "failureRetries")["observed-failure"] = object{"retries": float64(stopFailureMaxAttempts), "firstAt": now - 600, "lastAt": now - 10, "error": "unknown"}
+	})
+	hookOutput(t, onStopFailure, agentHookInput("StopFailure", "observed-overload", project, claudeFailure("overloaded", "", "API Error: Repeated 529 Overloaded errors")), cfg)
+	hookOutput(t, onStopFailure, agentHookInput("StopFailure", "observed-failure", project, object{"error_type": "unknown", "error_message": "API Error: Request timed out"}), cfg)
+
+	for sid, action := range map[string]string{"observed-overload": "overload-giveup", "observed-failure": "retry-giveup"} {
+		if journaledEntry(sid, action) != nil || journaledEntry(sid, "would-"+action) == nil {
+			t.Errorf("observe mode retried nothing for %s, yet did not just journal that it would give up: %v", sid, journaledFor(sid))
+		}
+	}
+	if told := loggedTimes("notify: " + pluginName); told != 0 {
+		t.Errorf("observe mode notified %d times that it gave up on retries it never made: %q", told, tailFileLines(files.log, 20))
+	}
+	if failure := getMap(getMap(readState(), "launchFailures"), "observed-failure"); failure != nil {
+		t.Errorf("observe mode left noctis status a give-up on retries it never made: %v", failure)
+	}
+}
+
+func TestAGiveUpTakesBackTheRetryARunnerPutOffToTheReset(t *testing.T) {
+	for _, give := range []struct {
+		name, action string
+		failure      func(sid, project string) object
+		spent        func(state object, sid string, now float64)
+	}{
+		{"overload", "overload-giveup", func(sid, project string) object {
+			return agentHookInput("StopFailure", sid, project, claudeFailure("overloaded", "", "API Error: Repeated 529 Overloaded errors"))
+		}, func(state object, sid string, now float64) {
+			stateMap(state, "overload")[sid] = object{"firstAt": now - 3*3600, "lastAt": now - 60, "attempts": float64(28)}
+		}},
+		{"failure", "retry-giveup", func(sid, project string) object {
+			return agentHookInput("StopFailure", sid, project, object{"error_type": "unknown", "error_message": "API Error: Request timed out"})
+		}, func(state object, sid string, now float64) {
+			stateMap(state, "failureRetries")[sid] = object{"retries": float64(stopFailureMaxAttempts), "firstAt": now - 600, "lastAt": now - 10, "error": "unknown"}
+		}},
+		{"full context", "retry-giveup", contextFullStop, func(state object, sid string, now float64) {
+			stateMap(state, "contextFulls")[sid] = object{"count": float64(stopFailureMaxAttempts), "lastAt": now - 600}
+		}},
+	} {
+		t.Run(give.name, func(t *testing.T) {
+			cfg, project := h1OverloadSandbox(t)
+			sid := "put-off-" + strings.ReplaceAll(give.name, " ", "-")
+			hookOutput(t, onStopFailure, give.failure(sid, project), cfg)
+			wait := pendingWait(sid)
+			if wait == nil {
+				t.Fatalf("the failure left no retry: %v", journaledFor(sid))
+			}
+			// When the retry came, the runner found a limit still in force and put it off to the reset.
+			now := float64(nowSec())
+			if !rescheduleOwnWait(sid, numberOr(wait, "startedAt", 0), func(record object) {
+				record["window"], record["label"], record["until"], record["resumeAt"] = "five_hour", windowLabel("five_hour"), now+3*3600, now+3*3600
+				record["startedAt"] = now
+			}) {
+				t.Fatal("the retry could not be put off to the reset")
+			}
+			// The session failed again before the reset, with the retries spent.
+			updateState(func(state object) { give.spent(state, sid, now) })
+			hookOutput(t, onStopFailure, give.failure(sid, project), cfg)
+			if journaledEntry(sid, give.action) == nil {
+				t.Fatalf("noctis did not give up on the failure: %v", journaledFor(sid))
+			}
+			if wait := pendingWait(sid); wait != nil {
+				t.Fatalf("noctis gave up and said it leaves the session stopped, yet the retry put off to the reset still starts it then: %v", wait)
+			}
+		})
+	}
+}

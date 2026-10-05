@@ -162,7 +162,8 @@ function check() {
   const onDisk = fs.readFileSync(LANG, 'utf8');
   const temporary = path.join(require('os').tmpdir(), `noctis-i18n-${process.pid}.go`);
   fs.writeFileSync(temporary, renderGo());
-  const gofmt = require('child_process').spawnSync('gofmt', [temporary], { encoding: 'utf8' });
+  // lang.go is past the 1 MiB that spawnSync buffers by default; past it, the output comes back cut short.
+  const gofmt = require('child_process').spawnSync('gofmt', [temporary], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   fs.rmSync(temporary, { force: true });
   if (gofmt.status !== 0) throw new Error(`gofmt failed: ${gofmt.stderr || gofmt.error}`);
   if (gofmt.stdout !== onDisk) {

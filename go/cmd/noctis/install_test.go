@@ -56,7 +56,7 @@ func TestEnsureDoesNotReadTheEngineItAlreadyLinked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runEnsure()
+	capturedStdout(t, runEnsure)
 
 	if logged := loggedErrors(); strings.Contains(logged, "SHA256SUMS") {
 		t.Fatalf("ensure read and hashed the engine bin/%s already links to: %s", binaryFileName(), logged)
@@ -78,7 +78,7 @@ func TestEnsureStillChecksAnEngineThatIsNotLinkedBeforePlacingIt(t *testing.T) {
 	}
 	writeShippedSum(t, strings.Repeat("0", 64))
 
-	runEnsure()
+	capturedStdout(t, runEnsure)
 
 	if logged := loggedErrors(); !strings.Contains(logged, "SHA256SUMS") {
 		t.Fatalf("an engine that fails bin/SHA256SUMS was not refused; errors.log: %q", logged)
@@ -88,7 +88,7 @@ func TestEnsureStillChecksAnEngineThatIsNotLinkedBeforePlacingIt(t *testing.T) {
 	}
 
 	writeShippedSum(t, sha256Of(engine))
-	runEnsure()
+	capturedStdout(t, runEnsure)
 
 	if placed, _ := os.ReadFile(binary); !bytes.Equal(placed, engine) {
 		t.Fatalf("a verified engine did not replace the launcher: %q", placed)
@@ -105,7 +105,7 @@ func TestEnsureAddsADefaultSectionTheConfigLacks(t *testing.T) {
 	})
 	mustWriteJSON(files.config, object{"thresholds": object{"session5h": float64(70)}})
 
-	runEnsure()
+	capturedStdout(t, runEnsure)
 
 	config := readJSON(files.config)
 	if got := numberOr(getMap(config, "thresholds"), "session5h", 0); got != 70 {
@@ -220,6 +220,28 @@ func TestAConfigThatIsNotAnObjectIsNamedAndLeftAsItIs(t *testing.T) {
 		capturedStdout(t, runEnsure)
 		if after, _ := os.ReadFile(files.config); string(after) != mine {
 			t.Errorf("a session start wrote over config.json %s:\n%.200s", mine, after)
+		}
+	}
+}
+
+func TestASettingsFileThatIsNotAnObjectIsNamedAndLeftAsItIs(t *testing.T) {
+	cliPluginTree(t)
+	clearCompactionVariables(t)
+	t.Setenv("NOCTIS_LANG", "en")
+	for _, mine := range []string{`null`, `[{"model": "opus", "permissions": {"defaultMode": "plan"}}]`, `"{\"model\": \"opus\"}"`} {
+		cliWrite(t, files.settings, []byte(mine))
+		mustWriteJSON(files.config, object{})
+
+		capturedStdout(t, runEnsure)
+
+		if after, _ := os.ReadFile(files.settings); string(after) != mine {
+			t.Errorf("a session start wrote over settings.json %s:\n%.200s", mine, after)
+		}
+		if doctor := strings.Join(doctorLines(loadConfig()), "\n"); !strings.Contains(doctor, "!!  settings.json: not a JSON object") {
+			t.Errorf("the doctor does not name settings.json %s:\n%s", mine, doctor)
+		}
+		if issues := strings.Join(selfCheckIssues(loadConfig()), "\n"); !strings.Contains(issues, T("selfcheck.settings")) {
+			t.Errorf("the session-start check does not name settings.json %s:\n%s", mine, issues)
 		}
 	}
 }

@@ -217,6 +217,140 @@ func TestAShortPauseASmallContextOrNoNoteStillResumesTheSessionItself(t *testing
 	}
 }
 
+func TestASessionThatStoppedWithItsContextFullStartsAfreshEvenAfterAShortPause(t *testing.T) {
+	calls := relaunchSandboxWith(t, fakeClaude("sleep 1", answerWhereItRuns, "exit 1"))
+	sid := "fullcontext1"
+	// A minute after the stop, with no fill known: neither resume.freshAfterMinutes nor
+	// resume.freshAboveTokens would start the session afresh.
+	_, note := parkBigPause(t, sid, "headless", 1, 0)
+	updateState(func(state object) {
+		wait := getMap(getMap(state, "waits"), sid)
+		wait["contextFull"] = true
+		delete(wait, "contextTokens")
+		stateMap(state, "contextFulls")[sid] = object{"count": float64(1), "lastAt": float64(nowSec())}
+	})
+
+	resumeWait(sid, "")
+
+	if got := launchesOf(calls, sid); got != 0 {
+		t.Fatalf("a session that stopped with its context full was resumed whole (%d --resume launch(es)), to send the same full context again", got)
+	}
+	fresh, prompt := freshLaunchOf(calls)
+	if fresh == "" {
+		t.Fatalf("no fresh session was started: %q", launchLines(calls))
+	}
+	for _, part := range []string{note, sid, "stopped with its context full", readInParts, "add a login page"} {
+		if !strings.Contains(prompt, part) {
+			t.Fatalf("the fresh session's prompt does not name %q: %q", part, prompt)
+		}
+	}
+	if entry := journaledEntry(sid, "launch"); !getBool(entry, "contextFull", false) || getString(entry, "fresh") != fresh {
+		t.Fatalf("the fresh start was not journaled as one after a full context: %v", entry)
+	}
+	if contextFulls := getMap(readState(), "contextFulls"); getMap(contextFulls, fresh) == nil || getMap(contextFulls, sid) != nil {
+		t.Fatalf("the fresh session did not take the count of full contexts along: %v", contextFulls)
+	}
+}
+
+// parkFullContext parks sid the way the StopFailure hook does when a turn ends with the context full,
+// a minute after the stop.
+func parkFullContext(t *testing.T, sid string) {
+	t.Helper()
+	parkBigPause(t, sid, "headless", 1, 0)
+	updateState(func(state object) {
+		wait := getMap(getMap(state, "waits"), sid)
+		wait["kind"], wait["window"], wait["label"], wait["used"], wait["threshold"] = "stopfailure", "unknown", T("stopfailure.ctxFullLabel"), nil, nil
+		wait["contextFull"], wait["retry"], wait["error"] = true, float64(1), "invalid_request"
+		delete(wait, "hit")
+		delete(wait, "contextTokens")
+	})
+}
+
+func TestAFreshStartIsNotHeldBackForACompactionOfTheContextItLeavesBehind(t *testing.T) {
+	calls := relaunchSandboxWith(t, fakeClaude("sleep 1", answerWhereItRuns, "exit 1"))
+	sid := "fullcontext3"
+	parkFullContext(t, sid)
+	// The 5-hour window is 4 points under its pause point and the status line last saw the context
+	// full: resumed whole, the session would compact first, which the guard holds back until the reset.
+	now := float64(nowSec())
+	recordStatusline(object{"session_id": sid,
+		"rate_limits": object{
+			"five_hour": object{"used_percentage": float64(88), "resets_at": now + 18000},
+			"seven_day": object{"used_percentage": float64(20), "resets_at": now + 3*86400},
+		},
+		"context_window": object{"context_window_size": float64(200000), "used_percentage": float64(97), "current_usage": object{"input_tokens": float64(194000)}},
+	}, nowSec(), true)
+
+	resumeWait(sid, "")
+
+	if fresh, _ := freshLaunchOf(calls); fresh == "" {
+		t.Fatalf("the fresh session, which starts with a clean context, was held back until the 5-hour reset for a compaction of the full context it leaves behind: %v (journal %v)", waitOf(sid), journaledFor(sid))
+	}
+}
+
+func TestAFreshStartIsNotHeldBackForTheCompactionAt280kOfTheMillionTokenContextItLeavesBehind(t *testing.T) {
+	calls := relaunchSandboxWith(t, fakeClaude("sleep 1", answerWhereItRuns, "exit 1"))
+	clearCompactionVariables(t)
+	mustWriteJSON(files.settings, object{"autoCompactWindow": float64(313000)})
+	sid := "fullcontext5"
+	parkFullContext(t, sid)
+	// The session's last status line: 278k tokens of context, by the 280k where Claude Code compacts its
+	// 1M window, and the five-hour window at 88 %, inside the band before its 92 % pause point.
+	now := nowSec()
+	recordStatusline(object{
+		"session_id": sid,
+		"model":      object{"id": "claude-opus-5-5[1m]"},
+		"context_window": object{"used_percentage": float64(28), "context_window_size": float64(1e6),
+			"current_usage": object{"input_tokens": float64(2000), "cache_read_input_tokens": float64(276000)}},
+		"rate_limits": object{
+			"five_hour": object{"used_percentage": float64(88), "resets_at": float64(now + 3*3600)},
+			"seven_day": object{"used_percentage": float64(20), "resets_at": float64(now + 3*86400)},
+		},
+	}, now, true)
+
+	resumeWait(sid, "")
+
+	if fresh, _ := freshLaunchOf(calls); fresh == "" {
+		t.Fatalf("the fresh start was held for a compaction only the context it leaves behind was near: %q, wait %v", launchLines(calls), waitOf(sid))
+	}
+}
+
+func TestAFreshStartAfterAFullContextNeedsNoUsageData(t *testing.T) {
+	calls := relaunchSandboxWith(t, fakeClaude("sleep 1", answerWhereItRuns, "exit 1"))
+	sid := "fullcontext4"
+	parkFullContext(t, sid)
+	// Neither the status line nor the usage endpoint has given any usage (an account on an API key,
+	// say). The context filled up whatever the limits are, so nothing waits for them to be known.
+	if err := os.Remove(files.usage); err != nil {
+		t.Fatal(err)
+	}
+
+	resumeWait(sid, "")
+
+	if fresh, _ := freshLaunchOf(calls); fresh == "" {
+		t.Fatalf("a session that stopped with its context full was not started afresh for want of usage data: %v (journal %v)", waitOf(sid), journaledFor(sid))
+	}
+}
+
+func TestASessionThatStoppedWithItsContextFullAndHasNoHandoffNoteIsToldWhyWhenResumed(t *testing.T) {
+	calls := relaunchSandboxWith(t, fakeClaude("exit 0"))
+	sid := "fullcontext2"
+	_, note := parkBigPause(t, sid, "headless", 1, 0)
+	if err := os.Remove(note); err != nil {
+		t.Fatal(err)
+	}
+	updateState(func(state object) { getMap(getMap(state, "waits"), sid)["contextFull"] = true })
+
+	resumeWait(sid, "")
+
+	if got := launchesOf(calls, sid); got != 1 {
+		t.Fatalf("the session was resumed %d time(s), want 1: %q", got, launchLines(calls))
+	}
+	if prompt := launchPromptOf(calls); !strings.Contains(prompt, contextFullNote) {
+		t.Fatalf("the resumed session is not told that it stopped with its context full: %q", prompt)
+	}
+}
+
 func TestAResumedBigSessionIsToldToGiveQueueItemsToSubagents(t *testing.T) {
 	cases := []struct {
 		name     string

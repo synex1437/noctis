@@ -18,24 +18,32 @@ func leanSandbox(t *testing.T) {
 
 func TestACompactionSettingOfTheWrongTypeKeepsTheShippedValueAndIsNamed(t *testing.T) {
 	leanSandbox(t)
-	shipped := leanPolicy{on: true, compactAt: 70}
+	shipped := leanPolicy{on: true, earlyAt: 90, compactAt: compactAim{tokens: 280000}}
 	for _, bad := range []struct {
 		key   string
 		value any
 	}{
 		{"lean", "yes"},
 		{"lean", float64(1)},
-		{"compactAtPercent", float64(150)},
-		{"compactAtPercent", float64(-5)},
-		{"compactAtPercent", "abc"},
-		{"compactAtPercent", "0x10"},
-		{"compactAtPercent", []any{float64(80)}},
-		{"compactAtPercent", true},
+		{"earlyAtPercent", float64(150)},
+		{"earlyAtPercent", float64(-5)},
+		{"earlyAtPercent", "abc"},
+		{"earlyAtPercent", "0x10"},
+		{"earlyAtPercent", []any{float64(80)}},
+		{"earlyAtPercent", true},
 		{"keepTurns", float64(-1)},
 		{"keepTurns", 2.5},
 		{"keepTurns", nil},
 		{"maxToolResultChars", float64(50)},
 		{"instructions", float64(5)},
+		{"compactAt", float64(50000)},
+		{"compactAt", float64(990000)},
+		{"compactAt", 300000.5},
+		{"compactAt", "lots"},
+		{"compactAt", "5%"},
+		{"compactAt", "150%"},
+		{"compactAt", true},
+		{"compactAt", []any{float64(280000)}},
 	} {
 		mustWriteJSON(files.config, object{"compaction": object{bad.key: bad.value}})
 		cfg := loadConfig()
@@ -61,13 +69,13 @@ func TestACompactionValueThatIsNotAnObjectKeepsTheShippedLeanSettings(t *testing
 	for _, bad := range []any{float64(85), "85", []any{float64(1)}, true, false, nil} {
 		mustWriteJSON(files.config, object{"compaction": bad})
 		cfg := loadConfig()
-		if got := leanPolicyOf(cfg); got != (leanPolicy{on: true, compactAt: 70}) {
+		if got := leanPolicyOf(cfg); got != (leanPolicy{on: true, earlyAt: 90, compactAt: compactAim{tokens: 280000}}) {
 			t.Fatalf("compaction=%v gave %+v, want the shipped lean settings", bad, got)
 		}
 		if names := repairedCompaction(cfg); !slices.Contains(names, "compaction") {
 			t.Fatalf("compaction=%v was set aside without telling anyone: repaired %v", bad, names)
 		}
-		if got := compactionGuardPercent(cfg); got != 85 {
+		if got := compactionGuardPercent(cfg, sharedSettings()); got != 85 {
 			t.Fatalf("compaction=%v moved the compaction guard to %v, want the shipped 85", bad, got)
 		}
 	}
@@ -79,13 +87,23 @@ func TestCompactionValuesOfTheRightShapeAreKept(t *testing.T) {
 		own  object
 		want leanPolicy
 	}{
-		{object{"compactAtPercent": " 75 "}, leanPolicy{on: true, compactAt: 75}},
-		{object{"compactAtPercent": float64(0)}, leanPolicy{on: true}},
-		{object{"compactAtPercent": false}, leanPolicy{on: true}},
-		{object{"compactAtPercent": nil}, leanPolicy{on: true}},
-		{object{"compactAtPercent": "0"}, leanPolicy{on: true}},
-		{object{"lean": false}, leanPolicy{compactAt: 70}},
-		{object{"keepTurns": "3", "maxToolResultChars": float64(800), "instructions": "keep the plan"}, leanPolicy{on: true, compactAt: 70}},
+		{object{"earlyAtPercent": " 75 "}, leanPolicy{on: true, earlyAt: 75, compactAt: compactAim{tokens: 280000}}},
+		{object{"earlyAtPercent": float64(0)}, leanPolicy{on: true, compactAt: compactAim{tokens: 280000}}},
+		{object{"earlyAtPercent": false}, leanPolicy{on: true, compactAt: compactAim{tokens: 280000}}},
+		{object{"earlyAtPercent": nil}, leanPolicy{on: true, compactAt: compactAim{tokens: 280000}}},
+		{object{"earlyAtPercent": "0"}, leanPolicy{on: true, compactAt: compactAim{tokens: 280000}}},
+		{object{"lean": false}, leanPolicy{earlyAt: 90, compactAt: compactAim{tokens: 280000}}},
+		{object{"keepTurns": "3", "maxToolResultChars": float64(800), "instructions": "keep the plan"}, leanPolicy{on: true, earlyAt: 90, compactAt: compactAim{tokens: 280000}}},
+		{object{"compactAt": float64(0)}, leanPolicy{on: true, earlyAt: 90}},
+		{object{"compactAt": false}, leanPolicy{on: true, earlyAt: 90}},
+		{object{"compactAt": nil}, leanPolicy{on: true, earlyAt: 90}},
+		{object{"compactAt": "off"}, leanPolicy{on: true, earlyAt: 90}},
+		{object{"compactAt": " 200000 "}, leanPolicy{on: true, earlyAt: 90, compactAt: compactAim{tokens: 200000}}},
+		{object{"compactAt": "600k"}, leanPolicy{on: true, earlyAt: 90, compactAt: compactAim{tokens: 600000}}},
+		{object{"compactAt": float64(67000)}, leanPolicy{on: true, earlyAt: 90, compactAt: compactAim{tokens: 67000}}},
+		{object{"compactAt": float64(967000)}, leanPolicy{on: true, earlyAt: 90, compactAt: compactAim{tokens: 967000}}},
+		{object{"compactAt": "60%"}, leanPolicy{on: true, earlyAt: 90, compactAt: compactAim{percent: 60}}},
+		{object{"compactAt": float64(60)}, leanPolicy{on: true, earlyAt: 90, compactAt: compactAim{percent: 60}}},
 	} {
 		mustWriteJSON(files.config, object{"compaction": good.own})
 		cfg := loadConfig()
@@ -111,13 +129,13 @@ func TestDoctorAndStatusNameARepairedCompactionSetting(t *testing.T) {
 	if !strings.Contains(status, "compaction.lean, compaction.keepTurns") {
 		t.Fatalf("status did not name the repaired compaction keys:\n%s", status)
 	}
-	mustWriteJSON(files.config, object{"compaction": object{"compactAtPercent": float64(75)}})
+	mustWriteJSON(files.config, object{"compaction": object{"earlyAtPercent": float64(75)}})
 	cfg = loadConfig()
 	doctor = strings.Join(doctorLines(cfg), "\n")
-	if !strings.Contains(doctor, "lean compaction: on, compacts early at 75% of the context") {
+	if !strings.Contains(doctor, "lean compaction: on, compacts early at 75% of the way to where Claude Code compacts") {
 		t.Fatalf("the doctor does not say how lean compaction is set:\n%s", doctor)
 	}
-	if status := describeState(cfg, readState(), usageView{}, nowSec()); !strings.Contains(status, "Compaction   : lean compaction on, compacts early at 75% of the context") {
+	if status := describeState(cfg, readState(), usageView{}, nowSec()); !strings.Contains(status, "Compaction   : lean compaction on, compacts early at 75% of the way to where Claude Code compacts") {
 		t.Fatalf("status does not say how lean compaction is set:\n%s", status)
 	}
 }
@@ -127,11 +145,11 @@ func TestTheModuleAndTheConfigShipTheSameLeanDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := regexp.MustCompile(`SHIPPED = Object\.freeze\(\{ lean: (true|false), compactAtPercent: (\d+), keepTurns: (\d+), maxToolResultChars: (\d+), instructions: "([^"]*)" \}\)`).FindStringSubmatch(string(source))
+	found := regexp.MustCompile(`SHIPPED = Object\.freeze\(\{ lean: (true|false), earlyAtPercent: (\d+), keepTurns: (\d+), maxToolResultChars: (\d+), instructions: "([^"]*)" \}\)`).FindStringSubmatch(string(source))
 	if found == nil {
 		t.Fatal("hooks/lean.js no longer spells SHIPPED the way this test reads it")
 	}
-	module := object{"lean": found[1] == "true", "compactAtPercent": found[2], "keepTurns": found[3], "maxToolResultChars": found[4], "instructions": found[5]}
+	module := object{"lean": found[1] == "true", "earlyAtPercent": found[2], "keepTurns": found[3], "maxToolResultChars": found[4], "instructions": found[5]}
 	shipped := getMap(shippedDefaults(t), "compaction")
 	for _, key := range leanKeys {
 		for name, values := range map[string]object{"hooks/lean.js": module, "builtinLean": builtinLean} {
@@ -143,5 +161,8 @@ func TestTheModuleAndTheConfigShipTheSameLeanDefaults(t *testing.T) {
 				t.Errorf("%s ships compaction.%s=%v, config.default.json %v", name, key, got, want)
 			}
 		}
+	}
+	if got, want := builtinLean["compactAt"], shipped["compactAt"]; jsonText(got) != jsonText(want) {
+		t.Errorf("builtinLean ships compaction.compactAt=%v, config.default.json %v", got, want)
 	}
 }

@@ -24,17 +24,19 @@ type digestInbox struct {
 func newDigestInbox(t *testing.T) *digestInbox {
 	t.Helper()
 	inbox := &digestInbox{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, _ := io.ReadAll(r.Body)
-		message := object{}
-		_ = json.Unmarshal(raw, &message)
-		inbox.mu.Lock()
-		inbox.messages = append(inbox.messages, message)
-		inbox.mu.Unlock()
-	}))
+	server := httptest.NewServer(inbox)
 	t.Cleanup(server.Close)
 	inbox.url = server.URL + "/hook"
 	return inbox
+}
+
+func (inbox *digestInbox) ServeHTTP(_ http.ResponseWriter, r *http.Request) {
+	raw, _ := io.ReadAll(r.Body)
+	message := object{}
+	_ = json.Unmarshal(raw, &message)
+	inbox.mu.Lock()
+	inbox.messages = append(inbox.messages, message)
+	inbox.mu.Unlock()
 }
 
 func (inbox *digestInbox) received() []object {

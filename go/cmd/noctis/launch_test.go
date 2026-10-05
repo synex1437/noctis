@@ -172,3 +172,31 @@ func TestOnlyAWindowsRelaunchGetsThePromptAsOneScrubbedLine(t *testing.T) {
 		t.Fatalf("a prompt that starts with a dash must not be read as an option: got %q", got)
 	}
 }
+
+func TestARelaunchLeavesOutThePercentSetupTookBack(t *testing.T) {
+	home := relaunchSandbox(t)
+	clearCompactionVariables(t)
+	mustWriteJSON(files.settings, object{"autoCompactWindow": float64(313000)})
+	mustWriteJSON(files.config, object{managedWindowKey: float64(313000), takenPercentKey: "60"})
+	// The session the runner came from started while settings.json still held the percent.
+	t.Setenv(autoCompactPercentVar, "60")
+	launch := launchSpec{sid: "s1", cwd: home}
+
+	if value, found := envEntry(relaunchEnv(launch, ""), autoCompactPercentVar); found {
+		t.Errorf("a relaunch hands the session the %s=%s setup took back, so it compacts there and not at the window settings.json has", autoCompactPercentVar, value)
+	}
+	script, _ := unixLaunchScript(launch, "/opt/claude/bin/claude", []string{"--resume", "s1"}, "")
+	if content, err := os.ReadFile(script); err != nil || !strings.Contains(string(content), " "+autoCompactPercentVar+"\n") {
+		t.Errorf("the window launcher of a relaunch should unset the percent setup took back (%v):\n%s", err, content)
+	}
+
+	// A percent of the user's own goes on to the session.
+	t.Setenv(autoCompactPercentVar, "70")
+	if value, found := envEntry(relaunchEnv(launch, ""), autoCompactPercentVar); !found || value != "70" {
+		t.Errorf("a relaunch hands the session %s=%q, want the user's 70", autoCompactPercentVar, value)
+	}
+	script, _ = unixLaunchScript(launch, "/opt/claude/bin/claude", []string{"--resume", "s1"}, "")
+	if content, err := os.ReadFile(script); err != nil || strings.Contains(string(content), autoCompactPercentVar) {
+		t.Errorf("the window launcher of a relaunch unsets the user's own percent (%v):\n%s", err, content)
+	}
+}

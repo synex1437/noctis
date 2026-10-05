@@ -135,6 +135,53 @@ func TestSetupAndUninstallWaitForTheSettingsLockAnotherProcessHolds(t *testing.T
 	}
 }
 
+func TestSetupKeepsTheWindowAutocompactSavesWhileItAsksClaudeForThePermissionModes(t *testing.T) {
+	low := object{"modelSettings": object{"claude-opus-5-5": object{"effortLevel": "low"}}}
+	for _, race := range []struct{ before, meanwhile object }{
+		{object{}, object{"modelSettings": object{"claude-opus-5-5": object{"autoCompactWindow": float64(400000)}}}},
+		{low, object{"modelSettings": object{"claude-opus-5-5": object{"effortLevel": "low", "autoCompactWindow": float64(400000)}}}},
+	} {
+		sandboxFiles(t)
+		clearCompactionVariables(t)
+		account := recordAccount(t, race.before)
+		settingsFile := filepath.Join(account, "settings.json")
+		settingsRaceClaude(t, settingsFile, race.meanwhile)
+
+		recordSetup(t, account, "high")
+
+		opus := getMap(getMap(readJSON(settingsFile), "modelSettings"), "claude-opus-5-5")
+		if want := (object{"effortLevel": "high", "autoCompactWindow": float64(400000)}); !reflect.DeepEqual(opus, want) {
+			t.Errorf("from %v, setup should save its level beside the window /autocompact saved for the model while setup ran claude --help: want %v, settings.json holds %v", race.before, want, opus)
+		}
+	}
+}
+
+func TestUninstallKeepsTheWindowAutocompactSavesWhileItWaitsForTheSettingsLock(t *testing.T) {
+	low := object{"modelSettings": object{"claude-opus-5-5": object{"effortLevel": "low"}}}
+	for _, race := range []struct{ before, want object }{
+		{object{}, object{"autoCompactWindow": float64(140000)}},
+		{low, object{"effortLevel": "low", "autoCompactWindow": float64(140000)}},
+	} {
+		sandboxFiles(t)
+		clearCompactionVariables(t)
+		recordClaudeWithAuto(t)
+		account := recordAccount(t, race.before)
+		settingsFile := filepath.Join(account, "settings.json")
+		recordSetup(t, account, "high")
+		read := readJSON(settingsFile)
+
+		settingsRaceHeld(t, account, func(settings object) {
+			getMap(getMap(settings, "modelSettings"), "claude-opus-5-5")["autoCompactWindow"] = float64(140000)
+		}, func() error {
+			return undoSetupSettings(settingsFile, read, readJSON(filepath.Join(account, pluginName, "config.json")))
+		})
+
+		if opus := getMap(getMap(readJSON(settingsFile), "modelSettings"), "claude-opus-5-5"); !reflect.DeepEqual(opus, race.want) {
+			t.Errorf("from %v, uninstall should take back its level beside the window /autocompact saved for the model while uninstall waited for the settings lock: want %v, settings.json holds %v", race.before, race.want, opus)
+		}
+	}
+}
+
 func TestUninstallLeavesNoStateFolderInAnAccountThatHadNone(t *testing.T) {
 	sandboxFiles(t)
 	account := recordAccount(t, object{"theme": "dark"})

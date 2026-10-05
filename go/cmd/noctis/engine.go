@@ -2596,6 +2596,9 @@ func pausedHookPulse(sid string, state object, now int64) {
 type decideOptions struct {
 	force   bool
 	noProbe bool
+	// fresh: a fresh session takes over from the session, so the context the session holds is never
+	// compacted and the guard does not weigh it.
+	fresh bool
 }
 
 func decide(cfg object, state object, input object, now int64, options decideOptions) decision {
@@ -2606,7 +2609,10 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 	usageFile := readJSON(files.usage)
 	model := resolveSessionModel(cfg, state, usageFile, sid)
 	sessionInfo := getMap(getMap(usageFile, "sessions"), sid)
-	contextPercent, hasContext := getNumber(sessionInfo, "context")
+	fill := sessionFill(sessionInfo)
+	if options.fresh {
+		fill = contextFill{}
+	}
 	usageCfg := section(cfg, "usage")
 	staleSeconds := usageStaleSeconds(cfg)
 	if sessionInfo == nil {
@@ -2682,8 +2688,8 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 			key, threshold, guarded := blindWindow(cfg, snapshot)
 			label := windowLabel(key)
 			win := snapshot.byKey(key)
-			blind := evaluate(cfg, usage, model, contextPercent, hasContext)
-			blind.usageStale, blind.contextPercent, blind.hasContext = true, contextPercent, hasContext
+			blind := evaluateSession(cfg, usage, model, fill)
+			blind.usageStale, blind.contextPercent, blind.hasContext = true, fill.percent, fill.known
 			if blind.wait == nil && win != nil && guarded {
 				blind.wait = &waitPlan{window: key, label: label, used: win.used, threshold: threshold, until: win.resetsAt, hit: "blind"}
 			}
@@ -2702,8 +2708,8 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 	if numberOr(section(cfg, "budget"), "dailyWeeklyPercent", 0) > 0 {
 		recordBudgetDay(usage, now)
 	}
-	result := evaluate(cfg, usage, model, contextPercent, hasContext)
-	result.usageStale, result.contextPercent, result.hasContext = usageStale, contextPercent, hasContext
+	result := evaluateSession(cfg, usage, model, fill)
+	result.usageStale, result.contextPercent, result.hasContext = usageStale, fill.percent, fill.known
 	notices, marks := planNotices(cfg, state, usage, &result, sid, now, currentHost().limits)
 	if len(marks) > 0 {
 		updateState(func(next object) {

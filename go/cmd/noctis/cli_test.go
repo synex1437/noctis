@@ -17,6 +17,10 @@ import (
 
 const cliChildArgs = "NOCTIS_CLI_TEST_ARGS"
 
+// cliChildManaged is the directory a command-line test's child reads managed settings from, in place of the
+// machine's.
+const cliChildManaged = "NOCTIS_CLI_TEST_MANAGED"
+
 func TestCLIChildRunsTheCommandItWasHanded(t *testing.T) {
 	raw := os.Getenv(cliChildArgs)
 	if raw == "" {
@@ -60,7 +64,7 @@ func startNoctisCLIAt(t *testing.T, home, input string, env map[string]string, a
 	if input != "" {
 		child.Stdin = strings.NewReader(input)
 	}
-	child.Env = append(os.Environ(), cliChildArgs+"="+string(encoded), "NOCTIS_LANG=en", "NOCTIS_HOST=", "NOCTIS_NO_WATCHER=1", "NOCTIS_NO_TASKS=1",
+	child.Env = append(os.Environ(), cliChildArgs+"="+string(encoded), cliChildManaged+"="+filepath.Join(home, "managed"), "NOCTIS_LANG=en", "NOCTIS_HOST=", "NOCTIS_NO_WATCHER=1", "NOCTIS_NO_TASKS=1",
 		"CLAUDE_CONFIG_DIR=", "CLAUDE_PLUGIN_ROOT=", "NOCTIS_PLUGIN_ROOT=",
 		"CLAUDE_CODE_OAUTH_TOKEN=test", "HOME="+home, "USERPROFILE="+home, "CODEX_HOME="+filepath.Join(home, ".codex"), "COPILOT_HOME="+filepath.Join(home, ".copilot"))
 	for _, name := range claudeProviderEnv {
@@ -252,6 +256,20 @@ func TestSetupRefusesAConfigItCannotRead(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSetupRefusesASettingsFileThatIsNotAnObject(t *testing.T) {
+	box := newCLIBox(t)
+	settingsFile := filepath.Join(box.account, "settings.json")
+	mine := []byte(`[{"model": "opus", "permissions": {"defaultMode": "plan"}}]`)
+	cliWrite(t, settingsFile, mine)
+
+	run := box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep")
+
+	if run.code != 1 || !strings.Contains(run.stderr, "settings.json unreadable (not a JSON object)") || strings.Contains(run.stdout, "setup complete") {
+		t.Fatalf("setup went on past a settings.json that is not an object:\n%s", run)
+	}
+	cliUnchanged(t, settingsFile, mine)
 }
 
 func TestInstallRefusesAConfigItCannotRead(t *testing.T) {
@@ -997,7 +1015,7 @@ func TestSetupAndInstallChangeNothingWhenTheyDoNotUnderstandTheirArguments(t *te
 }
 
 func TestSetupChecksItsValuesBeforeItWritesAnything(t *testing.T) {
-	for _, bad := range [][]string{{"--preset", "weird", "weird"}, {"--profile", "bogus", "bogus"}, {"--code", "opus:ultra", "ultra"}, {"--research", ":high", ":high"}} {
+	for _, bad := range [][]string{{"--preset", "weird", "weird"}, {"--profile", "bogus", "bogus"}, {"--code", "opus:ultra", "ultra"}, {"--research", ":high", ":high"}, {"--compact-at", "10k", "10k"}} {
 		t.Run(strings.Join(bad[:2], " "), func(t *testing.T) {
 			box := newCLIBox(t)
 

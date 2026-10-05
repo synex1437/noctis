@@ -28,6 +28,30 @@ func (box leanBox) statusline(t *testing.T, sid string, percent int) string {
 	return box.statuslineOf(t, sid, percent, "")
 }
 
+// statuslineTokens reports a context of tokens in a window of window tokens, as Claude Code does.
+func (box leanBox) statuslineTokens(t *testing.T, sid string, tokens, window float64) string {
+	t.Helper()
+	payload, _ := json.Marshal(object{"session_id": sid, "model": object{"id": "claude-opus-5-5", "display_name": "Opus 5.5"}, "cwd": forwardSlashes(box.home), "context_window": object{"used_percentage": 100 * tokens / window, "context_window_size": window, "current_usage": object{"input_tokens": tokens}}})
+	run := box.run(t, string(payload), "statusline")
+	if run.code != 0 {
+		t.Fatalf("the status line failed:\n%s", run)
+	}
+	return run.stdout
+}
+
+func (box leanBox) settings(t *testing.T, settings object) {
+	t.Helper()
+	cliWrite(t, filepath.Join(box.account, "settings.json"), marshalPretty(settings))
+}
+
+func (box leanBox) compacted(t *testing.T, sid string) {
+	t.Helper()
+	payload, _ := json.Marshal(object{"hook_event_name": "SessionStart", "session_id": sid, "cwd": box.home, "source": "compact"})
+	if run := box.run(t, string(payload), "hook"); run.code != 0 {
+		t.Fatalf("the SessionStart hook after a compaction failed:\n%s", run)
+	}
+}
+
 func (box leanBox) statuslineOf(t *testing.T, sid string, percent int, version string) string {
 	t.Helper()
 	payload := `{"session_id":"` + sid + `","model":{"id":"claude-opus-5-5","display_name":"Opus 5.5"},"cwd":"` + forwardSlashes(box.home) + `","context_window":{"used_percentage":` + formatNumber(float64(percent)) + `}}`
@@ -69,41 +93,85 @@ func (box leanBox) moduleRanIn(t *testing.T, sid string) {
 
 func TestTheStatusLineMarksAFullContextWhileTheLeanModuleIsNotRunning(t *testing.T) {
 	box := newLeanBox(t)
-	if line := box.statusline(t, "s1", 72); !strings.Contains(line, "ctx 72%▲") {
-		t.Fatalf("at 72%% with no lean module in the session the context carries no mark: %q", line)
+	box.settings(t, object{"autoCompactWindow": float64(313000)})
+	if line := box.statuslineTokens(t, "s1", 252000, 1e6); !strings.Contains(line, "ctx 90%▲") {
+		t.Fatalf("at 252k tokens, 90%% of the way to the 280k compaction point, with no lean module in the session the context carries no mark: %q", line)
 	}
-	if line := box.statusline(t, "s1", 69); !strings.Contains(line, "ctx 69%") || strings.Contains(line, "ctx 69%▲") {
-		t.Fatalf("below compactAtPercent the context is marked: %q", line)
+	if line := box.statuslineTokens(t, "s1", 249000, 1e6); !strings.Contains(line, "ctx 89%") || strings.Contains(line, "▲") {
+		t.Fatalf("below earlyAtPercent the context is marked: %q", line)
+	}
+	if line := box.statusline(t, "s1", 90); !strings.Contains(line, "ctx 90%▲") {
+		t.Fatalf("a status line with no token count lost the mark at 90%% of the window: %q", line)
 	}
 	box.moduleRanIn(t, "s1")
-	if line := box.statusline(t, "s1", 72); !strings.Contains(line, "ctx 72%") || strings.Contains(line, "ctx 72%▲") {
+	if line := box.statuslineTokens(t, "s1", 252000, 1e6); !strings.Contains(line, "ctx 90%") || strings.Contains(line, "▲") {
 		t.Fatalf("the context is marked in a session the lean module runs in: %q", line)
 	}
-	for _, compaction := range []object{{"lean": false}, {"compactAtPercent": float64(0)}} {
+	for _, compaction := range []object{{"lean": false}, {"earlyAtPercent": float64(0)}} {
 		box := newLeanBox(t)
 		box.config(t, compaction)
-		if line := box.statusline(t, "s2", 90); strings.Contains(line, "▲") {
+		if line := box.statusline(t, "s2", 95); strings.Contains(line, "▲") {
 			t.Fatalf("compaction=%v still marks the context: %q", compaction, line)
 		}
 	}
 }
 
+func TestTheStatusLineCountsTheContextToWhereClaudeCodeCompacts(t *testing.T) {
+	for _, account := range []struct {
+		name     string
+		settings object
+		tokens   float64
+	}{
+		{"noctis's 280k", object{"autoCompactWindow": float64(313000)}, 140000},
+		{"autoCompactWindow 633000", object{"autoCompactWindow": float64(633000)}, 300000},
+		{"/autocompact 600k", object{"modelSettings": object{"claude-opus-5-5": object{"autoCompactWindow": float64(600000)}}}, 283500},
+		{"/autocompact 140k", object{"modelSettings": object{"claude-opus-5-5": object{"autoCompactWindow": float64(140000)}}}, 53500},
+		{"60%", object{"env": object{autoCompactPercentVar: "60"}}, 294000},
+		{"Claude Code's own", object{}, 483500},
+	} {
+		t.Run(account.name, func(t *testing.T) {
+			box := newLeanBox(t)
+			box.settings(t, account.settings)
+			if line := box.statuslineTokens(t, "s1", account.tokens, 1e6); !strings.Contains(line, "ctx 50%") {
+				t.Fatalf("%v tokens, half of the way to where Claude Code compacts, do not read 50%%: %q", account.tokens, line)
+			}
+		})
+	}
+	box := newLeanBox(t)
+	box.settings(t, object{"autoCompactWindow": float64(313000), "env": object{"DISABLE_AUTO_COMPACT": "1"}})
+	if line := box.statuslineTokens(t, "s1", 300000, 1e6); !strings.Contains(line, "ctx 30%") {
+		t.Fatalf("with Claude Code's compaction off the context does not read as its share of the window: %q", line)
+	}
+}
+
 func TestAOneTimeNoticeNamesCompactWhileTheLeanModuleIsNotRunning(t *testing.T) {
 	box := newLeanBox(t)
-	box.statusline(t, "s1", 72)
+	box.statusline(t, "s1", 92)
 	first := box.prompt(t, "s1")
-	if !strings.Contains(first, "/compact") || !strings.Contains(first, "72%") {
-		t.Fatalf("the first prompt at 72%% got no notice naming /compact: %q", first)
+	if !strings.Contains(first, "/compact") || !strings.Contains(first, "92%") {
+		t.Fatalf("the first prompt at 92%% got no notice naming /compact: %q", first)
 	}
 	if again := box.prompt(t, "s1"); strings.Contains(again, "/compact") {
 		t.Fatalf("the notice came twice in one session: %q", again)
+	}
+	box.compacted(t, "s1")
+	if stale := box.prompt(t, "s1"); strings.Contains(stale, "/compact") {
+		t.Fatalf("after a compaction the fill from before it brought the notice back: %q", stale)
+	}
+	box.statusline(t, "s1", 30)
+	if low := box.prompt(t, "s1"); strings.Contains(low, "/compact") {
+		t.Fatalf("after a compaction a session at 30%% was told to compact: %q", low)
+	}
+	box.statusline(t, "s1", 93)
+	if refilled := box.prompt(t, "s1"); !strings.Contains(refilled, "/compact") || !strings.Contains(refilled, "93%") {
+		t.Fatalf("after a compaction the context filled up again and got no notice: %q", refilled)
 	}
 	box.statusline(t, "s2", 40)
 	if low := box.prompt(t, "s2"); strings.Contains(low, "/compact") {
 		t.Fatalf("a session at 40%% was told to compact: %q", low)
 	}
 	box.moduleRanIn(t, "s3")
-	box.statusline(t, "s3", 85)
+	box.statusline(t, "s3", 95)
 	if running := box.prompt(t, "s3"); strings.Contains(running, "/compact") {
 		t.Fatalf("a session the lean module runs in was told to compact by hand: %q", running)
 	}
@@ -112,9 +180,9 @@ func TestAOneTimeNoticeNamesCompactWhileTheLeanModuleIsNotRunning(t *testing.T) 
 func TestOnAClaudeCodeOlderThanTheLeanModuleNeedsTheNoticeNamesTheVersionInsteadOfPromisingSetup(t *testing.T) {
 	box := newLeanBox(t)
 	promise := "/noctis:setup turns Claude Code's function hooks on from the next session"
-	box.statuslineOf(t, "old", 72, "2.1.251")
+	box.statuslineOf(t, "old", 92, "2.1.251")
 	old := box.prompt(t, "old")
-	for _, want := range []string{"72%", "/compact", "2.1.251", "2.1.281", "--no-lean"} {
+	for _, want := range []string{"92%", "/compact", "2.1.251", "2.1.281", "--no-lean"} {
 		if !strings.Contains(old, want) {
 			t.Fatalf("the notice in a session on Claude Code 2.1.251 does not name %q: %q", want, old)
 		}
@@ -123,7 +191,7 @@ func TestOnAClaudeCodeOlderThanTheLeanModuleNeedsTheNoticeNamesTheVersionInstead
 		t.Fatalf("the notice in a session on Claude Code 2.1.251 promises that setup makes lean compaction run: %q", old)
 	}
 	for sid, version := range map[string]string{"current": "2.1.281", "newer": "2.2.0", "unreported": "", "unreadable": "unknown"} {
-		box.statuslineOf(t, sid, 72, version)
+		box.statuslineOf(t, sid, 92, version)
 		if notice := box.prompt(t, sid); !strings.Contains(notice, promise) {
 			t.Fatalf("a session on Claude Code %q did not get the notice that names /noctis:setup: %q", version, notice)
 		}

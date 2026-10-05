@@ -12,7 +12,7 @@ func TestRepeatedUnexplainedFailuresClimbTheRetryLadderAndThenStop(t *testing.T)
 	cfg := waitEngineConfig()
 	cfg["fable"] = object{"source": "off"}
 	sid := "keeps-failing"
-	input := object{"session_id": sid, "cwd": dir, "error_type": "invalid_request", "error_message": "prompt is too long"}
+	input := object{"session_id": sid, "cwd": dir, "error_type": "unknown", "error_message": "API Error: Request timed out"}
 	relaunched := func() {
 		updateState(func(state object) { delete(stateMap(state, "waits"), sid) })
 	}
