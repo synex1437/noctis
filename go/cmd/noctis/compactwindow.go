@@ -37,10 +37,7 @@ const (
 	contextFullDelaySeconds = 30.0
 )
 
-// contextFullPattern finds a turn Claude Code ended because the context would not fit: its breaker for
-// compactions that leave the context full again ("Autocompact is thrashing"), a prompt the API found too
-// long, the context limit reached with automatic compaction off.
-var contextFullPattern = lazyRegexp(`(?i)autocompact is thrashing|autocompact_thrashing|prompt is too long|context limit reached`)
+var contextFullPattern = lazyRegexp(`(?i)autocompact is thrashing|autocompact_thrashing|prompt is too long|context limit reached|context window limit`)
 
 type contextFill struct {
 	percent, tokens, window float64

@@ -40,6 +40,8 @@ const (
 	schedulingGraceSeconds  = 30
 	lockQueueBackgroundMs   = 900000
 	stopFailureMaxAttempts  = 5
+	outputCapRetries        = 1
+	outputCapDelaySeconds   = 30.0
 	failureEpisodeSlack     = 3600
 	burstHistoryLimit       = 6
 	burstWindowSeconds      = 1800
@@ -1199,17 +1201,16 @@ func emptyState() object {
 		"queueTrust":       object{},
 		"launchFailures":   object{},
 		"failureRetries":   object{},
-		// contextFulls count, by session, the turns that stopped with the context full since the
-		// session last ended a turn (count, lastAt): a fresh start takes the count along.
-		"contextFulls": object{},
-		"queueVerify":  object{},
-		"typedTurns":   object{},
-		"userTurns":    object{},
-		"queueDefer":   object{},
-		"jobs":         object{},
-		"jobSeq":       float64(0),
-		"continuedBy":  object{},
-		"freshStarts":  object{},
+		"contextFulls":     object{},
+		"outputCaps":       object{},
+		"queueVerify":      object{},
+		"typedTurns":       object{},
+		"userTurns":        object{},
+		"queueDefer":       object{},
+		"jobs":             object{},
+		"jobSeq":           float64(0),
+		"continuedBy":      object{},
+		"freshStarts":      object{},
 		// queueWakes are the runners set to resume a stopped session when a deferral of its queue
 		// ends (armQueueWake), by session.
 		"queueWakes": object{},
@@ -1527,6 +1528,7 @@ func pruneState(state object, now int64) {
 		"launchFailures": stateEntryTTLSeconds,
 		"failureRetries": stateEntryTTLSeconds,
 		"contextFulls":   stateEntryTTLSeconds,
+		"outputCaps":     stateEntryTTLSeconds,
 		"modelOverrides": launchRecordTTLSeconds,
 		"typedTurns":     stateEntryTTLSeconds,
 		"userTurns":      stateEntryTTLSeconds,

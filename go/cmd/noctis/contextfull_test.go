@@ -11,21 +11,25 @@ import (
 // thrashing is the message Claude Code ends a turn with when its compactions leave the context full again.
 const thrashing = "Autocompact is thrashing: the context refilled to the limit within 3 turns of the previous compact, 3 times in a row. A file being read or a tool output is likely too large for the context window. Try reading in smaller chunks, or use /clear to start fresh."
 
-// contextFullSandbox has the alarm on and stand-ins for the desktop notifiers, so every notification
-// reaches guard.log and nothing shows up on the machine running the tests.
+func standInNotifiers(t *testing.T) {
+	t.Helper()
+	if isWindows {
+		return
+	}
+	bin := t.TempDir()
+	for _, notifier := range []string{"notify-send", "osascript"} {
+		writeScript(t, filepath.Join(bin, notifier), "#!/bin/sh\nexit 0\n")
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
 func contextFullSandbox(t *testing.T) (object, string) {
 	t.Helper()
 	dir := sandboxFiles(t)
 	t.Setenv("NOCTIS_NO_TASKS", "1")
 	t.Setenv("NOCTIS_NO_SCHEDULE", "1")
 	t.Setenv("CLAUDE_CODE_REMOTE", "")
-	if !isWindows {
-		bin := t.TempDir()
-		for _, notifier := range []string{"notify-send", "osascript"} {
-			writeScript(t, filepath.Join(bin, notifier), "#!/bin/sh\nexit 0\n")
-		}
-		t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	}
+	standInNotifiers(t)
 	cfg := waitEngineConfig()
 	cfg["fable"] = object{"source": "off"}
 	cfg["alarm"] = object{"enabled": true}

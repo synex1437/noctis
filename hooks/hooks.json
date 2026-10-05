@@ -123,7 +123,7 @@
     ],
     "StopFailure": [
       {
-        "matcher": "rate_limit|overloaded|server_error|model_not_found|billing_error|account_on_hold|authentication_failed|invalid_request",
+        "matcher": "rate_limit|overloaded|server_error|model_not_found|billing_error|account_on_hold|authentication_failed|invalid_request|max_output_tokens|verification_required|oauth_org_not_allowed|cloud_credential_error|unknown",
         "hooks": [
           {
             "type": "command",

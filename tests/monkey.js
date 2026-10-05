@@ -6,7 +6,7 @@ const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
 const {
-  PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, waitKey, isAlive, MODEL_WINDOWS, THRASHING, OTHER_REQUEST_ERRORS, claudeCompactionPoint,
+  PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, sleep, nowSec, readJson, writeJson, waitKey, isAlive, MODEL_WINDOWS, THRASHING, OTHER_REQUEST_ERRORS, QUIET_FAILURES, WINDOW_LIMIT, claudeCompactionPoint,
 } = require('./harness');
 const { checkContinuations, pauseEndedWithoutReason } = require('./continuations');
 
@@ -240,15 +240,11 @@ function waitOf(sid) {
   return ((currentState() || {}).waits || {})[waitKey(sid)];
 }
 
-// A turn ends with invalid_request and the text Claude Code gives a context it cannot bring below its
-// limit. noctis sets the session to start afresh, gives up on it with a notification once its fresh
-// starts kept filling up, or leaves it to the person: a cloud session with a notice, in observe mode
-// with what it would have done in the journal, a pause it could not store with a notice. Never does it
-// leave the session waiting with nothing scheduled.
 function contextFullStop(round, sid, session, kind, cloud) {
   const action = `context-full ${kind}${cloud ? ' cloud' : ''}`;
   const input = { hook_event_name: 'StopFailure', session_id: sid, cwd: lab.projectDir, transcript_path: lab.transcript, error: 'invalid_request' };
   if (kind === 'thrashing') input.last_assistant_message = THRASHING;
+  else if (kind === 'windowLimit') Object.assign(input, { error: 'max_output_tokens', last_assistant_message: WINDOW_LIMIT });
   else Object.assign(input, { last_assistant_message: 'Prompt is too long', error_details: `prompt is too long: ${session.tokens} tokens > ${session.window} maximum` });
   const mark = acc.journalMark();
   const logFrom = sizeOf(guardLog());
@@ -258,7 +254,6 @@ function contextFullStop(round, sid, session, kind, cloud) {
   note(`context-full:${kind}`);
   if (result.error || result.status !== 0) return;
   const after = waitOf(sid);
-  // A wait this stop stored, which records the process that stored it.
   const waits = Boolean(after && after.contextFull === true && Number(after.storedBy) === result.pid);
   const rows = acc.journalSince(mark).filter((row) => row.sid === waitKey(sid) && row.event === 'StopFailure');
   const notified = /notify: /.test(textSince(guardLog(), logFrom));
@@ -280,6 +275,61 @@ function contextFullStop(round, sid, session, kind, cloud) {
   } else if (!hookOutput(result).systemMessage) {
     problem(round, action, `${sid} stopped with its context full and was neither set to start afresh, given up on nor left with a notice: ${JSON.stringify(rows.map((row) => row.action))}`);
   }
+}
+
+const ACCOUNT_FAILURES = ['verification_required', 'oauth_org_not_allowed'];
+
+const READY_TAIL = '; iş devam ettiriliyor.';
+
+function notifiedBy(pid, logFrom, command = 'hook', text = '') {
+  return textSince(guardLog(), logFrom).split('\n').some((line) => line.includes(`[INFO ${pid} ${command}] notify: `) && line.includes(text));
+}
+
+function stopFailureActions(mark, sid) {
+  return acc.journalSince(mark).filter((row) => row.sid === waitKey(sid) && row.event === 'StopFailure').map((row) => row.action);
+}
+
+function quietFailureStop(round, sid, error, message, cloud) {
+  const action = `quiet failure ${error}${cloud ? ' cloud' : ''}`;
+  const mark = acc.journalMark();
+  const logFrom = sizeOf(guardLog());
+  const since = clock();
+  const result = runEngine(['hook'], { hook_event_name: 'StopFailure', session_id: sid, cwd: lab.projectDir, transcript_path: lab.transcript, error, last_assistant_message: message }, cloud ? { CLAUDE_CODE_REMOTE: 'true' } : {});
+  checkResult(round, action, result, { since, sid });
+  note(`quiet-failure:${error}`);
+  if (result.error || result.status !== 0) return;
+  const after = waitOf(sid);
+  const waits = Boolean(after && Number(after.storedBy) === result.pid);
+  const actions = stopFailureActions(mark, sid);
+  const notified = notifiedBy(result.pid, logFrom);
+  if (actions.includes('retry-giveup')) {
+    if (waits) problem(round, action, `${sid} was given up on after ${error}, yet set to wait`);
+    if (!notified) problem(round, action, `${sid} was given up on after ${error} without a notification`);
+    note('quiet-failure:giveup');
+  } else if (actions.includes('schedule-resume')) {
+    if (!waits || !after.scheduled) problem(round, action, `${sid} was set to retry after ${error} with nothing scheduled: ${JSON.stringify(after || null).slice(0, 200)}`);
+    if (notified) problem(round, action, `${sid} was set to retry after ${error} with a notification before any give-up`);
+    note('quiet-failure:retry');
+  } else if (actions.some((name) => name.startsWith('would-'))) {
+    if (waits) problem(round, action, `observe mode set ${sid} to wait after ${error}`);
+  } else if (!hookOutput(result).systemMessage) {
+    problem(round, action, `${sid} stopped on ${error} and was neither set to retry, given up on nor left with a notice: ${JSON.stringify(actions)}`);
+  }
+}
+
+function accountFailureStop(round, sid, error) {
+  const action = `account failure ${error}`;
+  const mark = acc.journalMark();
+  const logFrom = sizeOf(guardLog());
+  const since = clock();
+  const result = runEngine(['hook'], { hook_event_name: 'StopFailure', session_id: sid, cwd: lab.projectDir, transcript_path: lab.transcript, error });
+  checkResult(round, action, result, { since, sid });
+  note(`account-failure:${error}`);
+  if (result.error || result.status !== 0) return;
+  const after = waitOf(sid);
+  if (after && Number(after.storedBy) === result.pid) problem(round, action, `${sid} was set to wait after ${error}, which no retry fixes`);
+  const told = stopFailureActions(mark, sid).includes('account-error');
+  if (told !== notifiedBy(result.pid, logFrom)) problem(round, action, `${error} for ${sid} was ${told ? 'journaled without a notification' : 'notified without a journal row'}`);
 }
 
 // A session that stopped with its context full starts afresh from its handoff note when it can: no
@@ -408,6 +458,7 @@ const ACTIONS = [
     const state = currentState() || {};
     const before = sid ? (state.waits || {})[sid] : undefined;
     const mark = acc.journalMark();
+    const logFrom = sizeOf(guardLog());
     const startedReal = Date.now();
     const result = runEngine(['resume', '--sid', sid, '--account', acc.dir]);
     checkResult(round, 'resume', result, { allowExit: sid === '' ? [2] : [0, 1] });
@@ -417,6 +468,7 @@ const ACTIONS = [
       const silent = pauseEndedWithoutReason({ key: sid, before, after, launched, journal: acc.journalSince(mark) });
       if (silent) problem(round, 'resume', silent);
       if (freshStartHeld(state, sid, before, after)) problem(round, 'resume', `${sid} stopped with its context full and its fresh start was held for a compaction until ${new Date(Number(after.resumeAt) * 1000).toISOString()}`);
+      if (before.quietRetry && notifiedBy(result.pid, logFrom, 'resume', READY_TAIL)) problem(round, 'resume', `${sid} waited for a retry noctis sets quietly, and its runner sent a notification that the limit reset`);
     }
     note('resume');
   }],
@@ -470,7 +522,7 @@ const ACTIONS = [
   }],
   ['context-full', (round) => {
     const sid = pick(CONTEXT_SESSIONS);
-    contextFullStop(round, sid, contextOf(sid), pick(['thrashing', 'tooLong']), chance(0.15));
+    contextFullStop(round, sid, contextOf(sid), pick(['thrashing', 'tooLong', 'windowLimit']), chance(0.15));
   }],
   ['other-request-error', (round) => {
     // The API turned a request down for another reason: that is the session's to deal with, and noctis
@@ -487,6 +539,13 @@ const ACTIONS = [
     if (after && Number(after.storedBy) === result.pid) problem(round, 'other request error', `${sid} was set to wait after a request the API turned down: ${message}`);
     if (acted.length) problem(round, 'other request error', `a request the API turned down was acted on (${acted.map((row) => row.action).join(', ')}): ${message}`);
     note('other-request-error');
+  }],
+  ['quiet-failure', (round) => {
+    const [error, message] = pick(QUIET_FAILURES);
+    quietFailureStop(round, pick(CONTEXT_SESSIONS), error, message, chance(0.15));
+  }],
+  ['account-failure', (round) => {
+    accountFailureStop(round, pick(CONTEXT_SESSIONS), pick(ACCOUNT_FAILURES));
   }],
   ['time-passes', () => {
     lab.settleLateAnswers();

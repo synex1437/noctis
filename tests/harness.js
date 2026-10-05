@@ -763,6 +763,14 @@ const OTHER_REQUEST_ERRORS = [
   'messages: text content blocks must be non-empty',
   'The request body is not valid JSON: unexpected end of data',
 ];
+const OUTPUT_CAPPED = "API Error: Claude's response exceeded the 32000 output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.";
+const WINDOW_LIMIT = 'API Error: The model has reached its context window limit.';
+const UNREACHABLE_API = "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)";
+const QUIET_FAILURES = [
+  ['max_output_tokens', OUTPUT_CAPPED],
+  ['unknown', UNREACHABLE_API],
+  ['cloud_credential_error', 'API Error: Could not load AWS credentials · The security token included in the request is expired. Check or refresh your AWS credentials and try again.'],
+];
 
 const switchedOn = (value) => ['1', 'true', 'yes', 'on'].includes(String(value === undefined || value === null ? '' : value).trim().toLowerCase());
 
@@ -801,4 +809,4 @@ function waitKey(sid) {
 
 module.exports = {
   refreshChecksums, PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, Account, sleep, nowSec, readJson, writeJson, isAlive, processStarted, processTable, waitKey,
-  MODEL_WINDOWS, COMPACT_REPLY_TOKENS, THRASHING, OTHER_REQUEST_ERRORS, claudeCompactionPoint };
+  MODEL_WINDOWS, COMPACT_REPLY_TOKENS, THRASHING, OTHER_REQUEST_ERRORS, OUTPUT_CAPPED, WINDOW_LIMIT, UNREACHABLE_API, QUIET_FAILURES, claudeCompactionPoint };
