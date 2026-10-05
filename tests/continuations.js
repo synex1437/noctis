@@ -101,13 +101,31 @@ function pausesContinuedTwice(pauses, answers) {
   return problems;
 }
 
+// One claude drives a session at a time, whatever pause each relaunch was for: a relaunch drives the
+// session it resumes, and one that starts a fresh session drives that one too, as it takes the work over.
+function sessionsDrivenTwice(launches) {
+  const problems = [];
+  const ran = launches.filter((launch) => launch.done).sort((a, b) => a.real - b.real);
+  ran.forEach((later, index) => {
+    const driven = new Set([later.key, later.fresh].filter(Boolean));
+    for (const earlier of ran.slice(0, index)) {
+      if (!samePath(earlier.config, later.config) || later.real >= earlier.done.real) continue;
+      const shared = [earlier.key, earlier.fresh].find((sid) => sid && driven.has(sid));
+      if (shared) {
+        problems.push(`${path.basename(later.config)}/${shared} was driven by two relaunches at once: one for the pause started ${iso(earlier.wait.startedAt)}${earlier.fresh ? ` as ${earlier.fresh}` : ''}, one for the pause started ${iso(later.wait.startedAt)}${later.fresh ? ` as ${later.fresh}` : ''}`);
+      }
+    }
+  });
+  return problems;
+}
+
 function checkContinuations({ launches, answers }) {
   const attributed = launches.filter((launch) => launch.wait && launch.handoff);
   const realAnswers = answers.filter((answer) => !answer.apiError);
   const pauses = groupPauses(attributed);
   const modes = {};
   for (const launch of attributed) modes[launch.mode] = (modes[launch.mode] || 0) + 1;
-  const problems = [...relaunchesAfterTheSessionWentOn(attributed, realAnswers), ...pausesContinuedTwice(pauses, realAnswers)];
+  const problems = [...relaunchesAfterTheSessionWentOn(attributed, realAnswers), ...pausesContinuedTwice(pauses, realAnswers), ...sessionsDrivenTwice(attributed)];
   return {
     problems: [...new Set(problems)],
     summary: {

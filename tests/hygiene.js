@@ -8,12 +8,15 @@ const crypto = require('crypto');
 const ROOT = path.join(__dirname, '..');
 const problems = [];
 
+// walk leaves out another checkout inside this one, such as a worktree Claude Code makes for an agent: a folder
+// with a .git of its own holds that checkout's files, not this one's.
 function walk(dir, visit) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (['node_modules', '.git', 'bin'].includes(entry.name)) continue;
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, visit);
-    else visit(full);
+    if (entry.isDirectory()) {
+      if (!fs.existsSync(path.join(full, '.git'))) walk(full, visit);
+    } else visit(full);
   }
 }
 

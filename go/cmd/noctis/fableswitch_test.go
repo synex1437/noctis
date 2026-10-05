@@ -60,6 +60,25 @@ func TestAMoveOffFableAfterAFailedTurnIsJournaledAsAModelSwitch(t *testing.T) {
 	}
 }
 
+func TestAMoveOffFableAtTheEndOfATurnIsJournaledUnderTheStopHook(t *testing.T) {
+	fableFailureSandbox(t, 99, false)
+	config := readJSON(files.config)
+	config["queue"] = object{"files": []any{"TASKS.md"}}
+	mustWriteJSON(files.config, config)
+	sid, project := "fable-at-stop", t.TempDir()
+	trustQueueFile(writeQueueFile(t, project, "# q\n- [ ] fix the parser\n- [ ] fix the typo\n"), true)
+
+	hookOutput(t, onStop, stopInput(sid, project), loadConfig())
+
+	switches := modelSwitchesOf(sid)
+	if len(switches) != 1 {
+		t.Fatalf("noctis moved the session off Fable as its queue went on at a Stop, and the journal has %d switch-model row(s) for it, want 1: %v", len(switches), journaledFor(sid))
+	}
+	if row := switches[0]; getString(row, "event") != "stop" || getString(row, "to") != "claude-opus-5" {
+		t.Errorf("the switch-model row a Stop wrote names another hook, as the pauses of a Stop do not: %v", row)
+	}
+}
+
 func TestAFailureThatNamesNoLimitMovesTheSessionOffFableOnlyPastItsSwitchPointOrWhenItRepeats(t *testing.T) {
 	unnamed := claudeFailure("rate_limit", "429 Too Many Requests", "API Error: Rate limit reached")
 	timedOut := claudeFailure("unknown", "", "API Error: Request timed out")

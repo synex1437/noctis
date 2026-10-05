@@ -284,6 +284,9 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 			sid = sessionKey(input)
 			sessions := getMap(next, "sessions")
 			info := object{"model": getString(getMap(input, "model"), "id"), "cwd": getString(input, "cwd"), "transcript": getString(input, "transcript_path"), "updatedAt": float64(now)}
+			if project := getString(getMap(input, "workspace"), "project_dir"); project != "" && project != info["cwd"] {
+				info["projectDir"] = project
+			}
 			if reported := getString(input, "version"); reported != "" {
 				info["version"] = reported
 			}
@@ -294,6 +297,9 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 			}
 			if tokens, ok := contextTokensOf(getMap(input, "context_window")); ok {
 				info["contextTokens"] = tokens
+			}
+			if size, ok := getNumber(getMap(input, "context_window"), "context_window_size"); ok && size > 0 {
+				info["contextWindow"] = size
 			}
 			if len(shown) > 0 {
 				info["windows"] = shown
@@ -319,6 +325,12 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 		keepWritten(files.usage, encoded, next)
 	})
 	return sid, heal
+}
+
+// statuslineProjectDir is the directory the session of a status line input started in, whose project settings
+// Claude Code reads: workspace.project_dir, else the session's working directory.
+func statuslineProjectDir(input object) string {
+	return orDefault(getString(getMap(input, "workspace"), "project_dir"), getString(input, "cwd"))
 }
 
 func runStatusline() {
@@ -354,10 +366,14 @@ func runStatusline() {
 	if level := getString(getMap(input, "effort"), "level"); level != "" {
 		effort = "/" + level
 	}
-	context := ""
-	if percent, ok := getNumber(getMap(input, "context_window"), "used_percentage"); ok {
-		context = leanContextText(cfg, sid, percent)
+	contextWindow := getMap(input, "context_window")
+	fill := contextFill{dir: statuslineProjectDir(input)}
+	fill.percent, fill.known = getNumber(contextWindow, "used_percentage")
+	if fill.known {
+		fill.tokens, _ = contextTokensOf(contextWindow)
+		fill.window, _ = getNumber(contextWindow, "context_window_size")
 	}
+	context := leanContextText(cfg, sid, getString(modelInfo, "id"), fill)
 	marker := "∞"
 	if !getBool(statuslineCfg, "emoji", true) {
 		marker = "NOCTIS"
@@ -1023,25 +1039,27 @@ func resumeWait(sid, release string) {
 	resume := section(cfg, "resume")
 	ready := ""
 	capUsage := usageView{}
+	plan := freshStartFor(cfg, readState(), wait, sid, nowSec())
 	if kind != "fable" && currentHost().limits {
 
-		result := decide(cfg, state, object{"session_id": sid, "cwd": getString(wait, "cwd"), "transcript_path": getString(wait, "transcript")}, now, decideOptions{force: true})
+		result := decide(cfg, state, object{"session_id": sid, "cwd": getString(wait, "cwd"), "transcript_path": getString(wait, "transcript")}, now, decideOptions{force: true, fresh: plan.sid != ""})
 		if result.wait != nil && result.wait.until > float64(now+120) {
 			resumeAt := result.wait.until + math.Max(0, numberOr(waitCfg, "resetMarginSeconds", 0))
-			plan := result.wait
+			limit := result.wait
 			if !rescheduleOwnWait(sid, startedAt, func(record object) {
-				record["until"], record["resumeAt"], record["label"], record["window"] = plan.until, resumeAt, plan.label, plan.window
-				record["hit"], record["cause"], record["used"], record["threshold"] = plan.hit, plan.cause, plan.used, plan.threshold
+				record["until"], record["resumeAt"], record["label"], record["window"] = limit.until, resumeAt, limit.label, limit.window
+				record["hit"], record["cause"], record["used"], record["threshold"] = limit.hit, limit.cause, limit.used, limit.threshold
 				record["startedAt"] = float64(now)
 				delete(record, "earlyTriggeredAt")
 			}) || !scheduleOwnRunner(cfg, sid, float64(now), resumeAt) {
 				leaveReplacedWait(sid)
 				return
 			}
-			logInfo("runner %s: limit still active (%s %%%s), rescheduled to %s", sid, plan.label, formatNumber(plan.used), localISO(resumeAt))
+			logInfo("runner %s: limit still active (%s %%%s), rescheduled to %s", sid, limit.label, formatNumber(limit.used), localISO(resumeAt))
 			return
 		}
-		if kind == "stopfailure" && !result.usage.hasAny {
+		// A context that filled up did not stop on a limit, so its fresh start does not wait for usage data.
+		if kind == "stopfailure" && !result.usage.hasAny && !getBool(wait, "contextFull", false) {
 			attempts := int(numberOr(wait, "attempts", 0)) + 1
 			if attempts >= stopFailureMaxAttempts {
 				if !clearOwnWait(sid, startedAt) {
@@ -1110,7 +1128,6 @@ func resumeWait(sid, release string) {
 		effort = appliedEffort("fallback", getMap(section(cfg, "roles"), "fallback"))
 	}
 	dirs := sessionDirs(getString(wait, "projectDir"), getString(wait, "cwd"))
-	plan := freshStartFor(cfg, readState(), wait, sid, nowSec())
 	queuePath := ""
 	if getBool(wait, "queueOff", false) {
 		// No queue drove the session when it paused (a headless run, or NOCTIS_QUEUE=off): its
@@ -1159,8 +1176,11 @@ func resumeWait(sid, release string) {
 	if getBool(wait, "overload", false) {
 		prompt = T("overload.wakeMessage", getString(wait, "label"), formatNumber(numberOr(wait, "attempt", 1)), durationText(numberOr(wait, "resumeAt", 0)-numberOr(wait, "startedAt", numberOr(wait, "resumeAt", 0)))) + " " + prompt
 	}
-	if plan.sid != "" {
+	switch {
+	case plan.sid != "":
 		prompt = freshPrompt(sid, plan, getString(wait, "transcript")) + prompt
+	case getBool(wait, "contextFull", false):
+		prompt = contextFullNote + " " + prompt
 	}
 	prompt = relaunchPrompt(prompt)
 	runnerStarted := processStarted(os.Getpid())
@@ -1255,7 +1275,11 @@ func resumeWait(sid, release string) {
 		notify(cfg, pluginName, ready)
 	}
 	facts := object{"mode": orDefault(launchMode, getString(resume, "mode"))}
-	if plan.sid != "" {
+	switch {
+	case plan.full:
+		facts["fresh"], facts["contextFull"] = plan.sid, true
+		logInfo("runner %s: it stopped with its context full; relaunching it as the fresh session %s with its handoff note", sid, plan.sid)
+	case plan.sid != "":
 		facts["fresh"], facts["contextTokens"], facts["idleMinutes"] = plan.sid, plan.tokens, math.Round(plan.idle/60)
 		logInfo("runner %s: %s since its last turn with about %s tokens of context; relaunching it as the fresh session %s with its handoff note", sid, pauseLength(plan.idle), approxCount(plan.tokens), plan.sid)
 	}

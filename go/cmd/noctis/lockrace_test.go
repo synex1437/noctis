@@ -23,6 +23,10 @@ func lockRaceChild(dir, role, key string) int {
 	files.usageLock, files.fableLock = filepath.Join(dir, "usage.lock"), filepath.Join(dir, "fable.lock")
 	files.log, files.errors = filepath.Join(dir, "guard.log"), filepath.Join(dir, "errors.log")
 	files.checkpoints, files.launches = filepath.Join(dir, "checkpoints"), filepath.Join(dir, "launches")
+	if role == "hold" {
+		withFileLock(files.stateLock, func() { _, _ = io.Copy(io.Discard, os.Stdin) })
+		return 0
+	}
 	_, _ = io.Copy(io.Discard, os.Stdin)
 	if role == "sweep" {
 		sweepStaleLocks()
@@ -83,7 +87,7 @@ func TestAStaleLookingLockThatIsStillHeldIsNeitherSweptNorTakenOver(t *testing.T
 	for _, held := range []struct {
 		owner string
 		age   time.Duration
-	}{{"2147483646", time.Minute}, {"2147483646", 3 * time.Minute}, {"", 3 * time.Second}} {
+	}{{"2147483646", 0}, {"2147483646", time.Minute}, {"2147483646", 3 * time.Minute}, {"", 3 * time.Second}} {
 		t.Run(fmt.Sprintf("%s old, naming %q", held.age, held.owner), func(t *testing.T) {
 			sandboxFiles(t)
 			plantLock(t, files.stateLock, held.owner, held.age)
@@ -167,7 +171,7 @@ func TestAStaleLockIsTakenOverByOneWriterAtATime(t *testing.T) {
 	}
 }
 
-func TestALockThatNamesNoProcessIsTakenOverAsSoonAsOneWhoseHolderDied(t *testing.T) {
+func TestALockThatNamesNoProcessIsTakenOverOnceItIsTwoSecondsOld(t *testing.T) {
 	sandboxFiles(t)
 	if err := os.WriteFile(files.usageLock, []byte("garbage"), 0o600); err != nil {
 		t.Fatal(err)
@@ -181,17 +185,71 @@ func TestALockThatNamesNoProcessIsTakenOverAsSoonAsOneWhoseHolderDied(t *testing
 		t.Fatal("a writer could not take a 3 s old usage.lock that names no process")
 	}
 	if waited := time.Since(started); waited > time.Second {
-		t.Errorf("a writer waited %s for a 3 s old usage.lock that names no process; one whose holder died goes after 2 s", waited)
+		t.Errorf("a writer waited %s for a 3 s old usage.lock that names no process; one that names no process goes after 2 s", waited)
 	}
 }
 
-func TestAnEmptyLockAWriterKilledBeforeItNamedItselfLeftIsTakenOverAsSoonAsOneWhoseHolderDied(t *testing.T) {
+func TestAnEmptyLockAWriterKilledBeforeItNamedItselfLeftIsTakenOverOnceItIsTwoSecondsOld(t *testing.T) {
 	sandboxFiles(t)
 	plantLock(t, files.stateLock, "", 3*time.Second)
 	started := time.Now()
 	ran := withFileLock(files.stateLock, func() {})
 	if waited := time.Since(started); !ran || waited > time.Second {
-		t.Errorf("a hook waited %s on the empty state.lock a writer killed before it named itself left 3 s ago, and its write ran: %t; a lock whose holder died goes after 2 s", waited.Round(time.Millisecond), ran)
+		t.Errorf("a hook waited %s on the empty state.lock a writer killed before it named itself left 3 s ago, and its write ran: %t; an empty lock goes after 2 s", waited.Round(time.Millisecond), ran)
+	}
+}
+
+func TestALockAWriterHasJustCreatedIsLeftAloneUntilItNamesItself(t *testing.T) {
+	sandboxFiles(t)
+	plantLock(t, files.stateLock, "", 0)
+	sweepStaleLocks()
+	if statSafe(files.stateLock) == nil {
+		t.Fatal("the sweep removed an empty state.lock made a moment ago, which a writer may have just created and not yet named itself in")
+	}
+	if release, acquired := tryFileLock(files.stateLock); acquired {
+		release()
+		t.Fatal("a writer took over an empty state.lock made a moment ago, which a writer may have just created and not yet named itself in")
+	}
+}
+
+func TestALockAHookKilledWhileHoldingItLeftIsTakenOverAtOnce(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := sandboxFiles(t)
+	hook := exec.Command(self)
+	hook.Env = append(os.Environ(), "NOCTIS_TEST_LOCK_DIR="+dir, "NOCTIS_TEST_LOCK_ROLE=hold", "NOCTIS_NO_WATCHER=1")
+	gate, err := hook.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hook.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		gate.Close()
+		_ = hook.Process.Kill()
+		_ = hook.Wait()
+	})
+	named := strconv.Itoa(hook.Process.Pid)
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(2 * time.Millisecond) {
+		if owner, _, _ := lockHolder(files.stateLock); owner == named {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the hook never took state.lock")
+		}
+	}
+	if err := hook.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	_ = hook.Wait()
+
+	started := time.Now()
+	ran := withFileLock(files.stateLock, func() {})
+	if waited := time.Since(started); !ran || waited > time.Second {
+		t.Errorf("the next hook waited %s on the state.lock a hook killed while holding it left a moment ago, and its write ran: %t; a lock whose holder is gone is taken over at once", waited.Round(time.Millisecond), ran)
 	}
 }
 

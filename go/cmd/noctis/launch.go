@@ -246,8 +246,19 @@ func withoutEnv(env []string, names ...string) []string {
 	return kept
 }
 
+// leftoverCompactPercent tells whether the CLAUDE_AUTOCOMPACT_PCT_OVERRIDE this process inherited is one setup or
+// ensure took back from settings.json since the session it came from started. A session started with it would
+// compact at that percent, not where settings.json now has Claude Code compact.
+func leftoverCompactPercent() bool {
+	return os.Getenv(autoCompactPercentVar) != "" && leftoverPercent(readJSON(files.config), getMap(sharedSettings(), "env"))
+}
+
 func relaunchEnv(launch launchSpec, effort string) []string {
-	env := withoutEnv(os.Environ(), append([]string{claudeConfigEnv, "CLAUDE_CODE_EFFORT_LEVEL"}, claudeSessionMarkers...)...)
+	dropped := append([]string{claudeConfigEnv, "CLAUDE_CODE_EFFORT_LEVEL"}, claudeSessionMarkers...)
+	if leftoverCompactPercent() {
+		dropped = append(dropped, autoCompactPercentVar)
+	}
+	env := withoutEnv(os.Environ(), dropped...)
 	if launch.configDir != "" {
 		env = append(env, claudeConfigEnv+"="+launch.configDir)
 	}
@@ -375,9 +386,13 @@ func unixLaunchScript(launch launchSpec, claudePath string, claudeArgs []string,
 	if effort != "" {
 		effortLine = "export CLAUDE_CODE_EFFORT_LEVEL=" + shellQuote(effort)
 	}
+	unset := claudeSessionMarkers
+	if leftoverCompactPercent() {
+		unset = append(slices.Clone(unset), autoCompactPercentVar)
+	}
 	lines := []string{
 		"#!/bin/sh",
-		"unset " + strings.Join(claudeSessionMarkers, " "),
+		"unset " + strings.Join(unset, " "),
 		configLine,
 	}
 	for _, pair := range environmentOf(slices.Concat(carriedEnvNames, proxyEnvNames)) {

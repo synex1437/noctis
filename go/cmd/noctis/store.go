@@ -120,32 +120,34 @@ var (
 type object = map[string]any
 
 type paths struct {
-	pluginRoot     string
-	notifyScript   string
-	launchScript   string
-	configDir      string
-	guardDir       string
-	config         string
-	usage          string
-	usageBackup    string
-	fable          string
-	release        string
-	state          string
-	stateBackup    string
-	stateLock      string
-	usageLock      string
-	fableLock      string
-	settingsLock   string
-	decisions      string
-	hooks          string
-	log            string
-	errors         string
-	resumeLog      string
-	settings       string
-	credentials    string
-	checkpoints    string
-	launches       string
-	runnerLauncher string
+	pluginRoot   string
+	notifyScript string
+	launchScript string
+	configDir    string
+	guardDir     string
+	config       string
+	usage        string
+	usageBackup  string
+	fable        string
+	release      string
+	state        string
+	stateBackup  string
+	stateLock    string
+	usageLock    string
+	fableLock    string
+	settingsLock string
+	decisions    string
+	hooks        string
+	log          string
+	errors       string
+	resumeLog    string
+	settings     string
+	// managedSettings is the directory Claude Code reads the system's managed settings from.
+	managedSettings string
+	credentials     string
+	checkpoints     string
+	launches        string
+	runnerLauncher  string
 }
 
 var (
@@ -320,32 +322,33 @@ func initPaths() {
 		notifyScript, launchScript = filepath.Join(pluginRoot, "scripts", "notify.ps1"), filepath.Join(pluginRoot, "scripts", "launch.ps1")
 	}
 	files = paths{
-		pluginRoot:     pluginRoot,
-		notifyScript:   notifyScript,
-		launchScript:   launchScript,
-		configDir:      configDir,
-		guardDir:       guardDir,
-		config:         filepath.Join(guardDir, "config.json"),
-		usage:          filepath.Join(guardDir, "usage.json"),
-		usageBackup:    filepath.Join(guardDir, "usage.json.bak"),
-		fable:          filepath.Join(guardDir, "fable.json"),
-		release:        filepath.Join(guardDir, "release.json"),
-		state:          filepath.Join(guardDir, "state.json"),
-		stateBackup:    filepath.Join(guardDir, "state.json.bak"),
-		stateLock:      filepath.Join(guardDir, "state.lock"),
-		usageLock:      filepath.Join(guardDir, "usage.lock"),
-		fableLock:      filepath.Join(guardDir, "fable.lock"),
-		settingsLock:   filepath.Join(guardDir, "settings.lock"),
-		decisions:      filepath.Join(guardDir, "decisions.jsonl"),
-		hooks:          filepath.Join(pluginRoot, "hooks", "hooks.json"),
-		log:            filepath.Join(guardDir, "guard.log"),
-		errors:         filepath.Join(guardDir, "errors.log"),
-		resumeLog:      filepath.Join(guardDir, "resume-output.log"),
-		settings:       filepath.Join(configDir, "settings.json"),
-		credentials:    filepath.Join(configDir, ".credentials.json"),
-		checkpoints:    filepath.Join(guardDir, "checkpoints"),
-		launches:       filepath.Join(guardDir, "launches"),
-		runnerLauncher: filepath.Join(guardDir, "runner.cmd"),
+		pluginRoot:      pluginRoot,
+		notifyScript:    notifyScript,
+		launchScript:    launchScript,
+		configDir:       configDir,
+		guardDir:        guardDir,
+		config:          filepath.Join(guardDir, "config.json"),
+		usage:           filepath.Join(guardDir, "usage.json"),
+		usageBackup:     filepath.Join(guardDir, "usage.json.bak"),
+		fable:           filepath.Join(guardDir, "fable.json"),
+		release:         filepath.Join(guardDir, "release.json"),
+		state:           filepath.Join(guardDir, "state.json"),
+		stateBackup:     filepath.Join(guardDir, "state.json.bak"),
+		stateLock:       filepath.Join(guardDir, "state.lock"),
+		usageLock:       filepath.Join(guardDir, "usage.lock"),
+		fableLock:       filepath.Join(guardDir, "fable.lock"),
+		settingsLock:    filepath.Join(guardDir, "settings.lock"),
+		decisions:       filepath.Join(guardDir, "decisions.jsonl"),
+		hooks:           filepath.Join(pluginRoot, "hooks", "hooks.json"),
+		log:             filepath.Join(guardDir, "guard.log"),
+		errors:          filepath.Join(guardDir, "errors.log"),
+		resumeLog:       filepath.Join(guardDir, "resume-output.log"),
+		settings:        filepath.Join(configDir, "settings.json"),
+		managedSettings: managedSettingsDir(),
+		credentials:     filepath.Join(configDir, ".credentials.json"),
+		checkpoints:     filepath.Join(guardDir, "checkpoints"),
+		launches:        filepath.Join(guardDir, "launches"),
+		runnerLauncher:  filepath.Join(guardDir, "runner.cmd"),
 	}
 	if offset, err := strconv.ParseInt(os.Getenv("NOCTIS_TIME_OFFSET"), 10, 64); err == nil {
 		timeOffset = offset
@@ -1023,6 +1026,7 @@ func loadConfig() object {
 	if userRead.ok && userRead.data != nil {
 		user = userRead.data
 	}
+	migrateCompaction(user)
 	merged := mergeDefaults(defaults, user)
 	keepRolesWhole(merged, user)
 	if !userRead.ok {
@@ -1040,6 +1044,23 @@ func readConfigStrict(file string) strictRead {
 		read.ok, read.err = false, "not a JSON object"
 	}
 	return read
+}
+
+// putBack gives file back what read found in it, or removes it where read found none: the records config.json
+// keeps of a settings.json change go back with the change when settings.json could not be written.
+func putBack(file string, read strictRead) {
+	if !read.ok {
+		return
+	}
+	var err error
+	if read.exists {
+		err = writeEncodedAtomic(file, read.raw)
+	} else {
+		err = os.Remove(file)
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		fail("%s could not be put back as it was: %v", filepath.Base(file), err)
+	}
 }
 
 func keepRolesWhole(merged, user object) {
@@ -1178,14 +1199,17 @@ func emptyState() object {
 		"queueTrust":       object{},
 		"launchFailures":   object{},
 		"failureRetries":   object{},
-		"queueVerify":      object{},
-		"typedTurns":       object{},
-		"userTurns":        object{},
-		"queueDefer":       object{},
-		"jobs":             object{},
-		"jobSeq":           float64(0),
-		"continuedBy":      object{},
-		"freshStarts":      object{},
+		// contextFulls count, by session, the turns that stopped with the context full since the
+		// session last ended a turn (count, lastAt): a fresh start takes the count along.
+		"contextFulls": object{},
+		"queueVerify":  object{},
+		"typedTurns":   object{},
+		"userTurns":    object{},
+		"queueDefer":   object{},
+		"jobs":         object{},
+		"jobSeq":       float64(0),
+		"continuedBy":  object{},
+		"freshStarts":  object{},
 		// queueWakes are the runners set to resume a stopped session when a deferral of its queue
 		// ends (armQueueWake), by session.
 		"queueWakes": object{},
@@ -1502,6 +1526,7 @@ func pruneState(state object, now int64) {
 		"tasks":          stateEntryTTLSeconds,
 		"launchFailures": stateEntryTTLSeconds,
 		"failureRetries": stateEntryTTLSeconds,
+		"contextFulls":   stateEntryTTLSeconds,
 		"modelOverrides": launchRecordTTLSeconds,
 		"typedTurns":     stateEntryTTLSeconds,
 		"userTurns":      stateEntryTTLSeconds,
@@ -1830,15 +1855,12 @@ func updateState(mutator func(state object)) object {
 func withSettings(change func(object) bool) bool {
 	changed := false
 	held := withFileLock(files.settingsLock, func() {
-		settings := readJSONStrict(files.settings)
+		settings := readConfigStrict(files.settings)
 		if !settings.ok {
 			fail("settings.json unreadable, left untouched: %s", settings.err)
 			return
 		}
 		data := settings.data
-		if data == nil {
-			data = object{}
-		}
 		if !change(data) {
 			return
 		}

@@ -19,7 +19,7 @@ func TestStatusCountsTheCompactionsTheLeanModuleTrimmed(t *testing.T) {
 	t.Setenv("NOCTIS_LANG", "en")
 	cfg := loadConfig()
 	status := describeState(cfg, readState(), usageView{}, nowSec())
-	if !strings.Contains(status, "Compaction   : lean compaction on, compacts early at 70% of the context · no compaction trimmed yet") {
+	if !strings.Contains(status, "Compaction   : lean compaction on, compacts early at 90% of the way to where Claude Code compacts · no compaction trimmed yet") {
 		t.Fatalf("status does not say that nothing was trimmed yet:\n%s", status)
 	}
 	writeLines(t, filepath.Join(files.guardDir, "compact.log"),
@@ -28,7 +28,7 @@ func TestStatusCountsTheCompactionsTheLeanModuleTrimmed(t *testing.T) {
 		`not json`,
 		`{"at":300,"sid":"s2","trigger":"manual","rows":5,"changed":1,"trimmed":5}`)
 	status = describeState(cfg, readState(), usageView{}, nowSec())
-	if !strings.Contains(status, "Compaction   : lean compaction on, compacts early at 70% of the context · compactions trimmed: 3, ~129k characters") {
+	if !strings.Contains(status, "Compaction   : lean compaction on, compacts early at 90% of the way to where Claude Code compacts · compactions trimmed: 3, ~129k characters") {
 		t.Fatalf("status does not count the trimmed compactions:\n%s", status)
 	}
 }

@@ -123,7 +123,7 @@ func selfCheckIssues(cfg object) []string {
 	issues := []string{}
 	host := currentHost()
 	if host.statusline {
-		settings := readJSONStrict(files.settings)
+		settings := readConfigStrict(files.settings)
 		statusLine := getString(getMap(settings.data, "statusLine"), "command")
 		switch {
 		case !settings.ok:
@@ -199,6 +199,10 @@ func onSessionStart(input, cfg object) {
 	if source == "clear" {
 		releaseClearedSession(sid, cwd, now)
 		state = readState()
+	}
+	if source == "compact" {
+		forgetContextFill(sid)
+		rearmLeanNotice(state, sid)
 	}
 	output := object{}
 	contexts := []string{}
@@ -1632,21 +1636,38 @@ func onStop(input, cfg object) {
 	maybeDigest(cfg, state, now)
 	if guardPaused(cfg, state, now) {
 		pausedHookPulse(sid, state, now)
+		// The pause lifts the limits, not the count of full contexts in a row, which only a turn that
+		// ends starts again (tool calls clear the other failure counts, paused or not).
+		clearContextFulls(state, sid)
 		return
 	}
 	if getMap(getMap(state, "handedOff"), sid) != nil && !isHandoffSession(sid) {
 		return
 	}
 	if wait := getMap(getMap(state, "waits"), sid); wait != nil && !getBool(wait, "inHook", false) && !resumedByThisSession(state, sid, wait) {
-		if numberOr(wait, "wakeAttemptedAt", 0) <= 0 || !takeWait(sid, wait, "wake", true) {
+		switch {
+		case numberOr(wait, "wakeAttemptedAt", 0) > 0:
+			if !takeWait(sid, wait, "wake", true) {
+				return
+			}
+			journal(sid, "Stop", "wake-took", getString(wait, "label"), nil)
+			logInfo("stop of %s after its same-session wake: the wake took, wait retired", sid)
+		case waitContinued(wait):
+			// The session went on in its own window after its wait ended: the runner would find that
+			// and resume nothing, so the turn ends as any other does.
+			if !takeWait(sid, wait, "session", true) {
+				return
+			}
+			journal(sid, "Stop", "skip-launch", "the session went on in its own window", nil)
+			logInfo("stop of %s: the session went on in its own window, wait retired", sid)
+		default:
 			return
 		}
-		journal(sid, "Stop", "wake-took", getString(wait, "label"), nil)
-		logInfo("stop of %s after its same-session wake: the wake took, wait retired", sid)
 		state = readState()
 	}
 	clearOverload(state, sid)
 	clearFailureRetries(state, sid)
+	clearContextFulls(state, sid)
 	queuePath := drivenQueueFile(cfg, state, input, sid)
 	if jobsAtStop(cfg, state, sid, queuePath) {
 		return
@@ -1819,7 +1840,7 @@ func onStop(input, cfg object) {
 		if observed(sid, "Stop", "switch-model", scopedLabel(cfg), usageFacts(result.usage)) {
 			return
 		}
-		emit(object{"systemMessage": handleFableHit("batch", input, cfg, result)})
+		emit(object{"systemMessage": handleFableHit("stop", input, cfg, result)})
 		return
 	}
 	systemMessage, waitContext := "", ""
@@ -2192,6 +2213,23 @@ func overloadEpisode(cfg object, sid string, now int64) (attempt float64, ok boo
 	return attempt, ok
 }
 
+// dropFailureRetry takes back the retry an earlier StopFailure of sid left, as noctis gives up on the
+// failure and leaves the session stopped. A runner that found a limit still in force put that retry
+// off to the reset instead of relaunching the session, so it would still start the session then. The
+// retry is taken under the state lock as it stands, since its runner moves its start when it puts it off.
+func dropFailureRetry(sid string) {
+	var taken object
+	updateState(func(next object) {
+		if wait := getMap(getMap(next, "waits"), sid); getString(wait, "kind") == "stopfailure" {
+			taken = wait
+			dropWait(next, sid, wait, "", false)
+		}
+	})
+	if taken != nil {
+		cancelScheduled(sid, getMap(taken, "scheduled"))
+	}
+}
+
 func failureRetry(cfg object, sid, errorType string, now int64) (retry int, firstAt float64) {
 	updateState(func(state object) {
 		episodes := stateMap(state, "failureRetries")
@@ -2205,6 +2243,30 @@ func failureRetry(cfg object, sid, errorType string, now int64) (retry int, firs
 		retry, firstAt = int(numberOr(episode, "retries", 1)), numberOr(episode, "firstAt", float64(now))
 	})
 	return retry, firstAt
+}
+
+// contextFullCount counts a turn of sid that stopped with the context full and returns how many did since
+// the session, or the one it took over from, last ended a turn. Tool calls between them do not reset it,
+// as they do a failure's retries: a context that fills up again does so after tool calls.
+func contextFullCount(sid string, now int64) (count int) {
+	updateState(func(state object) {
+		records := stateMap(state, "contextFulls")
+		record := getMap(records, sid)
+		if record == nil {
+			record = object{}
+		}
+		record["count"], record["lastAt"] = numberOr(record, "count", 0)+1, float64(now)
+		records[sid] = record
+		count = int(numberOr(record, "count", 1))
+	})
+	return count
+}
+
+func clearContextFulls(state object, sid string) {
+	if getMap(getMap(state, "contextFulls"), sid) == nil {
+		return
+	}
+	updateState(func(next object) { delete(stateMap(next, "contextFulls"), sid) })
 }
 
 func failureEpisodeLive(cfg, episode object, now int64) bool {
@@ -2306,12 +2368,37 @@ func onStopFailure(input, cfg object) {
 		return
 	}
 	overloaded := errorType == "overloaded" || errorType == "server_error"
+	// Claude Code ends a turn with invalid_request when its compactions leave the context full again
+	// and when the API finds the prompt too long. The hook takes that error type for these alone:
+	// any other request Claude Code turns down is the session's to deal with.
+	requestError := currentHost().id == "claude" && errorType == "invalid_request"
+	contextFull := requestError && contextFullPattern.MatchString(errorText)
+	if requestError && !contextFull {
+		return
+	}
+	if contextFull && cloudSession() {
+		// Woken in place, the session would send the same full context again, and a cloud session
+		// has no runner to start a fresh one.
+		journal(sid, "StopFailure", "context-full", errorType, object{"cloud": true, "message": truncateText(errorText, 160)})
+		fail("%s StopFailure for %s: the context is full and a cloud session cannot be started fresh; leaving it to the user", errorType, sid)
+		// The session a /clear starts goes on from the resume note.
+		if !observing {
+			buildCheckpoint(input, T("stopfailure.ctxFullLabel"), resolveSessionModel(cfg, state, readJSON(files.usage), sid), cfg)
+		}
+		notify(cfg, pluginName, T("stopfailure.ctxFullCloud", shortSid(sid)))
+		return
+	}
 	attempt, retryable := 0.0, true
 	if overloaded {
 		attempt, retryable = overloadEpisode(cfg, sid, now)
 		if !retryable {
+			// Observe mode retried none of the attempts, so it only journals that noctis would give up.
+			if observed(sid, "StopFailure", "overload-giveup", errorType, object{"attempts": attempt}) {
+				return
+			}
 			journal(sid, "StopFailure", "overload-giveup", errorType, object{"attempts": attempt})
 			fail("%s for %s: retry budget spent after %s attempts; leaving the session stopped", errorType, sid, formatNumber(attempt))
+			dropFailureRetry(sid)
 			notify(cfg, pluginName, T("overload.giveup", errorType, formatNumber(attempt)))
 			return
 		}
@@ -2345,6 +2432,29 @@ func onStopFailure(input, cfg object) {
 		record["window"], record["label"], record["used"] = "unknown", errorType, nil
 		record["until"], record["resumeAt"] = failureEnded, float64(now)+delay
 		record["overload"], record["attempt"] = true, attempt
+	case contextFull:
+		// Observe mode starts no fresh session, so it counts none against the fresh starts given.
+		retry := 1
+		if !observing {
+			retry = contextFullCount(sid, now)
+		}
+		if retry > stopFailureMaxAttempts {
+			journal(sid, "StopFailure", "retry-giveup", errorType, object{"retries": float64(retry - 1), "contextFull": true})
+			fail("%s StopFailure for %s: the context was full again after %d fresh starts; leaving the session stopped", errorType, sid, retry-1)
+			dropFailureRetry(sid)
+			// The notice says to go on from the resume note: the last one went to the fresh start that
+			// just filled up, so the session the person starts next is handed this one.
+			buildCheckpoint(input, T("stopfailure.ctxFullLabel"), result.model, cfg)
+			notify(cfg, pluginName, T("stopfailure.ctxFullGiveup", shortSid(sid), formatNumber(float64(retry-1))))
+			return
+		}
+		delay := contextFullDelaySeconds
+		if retry > 1 {
+			delay = retryDelaySeconds(cfg, retry-1)
+		}
+		record["window"], record["label"], record["used"] = "unknown", T("stopfailure.ctxFullLabel"), nil
+		record["until"], record["resumeAt"] = failureEnded, float64(now)+delay
+		record["retry"], record["error"], record["contextFull"] = float64(retry), errorType, true
 	case weeklyCulprit:
 		record["window"], record["label"], record["used"] = "seven_day", windowLabel("seven_day"), usage.sevenDay.used
 		record["until"], record["resumeAt"] = usage.sevenDay.resetsAt, usage.sevenDay.resetsAt+margin
@@ -2371,8 +2481,12 @@ func onStopFailure(input, cfg object) {
 			delay, spent = math.Min(delay, left), left < 60
 		}
 		if spent {
+			if observed(sid, "StopFailure", "retry-giveup", errorType, object{"retries": float64(retry - 1), "cloud": cloud}) {
+				return
+			}
 			journal(sid, "StopFailure", "retry-giveup", errorType, object{"retries": float64(retry - 1), "cloud": cloud})
 			fail("%s StopFailure for %s: failed again after %d retries; leaving the session stopped", errorType, sid, retry-1)
+			dropFailureRetry(sid)
 			if cloud {
 				notify(cfg, pluginName, T("stopfailure.giveupCloud", shortSid(sid), errorType, formatNumber(float64(retry-1))))
 			} else {
@@ -2401,7 +2515,7 @@ func onStopFailure(input, cfg object) {
 	interactive := flagString("input") == "" && (cloud || getMap(getMap(readJSON(files.usage), "sessions"), sid) != nil)
 	// The wake sleeps in this hook, so it must wake the session before the hook is killed.
 	wakeSleep, wakeCut := wakeSleepLimit(wakeCfg, numberOr(state, "hookCapSeconds", 0))
-	wakeable := currentHost().wake && getBool(wakeCfg, "sameSession", true) && interactive && getString(record, "window") != "fable" && resumeAt-float64(now) <= wakeSleep
+	wakeable := currentHost().wake && getBool(wakeCfg, "sameSession", true) && interactive && getString(record, "window") != "fable" && !contextFull && resumeAt-float64(now) <= wakeSleep
 	runnerAt := resumeAt
 	if wakeable {
 		runnerAt += wakeGraceSeconds(cfg)
@@ -2423,11 +2537,14 @@ func onStopFailure(input, cfg object) {
 		}
 	} else {
 		journal(sid, "StopFailure", "schedule-resume", label, object{"resumeAt": resumeAt, "wake": wakeable, "window": getString(record, "window"), "hint": hint, "message": truncateText(errorText, 160)})
-		warn("rate_limit StopFailure for %s: culprit=%s resumeAt=%s wake=%t", sid, getString(record, "window"), localISO(resumeAt), wakeable)
+		warn("%s StopFailure for %s: culprit=%s resumeAt=%s wake=%t", errorType, sid, getString(record, "window"), localISO(resumeAt), wakeable)
 		if resumes {
-			if getString(record, "window") == "unknown" {
+			switch {
+			case contextFull:
+				notify(cfg, pluginName, T("stopfailure.ctxFull", shortSid(sid), formatTime(resumeAt)))
+			case getString(record, "window") == "unknown":
 				notify(cfg, pluginName, T("stopfailure.transient", formatTime(resumeAt)))
-			} else {
+			default:
 				notify(cfg, pluginName, T("stopfailure.wall", label, formatTime(resumeAt)))
 			}
 		}

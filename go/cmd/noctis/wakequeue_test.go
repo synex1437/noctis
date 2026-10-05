@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -48,5 +49,49 @@ func TestAStopBeforeTheSameSessionWakeLeavesTheWaitAndTheQueueAlone(t *testing.T
 	}
 	if pendingWait(sid) == nil {
 		t.Fatal("a stop before the wake dropped the wait that is to resume the session")
+	}
+}
+
+func TestTheStopOfATurnThatWentOnInItsOwnWindowDrivesTheQueueAgain(t *testing.T) {
+	cfg, project, _ := projectQueueSandbox(t)
+	t.Setenv("CLAUDE_PROJECT_DIR", project)
+	t.Setenv("NOCTIS_NO_TASKS", "1")
+	t.Setenv("NOCTIS_NO_SCHEDULE", "1")
+	sid := "own-window-queue"
+	now := float64(nowSec())
+	transcript := writeTranscriptAt(t, t.TempDir(), []string{userPromptLine(now-60, "work through TASKS.md")}, now-60)
+	// A turn of the queue fails for a reason noctis cannot tell, and the session is parked for a retry.
+	onStopFailure(object{"session_id": sid, "cwd": project, "transcript_path": transcript, "error_type": "unknown", "error_message": "API Error: Request timed out"}, cfg)
+	if pendingWait(sid) == nil {
+		t.Fatalf("the failed turn was not parked for a retry: %v", journaledFor(sid))
+	}
+	// The person sends the turn again in the session's window before the retry is due, and it answers.
+	previous := timeOffset
+	t.Cleanup(func() { timeOffset = previous })
+	timeOffset += 5
+	prompt := promptInput(sid, project, "go on")
+	prompt["transcript_path"] = transcript
+	hookOutput(t, onUserPromptSubmit, prompt, cfg)
+	answer := string(marshalCompact(object{"type": "assistant", "timestamp": transcriptStamp(now + 9),
+		"message": object{"role": "assistant", "content": []any{object{"type": "text", "text": "Migrated the users table."}}}}))
+	file, err := os.OpenFile(transcript, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = file.WriteString(userPromptLine(now+5, "go on") + "\n" + answer + "\n")
+	file.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	timeOffset += 5
+
+	input := stopInput(sid, project)
+	input["transcript_path"] = transcript
+	output := stopHookOutput(t, input, cfg)
+	if getString(output, "decision") != "block" || !strings.Contains(getString(output, "reason"), "Queue continues: 2 open in TASKS.md") {
+		t.Fatalf("the turn that went on in the session's own window ended with the queue open and nothing said: %v (wait %v)", output, pendingWait(sid))
+	}
+	if wait := pendingWait(sid); wait != nil {
+		t.Fatalf("the retry of a session that went on in its own window stays parked, and its runner, finding the session gone on, drives nothing: %v", wait)
 	}
 }

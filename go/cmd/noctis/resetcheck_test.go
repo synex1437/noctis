@@ -86,6 +86,16 @@ func TestAResetTheUsageDoesNotShowYetIsReadAgainAtTheNextCheck(t *testing.T) {
 	}
 }
 
+func TestAWaitThatStartsAfterACheckMakesThatCheckAtOnce(t *testing.T) {
+	now := nowSec()
+	cfg := pausedPastItsReset(t, "rc4", "batch", float64(now-12))
+	served := limitsServer(t, weeklyOnlyBody(20, float64(now+3*86400)))
+	watch := newWaitWatch(cfg, "rc4", false)
+	if !watch.tick() || !watch.early || served.Load() != 1 {
+		t.Fatalf("a wait that started two seconds after the check ten seconds past its reset read the usage %d time(s) at its first tick, ended=%v; want the reading of that check at once, not at the next check eighteen seconds on", served.Load(), watch.early)
+	}
+}
+
 func TestAnInHookWaitEndsAtTheFirstCheckThatSeesTheReset(t *testing.T) {
 	dir := sandboxFiles(t)
 	t.Setenv("NOCTIS_NO_TASKS", "1")

@@ -14,9 +14,11 @@ import (
 // and what a summary tends to drop, such as whether a check ran to the end.
 const compactionInstructions = "Write the summary in short sections: the user's requests and intent, quoting any requirement they set; the task or queue item in hand, its acceptance criteria, what is done and what is left; each file changed or created and why; each build, test or check command run and its exit status, marking any that timed out, were killed or exited non-zero as UNVERIFIED, to be run again; errors met and how each was fixed, quoting any not fixed yet; decisions and approaches ruled out, each with its reason; open questions; the next step. Leave out file contents, tool output and search results that can be read again."
 
-var builtinLean = object{"lean": true, "compactAtPercent": float64(70), "keepTurns": float64(6), "maxToolResultChars": float64(2000), "instructions": compactionInstructions}
+var builtinLean = object{"lean": true, "earlyAtPercent": float64(90), "compactAt": float64(280000), "keepTurns": float64(6), "maxToolResultChars": float64(2000), "instructions": compactionInstructions}
 
-var leanKeys = []string{"lean", "compactAtPercent", "keepTurns", "maxToolResultChars", "instructions"}
+var leanKeys = []string{"lean", "earlyAtPercent", "keepTurns", "maxToolResultChars", "instructions"}
+
+var compactionKeys = append(slices.Clone(leanKeys), "compactAt")
 
 var leanDecimal = lazyRegexp(`^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$`)
 
@@ -24,7 +26,8 @@ const leanClaudeMin = "2.1.281"
 
 type leanPolicy struct {
 	on        bool
-	compactAt float64
+	earlyAt   float64
+	compactAt compactAim
 }
 
 func leanNumber(value any) (float64, bool) {
@@ -61,12 +64,15 @@ func leanValueValid(key string, value any) bool {
 	case "instructions":
 		_, ok := value.(string)
 		return ok
+	case "compactAt":
+		_, ok := compactAtOf(value)
+		return ok
 	}
 	// Only the numeric keys read their value as a number: a string such as the shipped empty
 	// instructions would otherwise build leanDecimal each time a process loads the config.
 	number, isNumber := leanNumber(value)
 	switch key {
-	case "compactAtPercent":
+	case "earlyAtPercent":
 		return leanSwitchedOff(value) || (isNumber && number > 0 && number <= 100)
 	case "keepTurns":
 		return isNumber && number == math.Trunc(number) && number >= 0
@@ -87,7 +93,7 @@ func repairCompaction(merged, defaults object) {
 	if compaction == nil {
 		return
 	}
-	for _, key := range leanKeys {
+	for _, key := range compactionKeys {
 		value, present := compaction[key]
 		if !present || leanValueValid(key, value) {
 			continue
@@ -122,10 +128,26 @@ func leanPolicyOf(cfg object) leanPolicy {
 	}
 	policy := leanPolicy{}
 	policy.on, _ = value("lean").(bool)
-	if at := value("compactAtPercent"); !leanSwitchedOff(at) {
-		policy.compactAt, _ = leanNumber(at)
+	if at := value("earlyAtPercent"); !leanSwitchedOff(at) {
+		policy.earlyAt, _ = leanNumber(at)
 	}
+	policy.compactAt, _ = compactAtOf(value("compactAt"))
 	return policy
+}
+
+// migrateCompaction carries compactAtPercent, the early compaction of noctis before 8.6.0 at a share of the
+// whole window, over to earlyAtPercent, a share of where Claude Code compacts: switched off, it stays off;
+// any other value gives way to earlyAtPercent's own, since a share of the window says nothing of the point.
+func migrateCompaction(user object) {
+	compaction := getMap(user, "compaction")
+	old, present := compaction["compactAtPercent"]
+	if !present {
+		return
+	}
+	if _, own := compaction["earlyAtPercent"]; !own && leanSwitchedOff(old) {
+		compaction["earlyAtPercent"] = float64(0)
+	}
+	delete(compaction, "compactAtPercent")
 }
 
 func leanDescription(cfg object) string {
@@ -133,10 +155,10 @@ func leanDescription(cfg object) string {
 	switch {
 	case !policy.on:
 		return T("lean.off")
-	case policy.compactAt == 0:
+	case policy.earlyAt == 0:
 		return T("lean.noEarly")
 	}
-	return T("lean.early", T("badge.percent", int(math.Round(policy.compactAt))))
+	return T("lean.early", T("badge.percent", int(math.Round(policy.earlyAt))))
 }
 
 func leanDoctorLines(cfg object) []string {
@@ -232,7 +254,7 @@ func compactionJournalEntry(entry object) object {
 }
 
 func leanStatusLines(cfg object) []string {
-	lines := []string{T("status.lean", leanDescription(cfg)+leanTally())}
+	lines := append([]string{T("status.lean", leanDescription(cfg)+leanTally())}, compactWindowStatusLines()...)
 	if repaired := repairedCompaction(cfg); len(repaired) > 0 {
 		lines = append(lines, T("status.leanFixed", strings.Join(repaired, ", ")))
 	}
@@ -244,7 +266,7 @@ const functionHooksVar = "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"
 func switchIsOn(value any) bool {
 	switch typed := value.(type) {
 	case string:
-		return slices.Contains([]string{"1", "true", "yes", "on"}, strings.ToLower(strings.TrimSpace(typed)))
+		return slices.Contains([]string{"1", "true", "yes", "on"}, strings.ToLower(strings.TrimFunc(typed, javaScriptSpace)))
 	case bool:
 		return typed
 	case float64:
@@ -313,31 +335,50 @@ func leanRanIn(sid string) bool {
 	return false
 }
 
-func leanHintDue(cfg object, sid string, percent float64) bool {
+// leanHintDue tells whether a session whose context is share percent of the way to where Claude Code
+// compacts it is due an early compaction that the lean module, not running in it, cannot ask for.
+func leanHintDue(cfg object, sid string, share float64) bool {
 	if sid == "" || sid == "unknown" || currentHost().id != "claude" {
 		return false
 	}
 	policy := leanPolicyOf(cfg)
-	return policy.on && policy.compactAt > 0 && percent >= policy.compactAt && !leanRanIn(sid)
+	return policy.on && policy.earlyAt > 0 && share >= policy.earlyAt && !leanRanIn(sid)
 }
 
-func leanContextText(cfg object, sid string, percent float64) string {
-	if leanHintDue(cfg, sid, percent) {
-		return T("statusline.ctxCompact", int(math.Round(percent)))
+// leanContextText is the status line's context part for a session on model with the context fill: how
+// far it is to where Claude Code compacts it, with ▲ once an early compaction is due and not coming.
+func leanContextText(cfg object, sid, model string, fill contextFill) string {
+	share, known := pointShare(compactionSettings(fill.dir), model, fill)
+	switch {
+	case !known:
+		return ""
+	case leanHintDue(cfg, sid, share):
+		return T("statusline.ctxCompact", int(math.Round(share)))
 	}
-	return T("statusline.ctx", int(math.Round(percent)))
+	return T("statusline.ctx", int(math.Round(share)))
+}
+
+// rearmLeanNotice lets the ▲ notice come again in a session Claude Code has compacted, once its context
+// fills up again.
+func rearmLeanNotice(state object, sid string) {
+	key := "lean:" + sid
+	if getMap(state, "notified")[key] == nil {
+		return
+	}
+	updateState(func(next object) { delete(stateMap(next, "notified"), key) })
 }
 
 func leanNotice(cfg, state object, sid string) string {
 	session := getMap(getMap(readJSON(files.usage), "sessions"), sid)
-	percent, known := getNumber(session, "context")
+	fill := sessionFill(session)
+	share, known := pointShare(compactionSettings(fill.dir), getString(session, "model"), fill)
 	key := "lean:" + sid
-	if !known || !leanHintDue(cfg, sid, percent) || getMap(state, "notified")[key] != nil {
+	if !known || !leanHintDue(cfg, sid, share) || getMap(state, "notified")[key] != nil {
 		return ""
 	}
 	updateState(func(next object) { stateMap(next, "notified")[key] = float64(nowSec()) })
-	journal(sid, "UserPromptSubmit", "lean-hint", "lean module not running", object{"ctx": percent})
-	badge := T("badge.percent", int(math.Round(percent)))
+	journal(sid, "UserPromptSubmit", "lean-hint", "lean module not running", object{"ctx": math.Round(share)})
+	badge := T("badge.percent", int(math.Round(share)))
 	if version := getString(session, "version"); claudeTooOldForLean(version) {
 		return T("lean.noticeOld", badge, version, leanClaudeMin)
 	}

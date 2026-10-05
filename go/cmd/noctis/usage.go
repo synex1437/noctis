@@ -1066,11 +1066,15 @@ func lockOwnerPid(owner string) (int, bool) {
 	return pid, parseErr == nil && pid > 0
 }
 
+// holderStale tells whether a lock may be taken from the holder it names. A pid is written only
+// once its writer holds the lock, so a lock that names a process that is gone is abandoned at
+// once; removeStaleLock still makes sure nobody holds it. One that names no process may be one a
+// writer created a moment ago and has not yet named itself in, so it waits out lockDeadOwnerMs.
 func holderStale(owner string, age time.Duration) bool {
 	pid, parsed := lockOwnerPid(owner)
 	switch {
 	case parsed && pid != os.Getpid() && !processAlive(pid):
-		return leftByDeadHolder(age)
+		return true
 	case parsed && pid != os.Getpid():
 		return age > lockLiveHolderMs*time.Millisecond
 	case !parsed:
@@ -1284,21 +1288,14 @@ func windowHit(win *window, threshold any) string {
 	return ""
 }
 
-func compactionGuardPercent(cfg object) float64 {
+// compactionGuardPercent is how full, in percent of the window, the guard counts a session's context near where
+// Claude Code compacts it by settings, where the status line reported no token count.
+func compactionGuardPercent(cfg, settings object) float64 {
 	configured, configuredOk := getNumber(section(cfg, "compaction"), "contextPercent")
 	if configuredOk && configured > 0 && configured <= 100 && configured != compactionContextPct {
 		return configured
 	}
-	settings := readJSONStrict(files.settings)
-	env := object{}
-	if settings.ok {
-		env = getMap(settings.data, "env")
-	}
-	overrideText := getString(env, "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE")
-	if overrideText == "" {
-		overrideText = os.Getenv("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE")
-	}
-	if override, ok := toNumber(overrideText); ok && override > 10 && override <= 100 {
+	if override, ok := percentVariable(getMap(settings, "env")); ok && override > 10 {
 		return math.Max(10, override-compactionGuardGap)
 	}
 	if configuredOk && configured > 0 {
@@ -1365,8 +1362,11 @@ func (plan *waitPlan) englishLabel() string {
 }
 
 func evaluate(cfg object, usage usageView, model string, contextPercent float64, hasContext bool) decision {
+	return evaluateSession(cfg, usage, model, contextFill{percent: contextPercent, known: hasContext})
+}
+
+func evaluateSession(cfg object, usage usageView, model string, fill contextFill) decision {
 	thresholds := section(cfg, "thresholds")
-	compactionImminent := hasContext && contextPercent >= compactionGuardPercent(cfg)
 	result := decision{model: model, usage: usage}
 	windows := []struct {
 		key, label string
@@ -1379,7 +1379,7 @@ func evaluate(cfg object, usage usageView, model string, contextPercent float64,
 		win := usage.byKey(spec.key)
 		hit := windowHit(win, spec.threshold)
 		limit, _ := toNumber(spec.threshold)
-		if hit == "" && compactionImminent && spec.key == "five_hour" && win != nil && validThreshold(spec.threshold) && win.used >= limit-compactionBand {
+		if hit == "" && spec.key == "five_hour" && win != nil && validThreshold(spec.threshold) && win.used >= limit-compactionBand && compactionNear(cfg, model, fill) {
 			hit = "compaction"
 		}
 		if hit != "" {

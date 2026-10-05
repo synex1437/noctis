@@ -36,11 +36,11 @@ You queued forty tasks, went to bed, and woke up to *"You've hit your session li
 - **Pauses before the limit, not after the 429.** At 92 % of the 5-hour window and 95 % of the weekly one by default, or earlier when a burst or the burn rate says the next turns would cross it, after a checkpoint of the last request, the touched files, `git status`, todos and the next jobs.
 - **Auto-resumes the same session.** A reset within about 5½ hours is waited out inside the turn, context intact. A later one, such as the weekly limit, relaunches `claude --resume` from Task Scheduler, launchd or systemd, even days later and even after Claude Code was closed; Windows, and Linux with `CAP_WAKE_ALARM`, can wake the machine for it.
 - **Works through a task queue.** `/noctis:start jobs.md` runs the jobs in a file in order without stopping to ask; a long prompt with several tasks becomes such a list by itself; a `TASKS.md` you trust drives every session, with priorities, dependencies and GitHub issues. Steps marked `(human)` wait for you, a `noctis-verify` line runs your checks between items, and long builds run as background jobs the queue waits for.
-- **Keeps Claude in its smart zone.** Once a session's context passes 100k tokens, each next item goes to a fresh `noctis:worker` subagent with a brief of its own; after a compaction Claude is told the item in hand, the files changed and how the check stands; a failing check is fixed in the code, not in its tests; an item Claude keeps stopping on goes once to a stronger model; and `noctis queue status` shows what each item took, so you can size the next ones.
+- **Keeps Claude in its smart zone.** Claude Code compacts by about 280k tokens of context, in a 1M window too, rather than near its end, and noctis follows any point you pick instead (a token count, a percent of each model's window, `/autocompact`, or Claude Code's own); once a session's context passes 100k tokens, each next item goes to a fresh `noctis:worker` subagent with a brief of its own; after a compaction Claude is told the item in hand, the files changed and how the check stands; a failing check is fixed in the code, not in its tests; an item Claude keeps stopping on goes once to a stronger model; and `noctis queue status` shows what each item took, so you can size the next ones.
 - **Never spends paid usage credits.** It stops at 100 % of a window even when the thresholds are off, and refuses a fan-out workflow that would not fit in what is left.
 - **Zero tokens per decision.** Fixed rules over your usage data, and every decision logged (`noctis why`). One self-contained Go binary, about 5 ms per hook on Linux; no Node, Git Bash or compiler.
 - **The right model for each job.** Code on Opus 5.5 · xhigh by default (the Code profile), or on Sonnet 5.5 · high to spend less (Balanced), file search and output digests on Haiku 4.5, and, with the router on, research and writing in a subagent of their own.
-- **Lean compaction, a status line and 15 languages.** It compacts between turns at 70 % context, draws a status line with both usage windows and their reset times, and speaks the language you type in.
+- **Lean compaction, a status line and 15 languages.** It compacts between turns once the context is 90 % of the way to the compaction point, draws a status line with both usage windows and their reset times, and speaks the language you type in.
 - **Also runs in** OpenAI Codex CLI, Antigravity CLI, Factory Droid and GitHub Copilot CLI, with fewer features.
 
 ## Install
@@ -51,19 +51,21 @@ Inside Claude Code, about a minute:
 /plugin marketplace add synex1437/noctis
 /plugin install noctis@noctis
 /noctis:setup
-/reload-plugins
+/exit
 ```
+
+Then start Claude Code again with `claude --continue`, which picks the conversation up: Claude Code reads where it compacts only as it starts, and from that start on it compacts by ~280k tokens of context even in a 1M window.
 
 > [!IMPORTANT]
 > Setup switches Claude Code to **auto permission mode: Claude edits files and runs commands without asking**. That is what lets it work while you sleep; `/noctis:setup --permissions keep` leaves your mode as it is. Setup also sets the default model and effort and the function hooks switch lean compaction needs, and the status line points at noctis from the first session. Setup backs up `settings.json` first, and every change has an undo: [what it changes and how to undo it](docs/GUIDE.md#what-it-changes-on-your-machine--and-how-to-undo-it).
 
-Setup asks one question, which model does which kind of work, and keeps the answer as your roles profile. If `/noctis:setup` is not found yet, run `/reload-plugins` first. From a terminal: `claude plugin marketplace add synex1437/noctis && claude plugin install noctis@noctis`, then `/noctis:setup` inside Claude Code. Clone and ZIP installs, the profiles and every flag: [install details](docs/GUIDE.md#install-details).
+Setup asks one question, which model does which kind of work, and keeps the answer as your roles profile. If `/noctis:setup` is not found yet, run `/reload-plugins` first. From a terminal: `claude plugin marketplace add synex1437/noctis && claude plugin install noctis@noctis`, then `/noctis:setup` inside Claude Code and the restart. Clone and ZIP installs, the profiles and every flag: [install details](docs/GUIDE.md#install-details).
 
 **Requirements:** Claude Code 2.1.251 or newer (lean compaction was tested with 2.1.281); Windows, macOS or Linux; a Pro or Max plan for the limit guard. Every profile runs on models every paid plan includes: Opus 5.5 and Haiku 4.5, and Sonnet 5.5 in Code and Balanced, which needs Claude Code 2.1.284 or newer.
 
 ## Quick start
 
-1. Look at the bottom of the window: `∞ 5h 41%→14:35 · Wk 23%▲→Mon 21.09 09:00 · Opus 5.5/xhigh · ctx 37%` shows both usage windows and when each resets, the model and effort, and how full the context is.
+1. Look at the bottom of the window: `∞ 5h 41%→14:35 · Wk 23%▲→Mon 21.09 09:00 · Opus 5.5/xhigh · ctx 37%` shows both usage windows and when each resets, the model and effort, and how far the context is on its way to where Claude Code compacts it.
 2. Put a few jobs in a file, one per line (`- [ ] write tests for the payments module`), and type `/noctis:start TASKS.md`. Claude works through them in order; `/noctis:stop` ends it early.
 3. Go to bed. At a limit there is nothing to do: noctis pauses, waits and continues, and a desktop notification tells you when work resumes.
 

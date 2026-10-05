@@ -36,11 +36,11 @@ Kuyruğa kırk iş koyup yattınız; sabah sizi 01:40'ta düşmüş bir *"You've
 - **Limitten önce duraklar, 429'dan sonra değil.** Varsayılan olarak 5 saatlik pencerenin %92'sinde, haftalığın %95'inde; ani bir yükseliş ya da yakım hızı sonraki turların limiti aşacağını söylüyorsa daha erken. Duraklamadan önce son isteğin, dokunulan dosyaların, `git status`'un, yapılacakların ve sıradaki işlerin checkpoint'ini alır.
 - **Aynı oturumu kendiliğinden sürdürür.** Yaklaşık 5½ saat içindeki bir sıfırlanma tur içinde beklenir, bağlam korunur. Haftalık limit gibi daha geç bir sıfırlanmada oturum Task Scheduler, launchd ya da systemd'den `claude --resume` ile yeniden başlatılır; günler sonra da, Claude Code kapatılmış olsa da. Windows ve `CAP_WAKE_ALARM` ile Linux bunun için makineyi uyandırabilir.
 - **Bir iş kuyruğunu bitirir.** `/noctis:start deneme.md` bir dosyadaki işleri durup sormadan sırayla yürütür; birkaç iş içeren uzun bir istem kendiliğinden böyle bir listeye dönüşür; izin verdiğiniz bir `TASKS.md` her oturumu sürükler — öncelikler, bağımlılıklar, GitHub issue'ları. `(insan)` işaretli adımlar sizi bekler, bir `noctis-verify` satırı maddeler arasında denetimlerinizi çalıştırır, uzun derlemeler de kuyruğun beklediği arka plan işleri olarak çalışır.
-- **Claude'u akıllı bölgesinde tutar.** Oturumun bağlamı 100 bin token'ı geçince sıradaki her madde kendi brifiyle taze bir `noctis:worker` alt-ajanına gider; bir sıkıştırmadan sonra Claude'a eldeki madde, değişen dosyalar ve denetimin durumu söylenir; başarısız bir denetim testlerinde değil kodda düzeltilir; Claude'un takılıp kaldığı madde bir kez daha güçlü bir modele gider; `noctis queue status` her maddenin neye mal olduğunu gösterir, sonrakileri ona göre boyutlandırırsınız.
+- **Claude'u akıllı bölgesinde tutar.** Claude Code 1M pencerede de bağlam yaklaşık 280 bin token'a varınca sıkıştırır, pencerenin sonunu beklemez; noctis, sizin seçtiğiniz başka bir noktaya da uyar (bir token sayısı, her modelin penceresinin bir yüzdesi, `/autocompact` ya da Claude Code'un kendi noktası); oturumun bağlamı 100 bin token'ı geçince sıradaki her madde kendi brifiyle taze bir `noctis:worker` alt-ajanına gider; bir sıkıştırmadan sonra Claude'a eldeki madde, değişen dosyalar ve denetimin durumu söylenir; başarısız bir denetim testlerinde değil kodda düzeltilir; Claude'un takılıp kaldığı madde bir kez daha güçlü bir modele gider; `noctis queue status` her maddenin neye mal olduğunu gösterir, sonrakileri ona göre boyutlandırırsınız.
 - **Ücretli kullanım kredisi harcamaz.** Eşikler kapalı olsa bile bir pencerenin %100'ünde durur ve kalan paya sığmayacak çok parçalı bir workflow'u reddeder.
 - **Karar başına sıfır token.** Kullanım verileriniz üzerinde sabit kurallar işler ve her karar kaydedilir (`noctis why`). Kendi başına çalışan tek bir Go binary'si, Linux'ta hook başına yaklaşık 5 ms; Node, Git Bash, derleyici gerekmez.
 - **Her işe uygun model.** Varsayılan olarak kod Opus 5.5 · xhigh'ta (Code profili), daha az harcamak için Sonnet 5.5 · high'da (Balanced), dosya arama ve çıktı özetleri Haiku 4.5'te; yönlendirici açıkken araştırma ve yazı kendi alt-ajanında.
-- **Yalın sıkıştırma, durum çubuğu ve 15 dil.** Bağlam %70'e varınca turlar arasında sıkıştırır, iki kullanım penceresini ve sıfırlanma zamanlarını gösteren bir durum çubuğu çizer ve yazdığınız dilde konuşur.
+- **Yalın sıkıştırma, durum çubuğu ve 15 dil.** Bağlam sıkıştırma noktasına giden yolun %90'ına varınca turlar arasında sıkıştırır, iki kullanım penceresini ve sıfırlanma zamanlarını gösteren bir durum çubuğu çizer ve yazdığınız dilde konuşur.
 - **Ayrıca** OpenAI Codex CLI, Antigravity CLI, Factory Droid ve GitHub Copilot CLI içinde de, daha az özellikle çalışır.
 
 ## Kurulum
@@ -51,19 +51,21 @@ Claude Code içinde, yaklaşık bir dakika:
 /plugin marketplace add synex1437/noctis
 /plugin install noctis@noctis
 /noctis:setup
-/reload-plugins
+/exit
 ```
+
+Ardından Claude Code'u `claude --continue` ile yeniden açın, konuşma kaldığı yerden sürer: Claude Code nerede sıkıştıracağını yalnızca açılırken okur ve o açılıştan itibaren 1M pencerede bile bağlam ~280 bin token'a varınca sıkıştırır.
 
 > [!IMPORTANT]
 > Setup, Claude Code'u **auto izin moduna geçirir: Claude size sormadan dosya düzenler ve komut çalıştırır**. Siz uyurken çalışabilmesini sağlayan budur; `/noctis:setup --permissions keep` modunuzu olduğu gibi bırakır. Setup ayrıca varsayılan modeli ve effort'u, yalın sıkıştırmanın gerektirdiği fonksiyon hook'ları anahtarını ayarlar; durum çubuğu da ilk oturumdan itibaren noctis'i gösterir. Setup önce `settings.json`'ın yedeğini alır ve her değişikliğin bir geri alma yolu vardır: [neyi değiştirir, nasıl geri alınır](docs/GUIDE.tr.md#makinenizde-neyi-değiştirir--nasıl-geri-alınır).
 
-Setup tek bir soru sorar — hangi model hangi işi yapsın — ve cevabı rol profiliniz olarak saklar. `/noctis:setup` henüz bulunamıyorsa önce `/reload-plugins` çalıştırın. Terminalden: `claude plugin marketplace add synex1437/noctis && claude plugin install noctis@noctis`, ardından Claude Code içinde `/noctis:setup`. Klon ve ZIP kurulumu, profiller ve tüm bayraklar: [kurulum ayrıntıları](docs/GUIDE.tr.md#kurulum-ayrıntı).
+Setup tek bir soru sorar — hangi model hangi işi yapsın — ve cevabı rol profiliniz olarak saklar. `/noctis:setup` henüz bulunamıyorsa önce `/reload-plugins` çalıştırın. Terminalden: `claude plugin marketplace add synex1437/noctis && claude plugin install noctis@noctis`, ardından Claude Code içinde `/noctis:setup` ve yeniden başlatma. Klon ve ZIP kurulumu, profiller ve tüm bayraklar: [kurulum ayrıntıları](docs/GUIDE.tr.md#kurulum-ayrıntı).
 
 **Gereksinimler:** Claude Code 2.1.251 veya üstü (yalın sıkıştırma 2.1.281 ile denendi); Windows, macOS ya da Linux; limit koruması için Pro ya da Max aboneliği. Her profil tüm ücretli planlarda bulunan modellerle çalışır: Opus 5.5 ve Haiku 4.5, Code ile Balanced'da ayrıca Claude Code 2.1.284 veya üstünü isteyen Sonnet 5.5.
 
 ## Hızlı başlangıç
 
-1. Pencerenin altına bakın: `∞ 5sa %41→14:35 · Hf %23▲→Pzt 21.09 09:00 · Opus 5.5/xhigh · ctx %37` iki kullanım penceresini ve her birinin sıfırlanma zamanını, model ve effort'u, bağlamın ne kadar dolu olduğunu gösterir.
+1. Pencerenin altına bakın: `∞ 5sa %41→14:35 · Hf %23▲→Pzt 21.09 09:00 · Opus 5.5/xhigh · ctx %37` iki kullanım penceresini ve her birinin sıfırlanma zamanını, model ve effort'u, bağlamın Claude Code'un onu sıkıştıracağı noktaya ne kadar yaklaştığını gösterir.
 2. Birkaç işi bir dosyaya, her satıra bir tane yazın (`- [ ] ödeme modülü için testleri yaz`) ve `/noctis:start TASKS.md` yazın. Claude onları sırayla yapar; `/noctis:stop` erken bitirir.
 3. Yatın. Limitte yapmanız gereken bir şey yok: noctis duraklar, bekler ve devam eder; iş sürdüğünde bir masaüstü bildirimi haber verir.
 

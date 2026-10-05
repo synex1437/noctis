@@ -73,8 +73,7 @@ func roomReported(cfg object, sid string, record object, usage usageView, now in
 	}
 	state := readState()
 	usageFile := readJSON(files.usage)
-	context, hasContext := getNumber(getMap(getMap(usageFile, "sessions"), sid), "context")
-	if evaluate(cfg, usage, resolveSessionModel(cfg, state, usageFile, sid), context, hasContext).wait != nil {
+	if evaluateSession(cfg, usage, resolveSessionModel(cfg, state, usageFile, sid), sessionFill(getMap(getMap(usageFile, "sessions"), sid))).wait != nil {
 		return false
 	}
 	_, _, over := dailyBudgetStatus(cfg, state, usage, now)
@@ -204,7 +203,7 @@ func (w *waitWatch) resetCheckDue(now float64) float64 {
 	reset := resetToConfirm(w.record)
 	due := 0.0
 	for _, offset := range resetCheckOffsets {
-		if check := reset + offset; reset > 0 && check <= now && check > w.lastPoll {
+		if check := reset + offset; reset > 0 && check <= now && check > w.lastCheck {
 			due = check
 		}
 	}
@@ -236,6 +235,7 @@ type waitWatch struct {
 	record    object
 	pollEvery float64
 	lastPoll  float64
+	lastCheck float64
 	startedAt float64
 	cancelled bool
 	early     bool
@@ -270,6 +270,7 @@ func (w *waitWatch) tick() bool {
 	fetchOlderThan := 0.0
 	if check := w.resetCheckDue(now); check > 0 {
 		fetchOlderThan = math.Max(1, now-check)
+		w.lastCheck = now
 	} else if now-w.lastPoll >= w.pollEvery {
 		fetchOlderThan = math.Max(1, w.pollEvery-2)
 	}

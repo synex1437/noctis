@@ -78,11 +78,18 @@ func TestMain(m *testing.M) {
 	// The suite runs the same wherever it is started: a Claude Code session
 	// that runs it (in the cloud, or through claude -p) must not turn every
 	// test into one about that kind of session, its effort, its compaction
-	// point, its stop block cap or its id.
-	for _, name := range []string{"CLAUDE_CODE_REMOTE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_EFFORT", "CLAUDE_CODE_EFFORT_LEVEL",
-		"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "CLAUDE_CODE_STOP_HOOK_BLOCK_CAP", "CLAUDE_CODE_SESSION_ID", queueEnv} {
-		_ = os.Unsetenv(name)
+	// point, its stop block cap or its id. A command-line child keeps the
+	// environment its test handed it, which starts from this cleaned one.
+	for _, name := range append([]string{"CLAUDE_CODE_REMOTE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_EFFORT", "CLAUDE_CODE_EFFORT_LEVEL",
+		autoCompactPercentVar, autoCompactWindowVar, maxOutputTokensVar, "DISABLE_AUTO_COMPACT", "DISABLE_COMPACT",
+		"CLAUDE_CODE_CUSTOM_OAUTH_URL", "CLAUDE_CODE_STOP_HOOK_BLOCK_CAP", "CLAUDE_CODE_SESSION_ID", queueEnv}, modelNameVariables...) {
+		if os.Getenv(cliChildArgs) == "" {
+			_ = os.Unsetenv(name)
+		}
 	}
+	// Nor do the managed settings of the machine it runs on: a command-line child reads those its test wrote
+	// to its sandbox, any other test none.
+	managedSettingsDir = func() string { return os.Getenv(cliChildManaged) }
 	os.Exit(m.Run())
 }
 

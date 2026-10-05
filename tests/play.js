@@ -60,6 +60,14 @@ function sizeOf(file) {
   }
 }
 
+function modifiedMs(file) {
+  try {
+    return fs.statSync(file).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
 function endsWithNewline(file) {
   try {
     const size = fs.statSync(file).size;
@@ -90,7 +98,14 @@ function appendAnswer(labRoot, transcript, offset, by, { apiError = false } = {}
   };
   const separator = endsWithNewline(transcript) ? '' : '\n';
   const position = sizeOf(transcript) + separator.length;
+  const touched = modifiedMs(transcript);
   fs.appendFileSync(transcript, `${separator}${JSON.stringify(entry)}\n`);
+  // Under a simulated clock the write lands at that clock's time, as a real claude's would at the
+  // real one: noctis reads how long a session has been idle from its transcript's modification time.
+  if (offset) {
+    const at = new Date(Math.max(touched, clockMs));
+    fs.utimesSync(transcript, at, at);
+  }
   const record = { id, by, transcript: path.resolve(transcript), ts: clockMs / 1000, real: Date.now(), position, apiError };
   writeRecord(path.join(recordDirs(labRoot).answers, `${id}.json`), record);
   return record;

@@ -251,6 +251,7 @@ func sandboxFilesIn(t *testing.T, dir string) string {
 	files.checkpoints = filepath.Join(dir, "checkpoints")
 	files.launches = filepath.Join(dir, "launches")
 	files.settings = filepath.Join(dir, "settings.json")
+	files.managedSettings = filepath.Join(dir, "managed")
 	files.settingsLock = filepath.Join(dir, "settings.lock")
 	files.config = filepath.Join(dir, "config.json")
 	return dir

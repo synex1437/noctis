@@ -1,7 +1,7 @@
 import { test, expect, describe, mock } from "claude-code/testing"
 import { prune, measure, policyOf, register, SHIPPED } from "../hooks/lean.js"
 
-const POLICY = { lean: true, compactAtPercent: 70, keepTurns: 1, maxToolResultChars: 100, instructions: "" }
+const POLICY = { lean: true, earlyAtPercent: 90, keepTurns: 1, maxToolResultChars: 100, instructions: "" }
 
 function prompt(text: string, handle = "") {
   return { role: "user", text, toolUses: [], ...(handle ? { handle } : {}) }
@@ -202,16 +202,16 @@ describe("measure", () => {
 describe("policyOf", () => {
   test("the shipped values when the account has none", () => {
     expect(policyOf(undefined, undefined)).toEqual(SHIPPED)
-    expect(policyOf({ lean: true, compactAtPercent: 70, keepTurns: 6, maxToolResultChars: 2000, instructions: SHIPPED.instructions }, {})).toEqual(SHIPPED)
+    expect(policyOf({ lean: true, earlyAtPercent: 90, keepTurns: 6, maxToolResultChars: 2000, instructions: SHIPPED.instructions }, {})).toEqual(SHIPPED)
   })
 
   test("a wrong type or range falls back to the shipped value", () => {
-    const shipped = { lean: true, compactAtPercent: 70, keepTurns: 6, maxToolResultChars: 2000, instructions: "" }
+    const shipped = { lean: true, earlyAtPercent: 90, keepTurns: 6, maxToolResultChars: 2000, instructions: "" }
     expect(policyOf(shipped, { lean: "yes" }).lean).toBe(true)
-    expect(policyOf(shipped, { compactAtPercent: 150 }).compactAtPercent).toBe(70)
-    expect(policyOf(shipped, { compactAtPercent: -5 }).compactAtPercent).toBe(70)
-    expect(policyOf(shipped, { compactAtPercent: "abc" }).compactAtPercent).toBe(70)
-    expect(policyOf(shipped, { compactAtPercent: [80] }).compactAtPercent).toBe(70)
+    expect(policyOf(shipped, { earlyAtPercent: 150 }).earlyAtPercent).toBe(90)
+    expect(policyOf(shipped, { earlyAtPercent: -5 }).earlyAtPercent).toBe(90)
+    expect(policyOf(shipped, { earlyAtPercent: "abc" }).earlyAtPercent).toBe(90)
+    expect(policyOf(shipped, { earlyAtPercent: [80] }).earlyAtPercent).toBe(90)
     expect(policyOf(shipped, { keepTurns: -1 }).keepTurns).toBe(6)
     expect(policyOf(shipped, { keepTurns: 2.5 }).keepTurns).toBe(6)
     expect(policyOf(shipped, { maxToolResultChars: 50 }).maxToolResultChars).toBe(2000)
@@ -219,26 +219,34 @@ describe("policyOf", () => {
   })
 
   test("numbers written as text count, as they do for the thresholds", () => {
-    const shipped = { lean: true, compactAtPercent: 70, keepTurns: 6, maxToolResultChars: 2000, instructions: "" }
-    expect(policyOf(shipped, { compactAtPercent: " 75 " }).compactAtPercent).toBe(75)
+    const shipped = { lean: true, earlyAtPercent: 90, keepTurns: 6, maxToolResultChars: 2000, instructions: "" }
+    expect(policyOf(shipped, { earlyAtPercent: " 75 " }).earlyAtPercent).toBe(75)
     expect(policyOf(shipped, { keepTurns: "3" }).keepTurns).toBe(3)
-    expect(policyOf(shipped, { compactAtPercent: "0x10" }).compactAtPercent).toBe(70)
+    expect(policyOf(shipped, { earlyAtPercent: "0x10" }).earlyAtPercent).toBe(90)
   })
 
   test("0, false and null switch the early compaction off", () => {
-    const shipped = { lean: true, compactAtPercent: 70, keepTurns: 6, maxToolResultChars: 2000, instructions: "" }
-    for (const off of [0, false, null, "0"]) expect(policyOf(shipped, { compactAtPercent: off }).compactAtPercent).toBe(0)
+    const shipped = { lean: true, earlyAtPercent: 90, keepTurns: 6, maxToolResultChars: 2000, instructions: "" }
+    for (const off of [0, false, null, "0"]) expect(policyOf(shipped, { earlyAtPercent: off }).earlyAtPercent).toBe(0)
+  })
+
+  test("compactAtPercent from before 8.6.0 keeps the early compaction off when it switched it off, and is dropped otherwise", () => {
+    const shipped = { lean: true, earlyAtPercent: 90, keepTurns: 6, maxToolResultChars: 2000, instructions: "" }
+    for (const off of [0, false, null, "0"]) expect(policyOf(shipped, { compactAtPercent: off }).earlyAtPercent).toBe(0)
+    expect(policyOf(shipped, { compactAtPercent: 70 }).earlyAtPercent).toBe(90)
+    expect(policyOf(shipped, { compactAtPercent: 0, earlyAtPercent: 80 }).earlyAtPercent).toBe(80)
+    expect("compactAtPercent" in policyOf(shipped, { compactAtPercent: 0 })).toBe(false)
   })
 
   test("a section that is not an object is set aside", () => {
-    const shipped = { lean: true, compactAtPercent: 80, keepTurns: 4, maxToolResultChars: 3000, instructions: "keep the plan" }
+    const shipped = { lean: true, earlyAtPercent: 80, keepTurns: 4, maxToolResultChars: 3000, instructions: "keep the plan" }
     for (const bad of [true, 5, "on", [1]]) expect(policyOf(shipped, bad)).toEqual(shipped)
-    expect(policyOf({ lean: "x", compactAtPercent: "y" }, {})).toEqual(SHIPPED)
+    expect(policyOf({ lean: "x", earlyAtPercent: "y" }, {})).toEqual(SHIPPED)
   })
 
   test("the account's own values win", () => {
-    const shipped = { lean: true, compactAtPercent: 70, keepTurns: 6, maxToolResultChars: 2000, instructions: "" }
-    expect(policyOf(shipped, { lean: false, compactAtPercent: 60, keepTurns: 2, maxToolResultChars: 800, instructions: "the plan" })).toEqual({ lean: false, compactAtPercent: 60, keepTurns: 2, maxToolResultChars: 800, instructions: "the plan" })
+    const shipped = { lean: true, earlyAtPercent: 90, keepTurns: 6, maxToolResultChars: 2000, instructions: "" }
+    expect(policyOf(shipped, { lean: false, earlyAtPercent: 60, keepTurns: 2, maxToolResultChars: 800, instructions: "the plan" })).toEqual({ lean: false, earlyAtPercent: 60, keepTurns: 2, maxToolResultChars: 800, instructions: "the plan" })
   })
 })
 
@@ -246,6 +254,8 @@ type World = {
   files: Record<string, string>
   env: Record<string, string>
   settings: Record<string, unknown>
+  sources?: Record<string, Record<string, unknown>>
+  model?: string
   usage: { context: { percent?: number; tokens?: number; window: number }; rateLimits?: unknown }
   compacts: unknown[]
   compactAnswer: () => Promise<unknown>
@@ -284,11 +294,11 @@ const CACHE_OFF = { HOME: "/home/u", DISABLE_PROMPT_CACHING: "1" }
 function world(overrides: Partial<World> = {}): World {
   return {
     files: {
-      "/plugin/config.default.json": JSON.stringify({ thresholds: { session5h: 92, weeklyAll: 89, weeklyFable: 95 }, compaction: { contextPercent: 85, lean: true, compactAtPercent: 70, keepTurns: 1, maxToolResultChars: 100, instructions: "" } }),
+      "/plugin/config.default.json": JSON.stringify({ thresholds: { session5h: 92, weeklyAll: 89, weeklyFable: 95 }, compaction: { contextPercent: 85, lean: true, earlyAtPercent: 90, keepTurns: 1, maxToolResultChars: 100, instructions: "" } }),
     },
     env: { HOME: "/home/u" },
     settings: {},
-    usage: { context: { percent: 75, tokens: 150000, window: 200000 } },
+    usage: { context: { percent: 80, tokens: 160000, window: 200000 } },
     compacts: [],
     compactAnswer: async () => ({ messages: [prompt("summary")] }),
     logs: [],
@@ -319,9 +329,16 @@ function engine(w: World) {
       },
     },
     clock: { now: async () => w.now },
-    settings: { read: async () => w.settings },
+    settings: {
+      read: async (arg?: { source?: string }) => {
+        if (arg?.source === undefined) return w.settings
+        guard("sources")
+        return w.sources ? (w.sources[arg.source] ?? {}) : arg.source === "user" ? w.settings : {}
+      },
+    },
     session: {
       id: async () => w.sid,
+      model: async () => w.model,
       usage: async () => w.usage,
       compact: async (args: unknown) => {
         w.compacts.push(args)
@@ -509,7 +526,7 @@ describe("register: session.compact", () => {
 describe("register: turn.complete", () => {
   const TURN = { answer: "done", durationMs: 5, isAborted: false, turnId: "t", reason: "answer" }
 
-  test("asks for a compaction between turns once the context is at compactAtPercent", async () => {
+  test("asks for a compaction between turns once the context is earlyAtPercent of the way to where Claude Code compacts", async () => {
     const w = world()
     const answered = { text: "done" }
     const result = await hooks()["turn.complete"](engine(w), TURN, async () => answered)
@@ -524,10 +541,92 @@ describe("register: turn.complete", () => {
     expect(w.compacts).toEqual([{ instructions: "keep the plan" }])
   })
 
-  test("below compactAtPercent nothing is asked", async () => {
-    const w = world({ usage: { context: { percent: 69, window: 200000 } } })
-    await hooks()["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
-    expect(w.compacts).toEqual([])
+  test("short of earlyAtPercent of the way to the compaction point nothing is asked, whatever share of the window that is", async () => {
+    for (const context of [{ percent: 75, tokens: 150000, window: 200000 }, { percent: 89, window: 200000 }]) {
+      const w = world({ usage: { context } })
+      await hooks()["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
+      expect({ context, compacts: w.compacts }).toEqual({ context, compacts: [] })
+    }
+  })
+
+  test("the way to the compaction point is reckoned as Claude Code reckons the point: the window variable, the model's own autoCompactWindow, autoCompactWindow, the percent override", async () => {
+    const MILLION = 1_000_000
+    const cases: [string, Record<string, string>, Record<string, unknown>, string | undefined, number, number, boolean][] = [
+      ["autoCompactWindow 313000 compacts by 280k", {}, { autoCompactWindow: 313000 }, undefined, MILLION, 252000, true],
+      ["autoCompactWindow 313000, just short", {}, { autoCompactWindow: 313000 }, undefined, MILLION, 251000, false],
+      ["Claude Code's own point in a 1M window", {}, {}, undefined, MILLION, 870300, true],
+      ["Claude Code's own point in a 1M window, just short", {}, {}, undefined, MILLION, 870000, false],
+      ["autoCompactWindow 313000 in a 200k window", {}, { autoCompactWindow: 313000 }, undefined, 200000, 150300, true],
+      ["autoCompactWindow out of range is set aside", {}, { autoCompactWindow: 50000 }, undefined, MILLION, 252000, false],
+      ["the window variable wins", { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "600000" }, { autoCompactWindow: 313000 }, undefined, MILLION, 510300, true],
+      ["the window variable wins, just short", { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "600000" }, { autoCompactWindow: 313000 }, undefined, MILLION, 510000, false],
+      ["the model's own entry", {}, { autoCompactWindow: 313000, modelSettings: { "claude-opus-5-5": { autoCompactWindow: 173000 } } }, "claude-opus-5-5[1m]", MILLION, 126000, true],
+      ["another model's entry is not this one's", {}, { autoCompactWindow: 313000, modelSettings: { "claude-opus-5-5": { autoCompactWindow: 173000 } } }, "claude-sonnet-5-5[1m]", MILLION, 126000, false],
+      ["60 percent of a 1M window", { CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "60" }, {}, undefined, MILLION, 529200, true],
+      ["60 percent of a 1M window, just short", { CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "60" }, {}, undefined, MILLION, 529000, false],
+      ["60 percent of a 200k window", { CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "60" }, {}, undefined, 200000, 97200, true],
+      ["60 percent of a 200k window, just short", { CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "60" }, {}, undefined, 200000, 97000, false],
+    ]
+    for (const [name, env, settings, model, window, tokens, asks] of cases) {
+      const w = world({ env: { HOME: "/home/u", ...env }, settings, model, usage: { context: { tokens, window } } })
+      await hooks()["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
+      expect({ name, asked: w.compacts.length }).toEqual({ name, asked: asks ? 1 : 0 })
+    }
+  })
+
+  test("the point follows Claude Code for a provider's spelling of the model and a reply limit below 20000", async () => {
+    const MILLION = 1_000_000
+    const OWN = { autoCompactWindow: 313000, modelSettings: { "claude-opus-5-5": { autoCompactWindow: 173000 } } }
+    const cases: [string, Record<string, string>, Record<string, unknown>, string | undefined, number, number, boolean][] = [
+      ["Bedrock's id for the model", {}, OWN, "us.anthropic.claude-opus-5-5[1m]", MILLION, 126000, true],
+      ["Bedrock's id for the model, just short", {}, OWN, "us.anthropic.claude-opus-5-5[1m]", MILLION, 125900, false],
+      ["a dated Bedrock id", {}, OWN, "eu.anthropic.claude-opus-5-5-20260101-v1:0", MILLION, 126000, true],
+      ["Mantle's id", {}, OWN, "anthropic.claude-opus-5-5", MILLION, 126000, true],
+      ["a Vertex id", {}, OWN, "claude-opus-5-5@20260101", MILLION, 126000, true],
+      ["an inference profile's ARN", {}, OWN, "arn:aws:bedrock:us-east-1:123456789012:inference-profile/global.anthropic.claude-opus-5-5", MILLION, 126000, true],
+      ["an entry under Bedrock's id", {}, { autoCompactWindow: 313000, modelSettings: { "us.anthropic.claude-opus-5-5": { autoCompactWindow: 173000 } } }, "claude-opus-5-5[1m]", MILLION, 126000, true],
+      ["another model's Bedrock id keeps autoCompactWindow", {}, OWN, "us.anthropic.claude-sonnet-5-5", MILLION, 126000, false],
+      ["CLAUDE_CODE_MAX_OUTPUT_TOKENS 4096 keeps 4096 for the summary", { CLAUDE_CODE_MAX_OUTPUT_TOKENS: "4096" }, { autoCompactWindow: 313000 }, undefined, MILLION, 266400, true],
+      ["CLAUDE_CODE_MAX_OUTPUT_TOKENS 4096, just short", { CLAUDE_CODE_MAX_OUTPUT_TOKENS: "4096" }, { autoCompactWindow: 313000 }, undefined, MILLION, 266000, false],
+      ["CLAUDE_CODE_MAX_OUTPUT_TOKENS 64000 keeps 20000", { CLAUDE_CODE_MAX_OUTPUT_TOKENS: "64000" }, { autoCompactWindow: 313000 }, undefined, MILLION, 252000, true],
+    ]
+    for (const [name, env, settings, model, window, tokens, asks] of cases) {
+      const w = world({ env: { HOME: "/home/u", ...env }, settings, model, usage: { context: { tokens, window } } })
+      await hooks()["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
+      expect({ name, asked: w.compacts.length }).toEqual({ name, asked: asks ? 1 : 0 })
+    }
+  })
+
+  test("the settings files are laid over each other as Claude Code lays them: a later file's autoCompactWindow sets aside the model windows of the files before it", async () => {
+    const MILLION = 1_000_000
+    const USER = { autoCompactWindow: 313000, modelSettings: { "claude-opus-5-5": { autoCompactWindow: 173000 } } }
+    const LATER_OPUS = { modelSettings: { "claude-opus-5-5": { autoCompactWindow: 313000 } } }
+    const cases: [string, Record<string, Record<string, unknown>>, number, boolean][] = [
+      ["the project's window sets aside the person's model window", { user: USER, project: { autoCompactWindow: 533000 } }, 450000, true],
+      ["the project's window, just short", { user: USER, project: { autoCompactWindow: 533000 } }, 449000, false],
+      ["a later file's model window over an earlier one's", { user: USER, local: LATER_OPUS }, 252000, true],
+      ["a later file's model window, just short", { user: USER, local: LATER_OPUS }, 251000, false],
+      ["a model window in a later file stands beside an earlier file's window", { user: { autoCompactWindow: 533000 }, project: { modelSettings: { opus: { autoCompactWindow: 173000 } } } }, 126000, true],
+      ["a model window in a later file, just short", { user: { autoCompactWindow: 533000 }, project: { modelSettings: { opus: { autoCompactWindow: 173000 } } } }, 125000, false],
+      ["the managed settings come last", { user: USER, project: { autoCompactWindow: 533000 }, policy: { autoCompactWindow: 233000 } }, 180000, true],
+      ["the managed settings, just short", { user: USER, project: { autoCompactWindow: 533000 }, policy: { autoCompactWindow: 233000 } }, 179000, false],
+      ["a window given on the command line", { user: USER, flag: { modelSettings: { opus: { autoCompactWindow: 233000 } } } }, 180000, true],
+    ]
+    for (const [name, sources, tokens, asks] of cases) {
+      const w = world({ sources, model: "claude-opus-5-5[1m]", usage: { context: { tokens, window: MILLION } } })
+      await hooks()["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
+      expect({ name, asked: w.compacts.length }).toEqual({ name, asked: asks ? 1 : 0 })
+    }
+  })
+
+  test("a Claude Code that does not give the settings files one by one leaves the settings laid together", async () => {
+    const sources = { user: { autoCompactWindow: 313000, modelSettings: { "claude-opus-5-5": { autoCompactWindow: 173000 } } }, project: { autoCompactWindow: 533000 } }
+    const settings = { autoCompactWindow: 533000, modelSettings: { "claude-opus-5-5": { autoCompactWindow: 173000 } } }
+    for (const [throwOn, asks] of [["", false], ["sources", true]] as const) {
+      const w = world({ sources, settings, throwOn, model: "claude-opus-5-5[1m]", usage: { context: { tokens: 126000, window: 1_000_000 } } })
+      await hooks()["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
+      expect({ throwOn, asked: w.compacts.length }).toEqual({ throwOn, asked: asks ? 1 : 0 })
+    }
   })
 
   test("no fill figure yet means nothing is asked", async () => {
@@ -545,8 +644,8 @@ describe("register: turn.complete", () => {
     expect(w.compacts).toEqual([])
   })
 
-  test("lean off or compactAtPercent 0 asks for nothing", async () => {
-    for (const compaction of [{ lean: false }, { compactAtPercent: 0 }]) {
+  test("lean off or earlyAtPercent 0 asks for nothing, as does compactAtPercent 0 from before 8.6.0", async () => {
+    for (const compaction of [{ lean: false }, { earlyAtPercent: 0 }, { compactAtPercent: 0 }]) {
       const w = world()
       w.files["/home/u/.claude/noctis/config.json"] = JSON.stringify({ compaction })
       await hooks()["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
@@ -596,7 +695,7 @@ describe("register: turn.complete", () => {
     const w = world()
     const on = hooks()
     const turn = async (rateLimits: unknown[]) => {
-      w.usage = { context: { percent: 75, window: 200000 }, rateLimits }
+      w.usage = { context: { percent: 95, window: 200000 }, rateLimits }
       await on["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
     }
     await turn([{ kind: "five_hour", percentUsed: 86, resetsAt: soon }])
@@ -605,7 +704,7 @@ describe("register: turn.complete", () => {
     await turn([{ kind: "five_hour", percentUsed: 85.9, resetsAt: soon }, { kind: "seven_day", percentUsed: 82.9, resetsAt: soon }])
     expect(w.compacts).toEqual([{}])
     for (const used of [83, 88]) {
-      const weekly = world({ usage: { context: { percent: 75, window: 200000 }, rateLimits: [{ kind: "seven_day", percentUsed: used, resetsAt: soon }, { kind: "five_hour", percentUsed: 10, resetsAt: soon }] } })
+      const weekly = world({ usage: { context: { percent: 95, window: 200000 }, rateLimits: [{ kind: "seven_day", percentUsed: used, resetsAt: soon }, { kind: "five_hour", percentUsed: 10, resetsAt: soon }] } })
       await hooks()["turn.complete"](engine(weekly), TURN, async () => ({ text: "done" }))
       expect({ used, compacts: weekly.compacts }).toEqual({ used, compacts: [{}] })
     }
@@ -614,8 +713,8 @@ describe("register: turn.complete", () => {
   test("the pause points are the thresholds the guard reads: the account's own, the shipped one for a wrong value, the built-in one when neither is right, none for a window switched off or without a threshold", async () => {
     const soon = new Date(1_790_000_000_000 + 3_600_000).toISOString()
     for (const [own, shipped, kind, used, asks] of PAUSE_POINTS) {
-      const w = world({ usage: { context: { percent: 75, window: 200000 }, rateLimits: [{ kind, percentUsed: used, resetsAt: soon }] } })
-      w.files["/plugin/config.default.json"] = JSON.stringify({ thresholds: shipped, compaction: { lean: true, compactAtPercent: 70 } })
+      const w = world({ usage: { context: { percent: 95, window: 200000 }, rateLimits: [{ kind, percentUsed: used, resetsAt: soon }] } })
+      w.files["/plugin/config.default.json"] = JSON.stringify({ thresholds: shipped, compaction: { lean: true, earlyAtPercent: 90 } })
       if (own !== undefined) w.files["/home/u/.claude/noctis/config.json"] = JSON.stringify({ thresholds: own })
       await hooks()["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
       expect({ own, shipped, kind, used, asked: w.compacts.length }).toEqual({ own, shipped, kind, used, asked: asks ? 1 : 0 })
@@ -636,7 +735,7 @@ describe("register: turn.complete", () => {
       "not a list",
     ]
     for (const rateLimits of readings) {
-      const w = world({ usage: { context: { percent: 75, window: 200000 }, rateLimits } })
+      const w = world({ usage: { context: { percent: 95, window: 200000 }, rateLimits } })
       await hooks()["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
       expect({ rateLimits, compacts: w.compacts }).toEqual({ rateLimits, compacts: [{}] })
     }
@@ -649,11 +748,11 @@ describe("register: turn.complete", () => {
       w.usage = { context: { percent, window: 200000 } }
       await on["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
     }
-    await turn(75)
-    await turn(80)
+    await turn(95)
+    await turn(98)
     expect(w.compacts).toHaveLength(1)
     await turn(40)
-    await turn(72)
+    await turn(92)
     expect(w.compacts).toHaveLength(2)
   })
 
@@ -668,14 +767,14 @@ describe("register: turn.complete", () => {
     expect(w.logs.every((args) => (args[1] as any)?.to === "debug")).toBe(true)
   })
 
-  test("the early compaction is logged with the fill that asked for it", async () => {
+  test("the early compaction is logged with the fill that asked for it, in percent of the way to the compaction point", async () => {
     const w = world({ env: CACHE_OFF })
     const on = hooks()
     w.compactAnswer = async () => on["session.compact"](engine(w), { trigger: "plugin", messages: CONVERSATION() }, async () => ({ messages: [prompt("s")], tokensBefore: 150000, tokensAfter: 8000 }))
     await on["turn.complete"](engine(w), TURN, async () => ({ text: "done" }))
     const [entry] = lines(w, "/home/u/.claude/noctis/compact.log")
     expect(entry.trigger).toBe("plugin")
-    expect(entry.ctx).toBe(75)
+    expect(entry.ctx).toBe(96)
   })
 
   test("a failure inside never touches the turn's answer", async () => {
@@ -722,18 +821,19 @@ describe("register: the session record", () => {
   })
 })
 
-function kit(on: any, files: Record<string, string> = {}, env: Record<string, string> = {}) {
+function kit(on: any, files: Record<string, string> = {}, env: Record<string, string> = {}, settings: Record<string, unknown> | ((source?: string) => unknown) = {}) {
   mock.env(on, { HOME: "/home/k", ...env })
   mock.clock(on, { now: 1_790_000_000_000 })
   const written: Record<string, string> = {}
   on("session.id", () => ({ value: "kit-session" }))
-  on("settings.read", () => ({ value: {} }))
+  on("session.model", () => ({ value: "claude-opus-5-5[1m]" }))
+  on("settings.read", ($: any, e: any) => ({ value: typeof settings === "function" ? settings(e?.source) : settings }))
   on("ui.log", () => ({ value: undefined }))
   on("fs.read", ($: any, e: any) => {
     const path = String(e.path)
     if (path in written) return { value: written[path] }
     if (path in files) return { value: files[path] }
-    if (path.endsWith("/config.default.json")) return { value: JSON.stringify({ thresholds: { session5h: 92, weeklyAll: 89, weeklyFable: 95 }, compaction: { lean: true, compactAtPercent: 70, keepTurns: 1, maxToolResultChars: 100, instructions: "" } }) }
+    if (path.endsWith("/config.default.json")) return { value: JSON.stringify({ thresholds: { session5h: 92, weeklyAll: 89, weeklyFable: 95 }, compaction: { lean: true, earlyAtPercent: 90, keepTurns: 1, maxToolResultChars: 100, instructions: "" } }) }
     return { deny: `ENOENT: ${path}` }
   })
   on("fs.write", ($: any, e: any) => {
@@ -791,9 +891,9 @@ describe("through the engine", () => {
     expect(written["/home/k/.claude/noctis/compact.log"]).toBeUndefined()
   })
 
-  test("a turn that ends at compactAtPercent asks the engine for a compaction", async ($, on) => {
+  test("a turn that ends earlyAtPercent of the way to the compaction point asks the engine for a compaction", async ($, on) => {
     const written = kit(on)
-    on("session.usage", () => ({ value: { startedAt: 0, context: { window: 200000, tokens: 150000, percent: 75 }, rateLimits: [] } }))
+    on("session.usage", () => ({ value: { startedAt: 0, context: { window: 200000, tokens: 160000, percent: 80 }, rateLimits: [] } }))
     on("turn.complete", ($: any, e: any) => ({ text: e.answer }))
     const asked: any[] = []
     on("session.compact", ($: any, e: any) => {
@@ -808,7 +908,7 @@ describe("through the engine", () => {
 
   test("autoCompactEnabled false in ~/.claude.json keeps a full turn from asking, as it keeps Claude Code's own compaction", async ($, on) => {
     kit(on, { "/home/k/.claude.json": JSON.stringify({ autoCompactEnabled: false }) })
-    on("session.usage", () => ({ value: { startedAt: 0, context: { window: 200000, tokens: 150000, percent: 75 }, rateLimits: [] } }))
+    on("session.usage", () => ({ value: { startedAt: 0, context: { window: 200000, tokens: 160000, percent: 80 }, rateLimits: [] } }))
     on("turn.complete", ($: any, e: any) => ({ text: e.answer }))
     const asked: any[] = []
     on("session.compact", ($: any, e: any) => {
@@ -822,7 +922,7 @@ describe("through the engine", () => {
   test("a full turn next to the 5-hour limit leaves the compaction for later", async ($, on) => {
     kit(on)
     const soon = new Date(1_790_000_000_000 + 3_600_000).toISOString()
-    on("session.usage", () => ({ value: { startedAt: 0, context: { window: 200000, tokens: 150000, percent: 75 }, rateLimits: [{ kind: "five_hour", percentUsed: 91, resetsAt: soon }] } }))
+    on("session.usage", () => ({ value: { startedAt: 0, context: { window: 200000, tokens: 160000, percent: 80 }, rateLimits: [{ kind: "five_hour", percentUsed: 91, resetsAt: soon }] } }))
     on("turn.complete", ($: any, e: any) => ({ text: e.answer }))
     const asked: any[] = []
     on("session.compact", ($: any, e: any) => {
@@ -836,7 +936,7 @@ describe("through the engine", () => {
   test("a full turn next to the weekly limit asks for the compaction", async ($, on) => {
     kit(on)
     const soon = new Date(1_790_000_000_000 + 3_600_000).toISOString()
-    on("session.usage", () => ({ value: { startedAt: 0, context: { window: 200000, tokens: 150000, percent: 75 }, rateLimits: [{ kind: "seven_day", percentUsed: 88, resetsAt: soon }] } }))
+    on("session.usage", () => ({ value: { startedAt: 0, context: { window: 200000, tokens: 160000, percent: 80 }, rateLimits: [{ kind: "seven_day", percentUsed: 88, resetsAt: soon }] } }))
     on("turn.complete", ($: any, e: any) => ({ text: e.answer }))
     const asked: any[] = []
     on("session.compact", ($: any, e: any) => {
@@ -847,7 +947,42 @@ describe("through the engine", () => {
     expect(asked).toEqual([{}])
   })
 
-  test("a turn below compactAtPercent asks for nothing", async ($, on) => {
+  test("the model's own autoCompactWindow in the settings sets where the way to the compaction point ends", async ($, on) => {
+    kit(on, {}, {}, { autoCompactWindow: 313000, modelSettings: { "claude-opus-5-5": { autoCompactWindow: 173000 } } })
+    on("session.usage", () => ({ value: { startedAt: 0, context: { window: 1000000, tokens: 130000, percent: 13 }, rateLimits: [] } }))
+    on("turn.complete", ($: any, e: any) => ({ text: e.answer }))
+    const asked: any[] = []
+    on("session.compact", ($: any, e: any) => {
+      asked.push(e)
+      return { messages: [SUMMARY] }
+    })
+    await $.turn.complete({ answer: "done", durationMs: 1, isAborted: false, turnId: "t5", reason: "answer" } as any)
+    expect(asked).toEqual([{}])
+  })
+
+  test("each settings file Claude Code reads is laid over the ones before it, as Claude Code lays them", async ($, on) => {
+    const sources: Record<string, Record<string, unknown>> = {
+      user: { autoCompactWindow: 313000, modelSettings: { "claude-opus-5-5": { autoCompactWindow: 173000 } } },
+      project: { autoCompactWindow: 533000 },
+    }
+    const merged = { autoCompactWindow: 533000, modelSettings: { "claude-opus-5-5": { autoCompactWindow: 173000 } } }
+    kit(on, {}, {}, (source) => (source === undefined ? merged : (sources[source] ?? {})))
+    let tokens = 300000
+    on("session.usage", () => ({ value: { startedAt: 0, context: { window: 1000000, tokens, percent: tokens / 10000 }, rateLimits: [] } }))
+    on("turn.complete", ($: any, e: any) => ({ text: e.answer }))
+    const asked: any[] = []
+    on("session.compact", ($: any, e: any) => {
+      asked.push(e)
+      return { messages: [SUMMARY] }
+    })
+    await $.turn.complete({ answer: "done", durationMs: 1, isAborted: false, turnId: "t6", reason: "answer" } as any)
+    expect(asked).toEqual([])
+    tokens = 450000
+    await $.turn.complete({ answer: "done", durationMs: 1, isAborted: false, turnId: "t7", reason: "answer" } as any)
+    expect(asked).toEqual([{}])
+  })
+
+  test("a turn short of earlyAtPercent asks for nothing", async ($, on) => {
     kit(on)
     on("session.usage", () => ({ value: { startedAt: 0, context: { window: 200000, tokens: 20000, percent: 10 }, rateLimits: [] } }))
     on("turn.complete", ($: any, e: any) => ({ text: e.answer }))

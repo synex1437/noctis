@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="610" viewBox="0 0 1200 610" role="img" aria-label="Install in about a minute: add the marketplace, install, run setup (which asks which model does which work), reload, then write TASKS.md and trust it">
-  <title>Install in about a minute: add the marketplace, install, run setup (which asks which model does which work), reload, then write TASKS.md and trust it</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="610" viewBox="0 0 1200 610" role="img" aria-label="Install in about a minute: add the marketplace, install, run setup (which asks which model does which work), restart, then write TASKS.md and trust it">
+  <title>Install in about a minute: add the marketplace, install, run setup (which asks which model does which work), restart, then write TASKS.md and trust it</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0d0d10"/>
@@ -73,7 +73,7 @@
   <rect x="0.5" y="0.5" width="1199" height="609" rx="18" fill="none" stroke="#24242b"/>
 
   <text x="48" y="58" class="sans eyebrow"><tspan fill="#ff3347">INSTALL</tspan> · SIXTY SECONDS</text>
-  <text x="48" y="98" class="sans title">Four commands, one question. Then trust your TASKS.md.</text>
+  <text x="48" y="98" class="sans title">Four steps, one question. Then trust your TASKS.md.</text>
 
   <!-- step rail -->
   <g class="sans">
@@ -116,9 +116,10 @@
       <rect x="0.5" y="0.5" width="263" height="111" rx="14" fill="url(#card)" stroke="#26262d" filter="url(#shadow)"/>
       <circle cx="26" cy="28" r="13" fill="url(#badge)"/>
       <text x="26" y="28" class="num" text-anchor="middle" dominant-baseline="central">4</text>
-      <text x="48" y="28" class="step" dominant-baseline="central">Reload</text>
-      <text x="20" y="64" class="mono prompt">/reload-plugins</text>
-      <text x="20" y="86" class="dim">no compiler, no Node, no Git Bash</text>
+      <text x="48" y="28" class="step" dominant-baseline="central">Restart</text>
+      <text x="20" y="64" class="mono prompt">/exit</text>
+      <text x="20" y="83" class="mono cmd">claude --continue</text>
+      <text x="20" y="102" class="dim">loads the 280k compaction point</text>
     </g>
   </g>
 

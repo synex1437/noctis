@@ -1,4 +1,4 @@
-export const SHIPPED = Object.freeze({ lean: true, compactAtPercent: 70, keepTurns: 6, maxToolResultChars: 2000, instructions: "Write the summary in short sections: the user's requests and intent, quoting any requirement they set; the task or queue item in hand, its acceptance criteria, what is done and what is left; each file changed or created and why; each build, test or check command run and its exit status, marking any that timed out, were killed or exited non-zero as UNVERIFIED, to be run again; errors met and how each was fixed, quoting any not fixed yet; decisions and approaches ruled out, each with its reason; open questions; the next step. Leave out file contents, tool output and search results that can be read again." })
+export const SHIPPED = Object.freeze({ lean: true, earlyAtPercent: 90, keepTurns: 6, maxToolResultChars: 2000, instructions: "Write the summary in short sections: the user's requests and intent, quoting any requirement they set; the task or queue item in hand, its acceptance criteria, what is done and what is left; each file changed or created and why; each build, test or check command run and its exit status, marking any that timed out, were killed or exited non-zero as UNVERIFIED, to be run again; errors met and how each was fixed, quoting any not fixed yet; decisions and approaches ruled out, each with its reason; open questions; the next step. Leave out file contents, tool output and search results that can be read again." })
 
 const READ_ONLY = new Set(["Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "NotebookRead"])
 const REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>\s*/g
@@ -10,6 +10,46 @@ const PRECOMPUTE_SKIP = "noctis lean compaction prunes the conversation when it 
 const COMPACTION_BAND = 6
 const BUILTIN_THRESHOLDS = Object.freeze({ session5h: 92 })
 const WINDOW_THRESHOLDS = new Map([["five_hour", "session5h"]])
+const WINDOW_MIN = 100000
+const WINDOW_MAX = 1000000
+const REPLY_TOKENS = 20000
+const BUFFER_TOKENS = 13000
+const EXPONENT = /^[+-]?(\d+(\.\d*)?|\.\d+)[eE][+-]?\d+$/
+const GROUPED = /^[+-]?\d{1,3}([_,\u00A0\u202F ])\d{3}(?:\1\d{3})*$/
+const GROUP_MARKS = /[_,\u00A0\u202F ]/g
+// The models Claude Code 2.1.289's catalog knows, and the three Claude 3 models it still names.
+const CATALOG_MODELS = ["claude-3-5-haiku", "claude-haiku-4-5", "claude-3-5-sonnet", "claude-3-7-sonnet", "claude-sonnet-4-0", "claude-sonnet-4-5", "claude-sonnet-4-6", "claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-4-0", "claude-opus-4-1", "claude-opus-4-5", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-mythos-5", "claude-mythos-5-1", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku"]
+// The models Claude Code looks for inside a name it cannot parse, in its order; claude-opus-4 and
+// claude-sonnet-4 count where no minor version follows.
+const MODEL_LADDER = ["claude-fable-5-1", "claude-fable-5", "claude-mythos-5-1", "claude-mythos-5", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5", "claude-opus-4-1", "claude-opus-4", "claude-sonnet-5-5", "claude-sonnet-5", "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4", "claude-haiku-4-5", "claude-3-7-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku"]
+// The models Claude Code's catalog gives its aliases, by provider ("" for any other); opusplan is sonnet and
+// best is opus (Claude Code takes fable for an account that may use Fable, which noctis cannot tell).
+const ALIAS_MODELS = { opus: { "": "claude-opus-5-5", foundry: "claude-opus-4-6" }, sonnet: { "": "claude-sonnet-5-5", bedrock: "claude-sonnet-4-5", vertex: "claude-sonnet-4-5", foundry: "claude-sonnet-4-5", mantle: "claude-sonnet-4-5", anthropicAws: "claude-sonnet-4-6" }, haiku: { "": "claude-haiku-4-5" }, fable: { "": "claude-fable-5-1" } }
+// The ids of the models ALIAS_MODELS names: on Anthropic's API (firstParty), which modelOverrides names a model
+// by, and on each provider, which an alias stands for there. Where a provider has none, as Mantle for
+// claude-sonnet-4-5, Claude Code takes claude-haiku-4-5's, the first model of its catalog it has one for. A
+// Bedrock id starts with the region's prefix in place of us.
+const MODEL_IDS = {
+  "claude-opus-5-5": { firstParty: "claude-opus-5-5", bedrock: "us.anthropic.claude-opus-5-5", vertex: "claude-opus-5-5", foundry: "claude-opus-5-5", anthropicAws: "claude-opus-5-5", anthropicGoogleCloud: "claude-opus-5-5", mantle: "anthropic.claude-opus-5-5" },
+  "claude-opus-4-6": { firstParty: "claude-opus-4-6", bedrock: "us.anthropic.claude-opus-4-6-v1", vertex: "claude-opus-4-6", foundry: "claude-opus-4-6", anthropicAws: "claude-opus-4-6", anthropicGoogleCloud: "claude-opus-4-6" },
+  "claude-sonnet-5-5": { firstParty: "claude-sonnet-5-5", bedrock: "us.anthropic.claude-sonnet-5-5", vertex: "claude-sonnet-5-5", foundry: "claude-sonnet-5-5", anthropicAws: "claude-sonnet-5-5", anthropicGoogleCloud: "claude-sonnet-5-5", mantle: "anthropic.claude-sonnet-5-5" },
+  "claude-sonnet-4-6": { firstParty: "claude-sonnet-4-6", bedrock: "us.anthropic.claude-sonnet-4-6", vertex: "claude-sonnet-4-6", foundry: "claude-sonnet-4-6", anthropicAws: "claude-sonnet-4-6", anthropicGoogleCloud: "claude-sonnet-4-6" },
+  "claude-sonnet-4-5": { firstParty: "claude-sonnet-4-5-20250929", bedrock: "us.anthropic.claude-sonnet-4-5-20250929-v1:0", vertex: "claude-sonnet-4-5@20250929", foundry: "claude-sonnet-4-5", anthropicAws: "claude-sonnet-4-5-20250929", anthropicGoogleCloud: "claude-sonnet-4-5-20250929" },
+  "claude-haiku-4-5": { firstParty: "claude-haiku-4-5-20251001", bedrock: "us.anthropic.claude-haiku-4-5-20251001-v1:0", vertex: "claude-haiku-4-5@20251001", foundry: "claude-haiku-4-5", anthropicAws: "claude-haiku-4-5-20251001", anthropicGoogleCloud: "claude-haiku-4-5-20251001", mantle: "anthropic.claude-haiku-4-5" },
+  "claude-fable-5-1": { firstParty: "claude-fable-5-1", bedrock: "us.anthropic.claude-fable-5-1", vertex: "claude-fable-5-1", foundry: "claude-fable-5-1", anthropicAws: "claude-fable-5-1", anthropicGoogleCloud: "claude-fable-5-1", mantle: "anthropic.claude-fable-5-1" },
+}
+const BEDROCK_PREFIXES = ["us", "eu", "apac", "jp", "au", "global"]
+const ALIAS_VARIABLES = { opus: "ANTHROPIC_DEFAULT_OPUS_MODEL", sonnet: "ANTHROPIC_DEFAULT_SONNET_MODEL", haiku: "ANTHROPIC_DEFAULT_HAIKU_MODEL", fable: "ANTHROPIC_DEFAULT_FABLE_MODEL" }
+const PROVIDERS = [["CLAUDE_CODE_USE_BEDROCK", "bedrock"], ["CLAUDE_CODE_USE_FOUNDRY", "foundry"], ["CLAUDE_CODE_USE_ANTHROPIC_AWS", "anthropicAws"], ["CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD", "anthropicGoogleCloud"], ["CLAUDE_CODE_USE_MANTLE", "mantle"], ["CLAUDE_CODE_USE_VERTEX", "vertex"]]
+const LEGACY_OPUS = ["claude-opus-4-20250514", "claude-opus-4-1-20250805", "claude-opus-4-0", "claude-opus-4-1"]
+const NATIVE_1M = ["claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-mythos-5", "claude-mythos-5-1", "claude-mythos-preview"]
+const BEDROCK_REGIONS = ["us", "eu", "apac", "jp", "au", "us-gov", "global"]
+const DEFAULT_PORTS = { http: "80", https: "443", ws: "80", wss: "443", ftp: "21", file: "" }
+const ONE_MILLION = /\[1m\]/i
+const ONE_MILLION_TAIL = /(?:\[1m\])+$/i
+const PROVIDER_MODEL = /^(?:([a-z-]+)\.)?anthropic\.(claude-.*)$/
+const MODEL_TAIL = /^(?:-fast|-latest)?(?:-v\d{1,3}@\d{8}|[-@]\d{8})?(?:-v\d{1,3}(?::\d{1,3})?)?$/
+const DATE_SUFFIX = /-\d{8}$/
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -39,7 +79,7 @@ function countOf(value, least) {
 
 const FIELDS = {
   lean: (value) => (typeof value === "boolean" ? value : undefined),
-  compactAtPercent: percentOf,
+  earlyAtPercent: percentOf,
   keepTurns: (value) => countOf(value, 0),
   maxToolResultChars: (value) => countOf(value, 100),
   instructions: (value) => (typeof value === "string" ? value : undefined),
@@ -54,9 +94,259 @@ function settle(base, section) {
   return settled
 }
 
+// carried keeps early compaction off for a config of noctis before 8.6.0 that switched it off as
+// compactAtPercent, a share of the whole window then.
+function carried(section) {
+  if (!isPlainObject(section) || !("compactAtPercent" in section) || "earlyAtPercent" in section) return section
+  return switchedOff(section.compactAtPercent) ? { ...section, earlyAtPercent: 0 } : section
+}
+
 export function policyOf(shipped, own) {
-  const base = settle(SHIPPED, shipped)
-  return own === undefined ? base : settle(base, isPlainObject(own) ? own : undefined)
+  const base = settle(SHIPPED, carried(shipped))
+  return own === undefined ? base : settle(base, isPlainObject(own) ? carried(own) : undefined)
+}
+
+// claudeInteger reads CLAUDE_CODE_AUTO_COMPACT_WINDOW as Claude Code reads it: an integer in exponent
+// form, digits in groups of three, else the digits it starts with.
+function claudeInteger(value) {
+  const text = String(value).trim()
+  if (text.length <= 32) {
+    if (EXPONENT.test(text)) {
+      const number = Number(text)
+      return Number.isInteger(number) ? number : NaN
+    }
+    if (GROUPED.test(text)) return parseInt(text.replace(GROUP_MARKS, ""), 10)
+  }
+  return parseInt(text, 10)
+}
+
+function truthy(value) {
+  return ["1", "true", "yes", "on"].includes(String(value ?? "").trim().toLowerCase())
+}
+
+// anthropicURL tells whether ANTHROPIC_BASE_URL leaves Claude Code on Anthropic's own API: unset, or a URL whose
+// host is api.anthropic.com.
+function anthropicURL(base) {
+  if (!base) return true
+  const text = String(base).replace(/[\t\n\r]/g, "").replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, "")
+  const parts = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\/(?:[^/?#]*@)?(\[[^\]]*\]|[^/?#:]*)(?::([^/?#]*))?(?:[/?#]|$)/.exec(text)
+  if (!parts) return false
+  const scheme = parts[1].toLowerCase()
+  const special = Object.hasOwn(DEFAULT_PORTS, scheme)
+  let host = parts[2]
+  try {
+    host = decodeURIComponent(host)
+  } catch {
+    return false
+  }
+  if (special) host = host.toLowerCase()
+  if (parts[3]) {
+    const port = /^\d+$/.test(parts[3]) ? Number(parts[3]) : NaN
+    if (!special || !(port <= 65535) || String(port) !== DEFAULT_PORTS[scheme]) return false
+  }
+  return host === "api.anthropic.com"
+}
+
+// modelNaming is what Claude Code names a model by besides its id, as the environment and modelOverrides set
+// it: the models its aliases stand for, the provider, and whether [1m] and the legacy Opus ids count.
+export function modelNaming(env = {}, overrides = undefined) {
+  const provider = PROVIDERS.find(([variable]) => truthy(env[variable]))?.[1] ?? "firstParty"
+  const taken = isPlainObject(overrides) && Object.values(overrides).every((value) => typeof value === "string") ? overrides : {}
+  const naming = { provider, bedrockPrefix: bedrockPrefixOf(env), overrides: taken, aliases: {} }
+  for (const [alias, models] of Object.entries(ALIAS_MODELS)) {
+    naming.aliases[alias] = textOf(env[ALIAS_VARIABLES[alias]]) || aliasModel(naming, models[provider] ?? models[""])
+  }
+  naming.aliases.opusplan = naming.aliases.sonnet
+  naming.aliases.best = naming.aliases.opus
+  naming.remap = !["bedrock", "foundry", "mantle", "vertex"].includes(provider) && !truthy(env.CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP)
+  naming.oneMillion = !truthy(env.CLAUDE_CODE_DISABLE_1M_CONTEXT)
+  naming.firstParty = provider === "firstParty" && (truthy(env._CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL) || anthropicURL(env.ANTHROPIC_BASE_URL))
+  const bare = naming.aliases.fable.replace(/\[1m\]/gi, "")
+  if (bare !== naming.aliases.fable && naming.firstParty && naming.oneMillion && nativeOneMillion(naming, bare)) naming.aliases.fable = bare
+  return naming
+}
+
+const FIRST_PARTY_NAMING = modelNaming()
+
+function textOf(value) {
+  return typeof value === "string" ? value.trim() : ""
+}
+
+// aliasModel is the id Claude Code takes for an alias whose catalog gives it model: the one modelOverrides maps
+// the model's first-party id to, else the provider's id for it.
+function aliasModel(naming, model) {
+  const ids = MODEL_IDS[model]
+  if (Object.hasOwn(naming.overrides, ids.firstParty) && naming.overrides[ids.firstParty]) return naming.overrides[ids.firstParty]
+  const id = ids[naming.provider] ?? MODEL_IDS["claude-haiku-4-5"][naming.provider]
+  return naming.provider === "bedrock" ? id.replace("us.", `${naming.bedrockPrefix}.`) : id
+}
+
+// bedrockPrefixOf is the region prefix Claude Code gives Bedrock ids: us-gov in a GovCloud region, else the one
+// ANTHROPIC_BEDROCK_REGION_PREFIX names, else the region's (us, eu, apac or global). The region is AWS_REGION's,
+// else AWS_DEFAULT_REGION's, else us-east-1 (Claude Code reads the AWS config's region before that; noctis
+// does not).
+function bedrockPrefixOf(env) {
+  const region = [textOf(env.AWS_REGION), textOf(env.AWS_DEFAULT_REGION)].find((value) => /^[a-z]{2,}(?:-[a-z0-9]+){0,4}$/i.test(value)) ?? "us-east-1"
+  if (region.startsWith("us-gov-")) return "us-gov"
+  if (BEDROCK_PREFIXES.includes(textOf(env.ANTHROPIC_BEDROCK_REGION_PREFIX))) return textOf(env.ANTHROPIC_BEDROCK_REGION_PREFIX)
+  return region.startsWith("us-") ? "us" : region.startsWith("eu-") ? "eu" : region.startsWith("ap-") ? "apac" : "global"
+}
+
+function trimOneMillion(model) {
+  return model.replace(/\[1m\]$/i, "")
+}
+
+function withOneMillion(model, marked) {
+  return marked ? `${model.replace(ONE_MILLION_TAIL, "")}[1m]` : model
+}
+
+// parseModel parses a Claude model name as Claude Code's Hu does.
+function parseModel(model) {
+  let name = model.trim().toLowerCase()
+  if (name === "" || /\s/.test(name)) return undefined
+  name = name.replace(/\[[12]m\]$/, "")
+  name = name.slice(name.lastIndexOf("/") + 1)
+  const provider = PROVIDER_MODEL.exec(name)
+  if (provider) {
+    if (provider[1] !== undefined && !BEDROCK_REGIONS.includes(provider[1])) return undefined
+    name = provider[2]
+  }
+  let parse
+  let found = /^claude-([a-z]+)-(\d{1,2})(?!\d)(?:-(\d{1,2})(?!\d))?/.exec(name)
+  if (found) parse = { family: found[1], major: Number(found[2]), minor: Number(found[3] ?? 0), legacy: false, base: found[0] }
+  else if ((found = /^claude-(\d{1,2})(?!\d)(?:-(\d{1,2})(?!\d))?-([a-z]+)/.exec(name))) parse = { family: found[3], major: Number(found[1]), minor: Number(found[2] ?? 0), legacy: true, base: found[0] }
+  else return undefined
+  const rest = name.slice(parse.base.length)
+  if (rest !== "" && !/^[-@]/.test(rest)) return undefined
+  parse.trailer = !MODEL_TAIL.test(rest)
+  return parse
+}
+
+// canonicalModel is the model Claude Code's RS takes a name in lower case for.
+function canonicalModel(name) {
+  const parse = parseModel(name)
+  if (parse && !parse.trailer) {
+    const known = CATALOG_MODELS.find((id) => {
+      const own = parseModel(id)
+      return own.family === parse.family && own.legacy === parse.legacy && own.major === parse.major && own.minor === parse.minor
+    })
+    return known ?? parse.base.replace(DATE_SUFFIX, "")
+  }
+  for (const id of MODEL_LADDER) {
+    if (id === "claude-opus-4" || id === "claude-sonnet-4" ? new RegExp(`${id}(?!-\\d(?!\\d))`).test(name) : name.includes(id)) return id === "claude-opus-4" || id === "claude-sonnet-4" ? `${id}-0` : id
+  }
+  return name.replace(DATE_SUFFIX, "")
+}
+
+function knownModel(id) {
+  const bare = trimOneMillion(id)
+  return CATALOG_MODELS.includes(bare) || bare === "claude-mythos-preview"
+}
+
+// identify is the model Claude Code takes a name for: the first model modelOverrides maps back from it, else
+// its canonical model.
+function identify(naming, model) {
+  for (const [name, value] of Object.entries(naming.overrides)) {
+    if (value === model && knownModel(canonicalModel(name.toLowerCase()))) return canonicalModel(name.toLowerCase())
+  }
+  return canonicalModel(model.toLowerCase())
+}
+
+function nativeOneMillion(naming, model) {
+  const bare = trimOneMillion(model)
+  if (NATIVE_1M.includes(trimOneMillion(identify(naming, bare)))) return true
+  return bare !== model && NATIVE_1M.includes(trimOneMillion(identify(naming, model)))
+}
+
+// resolve is the model a name stands for, as Claude Code's Tt gives it.
+function resolve(naming, model) {
+  const trimmed = model.trim()
+  const lower = trimmed.toLowerCase()
+  const marked = naming.oneMillion && ONE_MILLION.test(lower)
+  const name = marked ? trimOneMillion(lower).trim() : lower
+  if (name === "fable") return marked && !naming.firstParty && !ONE_MILLION.test(naming.aliases.fable) ? `${naming.aliases.fable}[1m]` : naming.aliases.fable
+  if (["opus", "opusplan", "sonnet", "haiku"].includes(name)) return withOneMillion(naming.aliases[name], marked)
+  if (name === "best") return naming.aliases.best
+  if (naming.remap && LEGACY_OPUS.includes(name)) return withOneMillion(naming.aliases.opus, marked)
+  if (marked && naming.firstParty && name.includes("fable") && nativeOneMillion(naming, name)) return trimmed.replace(ONE_MILLION_TAIL, "").trim()
+  return marked ? `${trimmed.replace(ONE_MILLION_TAIL, "").trim()}[1m]` : trimmed
+}
+
+// modelKey is the name Claude Code 2.1.289 files a model's own settings under in modelSettings, its mV, for a
+// session's model and an entry's name alike: the id of the model an alias stands for; the catalog id of a
+// model's dated, [1m], Bedrock, Vertex and Foundry ids; the model modelOverrides maps a provider's id back to;
+// else the name in lower case without [1m] or a date. "" for none.
+export function modelKey(model, naming = FIRST_PARTY_NAMING) {
+  return typeof model === "string" ? trimOneMillion(identify(naming, resolve(naming, model))) : ""
+}
+
+// windowOf is an autoCompactWindow as Claude Code's settings take it: a whole number of tokens from
+// WINDOW_MIN to WINDOW_MAX.
+function windowOf(value) {
+  return Number.isInteger(value) && value >= WINDOW_MIN && value <= WINDOW_MAX ? value : undefined
+}
+
+// windowTable is what Claude Code's gOt finds in the settings files it lays over each other, given in its
+// order: the autoCompactWindow of the last that sets one, and the models' own windows of that file and the
+// files after it, a later file's over an earlier one's. In one file the entry under the name Claude Code files
+// a model under comes before the model's other names, and of those the first; entries Claude Code does not
+// take ("auto" and a window are taken) are passed over.
+function windowTable(layers, naming) {
+  let top
+  let models = new Map()
+  for (const settings of layers) {
+    if (!isPlainObject(settings)) continue
+    const own = new Map()
+    if (isPlainObject(settings.modelSettings)) {
+      for (const [name, entry] of Object.entries(settings.modelSettings)) {
+        if (Object.hasOwn(Object.prototype, name) || !isPlainObject(entry)) continue
+        const window = entry.autoCompactWindow
+        if (window !== "auto" && windowOf(window) === undefined) continue
+        const key = modelKey(name, naming)
+        if (key && (name === key || !own.has(key))) own.set(key, window)
+      }
+    }
+    if (windowOf(settings.autoCompactWindow) !== undefined) {
+      top = settings.autoCompactWindow
+      models = own
+    } else models = new Map([...models, ...own])
+  }
+  return { top, models }
+}
+
+// settingsWindow is the window settings give sessions on model: the model's own entry in modelSettings before
+// autoCompactWindow; "auto" there leaves the window to Claude Code. settings is a settings object, or the
+// settings files Claude Code lays over each other, in its order.
+function settingsWindow(settings, model, naming = FIRST_PARTY_NAMING) {
+  const table = windowTable(Array.isArray(settings) ? settings : [settings], naming)
+  const key = typeof model === "string" ? modelKey(model, naming) : ""
+  return windowOf(key && table.models.has(key) ? table.models.get(key) : table.top)
+}
+
+// replyTokens is how much of the window Claude Code keeps for the summary: 20000 tokens, or the fewer that
+// CLAUDE_CODE_MAX_OUTPUT_TOKENS lets a reply have.
+function replyTokens(maxOutput) {
+  const limit = maxOutput ? claudeInteger(maxOutput) : NaN
+  return !Number.isNaN(limit) && limit > 0 ? Math.min(limit, REPLY_TOKENS) : REPLY_TOKENS
+}
+
+// compactionPoint is how many tokens of context a session on model, in a window of window tokens, holds
+// when Claude Code compacts it, reckoned as Claude Code reckons it: CLAUDE_CODE_AUTO_COMPACT_WINDOW, or
+// else autoCompactWindow (the model's own entry in modelSettings first), lowers the window; 20000 tokens
+// (fewer where CLAUDE_CODE_MAX_OUTPUT_TOKENS is lower) are kept for the summary and 13000 more;
+// CLAUDE_AUTOCOMPACT_PCT_OVERRIDE's percent of the rest comes sooner when it is the smaller.
+export function compactionPoint(window, { variable, percent, settings, model, maxOutput, naming } = {}) {
+  let effective = window
+  const configured = variable ? claudeInteger(variable) : NaN
+  if (!Number.isNaN(configured) && configured > 0) effective = Math.min(window, Math.max(WINDOW_MIN, Math.min(configured, WINDOW_MAX)))
+  else {
+    const own = settingsWindow(settings, model, naming)
+    if (own !== undefined) effective = Math.min(window, own)
+  }
+  const usable = effective - replyTokens(maxOutput)
+  const share = percent ? parseFloat(percent) : NaN
+  if (!Number.isNaN(share) && share > 0 && share <= 100) return Math.min(Math.floor(usable * (share / 100)), usable - BUFFER_TOKENS)
+  return usable - BUFFER_TOKENS
 }
 
 function pausePointsOf(shipped, own) {
@@ -282,10 +572,6 @@ function debug($, text) {
   }
 }
 
-function truthy(value) {
-  return ["1", "true", "yes", "on"].includes(String(value ?? "").trim().toLowerCase())
-}
-
 async function globalConfig($, account) {
   if (account) {
     const legacy = await $.fs.read(`${account}/.config.json`).catch(() => undefined)
@@ -304,6 +590,83 @@ async function ownCompactionOff($, account) {
   if (isPlainObject(settings) && settings.autoCompactEnabled !== undefined) return settings.autoCompactEnabled === false
   const global = await globalConfig($, account)
   return isPlainObject(global) && global.autoCompactEnabled === false
+}
+
+async function attempt(read) {
+  try {
+    return await read()
+  } catch {
+    return undefined
+  }
+}
+
+// settingsLayers are the settings files Claude Code lays over each other, in its order, each as
+// $.settings.read gives it; undefined where it does not give them one by one. Each source is named where it is
+// read, as each variable is.
+async function settingsLayers($) {
+  try {
+    return await Promise.all([
+      $.settings.read({ source: "user" }),
+      $.settings.read({ source: "project" }),
+      $.settings.read({ source: "local" }),
+      $.settings.read({ source: "flag" }),
+      $.settings.read({ source: "policy" }),
+    ])
+  } catch {
+    return undefined
+  }
+}
+
+// ownWindows tells whether settings give a model a window of its own.
+function ownWindows(settings) {
+  return isPlainObject(settings) && isPlainObject(settings.modelSettings) && Object.values(settings.modelSettings).some((entry) => isPlainObject(entry) && entry.autoCompactWindow !== undefined)
+}
+
+// namingOf reads the naming of models only where layers, the settings files, give a model a window of its own;
+// modelOverrides are those of merged, the settings laid together. Claude Code loads a module only when each
+// variable it reads is named where it is read, so every one is spelled out.
+async function namingOf($, layers, merged) {
+  if (!Array.isArray(layers) || !layers.some(ownWindows)) return undefined
+  const env = {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: await attempt(() => $.env.get("ANTHROPIC_DEFAULT_OPUS_MODEL")),
+    ANTHROPIC_DEFAULT_SONNET_MODEL: await attempt(() => $.env.get("ANTHROPIC_DEFAULT_SONNET_MODEL")),
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: await attempt(() => $.env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL")),
+    ANTHROPIC_DEFAULT_FABLE_MODEL: await attempt(() => $.env.get("ANTHROPIC_DEFAULT_FABLE_MODEL")),
+    CLAUDE_CODE_USE_BEDROCK: await attempt(() => $.env.get("CLAUDE_CODE_USE_BEDROCK")),
+    CLAUDE_CODE_USE_FOUNDRY: await attempt(() => $.env.get("CLAUDE_CODE_USE_FOUNDRY")),
+    CLAUDE_CODE_USE_ANTHROPIC_AWS: await attempt(() => $.env.get("CLAUDE_CODE_USE_ANTHROPIC_AWS")),
+    CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD: await attempt(() => $.env.get("CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD")),
+    CLAUDE_CODE_USE_MANTLE: await attempt(() => $.env.get("CLAUDE_CODE_USE_MANTLE")),
+    CLAUDE_CODE_USE_VERTEX: await attempt(() => $.env.get("CLAUDE_CODE_USE_VERTEX")),
+    CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP: await attempt(() => $.env.get("CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP")),
+    CLAUDE_CODE_DISABLE_1M_CONTEXT: await attempt(() => $.env.get("CLAUDE_CODE_DISABLE_1M_CONTEXT")),
+    ANTHROPIC_BASE_URL: await attempt(() => $.env.get("ANTHROPIC_BASE_URL")),
+    _CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL: await attempt(() => $.env.get("_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL")),
+    AWS_REGION: await attempt(() => $.env.get("AWS_REGION")),
+    AWS_DEFAULT_REGION: await attempt(() => $.env.get("AWS_DEFAULT_REGION")),
+    ANTHROPIC_BEDROCK_REGION_PREFIX: await attempt(() => $.env.get("ANTHROPIC_BEDROCK_REGION_PREFIX")),
+  }
+  return modelNaming(env, isPlainObject(merged) ? merged.modelOverrides : undefined)
+}
+
+// shareOf is how full the context is, in percent of where Claude Code compacts it; of the whole window
+// when the engine reports no token count or window; undefined when it reports neither.
+async function shareOf($, context) {
+  const { tokens, window, percent } = isPlainObject(context) ? context : {}
+  if (typeof tokens === "number" && typeof window === "number" && window > 0) {
+    const merged = await attempt(() => $.settings.read())
+    const layers = (await settingsLayers($)) ?? [merged]
+    const point = compactionPoint(window, {
+      variable: await $.env.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW"),
+      percent: await $.env.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"),
+      settings: layers,
+      model: await attempt(() => $.session.model()),
+      maxOutput: await $.env.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS"),
+      naming: await namingOf($, layers, merged),
+    })
+    if (point > 0) return (100 * tokens) / point
+  }
+  return typeof percent === "number" ? percent : undefined
 }
 
 async function remember($, context) {
@@ -389,18 +752,19 @@ export function register(on, options) {
       const context = await contextOf($)
       if (!context.policy.lean) return answered
       await remember($, context)
-      const mark = context.policy.compactAtPercent
+      const mark = context.policy.earlyAtPercent
       if (!mark) return answered
       const usage = await $.session.usage()
-      const percent = usage?.context?.percent
-      if (typeof percent !== "number") return answered
-      if (percent < mark) {
+      const share = await shareOf($, usage?.context)
+      if (share === undefined) return answered
+      const percent = Math.round(share)
+      if (share < mark) {
         disarmed.delete(context.sid)
         return answered
       }
       if (disarmed.has(context.sid) || (await ownCompactionOff($, context.account))) return answered
       if (nearPausePoint(usage.rateLimits, context.pausePoints, await $.clock.now())) {
-        debug($, `early compaction at ${percent}% put off: the 5-hour window is within ${COMPACTION_BAND} points of its pause point`)
+        debug($, `early compaction at ${percent}% of the compaction point put off: the 5-hour window is within ${COMPACTION_BAND} points of its pause point`)
         return answered
       }
       disarmed.add(context.sid)
@@ -408,7 +772,7 @@ export function register(on, options) {
       try {
         await $.session.compact(context.policy.instructions ? { instructions: context.policy.instructions } : {})
       } catch (err) {
-        debug($, `early compaction at ${percent}% not run: ${err}`)
+        debug($, `early compaction at ${percent}% of the compaction point not run: ${err}`)
       } finally {
         early = undefined
       }

@@ -453,7 +453,7 @@ class Account {
     delete inherited.LC_MESSAGES;
     // A Claude Code session that runs the suite hands it its own kind, effort, compaction point, stop block cap and id.
     for (const name of ['CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_REMOTE', 'CLAUDE_EFFORT', 'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_AUTOCOMPACT_PCT_OVERRIDE',
-      'CLAUDE_CODE_STOP_HOOK_BLOCK_CAP', 'CLAUDE_CODE_SESSION_ID']) {
+      'CLAUDE_CODE_AUTO_COMPACT_WINDOW', 'DISABLE_AUTO_COMPACT', 'DISABLE_COMPACT', 'CLAUDE_CODE_STOP_HOOK_BLOCK_CAP', 'CLAUDE_CODE_SESSION_ID']) {
       delete inherited[name];
     }
     const env = {
@@ -590,7 +590,9 @@ class Account {
     });
   }
 
-  statuslineInput(sid, model, fiveUsed, fiveReset, weekUsed, weekReset, contextPercent = 32) {
+  // context is the share of the window the context fills, or { tokens, window }: the context of the last
+  // request and the model's window, which the status line gets as Claude Code hands them over.
+  statuslineInput(sid, model, fiveUsed, fiveReset, weekUsed, weekReset, context = 32) {
     return {
       session_id: sid,
       cwd: this.lab.projectDir,
@@ -598,13 +600,13 @@ class Account {
       version: '2.1.270',
       model: { id: model, display_name: model },
       effort: { level: 'max' },
-      context_window: { used_percentage: contextPercent },
+      context_window: context !== null && typeof context === 'object' ? claudeContextWindow(context) : { used_percentage: context },
       rate_limits: { five_hour: { used_percentage: fiveUsed, resets_at: fiveReset }, seven_day: { used_percentage: weekUsed, resets_at: weekReset } },
     };
   }
 
-  statusline(sid, model, fiveUsed, fiveReset, weekUsed, weekReset, contextPercent = 32) {
-    return this.run(['statusline'], this.statuslineInput(sid, model, fiveUsed, fiveReset, weekUsed, weekReset, contextPercent));
+  statusline(sid, model, fiveUsed, fiveReset, weekUsed, weekReset, context = 32) {
+    return this.run(['statusline'], this.statuslineInput(sid, model, fiveUsed, fiveReset, weekUsed, weekReset, context));
   }
 
   state() {
@@ -731,6 +733,58 @@ class Account {
   }
 }
 
+// The context_window of Claude Code's status line input for a context of tokens in a window: the input,
+// cache creation and cache read tokens of the last request add up to the context, and the used share is
+// that of the window, rounded.
+function claudeContextWindow({ tokens, window }) {
+  const input = Math.round(tokens * 0.01);
+  const created = Math.round(tokens * 0.07);
+  const used = Math.min(100, Math.max(0, Math.round((100 * tokens) / window)));
+  return {
+    total_input_tokens: tokens,
+    total_output_tokens: Math.round(tokens * 0.05),
+    context_window_size: window,
+    current_usage: { input_tokens: input, output_tokens: 1200, cache_creation_input_tokens: created, cache_read_input_tokens: tokens - input - created },
+    used_percentage: used,
+    remaining_percentage: 100 - used,
+  };
+}
+
+// The windows of the models whose context the suites count in tokens, and the tokens Claude Code keeps
+// free below the window it compacts in: 20000 for the summary and 13000 more.
+const MODEL_WINDOWS = { 'claude-fable-5-1': 1000000, 'claude-opus-5': 200000 };
+const COMPACT_REPLY_TOKENS = 20000;
+const COMPACT_BUFFER_TOKENS = 13000;
+// The text Claude Code ends a turn with when its compactions leave the context full again, and texts of
+// requests the API turns down for other reasons, all with the error invalid_request.
+const THRASHING = 'Autocompact is thrashing: the context refilled to the limit within 3 turns of the previous compact, 3 times in a row. A file being read or a tool output is likely too large for the context window. Try reading in smaller chunks, or use /clear to start fresh.';
+const OTHER_REQUEST_ERRORS = [
+  'messages.41.content.1: unexpected `tool_use_id` found in `tool_result` blocks: toolu_01. Each `tool_result` block must have a corresponding `tool_use` block in the previous message.',
+  'messages: text content blocks must be non-empty',
+  'The request body is not valid JSON: unexpected end of data',
+];
+
+const switchedOn = (value) => ['1', 'true', 'yes', 'on'].includes(String(value === undefined || value === null ? '' : value).trim().toLowerCase());
+
+// Where Claude Code compacts a session on model, in tokens of context in its window, read from the
+// settings.json it runs with as the suites take Claude Code 2.1.289 to reckon it: the window
+// CLAUDE_CODE_AUTO_COMPACT_WINDOW sets (100000 to 1000000), else the model's own modelSettings entry, else
+// autoCompactWindow, where it is smaller than the model's window, less the tokens kept free;
+// CLAUDE_AUTOCOMPACT_PCT_OVERRIDE's percent of the window less the 20000 where that comes sooner. null
+// while it compacts nothing by itself.
+function claudeCompactionPoint(settings, model, modelWindow) {
+  const env = (settings && settings.env) || {};
+  if (switchedOn(env.DISABLE_AUTO_COMPACT) || switchedOn(env.DISABLE_COMPACT)) return null;
+  const variable = parseInt(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, 10);
+  const own = (((settings && settings.modelSettings) || {})[model] || {}).autoCompactWindow;
+  const setting = variable > 0 ? Math.max(100000, Math.min(variable, 1000000)) : own !== undefined ? own : settings && settings.autoCompactWindow;
+  const window = typeof setting === 'number' && setting >= 100000 && setting <= 1000000 ? Math.min(modelWindow, setting) : modelWindow;
+  const usable = window - COMPACT_REPLY_TOKENS;
+  const percent = parseFloat(env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE);
+  if (percent > 0 && percent <= 100) return Math.min(Math.floor((usable * percent) / 100), usable - COMPACT_BUFFER_TOKENS);
+  return usable - COMPACT_BUFFER_TOKENS;
+}
+
 function codeOnFable(config) {
   config.roles = { ...config.roles, profile: 'custom', code: { model: 'fable', effort: 'max' }, planning: { model: 'fable' } };
   config.models.primary = 'fable';
@@ -746,4 +800,5 @@ function waitKey(sid) {
 }
 
 module.exports = {
-  refreshChecksums, PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, Account, sleep, nowSec, readJson, writeJson, isAlive, processStarted, processTable, waitKey };
+  refreshChecksums, PLUGIN_NAME, SOURCE_ROOT, IS_WINDOWS, Lab, Account, sleep, nowSec, readJson, writeJson, isAlive, processStarted, processTable, waitKey,
+  MODEL_WINDOWS, COMPACT_REPLY_TOKENS, THRASHING, OTHER_REQUEST_ERRORS, claudeCompactionPoint };

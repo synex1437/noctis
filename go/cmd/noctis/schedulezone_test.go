@@ -4,6 +4,8 @@ package main
 
 import (
 	"encoding/binary"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -42,6 +44,18 @@ func r1SystemZone(t *testing.T) *time.Location {
 		t.Fatalf("/etc/localtime does not read as a zone: %v", err)
 	}
 	return zone
+}
+
+// r1AnsweredHere is a transport that has handler answer each request in the goroutine that sends it.
+type r1AnsweredHere struct{ handler http.Handler }
+
+func (here r1AnsweredHere) RoundTrip(request *http.Request) (*http.Response, error) {
+	recorder := httptest.NewRecorder()
+	here.handler.ServeHTTP(recorder, request)
+	if request.Body != nil {
+		request.Body.Close()
+	}
+	return recorder.Result(), nil
 }
 
 var r1CalendarField = regexp.MustCompile(`<key>(Month|Day|Hour|Minute)</key><integer>(\d+)</integer>`)
@@ -98,6 +112,10 @@ func TestADigestRunnerTheSchedulerStartsKeepsTheDailyDigestAtItsTimeInTheUsersTZ
 	scheduleBackendOverride = "systemd"
 	t.Cleanup(func() { scheduleBackendOverride = "" })
 	defer func(previous int64) { timeOffset = previous }(timeOffset)
+	// time.Local stands in for the zone each process takes from its TZ. Every goroutine reads it, an
+	// HTTP server's as it serves too, so the inbox answers the digests in this goroutine while it changes.
+	defer func(previous http.RoundTripper) { http.DefaultTransport = previous }(http.DefaultTransport)
+	http.DefaultTransport = r1AnsweredHere{inbox}
 	defer func(previous *time.Location) { time.Local = previous }(time.Local)
 	system := r1SystemZone(t)
 	_, systemOffset := time.Now().In(system).Zone()
