@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { Lab, sleep, readJson, writeJson, MODEL_WINDOWS, COMPACT_REPLY_TOKENS, THRASHING, OTHER_REQUEST_ERRORS, claudeCompactionPoint } = require('./harness');
+const { Lab, sleep, readJson, writeJson, MODEL_WINDOWS, COMPACT_REPLY_TOKENS, THRASHING, OTHER_REQUEST_ERRORS, QUIET_FAILURES, WINDOW_LIMIT, claudeCompactionPoint } = require('./harness');
 const { checkContinuations, pauseEndedWithoutReason } = require('./continuations');
 
 const options = { days: 7, seed: 1, sessionsPerDay: 4, turns: 6, hard: 0 };
@@ -104,9 +104,10 @@ const stats = {
   labWaitMs: 0,
   compactionChoices: {},
   contextChecks: 0,
-  contextFulls: { thrashing: 0, tooLong: 0, cloud: 0, giveups: 0, inPlace: 0 },
+  contextFulls: { thrashing: 0, tooLong: 0, windowLimit: 0, cloud: 0, giveups: 0, inPlace: 0 },
   freshStarts: 0,
   otherRequestErrors: 0,
+  quietFailures: { max_output_tokens: 0, unknown: 0, cloud_credential_error: 0, giveups: 0 },
 };
 const pendingResumes = [];
 
@@ -428,7 +429,7 @@ function queueResume(acc, session, expect = {}, reason = '') {
     if (!traced) stats.anomalies.push(`stop without wait record or journal trace ${acc.name}/${session.sid}: ${String(reason).slice(0, 160)}`);
     return;
   }
-  const entry = { acc, sid: session.sid, resumeAt: Number(wait.resumeAt), kind: wait.kind, contextFull: wait.contextFull === true, ...expect };
+  const entry = { acc, sid: session.sid, resumeAt: Number(wait.resumeAt), kind: wait.kind, contextFull: wait.contextFull === true, outputCap: wait.outputCap === true, ...expect };
   if (session.workflow) {
     entry.expectWorkflow = session.workflow;
     const checkpoint = acc.checkpoint(session.sid);
@@ -455,6 +456,7 @@ function checkRelaunchPrompt(entry, line) {
     if (!fresh) stats.contextFulls.inPlace += 1;
     if (!(fresh ? /which stopped with its context full/ : /The session stopped with its context full/).test(line)) anomaly(`relaunch of a session that stopped with its context full lacks its note ${entry.acc.name}/${entry.sid}: ${line.slice(0, 200)}`);
   }
+  if (entry.outputCap && !/running into the output token maximum\. Go on where it stopped, in smaller steps/.test(line)) anomaly(`relaunch of a session cut at the output token maximum lacks its note ${entry.acc.name}/${entry.sid}: ${line.slice(0, 200)}`);
 }
 
 // The fresh session a launch starts with --session-id in place of the one it took over from.
@@ -509,7 +511,7 @@ function resumeOnce(acc, sid) {
 }
 
 function requeue(entry, wait) {
-  pendingResumes.push({ acc: entry.acc, sid: entry.sid, resumeAt: Number(wait.resumeAt), kind: wait.kind, contextFull: wait.contextFull === true });
+  pendingResumes.push({ acc: entry.acc, sid: entry.sid, resumeAt: Number(wait.resumeAt), kind: wait.kind, contextFull: wait.contextFull === true, outputCap: wait.outputCap === true });
 }
 
 function processResumes(accounts) {
@@ -1120,14 +1122,10 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
   return kind;
 }
 
-// Before a request Claude Code compacts a context that reached its compaction point: PreCompact, then
-// SessionStart from compact, after which the context holds the summary. A context that fills up again
-// right after three compactions in a row, or one that outgrows its window while Claude Code compacts
-// nothing by itself (or that a single read fills), ends the turn with invalid_request instead.
 function beforeRequest(acc, session) {
   if (session.tokens === undefined) return '';
   const point = compactionPointOf(acc, session);
-  if (session.tokens >= session.window - COMPACT_REPLY_TOKENS && (point === null || session.overflows)) return contextFull(acc, session, 'tooLong');
+  if (session.tokens >= session.window - COMPACT_REPLY_TOKENS && (point === null || session.overflows)) return contextFull(acc, session, contextRng() < 0.25 ? 'windowLimit' : 'tooLong');
   if (point === null || session.tokens < point) return '';
   if (session.bigReads && session.refills >= 3) return contextFull(acc, session, 'thrashing');
   compact(acc, session, point);
@@ -1161,15 +1159,12 @@ function growContext(acc, session) {
   fs.utimesSync(session.transcript, T, T);
 }
 
-// The turn ends with invalid_request and the text Claude Code gives a context it cannot bring below its
-// limit. noctis starts the session afresh soon, gives up on it with a notification once fresh starts kept
-// filling up, or, in a cloud session, leaves it to the person with a notice: never does it leave the
-// session waiting with nothing scheduled.
 function contextFull(acc, session, kind) {
   const label = `${acc.name}/${session.sid}`;
   const cloud = contextRng() < 0.08;
   const input = { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error: 'invalid_request' };
   if (kind === 'thrashing') input.last_assistant_message = THRASHING;
+  else if (kind === 'windowLimit') Object.assign(input, { error: 'max_output_tokens', last_assistant_message: WINDOW_LIMIT });
   else Object.assign(input, { last_assistant_message: 'Prompt is too long', error_details: `prompt is too long: ${Math.round(session.tokens)} tokens > ${session.window} maximum` });
   const mark = acc.journalMark();
   const log = path.join(acc.guardDir, 'guard.log');
@@ -1255,6 +1250,35 @@ function otherRequestError(acc, session) {
   stats.otherRequestErrors += 1;
 }
 
+function quietFailure(acc, session) {
+  const [error, message] = contextPick(QUIET_FAILURES);
+  const label = `${acc.name}/${session.sid}`;
+  const before = (acc.state().waits || {})[session.sid];
+  const mark = acc.journalMark();
+  const log = path.join(acc.guardDir, 'guard.log');
+  let logFrom = 0;
+  try {
+    logFrom = fs.statSync(log).size;
+  } catch {}
+  timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error, last_assistant_message: message });
+  stats.quietFailures[error] += 1;
+  const wait = (acc.state().waits || {})[session.sid];
+  const rows = acc.journalSince(mark).filter((row) => row.sid === session.sid && row.event === 'StopFailure');
+  const logged = logSince(log, logFrom);
+  if (rows.some((row) => row.action === 'retry-giveup')) {
+    stats.quietFailures.giveups += 1;
+    if (wait) anomaly(`a session given up on after ${error} still waits ${label}`);
+    if (!/notify: /.test(logged)) anomaly(`a session was given up on after ${error} without a notification ${label}`);
+    return clearSession(acc, session);
+  }
+  if (wait && (!before || wait.startedAt !== before.startedAt)) {
+    if (wait.window !== 'unknown') anomaly(`a session that stopped on ${error} was put down to the ${wait.window} window ${label}`);
+    if (logged.includes(`[INFO ${wait.storedBy} hook] notify: `)) anomaly(`a session set to retry after ${error} raised a notification before any give-up ${label}`);
+  }
+  queueResume(acc, session, {}, error);
+  return 'stopped';
+}
+
 async function marathonTurn(acc, session, turn, accounts) {
   rollWindows(acc);
   publishTruth(acc);
@@ -1336,6 +1360,7 @@ async function marathonTurn(acc, session, turn, accounts) {
     otherRequestError(acc, session);
     return 'ok';
   }
+  if (contextRng() < 0.006) return quietFailure(acc, session);
   if (rng() < 0.03 && acc.truth.five.used < 85 && acc.truth.week.used < 85) {
     timedHook(acc, { hook_event_name: 'StopFailure', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, error: 'rate_limit' });
     const wait = acc.state().waits[session.sid];
@@ -1586,6 +1611,7 @@ async function main() {
     contextFulls: stats.contextFulls,
     freshStarts: stats.freshStarts,
     otherRequestErrors: stats.otherRequestErrors,
+    quietFailures: stats.quietFailures,
     transient429: stats.transient429,
     maxUsageWhenAllowed: { five: Number(stats.maxAllowedFive.toFixed(1)), week: Number(stats.maxAllowedWeek.toFixed(1)) },
     typedTurnCalls: { calls: stats.typedCalls, maxFive: Number(stats.maxTypedFive.toFixed(1)) },

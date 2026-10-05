@@ -147,10 +147,7 @@ func freshPrompt(sid string, plan freshPlan, transcript string) string {
 	return prompt + " "
 }
 
-// freshSessionRecords move to the fresh session that takes over from a session. contextFulls goes along
-// so that work whose context fills up again in every fresh start is given up on after
-// stopFailureMaxAttempts of them.
-var freshSessionRecords = []string{"autoQueues", "stopGuard", "stopDay", "contextFulls"}
+var freshSessionRecords = []string{"autoQueues", "stopGuard", "stopDay", "contextFulls", "outputCaps"}
 
 func moveSessionRecords(state object, from, to string) {
 	for _, name := range freshSessionRecords {

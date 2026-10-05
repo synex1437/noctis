@@ -1058,8 +1058,7 @@ func resumeWait(sid, release string) {
 			logInfo("runner %s: limit still active (%s %%%s), rescheduled to %s", sid, limit.label, formatNumber(limit.used), localISO(resumeAt))
 			return
 		}
-		// A context that filled up did not stop on a limit, so its fresh start does not wait for usage data.
-		if kind == "stopfailure" && !result.usage.hasAny && !getBool(wait, "contextFull", false) {
+		if kind == "stopfailure" && !result.usage.hasAny && !getBool(wait, "contextFull", false) && !getBool(wait, "quietRetry", false) {
 			attempts := int(numberOr(wait, "attempts", 0)) + 1
 			if attempts >= stopFailureMaxAttempts {
 				if !clearOwnWait(sid, startedAt) {
@@ -1091,7 +1090,7 @@ func resumeWait(sid, release string) {
 		}
 		if getString(resume, "mode") == "none" {
 			notify(cfg, pluginName, readyNotice(wait, release, now, T("wait.readyNone")))
-		} else {
+		} else if !getBool(wait, "quietRetry", false) {
 			ready = readyNotice(wait, release, now, T("wait.readyTail"))
 		}
 	}
@@ -1175,6 +1174,9 @@ func resumeWait(sid, release string) {
 	}
 	if getBool(wait, "overload", false) {
 		prompt = T("overload.wakeMessage", getString(wait, "label"), formatNumber(numberOr(wait, "attempt", 1)), durationText(numberOr(wait, "resumeAt", 0)-numberOr(wait, "startedAt", numberOr(wait, "resumeAt", 0)))) + " " + prompt
+	}
+	if getBool(wait, "outputCap", false) {
+		prompt = outputCapNote + " " + prompt
 	}
 	switch {
 	case plan.sid != "":

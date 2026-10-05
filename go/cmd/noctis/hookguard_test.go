@@ -706,6 +706,8 @@ func TestClaudeCodesAccountErrorsAreNotRetried(t *testing.T) {
 		{"authentication_failed", claudeFailure("authentication_failed", "401 Unauthorized", "Invalid API key · Please run /login")},
 		{"billing_error", claudeFailure("billing_error", "", "Credit balance is too low")},
 		{"account_on_hold", claudeFailure("account_on_hold", "", "Your account is on hold")},
+		{"verification_required", claudeFailure("verification_required", "", "API Error: Organization verification is required to use this model.")},
+		{"oauth_org_not_allowed", claudeFailure("oauth_org_not_allowed", "", "Your organization has disabled Claude subscription access for Claude Code · Use an Anthropic API key instead, or ask your admin to enable access")},
 	}
 	for _, c := range cases {
 		sid := "sf-" + c.name

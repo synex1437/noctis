@@ -1636,9 +1636,7 @@ func onStop(input, cfg object) {
 	maybeDigest(cfg, state, now)
 	if guardPaused(cfg, state, now) {
 		pausedHookPulse(sid, state, now)
-		// The pause lifts the limits, not the count of full contexts in a row, which only a turn that
-		// ends starts again (tool calls clear the other failure counts, paused or not).
-		clearContextFulls(state, sid)
+		clearTurnStops(state, sid)
 		return
 	}
 	if getMap(getMap(state, "handedOff"), sid) != nil && !isHandoffSession(sid) {
@@ -1667,7 +1665,7 @@ func onStop(input, cfg object) {
 	}
 	clearOverload(state, sid)
 	clearFailureRetries(state, sid)
-	clearContextFulls(state, sid)
+	clearTurnStops(state, sid)
 	queuePath := drivenQueueFile(cfg, state, input, sid)
 	if jobsAtStop(cfg, state, sid, queuePath) {
 		return
@@ -2245,12 +2243,11 @@ func failureRetry(cfg object, sid, errorType string, now int64) (retry int, firs
 	return retry, firstAt
 }
 
-// contextFullCount counts a turn of sid that stopped with the context full and returns how many did since
-// the session, or the one it took over from, last ended a turn. Tool calls between them do not reset it,
-// as they do a failure's retries: a context that fills up again does so after tool calls.
-func contextFullCount(sid string, now int64) (count int) {
+var turnStopRecords = []string{"contextFulls", "outputCaps"}
+
+func turnStopCount(name, sid string, now int64) (count int) {
 	updateState(func(state object) {
-		records := stateMap(state, "contextFulls")
+		records := stateMap(state, name)
 		record := getMap(records, sid)
 		if record == nil {
 			record = object{}
@@ -2262,11 +2259,19 @@ func contextFullCount(sid string, now int64) (count int) {
 	return count
 }
 
-func clearContextFulls(state object, sid string) {
-	if getMap(getMap(state, "contextFulls"), sid) == nil {
+func clearTurnStops(state object, sid string) {
+	held := false
+	for _, name := range turnStopRecords {
+		held = held || getMap(getMap(state, name), sid) != nil
+	}
+	if !held {
 		return
 	}
-	updateState(func(next object) { delete(stateMap(next, "contextFulls"), sid) })
+	updateState(func(next object) {
+		for _, name := range turnStopRecords {
+			delete(stateMap(next, name), sid)
+		}
+	})
 }
 
 func failureEpisodeLive(cfg, episode object, now int64) bool {
@@ -2343,8 +2348,13 @@ func handedOffStopFailure(file string) (object, string) {
 	return payload, resolved
 }
 
-func onStopFailure(input, cfg object) {
+var accountErrors = map[string]bool{"billing_error": true, "account_on_hold": true, "authentication_failed": true, "verification_required": true, "oauth_org_not_allowed": true}
 
+var quietRetryErrors = map[string]bool{"unknown": true, "cloud_credential_error": true}
+
+const outputCapNote = "[noctis] The session stopped because Claude's replies kept running into the output token maximum. Go on where it stopped, in smaller steps: write a long file in parts (create it with the first part, then add each further part with Edit), and keep each reply short."
+
+func onStopFailure(input, cfg object) {
 	if !currentHost().stopFailure {
 		return
 	}
@@ -2358,7 +2368,7 @@ func onStopFailure(input, cfg object) {
 		healUnavailableModel(cfg, sid, errorText)
 		return
 	}
-	if errorType == "billing_error" || errorType == "account_on_hold" || errorType == "authentication_failed" {
+	if accountErrors[errorType] {
 		if float64(now)-numberOr(getMap(state, "notified"), "account:"+errorType, 0) > 6*3600 {
 			updateState(func(next object) { stateMap(next, "notified")["account:"+errorType] = float64(now) })
 			journal(sid, "StopFailure", "account-error", errorType, nil)
@@ -2368,20 +2378,18 @@ func onStopFailure(input, cfg object) {
 		return
 	}
 	overloaded := errorType == "overloaded" || errorType == "server_error"
-	// Claude Code ends a turn with invalid_request when its compactions leave the context full again
-	// and when the API finds the prompt too long. The hook takes that error type for these alone:
-	// any other request Claude Code turns down is the session's to deal with.
-	requestError := currentHost().id == "claude" && errorType == "invalid_request"
-	contextFull := requestError && contextFullPattern.MatchString(errorText)
+	claude := currentHost().id == "claude"
+	requestError := claude && errorType == "invalid_request"
+	outputCut := claude && errorType == "max_output_tokens"
+	contextFull := (requestError || outputCut) && contextFullPattern.MatchString(errorText)
 	if requestError && !contextFull {
 		return
 	}
+	outputCap := outputCut && !contextFull
+	quietRetry := claude && quietRetryErrors[errorType]
 	if contextFull && cloudSession() {
-		// Woken in place, the session would send the same full context again, and a cloud session
-		// has no runner to start a fresh one.
 		journal(sid, "StopFailure", "context-full", errorType, object{"cloud": true, "message": truncateText(errorText, 160)})
 		fail("%s StopFailure for %s: the context is full and a cloud session cannot be started fresh; leaving it to the user", errorType, sid)
-		// The session a /clear starts goes on from the resume note.
 		if !observing {
 			buildCheckpoint(input, T("stopfailure.ctxFullLabel"), resolveSessionModel(cfg, state, readJSON(files.usage), sid), cfg)
 		}
@@ -2392,7 +2400,6 @@ func onStopFailure(input, cfg object) {
 	if overloaded {
 		attempt, retryable = overloadEpisode(cfg, sid, now)
 		if !retryable {
-			// Observe mode retried none of the attempts, so it only journals that noctis would give up.
 			if observed(sid, "StopFailure", "overload-giveup", errorType, object{"attempts": attempt}) {
 				return
 			}
@@ -2403,9 +2410,6 @@ func onStopFailure(input, cfg object) {
 			return
 		}
 	}
-	// git status runs while the hook reads the limits, which can mean a request to the usage
-	// endpoint; the checkpoint and the tree fingerprint read it after. The hook does not end
-	// before that run has.
 	gitSettled := gitStatusAhead(getString(input, "cwd"))
 	defer gitSettled()
 	result := decide(cfg, state, input, now, decideOptions{force: true, noProbe: true})
@@ -2416,12 +2420,11 @@ func onStopFailure(input, cfg object) {
 
 	hint := limitHint(errorText, scopedLabel(cfg), usage)
 	nearCap := func(win *window) bool { return win != nil && win.used >= culpritFloor }
-	weeklyCulprit := hint == "seven_day" || (hint == "" && nearCap(usage.sevenDay) && (!nearCap(usage.fiveHour) || usage.sevenDay.resetsAt > usage.fiveHour.resetsAt))
-	fiveCulprit := hint == "five_hour" || (hint == "" && nearCap(usage.fiveHour))
-	// A cloud session has no runner to relaunch it on the fallback model.
+	weeklyCulprit := !quietRetry && (hint == "seven_day" || (hint == "" && nearCap(usage.sevenDay) && (!nearCap(usage.fiveHour) || usage.sevenDay.resetsAt > usage.fiveHour.resetsAt)))
+	fiveCulprit := !quietRetry && (hint == "five_hour" || (hint == "" && nearCap(usage.fiveHour)))
 	lastFailure := getMap(getMap(state, "failureRetries"), sid)
 	failedAgain := failureEpisodeLive(cfg, lastFailure, now) && getString(lastFailure, "error") == errorType
-	fableCulprit := !cloud && scopedModelPattern(cfg).MatchString(result.model) && usage.fable != nil && (hint == "fable" || (hint == "" && fableExplainsUnnamedLimit(cfg, usage.fable, failedAgain)))
+	fableCulprit := !quietRetry && !cloud && scopedModelPattern(cfg).MatchString(result.model) && usage.fable != nil && (hint == "fable" || (hint == "" && fableExplainsUnnamedLimit(cfg, usage.fable, failedAgain)))
 	waitCfg := section(cfg, "wait")
 	margin := math.Max(0, numberOr(waitCfg, "resetMarginSeconds", 0)) + math.Max(0, numberOr(waitCfg, "builtinGraceSeconds", 0))
 	record := object{"kind": "stopfailure", "threshold": nil}
@@ -2433,17 +2436,14 @@ func onStopFailure(input, cfg object) {
 		record["until"], record["resumeAt"] = failureEnded, float64(now)+delay
 		record["overload"], record["attempt"] = true, attempt
 	case contextFull:
-		// Observe mode starts no fresh session, so it counts none against the fresh starts given.
 		retry := 1
 		if !observing {
-			retry = contextFullCount(sid, now)
+			retry = turnStopCount("contextFulls", sid, now)
 		}
 		if retry > stopFailureMaxAttempts {
 			journal(sid, "StopFailure", "retry-giveup", errorType, object{"retries": float64(retry - 1), "contextFull": true})
 			fail("%s StopFailure for %s: the context was full again after %d fresh starts; leaving the session stopped", errorType, sid, retry-1)
 			dropFailureRetry(sid)
-			// The notice says to go on from the resume note: the last one went to the fresh start that
-			// just filled up, so the session the person starts next is handed this one.
 			buildCheckpoint(input, T("stopfailure.ctxFullLabel"), result.model, cfg)
 			notify(cfg, pluginName, T("stopfailure.ctxFullGiveup", shortSid(sid), formatNumber(float64(retry-1))))
 			return
@@ -2455,6 +2455,26 @@ func onStopFailure(input, cfg object) {
 		record["window"], record["label"], record["used"] = "unknown", T("stopfailure.ctxFullLabel"), nil
 		record["until"], record["resumeAt"] = failureEnded, float64(now)+delay
 		record["retry"], record["error"], record["contextFull"] = float64(retry), errorType, true
+	case outputCap:
+		retry := 1
+		if !observing {
+			retry = turnStopCount("outputCaps", sid, now)
+		}
+		if retry > outputCapRetries {
+			journal(sid, "StopFailure", "retry-giveup", errorType, object{"retries": float64(retry - 1), "outputCap": true})
+			fail("%s StopFailure for %s: the reply hit the output token maximum again after %d retries; leaving the session stopped", errorType, sid, retry-1)
+			dropFailureRetry(sid)
+			buildCheckpoint(input, T("stopfailure.outCapLabel"), result.model, cfg)
+			if cloud {
+				notify(cfg, pluginName, T("stopfailure.outCapCloud", shortSid(sid)))
+			} else {
+				notify(cfg, pluginName, T("stopfailure.outCapGiveup", shortSid(sid), hostResumeCommand(currentHost().id, sid)))
+			}
+			return
+		}
+		record["window"], record["label"], record["used"] = "unknown", T("stopfailure.outCapLabel"), nil
+		record["until"], record["resumeAt"] = failureEnded, float64(now)+outputCapDelaySeconds
+		record["retry"], record["error"], record["outputCap"] = float64(retry), errorType, true
 	case weeklyCulprit:
 		record["window"], record["label"], record["used"] = "seven_day", windowLabel("seven_day"), usage.sevenDay.used
 		record["until"], record["resumeAt"] = usage.sevenDay.resetsAt, usage.sevenDay.resetsAt+margin
@@ -2475,8 +2495,6 @@ func onStopFailure(input, cfg object) {
 		retry, firstAt := failureRetry(cfg, sid, errorType, now)
 		delay, spent := retryDelaySeconds(cfg, retry), retry > stopFailureMaxAttempts
 		if cloud {
-			// Without usage data the wall's reset is unknown, so the retries go
-			// on until wake.maxMinutes have passed since the first failure.
 			left := firstAt + wakeLimit - float64(now)
 			delay, spent = math.Min(delay, left), left < 60
 		}
@@ -2501,6 +2519,9 @@ func onStopFailure(input, cfg object) {
 		record["until"], record["resumeAt"] = failureEnded, float64(now)+delay
 		record["retry"], record["error"] = float64(retry), errorType
 	}
+	if outputCap || quietRetry {
+		record["quietRetry"] = true
+	}
 	resumeAt := numberOr(record, "resumeAt", 0)
 	label := getString(record, "label")
 	if observed(sid, "StopFailure", "schedule-resume", label, object{"resumeAt": resumeAt}) {
@@ -2513,7 +2534,6 @@ func onStopFailure(input, cfg object) {
 	record["permissionMode"] = permissionModeOf(input)
 	recordTree(cfg, record, getString(input, "cwd"))
 	interactive := flagString("input") == "" && (cloud || getMap(getMap(readJSON(files.usage), "sessions"), sid) != nil)
-	// The wake sleeps in this hook, so it must wake the session before the hook is killed.
 	wakeSleep, wakeCut := wakeSleepLimit(wakeCfg, numberOr(state, "hookCapSeconds", 0))
 	wakeable := currentHost().wake && getBool(wakeCfg, "sameSession", true) && interactive && getString(record, "window") != "fable" && !contextFull && resumeAt-float64(now) <= wakeSleep
 	runnerAt := resumeAt
@@ -2526,8 +2546,6 @@ func onStopFailure(input, cfg object) {
 		return
 	}
 	scheduleRunner(cfg, sid, runnerAt)
-	// A cloud session that is not woken in place stays stopped, since nothing
-	// else there resumes it, so no notice promises a resume time.
 	resumes := !cloud || wakeable
 	if overloaded {
 		journal(sid, "StopFailure", "overload-backoff", errorType, object{"attempt": attempt, "delaySeconds": math.Round(resumeAt - float64(now)), "wake": wakeable})
@@ -2538,7 +2556,7 @@ func onStopFailure(input, cfg object) {
 	} else {
 		journal(sid, "StopFailure", "schedule-resume", label, object{"resumeAt": resumeAt, "wake": wakeable, "window": getString(record, "window"), "hint": hint, "message": truncateText(errorText, 160)})
 		warn("%s StopFailure for %s: culprit=%s resumeAt=%s wake=%t", errorType, sid, getString(record, "window"), localISO(resumeAt), wakeable)
-		if resumes {
+		if resumes && !getBool(record, "quietRetry", false) {
 			switch {
 			case contextFull:
 				notify(cfg, pluginName, T("stopfailure.ctxFull", shortSid(sid), formatTime(resumeAt)))
@@ -2690,6 +2708,8 @@ func wakeSameSession(cfg object, sid string, record object, resumeAt float64) {
 	switch {
 	case getBool(record, "overload", false):
 		message = T("overload.wakeMessage", getString(record, "label"), formatNumber(numberOr(record, "attempt", 1)), durationText(resumeAt-numberOr(record, "startedAt", resumeAt)))
+	case getBool(record, "outputCap", false):
+		message = outputCapNote
 	case getString(record, "window") == "unknown":
 		message = T("stopfailure.wakeRetry", formatNumber(numberOr(record, "retry", 1)), orDefault(getString(record, "error"), "rate_limit"), durationText(resumeAt-numberOr(record, "startedAt", resumeAt)))
 	}

@@ -132,8 +132,7 @@ function checkPreToolUseMatcher(entries) {
 
 function checkStopFailureMatcher(entries) {
   const matchers = entries.filter((entry) => entry.event === 'StopFailure').map((entry) => entry.matcher || '');
-  // invalid_request is how Claude Code ends a turn with the context full, which noctis starts afresh.
-  for (const error of ['rate_limit', 'overloaded', 'server_error', 'model_not_found', 'billing_error', 'account_on_hold', 'authentication_failed', 'invalid_request']) {
+  for (const error of ['rate_limit', 'overloaded', 'server_error', 'model_not_found', 'billing_error', 'account_on_hold', 'authentication_failed', 'invalid_request', 'max_output_tokens', 'verification_required', 'oauth_org_not_allowed', 'cloud_credential_error', 'unknown']) {
     check(`StopFailure matcher starts the hook for ${error}`,
       matchers.some((matcher) => !matcher || new RegExp(`^(${matcher})$`).test(error)), matchers.join(' ; ') || '(none)');
   }
