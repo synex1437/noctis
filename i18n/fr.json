@@ -177,6 +177,7 @@
   "stopfailure.modelKept": "Le modèle %s n'est pas disponible sur ce forfait. settings.json ne le sélectionne pas, donc noctis a laissé le fichier tel quel ; passe cette session à un autre modèle avec /model.",
   "notification.stale": "Limite réinitialisée ; Claude Code attend Entrée (la poursuite automatique se déclenchera si prévue).",
   "notification.disabled": "Claude Code a abandonné son attente intégrée ; reprise à l'heure prévue.",
+  "notification.waiting": "%s : la session %s t'attend (%s) ; le travail reste à l'arrêt jusqu'à ce que tu répondes dans la session.",
   "launch.noClaude": "Le redémarrage automatique de %s a échoué : commande %s introuvable — installe-la ou ajoute-la au PATH, puis lance dans %s : %s",
   "launch.noCwd": "Le redémarrage automatique de %s a échoué : le dossier du projet %s n'existe plus — ouvre un terminal dans le dossier où il a été déplacé et lance : %s",
   "launch.failed": "Le redémarrage automatique de %s a échoué — ouvre un terminal dans %s et lance : %s",

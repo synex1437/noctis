@@ -177,6 +177,7 @@
   "stopfailure.modelKept": "Il modello %s non è disponibile con questo piano. settings.json non lo seleziona, quindi noctis ha lasciato il file com'era; passa questa sessione a un altro modello con /model.",
   "notification.stale": "Limite azzerato; Claude Code aspetta Invio (la continuazione automatica scatterà se prevista).",
   "notification.disabled": "Claude Code ha abbandonato la sua attesa integrata; ripresa all'ora prevista.",
+  "notification.waiting": "%s: la sessione %s ti sta aspettando (%s); il lavoro resta fermo finché non rispondi nella sessione.",
   "launch.noClaude": "Il riavvio automatico di %s non è riuscito: comando %s non trovato — installalo o aggiungilo al PATH, poi esegui in %s: %s",
   "launch.noCwd": "Il riavvio automatico di %s non è riuscito: la cartella del progetto %s non esiste più — apri un terminale nella cartella in cui è stata spostata ed esegui: %s",
   "launch.failed": "Il riavvio automatico di %s non è riuscito — apri un terminale in %s ed esegui: %s",

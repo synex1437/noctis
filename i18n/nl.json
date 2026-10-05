@@ -177,6 +177,7 @@
   "stopfailure.modelKept": "Model %s is niet beschikbaar in dit abonnement. settings.json selecteert het niet, dus noctis liet het bestand ongewijzigd; zet deze sessie met /model op een ander model.",
   "notification.stale": "Limiet gereset; Claude Code wacht op Enter (automatisch doorgaan volgt als gepland).",
   "notification.disabled": "Claude Code liet zijn ingebouwde wachten los; hervatten op het geplande tijdstip.",
+  "notification.waiting": "%s: sessie %s wacht op je (%s); het werk staat stil tot je in de sessie antwoordt.",
   "launch.noClaude": "Automatisch herstarten van %s is mislukt: commando %s niet gevonden — installeer het of zet het in PATH en voer dan in %s uit: %s",
   "launch.noCwd": "Automatisch herstarten van %s is mislukt: projectmap %s bestaat niet meer — open een terminal in de map waarheen die verplaatst is en voer uit: %s",
   "launch.failed": "Automatisch herstarten van %s is mislukt — open een terminal in %s en voer uit: %s",

@@ -2016,6 +2016,18 @@ async function scenarioQueuePriorities(acc) {
   acc.run(['queue', 'trust', '--file', queueFile]);
   const noted = acc.run(['queue', 'note', 'kept the sloppy boxes as written: the checklist is the user\'s', '--file', queueFile]);
   check('queue: noctis queue note keeps a decision and queue status gives it back', noted.includes('✎') && acc.run(['queue', 'status', '--file', queueFile]).includes('kept the sloppy boxes as written'), true);
+  const unattendedFrom = acc.journalMark();
+  const asked = JSON.parse(acc.hook({ hook_event_name: 'PreToolUse', session_id: 'qp2', cwd: PROJECT_DIR, tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Keep the sloppy boxes as written?', header: 'Boxes', multiSelect: false, options: [{ label: 'Keep', description: 'as written' }, { label: 'Rewrite', description: 'as clean boxes' }] }] } }) || '{}');
+  const refusal = String((asked.hookSpecificOutput || {}).permissionDecisionReason);
+  check('queue: a question while the queue drives the session is left to Claude, to note or defer', (asked.hookSpecificOutput || {}).permissionDecision === 'deny' && refusal.includes('noctis queue note') && refusal.includes('noctis queue defer'), true);
+  const waitLog = path.join(acc.guardDir, 'guard.log');
+  const waitFrom = fs.statSync(waitLog).size;
+  for (let prompt = 0; prompt < 2; prompt += 1) {
+    acc.hook({ hook_event_name: 'Notification', session_id: 'qp2', cwd: PROJECT_DIR, notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' });
+  }
+  const waitNotices = fs.readFileSync(waitLog).subarray(waitFrom).toString('utf8').match(/notify: .*/g) || [];
+  check('queue: two permission prompts in the session the queue drives tell the user once', waitNotices.length === 1 && waitNotices[0].includes('Claude needs your permission to use Bash'), true);
+  check('queue: the refused question and the notice are journaled', acc.journalSince(unattendedFrom).map((entry) => entry.action), ['deny-question', 'waiting-notice']);
   const sloppy = JSON.parse(acc.hook({ hook_event_name: 'Stop', session_id: 'qp2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false })).reason;
   check('queue: sloppy boxes, bare boxes and TODO markers all count; notes do not', sloppy.includes('Queue continues: 4 open'), true);
   check('queue: a multi-line item is one item and P1 comes first', sloppy.includes('("bare box without a bullet (P1)")'), true);
