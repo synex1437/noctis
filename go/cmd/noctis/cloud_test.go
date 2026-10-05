@@ -89,7 +89,7 @@ func TestACloudSessionStartsNoRunnerWatcherOrHandOff(t *testing.T) {
 func TestACloudRateLimitIsRetriedUntilWakeMaxMinutesHavePassed(t *testing.T) {
 	cfg, project := cloudSandbox(t, t.TempDir(), object{"wake": object{"sameSession": false, "maxMinutes": float64(330)}})
 	sid := "cloud-budget"
-	failAfter := func(retries, minutesAgo float64) object {
+	failAfter := func(retries, minutesAgo float64) (object, float64) {
 		t.Helper()
 		now := float64(nowSec())
 		updateState(func(state object) {
@@ -97,19 +97,19 @@ func TestACloudRateLimitIsRetriedUntilWakeMaxMinutesHavePassed(t *testing.T) {
 			stateMap(state, "failureRetries")[sid] = object{"retries": retries, "lastAt": now - 5, "firstAt": now - minutesAgo*60}
 		})
 		onStopFailure(rateLimitStop(sid, project), cfg)
-		return pendingWait(sid)
+		return pendingWait(sid), now
 	}
-	if wait := failAfter(float64(stopFailureMaxAttempts+1), 200); wait == nil {
+	if wait, failedAt := failAfter(float64(stopFailureMaxAttempts+1), 200); wait == nil {
 		t.Fatalf("a cloud rate limit was given up after %d retries, 200 of 330 minutes in", stopFailureMaxAttempts+1)
-	} else if delay := numberOr(wait, "resumeAt", 0) - float64(nowSec()); delay < retryDelaySeconds(cfg, stopFailureMaxAttempts+2)-2 {
+	} else if delay := numberOr(wait, "resumeAt", 0) - failedAt; delay < retryDelaySeconds(cfg, stopFailureMaxAttempts+2) {
 		t.Errorf("the retry came after %v s, want the last step of wait.retryMinutes", delay)
 	}
-	if wait := failAfter(3, 300); wait == nil {
+	if wait, failedAt := failAfter(3, 300); wait == nil {
 		t.Fatal("a cloud rate limit 300 of 330 minutes in was not retried")
-	} else if delay := numberOr(wait, "resumeAt", 0) - float64(nowSec()); delay > 30*60+2 {
+	} else if delay := numberOr(wait, "resumeAt", 0) - failedAt; delay > 30*60 {
 		t.Errorf("the last wait runs %v s past wake.maxMinutes", delay-30*60)
 	}
-	if wait := failAfter(3, 329.5); wait != nil {
+	if wait, _ := failAfter(3, 329.5); wait != nil {
 		t.Fatalf("a cloud rate limit was retried past wake.maxMinutes: %v", wait)
 	}
 	if actions := journaledFor(sid); !slices.Contains(actions, "retry-giveup") || !slices.Contains(actions, "cloud-no-wake") {
