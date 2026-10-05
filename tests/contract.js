@@ -116,7 +116,7 @@ function checkPreToolUseMatcher(entries) {
   const hits = (entry, tool, anchored) => !entry.matcher || entry.matcher === '*' ||
     (/^[A-Za-z0-9_|]+$/.test(entry.matcher) ? entry.matcher.split('|').includes(tool) :
       new RegExp(anchored ? `^(${entry.matcher})$` : entry.matcher).test(tool));
-  for (const tool of ['Write', 'Edit', 'MultiEdit', 'Agent', 'Task', 'WebSearch', 'WebFetch', 'Workflow']) {
+  for (const tool of ['Write', 'Edit', 'MultiEdit', 'Agent', 'Task', 'WebSearch', 'WebFetch', 'Workflow', 'AskUserQuestion']) {
     check(`PreToolUse matcher starts the hook for ${tool}`, pre.some((entry) => hits(entry, tool, true)), matchers);
   }
   check('PreToolUse matcher skips NotebookEdit, so a notebook edit never waits for a process',
@@ -136,6 +136,15 @@ function checkStopFailureMatcher(entries) {
     check(`StopFailure matcher starts the hook for ${error}`,
       matchers.some((matcher) => !matcher || new RegExp(`^(${matcher})$`).test(error)), matchers.join(' ; ') || '(none)');
   }
+}
+
+function checkNotificationMatcher(entries) {
+  const matchers = entries.filter((entry) => entry.event === 'Notification').map((entry) => entry.matcher || '');
+  const starts = (type) => matchers.some((matcher) => !matcher || new RegExp(`^(${matcher})$`).test(type));
+  for (const type of ['quota_auto_resume_fired', 'quota_auto_resume_stale', 'quota_auto_resume_disabled', 'permission_prompt', 'worker_permission_prompt', 'elicitation_dialog', 'elicitation_url_dialog']) {
+    check(`Notification matcher starts the hook for ${type}`, starts(type), matchers.join(' ; ') || '(none)');
+  }
+  check('Notification matcher skips idle_prompt, which comes whenever a session has sat idle for a minute after a turn', !starts('idle_prompt'), matchers.join(' ; ') || '(none)');
 }
 
 function binaryHandlerNames() {
@@ -303,6 +312,7 @@ async function main() {
     checkManifestShape(entries, handlers);
     checkPreToolUseMatcher(entries);
     checkStopFailureMatcher(entries);
+    checkNotificationMatcher(entries);
 
     const sampleCommand = entries[0].command.replace('${CLAUDE_PLUGIN_ROOT}', pluginRootOf(account));
     let executable = false;

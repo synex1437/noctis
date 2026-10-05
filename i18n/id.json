@@ -177,6 +177,7 @@
   "stopfailure.modelKept": "Model %s tidak tersedia di paket ini. settings.json tidak memilihnya, jadi noctis membiarkan file itu apa adanya; pindahkan sesi ini ke model lain dengan /model.",
   "notification.stale": "Batas direset; Claude Code menunggu Enter (lanjut otomatis akan jalan jika direncanakan).",
   "notification.disabled": "Claude Code melepas penantian bawaannya; dilanjutkan pada waktu yang direncanakan.",
+  "notification.waiting": "%s: sesi %s menunggumu (%s); pekerjaan berhenti sampai kamu menjawab di sesi itu.",
   "launch.noClaude": "Peluncuran ulang otomatis %s gagal: perintah %s tidak ditemukan — pasang atau tambahkan ke PATH, lalu jalankan di %s: %s",
   "launch.noCwd": "Peluncuran ulang otomatis %s gagal: folder proyeknya %s sudah tidak ada — buka terminal di folder tujuan pindahnya dan jalankan: %s",
   "launch.failed": "Peluncuran ulang otomatis %s gagal — buka terminal di %s dan jalankan: %s",

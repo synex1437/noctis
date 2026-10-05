@@ -1414,6 +1414,10 @@ func onSubagentBatch(input, cfg object) {
 
 func onPreToolUse(input, cfg object) {
 	toolName := getString(input, "tool_name")
+	if toolName == "AskUserQuestion" {
+		refuseQuestionInQueue(input, cfg)
+		return
+	}
 	if ownFileTools[toolName] {
 		if denyOwnFileWrite(input, cfg) || refuseHumanTicks(input, cfg) || refuseJobsNotInPrompt(input, cfg) || refuseTestEdits(input, cfg) {
 			return
@@ -1447,7 +1451,6 @@ func onPreToolUse(input, cfg object) {
 		onWorkflowLaunch(input, cfg, readState(), now, sid)
 		return
 	}
-	// Only the router keeps routes; with it off, WebSearch and WebFetch go ahead unread.
 	if !getBool(section(cfg, "router"), "enabled", false) || runsAsAgent(input, liteAgentType(cfg)) {
 		return
 	}
@@ -2727,12 +2730,10 @@ func wakeSameSession(cfg object, sid string, record object, resumeAt float64) {
 func onNotification(input, cfg object) {
 	now := nowSec()
 	sid := sessionKey(input)
-	kind := getString(input, "notification_type")
-	if kind == "" {
-		kind = getString(input, "type")
-	}
-	if kind == "" {
-		kind = getString(input, "matcher")
+	kind := firstString(input, "notification_type", "type", "matcher")
+	if waitingNoticeKinds[kind] {
+		noticeWaitingForUser(input, cfg, sid, kind)
+		return
 	}
 	state := updateState(func(next object) {
 		stateMap(next, "autoResume")[sid] = object{"type": kind, "at": float64(now)}

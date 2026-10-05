@@ -177,6 +177,7 @@
   "stopfailure.modelKept": "此套餐不提供模型 %s。settings.json 没有选择它，所以 noctis 没有改动该文件；请用 /model 将此会话切换到其他模型。",
   "notification.stale": "限额已重置；Claude Code 正在等待回车（如已计划，自动继续会触发）。",
   "notification.disabled": "Claude Code 放弃了内置等待；将在计划时间恢复。",
+  "notification.waiting": "%s：会话 %s 正在等你（%s）；在会话中回应之前，工作会一直停着。",
   "launch.noClaude": "自动重启 %s 失败：找不到 %s 命令 — 请安装它或将其加入 PATH，然后在 %s 中运行：%s",
   "launch.noCwd": "自动重启 %s 失败：项目文件夹 %s 已不存在 — 请在它被移到的文件夹中打开终端并运行：%s",
   "launch.failed": "自动重启 %s 失败 — 请在 %s 中打开终端并运行：%s",

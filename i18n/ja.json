@@ -177,6 +177,7 @@
   "stopfailure.modelKept": "モデル %s はこのプランでは利用できません。settings.json はこのモデルを選んでいないため、noctis はファイルを変更していません。/model でこのセッションを別のモデルに切り替えてください。",
   "notification.stale": "上限がリセットされました。Claude Code は Enter を待っています（予定があれば自動継続が働きます）。",
   "notification.disabled": "Claude Code が内蔵の待機をやめました。予定時刻に再開します。",
+  "notification.waiting": "%s: セッション %s があなたを待っています（%s）。セッションで応答するまで作業は止まったままです。",
   "launch.noClaude": "%s の自動再起動に失敗しました: %s コマンドが見つかりません — インストールするか PATH に追加してから、%s で実行してください: %s",
   "launch.noCwd": "%s の自動再起動に失敗しました: プロジェクトフォルダ %s がもうありません — 移動先のフォルダでターミナルを開いて実行してください: %s",
   "launch.failed": "%s の自動再起動に失敗しました — %s でターミナルを開いて実行してください: %s",

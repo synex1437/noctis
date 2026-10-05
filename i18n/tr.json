@@ -184,6 +184,7 @@
   "stopfailure.outCapCloud": "%s: Claude'un yanıtları, daha küçük adımlar isteyen bir yeniden denemeden sonra da çıktı token sınırına takıldı; noctis yeniden denemeyi bıraktı. Uzun çıktıyı (örneğin büyük bir dosyayı) parça parça yazdır ya da CLAUDE_CODE_MAX_OUTPUT_TOKENS değerini yükselt; sonra devam etmek için oturuma bir istem yaz.",
   "notification.stale": "Limit sıfırlandı; Claude Code Enter bekliyor (plan varsa otomatik devam edecek).",
   "notification.disabled": "Claude Code dahili beklemeyi bıraktı; planlanan saatte devam edilecek.",
+  "notification.waiting": "%s: %s oturumu seni bekliyor (%s); oturumda yanıt verene kadar iş durur.",
   "launch.noClaude": "%s otomatik yeniden başlatılamadı: %s komutu bulunamadı — kurun ya da PATH içine ekleyin, sonra %s klasöründe şunu çalıştırın: %s",
   "launch.noCwd": "%s otomatik yeniden başlatılamadı: proje klasörü %s artık yok — taşındığı klasörde bir terminal açıp şunu çalıştırın: %s",
   "launch.failed": "%s otomatik yeniden başlatılamadı — %s klasöründe bir terminal açıp şunu çalıştırın: %s",

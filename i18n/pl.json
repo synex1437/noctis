@@ -177,6 +177,7 @@
   "stopfailure.modelKept": "Model %s nie jest dostępny w tym planie. settings.json go nie wybiera, więc noctis zostawił plik bez zmian; przełącz tę sesję na inny model przez /model.",
   "notification.stale": "Limit zresetowany; Claude Code czeka na Enter (automatyczna kontynuacja zadziała, jeśli była zaplanowana).",
   "notification.disabled": "Claude Code porzucił wbudowane oczekiwanie; wznowienie o zaplanowanej porze.",
+  "notification.waiting": "%s: sesja %s czeka na ciebie (%s); praca stoi, dopóki nie odpowiesz w sesji.",
   "launch.noClaude": "Automatyczne wznowienie %s nie powiodło się: nie znaleziono polecenia %s — zainstaluj je lub dodaj do PATH, a potem uruchom w %s: %s",
   "launch.noCwd": "Automatyczne wznowienie %s nie powiodło się: folder projektu %s już nie istnieje — otwórz terminal w folderze, do którego go przeniesiono, i uruchom: %s",
   "launch.failed": "Automatyczne wznowienie %s nie powiodło się — otwórz terminal w %s i uruchom: %s",

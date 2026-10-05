@@ -78,7 +78,7 @@
         ]
       },
       {
-        "matcher": "Bash|PowerShell|Edit|MultiEdit",
+        "matcher": "Bash|PowerShell|Edit|MultiEdit|AskUserQuestion",
         "hooks": [
           {
             "type": "command",
@@ -140,7 +140,7 @@
     ],
     "Notification": [
       {
-        "matcher": "quota_auto_resume_fired|quota_auto_resume_stale|quota_auto_resume_disabled",
+        "matcher": "quota_auto_resume_fired|quota_auto_resume_stale|quota_auto_resume_disabled|permission_prompt|worker_permission_prompt|elicitation_dialog|elicitation_url_dialog",
         "hooks": [
           {
             "type": "command",

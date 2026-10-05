@@ -184,6 +184,7 @@
   "stopfailure.outCapCloud": "%s: Claude's replies kept running into the output token maximum, even after a retry that asked for smaller steps, so noctis stopped retrying. Have the long output (a large file, say) written in parts, or raise CLAUDE_CODE_MAX_OUTPUT_TOKENS; then type a prompt in the session to go on.",
   "notification.stale": "Limit reset; Claude Code is waiting for Enter (auto-continue will fire if planned).",
   "notification.disabled": "Claude Code dropped its built-in wait; resuming at the planned time.",
+  "notification.waiting": "%s: session %s is waiting for you (%s); the work stands still until you respond in the session.",
   "launch.noClaude": "Automatic relaunch of %s failed: the %s command was not found — install it or add it to PATH, then run in %s: %s",
   "launch.noCwd": "Automatic relaunch of %s failed: its project folder %s no longer exists — open a terminal in the folder it moved to and run: %s",
   "launch.failed": "Automatic relaunch of %s failed — open a terminal in %s and run: %s",
