@@ -998,6 +998,15 @@ func steersMainModel(cfg object, targets []string) bool {
 
 var ownFileTools = map[string]bool{"Write": true, "Edit": true, "MultiEdit": true}
 
+func guardFileWrite(input, cfg object) (refused bool) {
+	defer memoizeWritePaths()()
+	if denyOwnFileWrite(input, cfg) || refuseHumanTicks(input, cfg) || refuseJobsNotInPrompt(input, cfg) || refuseTestEdits(input, cfg) {
+		return true
+	}
+	forgetUntickedChecks(input, cfg)
+	return false
+}
+
 func denyOwnFileWrite(input, cfg object) bool {
 	if !ownFileTools[getString(input, "tool_name")] {
 		return false
@@ -1060,7 +1069,25 @@ func noctisOwnFile(file, cwd string) string {
 	return ""
 }
 
+var writePathMemo map[string]string
+
+func memoizeWritePaths() (forget func()) {
+	writePathMemo = map[string]string{}
+	return func() { writePathMemo = nil }
+}
+
 func resolvedWritePath(file string) string {
+	if resolved, known := writePathMemo[file]; known {
+		return resolved
+	}
+	resolved := resolveWritePath(file)
+	if writePathMemo != nil {
+		writePathMemo[file] = resolved
+	}
+	return resolved
+}
+
+func resolveWritePath(file string) string {
 	if reached, followed := followWrite(file); followed {
 		file = reached[len(reached)-1]
 	}
@@ -1419,11 +1446,7 @@ func onPreToolUse(input, cfg object) {
 		return
 	}
 	if ownFileTools[toolName] {
-		if denyOwnFileWrite(input, cfg) || refuseHumanTicks(input, cfg) || refuseJobsNotInPrompt(input, cfg) || refuseTestEdits(input, cfg) {
-			return
-		}
-		forgetUntickedChecks(input, cfg)
-		if toolName != "Write" {
+		if guardFileWrite(input, cfg) || toolName != "Write" {
 			return
 		}
 	}
