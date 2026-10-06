@@ -14,13 +14,11 @@
   <a href="#install"><b>Install</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#quick-start"><b>Quick start</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#how-it-compares"><b>Compare</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#commands"><b>Commands</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#faq"><b>FAQ</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="docs/GUIDE.md"><b>Guide</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="README.tr.md"><b>Türkçe</b></a>
 </p>
 
-# Noctis — Claude Code plugin: pause before usage limits, auto-resume after the reset
+# Noctis — Claude Code that keeps working while you sleep
 
-**Noctis keeps long Claude Code jobs running overnight. It pauses just before the 5-hour or weekly usage limit, waits for the reset and resumes the same session on its own, while it works through your task queue without stopping to ask.**
+**A usage limit at 01:40 should not cost you the rest of the night.** Noctis is a Claude Code plugin that pauses just before the 5-hour or weekly usage limit, waits for the reset and resumes the same session on its own, while it works through your task queue without stopping to ask.
 
-You queued forty tasks, went to bed, and woke up to *"You've hit your session limit"* at 01:40 — or to a session that stopped at task three with *"moving on to the next thing"*. Noctis handles both: it stops Claude Code before the rate limit instead of after it, comes back when the limit resets, and keeps going down your list. Along the way it keeps Claude sharp: a fresh context once the conversation grows long, your check between items, and a stronger model for the item it gets stuck on.
-
-<p align="center"><img src="docs/demo.svg" alt="A night with noctis: it pauses before the 5-hour limit, waits out the reset in the same turn, keeps working down TASKS.md and stops cleanly when the queue is empty" width="100%"></p>
+<p align="center"><img src="docs/before-after.svg" alt="The same night with and without noctis, as an illustration: Claude Code alone waits out the 01:40 limit, then stops at 03:20 with 21 of 48 tasks done; with noctis all 48 are done by 06:55" width="100%"></p>
 
 <table align="center">
   <tr>
@@ -31,17 +29,29 @@ You queued forty tasks, went to bed, and woke up to *"You've hit your session li
   </tr>
 </table>
 
-## What it does
+<p align="center"><a href="#install"><b>Set it up in about a minute</b></a>, then go to bed.</p>
 
-- **Pauses before the limit, not after the 429.** At 92 % of the 5-hour window and 95 % of the weekly one by default, or earlier when a burst or the burn rate says the next turns would cross it, after a checkpoint of the last request, the touched files, `git status`, todos and the next jobs.
-- **Auto-resumes the same session.** A reset within about 5½ hours is waited out inside the turn, context intact. A later one, such as the weekly limit, relaunches `claude --resume` from Task Scheduler, launchd or systemd, even days later and even after Claude Code was closed; Windows, and Linux with `CAP_WAKE_ALARM`, can wake the machine for it.
-- **Works through a task queue.** `/noctis:start jobs.md` runs the jobs in a file in order without stopping to ask; a long prompt with several tasks becomes such a list by itself; a `TASKS.md` you trust drives every session, with priorities, dependencies and GitHub issues. Steps marked `(human)` wait for you, a `noctis-verify` line runs your checks between items, and long builds run as background jobs the queue waits for.
-- **Keeps Claude in its smart zone.** Claude Code compacts by about 280k tokens of context, in a 1M window too, rather than near its end, and noctis follows any point you pick instead (a token count, a percent of each model's window, `/autocompact`, or Claude Code's own); once a session's context passes 100k tokens, each next item goes to a fresh `noctis:worker` subagent with a brief of its own; after a compaction Claude is told the item in hand, the files changed and how the check stands; a failing check is fixed in the code, not in its tests; an item Claude keeps stopping on goes once to a stronger model; and `noctis queue status` shows what each item took, so you can size the next ones.
-- **Never spends paid usage credits.** It stops at 100 % of a window even when the thresholds are off, and refuses a fan-out workflow that would not fit in what is left.
+## Sound familiar?
+
+- You queued forty tasks, went to bed, and woke up to *"You've hit your session limit"*, sent at 01:40.
+- The session stopped at task three with *"moving on to the next thing"*, and nobody was there to say continue.
+- The weekly limit ran out on a Friday night, reset on Monday morning, and nothing moved until you came back.
+
+Noctis takes care of all three. It stops Claude Code before the limit instead of after it, comes back when the limit resets and keeps going down your list. Along the way it keeps Claude sharp: a fresh context once the conversation grows long, your check between items, and a stronger model for the item it gets stuck on.
+
+## What you get
+
+- **It pauses before the limit, not after the 429.** At 92 % of the 5-hour window and 95 % of the weekly one by default, or earlier when a burst or the burn rate says the next turns would cross it, after a checkpoint of the last request, the touched files, `git status`, todos and the next jobs.
+- **It resumes the same session by itself.** A reset within about 5½ hours is waited out inside the turn, context intact. A later one, such as the weekly limit, relaunches `claude --resume` from Task Scheduler, launchd or systemd, even days later and even after Claude Code was closed; Windows, and Linux with `CAP_WAKE_ALARM`, can wake the machine for it.
+- **Your queue keeps moving.** `/noctis:start jobs.md` runs the jobs in a file in order without stopping to ask; a long prompt with several tasks becomes such a list by itself; a `TASKS.md` you trust drives every session, with priorities, dependencies and GitHub issues. Steps marked `(human)` wait for you, a `noctis-verify` line runs your checks between items, and long builds run as background jobs the queue waits for.
+- **Claude stays in its smart zone.** Claude Code compacts by about 280k tokens of context, in a 1M window too, rather than near its end, and noctis follows any point you pick instead (a token count, a percent of each model's window, `/autocompact`, or Claude Code's own); once a session's context passes 100k tokens, each next item goes to a fresh `noctis:worker` subagent with a brief of its own; after a compaction Claude is told the item in hand, the files changed and how the check stands; a failing check is fixed in the code, not in its tests; an item Claude keeps stopping on goes once to a stronger model; and `noctis queue status` shows what each item took, so you can size the next ones.
+- **Your paid credits stay untouched.** It stops at 100 % of a window even when the thresholds are off, and refuses a fan-out workflow that would not fit in what is left.
 - **Zero tokens per decision.** Fixed rules over your usage data, and every decision logged (`noctis why`). One self-contained Go binary, about 5 ms per hook on Linux; no Node, Git Bash or compiler.
 - **The right model for each job.** Code on Opus 5.5 · xhigh by default (the Code profile), or on Sonnet 5.5 · high to spend less (Balanced), file search and output digests on Haiku 4.5, and, with the router on, research and writing in a subagent of their own.
 - **Lean compaction, a status line and 15 languages.** It compacts between turns once the context is 90 % of the way to the compaction point, draws a status line with both usage windows and their reset times, and speaks the language you type in.
-- **Also runs in** OpenAI Codex CLI, Antigravity CLI, Factory Droid and GitHub Copilot CLI, with fewer features.
+- **Not only Claude Code.** It also runs in OpenAI Codex CLI, Antigravity CLI, Factory Droid and GitHub Copilot CLI, with fewer features.
+
+<p align="center"><img src="docs/demo.svg" alt="A night with noctis: it pauses before the 5-hour limit, waits out the reset in the same turn, keeps working down TASKS.md and stops cleanly when the queue is empty" width="100%"></p>
 
 ## Install
 
@@ -69,13 +79,11 @@ Setup asks one question, which model does which kind of work, and keeps the answ
 2. Put a few jobs in a file, one per line (`- [ ] write tests for the payments module`), and type `/noctis:start TASKS.md`. Claude works through them in order; `/noctis:stop` ends it early.
 3. Go to bed. At a limit there is nothing to do: noctis pauses, waits and continues, and a desktop notification tells you when work resumes.
 
-Not ready to let it act? `"mode": "observe"` in `~/.claude/noctis/config.json` logs every decision and enforces none of them, not even the stop at 100 %. More in [the first five minutes](docs/GUIDE.md#the-first-five-minutes).
+**Try it before you let it act.** `"mode": "observe"` in `~/.claude/noctis/config.json` logs every decision and enforces none of them, not even the stop at 100 %. More in [the first five minutes](docs/GUIDE.md#the-first-five-minutes).
 
 ## Why not just let Claude Code continue?
 
 Recent Claude Code versions continue a session on their own once a usage limit resets, as long as that session stays open, the machine stays awake and the reset is less than 24 hours away. Noctis covers the rest: it pauses *before* the limit with a checkpoint, relaunches the session from a scheduled task when Claude Code was closed or the reset is days away (the weekly limit), and keeps a queue of jobs moving. When Claude Code's own continue fires, noctis cancels its relaunch.
-
-<p align="center"><img src="docs/before-after.svg" alt="The same night with and without noctis, as an illustration: Claude Code alone waits out the 01:40 limit, then stops at 03:20 with 21 of 48 tasks done; with noctis all 48 are done by 06:55" width="100%"></p>
 
 ## How it compares
 
@@ -109,38 +117,35 @@ Status lines such as ccstatusline and claude-powerline keep running behind nocti
 
 ## FAQ
 
-<details>
-<summary><b>Will it spend my extra usage credits?</b></summary>
+### Will it spend my extra usage credits?
 
 No. Work stops at 100 % of a window, or just before it when the last readings jumped far enough, even when your thresholds are misconfigured or switched off and even during `/noctis:pause`. Set `"credits": {"allowPaid": true}` if you want the overflow. Noctis cannot switch off auto-reload on the account; that is in your Anthropic billing settings.
-</details>
 
-<details>
-<summary><b>What does it send over the network?</b></summary>
+### What does it send over the network?
 
 No telemetry. When the status line is not enough, it asks the usage endpoint the Claude app itself uses on `api.anthropic.com`, with the login token Claude Code already keeps. Once a day it fetches `plugin.json` from GitHub to see whether a newer version exists (`update.check: false` turns that off). Nothing else, except a webhook you set and GitHub through your own `gh` CLI when you import issues. [Details](docs/GUIDE.md#what-it-changes-on-your-machine--and-how-to-undo-it).
-</details>
 
-<details>
-<summary><b>Does it work with an API key?</b></summary>
+### Does it work with an API key?
 
 An API key has no usage windows, so the limit guard has nothing to act on, and the status line shows *waiting for limit data*. The queue, the router and the 529/5xx retry still work.
-</details>
 
-<details>
-<summary><b>Can a cloned repository's TASKS.md make Claude run things?</b></summary>
+### Can a cloned repository's TASKS.md make Claude run things?
 
 Not until you trust it. A `TASKS.md` drives nothing until you type `!noctis queue trust`, and a line added or changed later stops it again until you trust it anew. When Claude runs `noctis queue trust` itself, the hook refuses the call. A check command the file names on a `noctis-verify` line runs only while your trust covers that line. [Queue file](docs/GUIDE.md#queue-file).
-</details>
 
-<details>
-<summary><b>Can it carry a large project on a server for days?</b></summary>
+### Can it carry a large project on a server for days?
 
-That is what the queue is for. Run `claude` inside tmux on the server, write the plan as a `TASKS.md` with priorities, dependencies and a `noctis-verify` check line, mark the steps only you can do `(human)`, give a hard or an easy step its model with `(opus)` or `(sonnet)`, and trust the file once you have read it. Claude works through it and commits as it goes, runs long builds as `noctis job` jobs, hands an item it gets stuck on once to a stronger model before it sets it aside, sets aside what waits on something outside the session, and stops with the list of what is yours once nothing else is left; a relaunch after a long wait opens as a new tmux window, `noctis queue status --json` tells a monitoring script where the queue stands, and with `alarm.digestAt` set your webhook sends you a digest of it every day, with what an item takes of the weekly limit, when the rest may be done and, once the numbers say so, which profile finishes the queue for less. [Large projects on a server](docs/GUIDE.md#large-projects-on-a-server).
-</details>
+That is what the queue is for:
 
-<details>
-<summary><b>How do I turn it off or uninstall it?</b></summary>
+- Run `claude` inside tmux on the server and write the plan as a `TASKS.md` with priorities, dependencies and a `noctis-verify` check line.
+- Mark the steps only you can do `(human)`, give a hard or an easy step its model with `(opus)` or `(sonnet)`, and trust the file once you have read it.
+- Claude works through it and commits as it goes, runs long builds as `noctis job` jobs, hands an item it gets stuck on once to a stronger model before it sets it aside, sets aside what waits on something outside the session, and stops with the list of what is yours once nothing else is left.
+- A relaunch after a long wait opens as a new tmux window, and `noctis queue status --json` tells a monitoring script where the queue stands.
+- With `alarm.digestAt` set, your webhook sends you a digest every day: what an item takes of the weekly limit, when the rest may be done and, once the numbers say so, which profile finishes the queue for less.
+
+[Large projects on a server](docs/GUIDE.md#large-projects-on-a-server).
+
+### How do I turn it off or uninstall it?
 
 For a while: `/noctis:pause 120`. Completely, inside Claude Code, with the first line before the second, because removing the plugin deletes the binary that undoes the settings:
 
@@ -150,13 +155,10 @@ For a while: `/noctis:pause 120`. Completely, inside Claude Code, with the first
 ```
 
 The first line cancels pending resumes and restores `settings.json`; `--purge` also deletes `~/.claude/noctis/`. [Everything uninstall does](docs/GUIDE.md#what-it-changes-on-your-machine--and-how-to-undo-it).
-</details>
 
-<details>
-<summary><b>How is it tested?</b></summary>
+### How is it tested?
 
 Every push runs the Go tests on Linux, macOS and Windows, fuzzing, a lab that drives the hooks against stand-ins for Claude Code and the usage endpoint, a simulated two-day soak, a torrent of 600 jobs and a chaos monkey. CI also rebuilds the binaries in `bin/` and fails unless they match the committed ones byte for byte. [TESTING.md](docs/TESTING.md).
-</details>
 
 ## Documentation
 

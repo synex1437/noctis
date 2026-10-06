@@ -14,13 +14,11 @@
   <a href="#kurulum"><b>Kurulum</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#hızlı-başlangıç"><b>Hızlı başlangıç</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#benzer-araçlarla-karşılaştırma"><b>Karşılaştırma</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#komutlar"><b>Komutlar</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#sss"><b>SSS</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="docs/GUIDE.tr.md"><b>Kılavuz</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="README.md"><b>English</b></a>
 </p>
 
-# Noctis — kullanım limitinden önce duraklayan, sıfırlanınca kendiliğinden devam eden Claude Code eklentisi
+# Noctis — siz uyurken çalışmaya devam eden Claude Code
 
-**Noctis uzun Claude Code işlerini gece boyunca yürütür. 5 saatlik ya da haftalık kullanım limitinden hemen önce duraklar, sıfırlanmayı bekler ve aynı oturumu kendiliğinden sürdürür; bu sırada iş kuyruğunuzu durup sormadan bitirir.**
+**Gece 01:40'ta dolan bir kullanım limiti, gecenin geri kalanını boşa harcatmamalı.** Noctis, 5 saatlik ya da haftalık kullanım limitinden hemen önce duraklayan, sıfırlanmayı bekleyen ve aynı oturumu kendiliğinden sürdüren bir Claude Code eklentisidir; bu sırada iş kuyruğunuzu durup sormadan bitirir.
 
-Kuyruğa kırk iş koyup yattınız; sabah sizi 01:40'ta düşmüş bir *"You've hit your session limit"* mesajı karşıladı — ya da üçüncü işte *"şimdi diğer işe geçiyorum"* deyip durmuş bir oturum. Noctis ikisini de çözer: Claude Code'u hız limitine çarptıktan sonra değil, çarpmadan önce durdurur, limit sıfırlanınca geri döner ve listenizde ilerlemeye devam eder. Bu arada Claude'u keskin tutar: konuşma uzayınca taze bir bağlam, maddeler arasında sizin denetiminiz, takıldığı madde için daha güçlü bir model.
-
-<p align="center"><img src="docs/demo.svg" alt="Noctis'le bir gece: 5 saatlik limitten önce duraklar, sıfırlanmayı aynı tur içinde bekler, TASKS.md'de ilerlemeye devam eder ve kuyruk boşalınca temizce durur" width="100%"></p>
+<p align="center"><img src="docs/before-after.svg" alt="Aynı gece, noctis'li ve noctis'siz, bir çizim olarak: Claude Code tek başına 01:40'taki limiti bekler, sonra 03:20'de 48 işin 21'i bitmişken durur; noctis'le 48'in hepsi 06:55'te bitmiştir" width="100%"></p>
 
 <table align="center">
   <tr>
@@ -31,17 +29,29 @@ Kuyruğa kırk iş koyup yattınız; sabah sizi 01:40'ta düşmüş bir *"You've
   </tr>
 </table>
 
-## Ne yapar
+<p align="center"><a href="#kurulum"><b>Yaklaşık bir dakikada kurun</b></a>, sonra yatın.</p>
+
+## Tanıdık geldi mi?
+
+- Kuyruğa kırk iş koyup yattınız; sabah sizi 01:40'ta düşmüş bir *"You've hit your session limit"* mesajı karşıladı.
+- Oturum üçüncü işte *"şimdi diğer işe geçiyorum"* deyip durdu ve "devam et" diyecek kimse yoktu.
+- Haftalık limit cuma gecesi doldu, pazartesi sabahı sıfırlandı ve siz dönene kadar hiçbir şey ilerlemedi.
+
+Noctis üçünü de çözer. Claude Code'u limite çarptıktan sonra değil, çarpmadan önce durdurur, limit sıfırlanınca geri döner ve listenizde ilerlemeye devam eder. Bu arada Claude'u keskin tutar: konuşma uzayınca taze bir bağlam, maddeler arasında sizin denetiminiz, takıldığı madde için daha güçlü bir model.
+
+## Neler kazanırsınız
 
 - **Limitten önce duraklar, 429'dan sonra değil.** Varsayılan olarak 5 saatlik pencerenin %92'sinde, haftalığın %95'inde; ani bir yükseliş ya da yakım hızı sonraki turların limiti aşacağını söylüyorsa daha erken. Duraklamadan önce son isteğin, dokunulan dosyaların, `git status`'un, yapılacakların ve sıradaki işlerin checkpoint'ini alır.
 - **Aynı oturumu kendiliğinden sürdürür.** Yaklaşık 5½ saat içindeki bir sıfırlanma tur içinde beklenir, bağlam korunur. Haftalık limit gibi daha geç bir sıfırlanmada oturum Task Scheduler, launchd ya da systemd'den `claude --resume` ile yeniden başlatılır; günler sonra da, Claude Code kapatılmış olsa da. Windows ve `CAP_WAKE_ALARM` ile Linux bunun için makineyi uyandırabilir.
-- **Bir iş kuyruğunu bitirir.** `/noctis:start deneme.md` bir dosyadaki işleri durup sormadan sırayla yürütür; birkaç iş içeren uzun bir istem kendiliğinden böyle bir listeye dönüşür; izin verdiğiniz bir `TASKS.md` her oturumu sürükler — öncelikler, bağımlılıklar, GitHub issue'ları. `(insan)` işaretli adımlar sizi bekler, bir `noctis-verify` satırı maddeler arasında denetimlerinizi çalıştırır, uzun derlemeler de kuyruğun beklediği arka plan işleri olarak çalışır.
-- **Claude'u akıllı bölgesinde tutar.** Claude Code 1M pencerede de bağlam yaklaşık 280 bin token'a varınca sıkıştırır, pencerenin sonunu beklemez; noctis, sizin seçtiğiniz başka bir noktaya da uyar (bir token sayısı, her modelin penceresinin bir yüzdesi, `/autocompact` ya da Claude Code'un kendi noktası); oturumun bağlamı 100 bin token'ı geçince sıradaki her madde kendi brifiyle taze bir `noctis:worker` alt-ajanına gider; bir sıkıştırmadan sonra Claude'a eldeki madde, değişen dosyalar ve denetimin durumu söylenir; başarısız bir denetim testlerinde değil kodda düzeltilir; Claude'un takılıp kaldığı madde bir kez daha güçlü bir modele gider; `noctis queue status` her maddenin neye mal olduğunu gösterir, sonrakileri ona göre boyutlandırırsınız.
-- **Ücretli kullanım kredisi harcamaz.** Eşikler kapalı olsa bile bir pencerenin %100'ünde durur ve kalan paya sığmayacak çok parçalı bir workflow'u reddeder.
+- **Kuyruğunuz ilerlemeye devam eder.** `/noctis:start deneme.md` bir dosyadaki işleri durup sormadan sırayla yürütür; birkaç iş içeren uzun bir istem kendiliğinden böyle bir listeye dönüşür; izin verdiğiniz bir `TASKS.md` her oturumu sürükler — öncelikler, bağımlılıklar, GitHub issue'ları. `(insan)` işaretli adımlar sizi bekler, bir `noctis-verify` satırı maddeler arasında denetimlerinizi çalıştırır, uzun derlemeler de kuyruğun beklediği arka plan işleri olarak çalışır.
+- **Claude akıllı bölgesinde kalır.** Claude Code 1M pencerede de bağlam yaklaşık 280 bin token'a varınca sıkıştırır, pencerenin sonunu beklemez; noctis, sizin seçtiğiniz başka bir noktaya da uyar (bir token sayısı, her modelin penceresinin bir yüzdesi, `/autocompact` ya da Claude Code'un kendi noktası); oturumun bağlamı 100 bin token'ı geçince sıradaki her madde kendi brifiyle taze bir `noctis:worker` alt-ajanına gider; bir sıkıştırmadan sonra Claude'a eldeki madde, değişen dosyalar ve denetimin durumu söylenir; başarısız bir denetim testlerinde değil kodda düzeltilir; Claude'un takılıp kaldığı madde bir kez daha güçlü bir modele gider; `noctis queue status` her maddenin neye mal olduğunu gösterir, sonrakileri ona göre boyutlandırırsınız.
+- **Ücretli kredilerinize dokunmaz.** Eşikler kapalı olsa bile bir pencerenin %100'ünde durur ve kalan paya sığmayacak çok parçalı bir workflow'u reddeder.
 - **Karar başına sıfır token.** Kullanım verileriniz üzerinde sabit kurallar işler ve her karar kaydedilir (`noctis why`). Kendi başına çalışan tek bir Go binary'si, Linux'ta hook başına yaklaşık 5 ms; Node, Git Bash, derleyici gerekmez.
 - **Her işe uygun model.** Varsayılan olarak kod Opus 5.5 · xhigh'ta (Code profili), daha az harcamak için Sonnet 5.5 · high'da (Balanced), dosya arama ve çıktı özetleri Haiku 4.5'te; yönlendirici açıkken araştırma ve yazı kendi alt-ajanında.
 - **Yalın sıkıştırma, durum çubuğu ve 15 dil.** Bağlam sıkıştırma noktasına giden yolun %90'ına varınca turlar arasında sıkıştırır, iki kullanım penceresini ve sıfırlanma zamanlarını gösteren bir durum çubuğu çizer ve yazdığınız dilde konuşur.
-- **Ayrıca** OpenAI Codex CLI, Antigravity CLI, Factory Droid ve GitHub Copilot CLI içinde de, daha az özellikle çalışır.
+- **Yalnız Claude Code değil.** OpenAI Codex CLI, Antigravity CLI, Factory Droid ve GitHub Copilot CLI içinde de, daha az özellikle çalışır.
+
+<p align="center"><img src="docs/demo.svg" alt="Noctis'le bir gece: 5 saatlik limitten önce duraklar, sıfırlanmayı aynı tur içinde bekler, TASKS.md'de ilerlemeye devam eder ve kuyruk boşalınca temizce durur" width="100%"></p>
 
 ## Kurulum
 
@@ -69,13 +79,11 @@ Setup tek bir soru sorar — hangi model hangi işi yapsın — ve cevabı rol p
 2. Birkaç işi bir dosyaya, her satıra bir tane yazın (`- [ ] ödeme modülü için testleri yaz`) ve `/noctis:start TASKS.md` yazın. Claude onları sırayla yapar; `/noctis:stop` erken bitirir.
 3. Yatın. Limitte yapmanız gereken bir şey yok: noctis duraklar, bekler ve devam eder; iş sürdüğünde bir masaüstü bildirimi haber verir.
 
-Ona iş yaptırmaya hazır değil misiniz? `~/.claude/noctis/config.json` içinde `"mode": "observe"` her kararı kaydeder, hiçbirini uygulamaz — %100'deki durdurmayı bile. Devamı: [başlarken: ilk beş dakika](docs/GUIDE.tr.md#başlarken-ilk-beş-dakika).
+**Harekete geçmesine izin vermeden önce deneyin.** `~/.claude/noctis/config.json` içinde `"mode": "observe"` her kararı kaydeder, hiçbirini uygulamaz — %100'deki durdurmayı bile. Devamı: [başlarken: ilk beş dakika](docs/GUIDE.tr.md#başlarken-ilk-beş-dakika).
 
 ## Claude Code zaten devam etmiyor mu?
 
 Son Claude Code sürümleri, kullanım limiti sıfırlanınca bir oturumu kendiliğinden sürdürebilir; yeter ki o oturum açık kalsın, makine uyanık kalsın ve sıfırlanma 24 saatten yakın olsun. Gerisini noctis üstlenir: limitten *önce* checkpoint alarak duraklar, Claude Code kapatılmışsa ya da sıfırlanma günler sonraysa (haftalık limit) oturumu zamanlanmış bir görevden yeniden başlatır ve bir iş kuyruğunu yürütmeye devam eder. Claude Code'un kendi devamı tetiklenirse noctis kendi yeniden başlatmasını iptal eder.
-
-<p align="center"><img src="docs/before-after.svg" alt="Aynı gece, noctis'li ve noctis'siz, bir çizim olarak: Claude Code tek başına 01:40'taki limiti bekler, sonra 03:20'de 48 işin 21'i bitmişken durur; noctis'le 48'in hepsi 06:55'te bitmiştir" width="100%"></p>
 
 ## Benzer araçlarla karşılaştırma
 
@@ -109,38 +117,35 @@ ccstatusline ve claude-powerline gibi durum çubukları noctis'inkinin arkasınd
 
 ## SSS
 
-<details>
-<summary><b>Ekstra kullanım kredimi harcar mı?</b></summary>
+### Ekstra kullanım kredimi harcar mı?
 
 Hayır. Eşikleriniz yanlış ayarlanmış ya da kapatılmış olsa da, `/noctis:pause` açıkken bile iş bir pencerenin %100'ünde durur; son okumalar yeterince sıçradıysa hemen öncesinde durur. Taşan kullanımı istiyorsanız `"credits": {"allowPaid": true}` yazın. noctis hesabınızdaki otomatik kredi yüklemesini kapatamaz; o ayar Anthropic faturalandırma ayarlarınızdadır.
-</details>
 
-<details>
-<summary><b>Ağ üzerinden ne gönderir?</b></summary>
+### Ağ üzerinden ne gönderir?
 
 Telemetri yok. Durum çubuğu yetmediğinde `api.anthropic.com` üzerinde Claude uygulamasının kendi kullandığı kullanım uç noktasına, Claude Code'un zaten sakladığı giriş token'ıyla sorar. Günde bir kez, daha yeni bir sürüm olup olmadığını görmek için GitHub'dan `plugin.json`'ı alır (`update.check: false` bunu kapatır). Bunların dışında yalnızca ayarladığınız webhook'a ve issue içe aktarırken kendi `gh` CLI'ınız üzerinden GitHub'a gider. [Ayrıntılar](docs/GUIDE.tr.md#makinenizde-neyi-değiştirir--nasıl-geri-alınır).
-</details>
 
-<details>
-<summary><b>API anahtarıyla çalışır mı?</b></summary>
+### API anahtarıyla çalışır mı?
 
 API anahtarında kullanım pencereleri olmaz; bu yüzden limit korumasının izleyeceği bir şey yoktur ve durum çubuğunda *limit verisi bekleniyor* yazar. Kuyruk, yönlendirici ve 529/5xx sonrası yeniden deneme yine çalışır.
-</details>
 
-<details>
-<summary><b>Klonlanan bir deponun TASKS.md'si Claude'a iş yaptırabilir mi?</b></summary>
+### Klonlanan bir deponun TASKS.md'si Claude'a iş yaptırabilir mi?
 
 Siz izin verene kadar hayır. Bir `TASKS.md`, siz `!noctis queue trust` yazana kadar hiçbir şeyi sürüklemez; sonradan eklenen ya da değişen bir satır, siz yeniden izin verene kadar onu yine durdurur. Claude `noctis queue trust`'ı kendisi çalıştırırsa hook bu çağrıyı reddeder. Dosyanın bir `noctis-verify` satırında adını verdiği denetim komutu da yalnızca verdiğiniz güven o satırı kapsadığı sürece çalışır. [Kuyruk dosyası](docs/GUIDE.tr.md#kuyruk-dosyası).
-</details>
 
-<details>
-<summary><b>Büyük bir projeyi sunucuda günlerce yürütebilir mi?</b></summary>
+### Büyük bir projeyi sunucuda günlerce yürütebilir mi?
 
-Kuyruk bunun için var. Sunucuda `claude`'u tmux içinde çalıştırın, planı öncelikleri, bağımlılıkları ve bir `noctis-verify` denetim satırı olan bir `TASKS.md` olarak yazın, yalnızca sizin yapabileceğiniz adımları `(insan)` ile işaretleyin, zor ya da kolay bir adıma `(opus)` veya `(sonnet)` ile modelini verin ve dosyayı okuduktan sonra ona bir kez güvenin. Claude onu yürütür ve yol boyunca commit atar, uzun derlemeleri `noctis job` işleri olarak çalıştırır, takıldığı bir maddeyi kenara almadan önce daha güçlü bir modele bir kez verir, oturum dışındaki bir şeyi bekleyeni kenara alır ve başka iş kalmayınca sizde olanların listesiyle durur; uzun bir beklemeden sonraki yeniden başlatma tmux'ta yeni bir pencere olarak açılır, `noctis queue status --json` bir izleme betiğine kuyruğun nerede olduğunu söyler, `alarm.digestAt` ayarlıysa webhook'unuz her gün size kuyruğun özetini, bir maddenin haftalık limitten ne aldığı, kalanın ne zaman bitebileceği ve sayılar yetince kuyruğu hangi profilin daha ucuza bitireceğiyle birlikte gönderir. [Sunucuda büyük projeler](docs/GUIDE.tr.md#sunucuda-büyük-projeler).
-</details>
+Kuyruk bunun için var:
 
-<details>
-<summary><b>Nasıl kapatır ya da kaldırırım?</b></summary>
+- Sunucuda `claude`'u tmux içinde çalıştırın ve planı öncelikleri, bağımlılıkları ve bir `noctis-verify` denetim satırı olan bir `TASKS.md` olarak yazın.
+- Yalnızca sizin yapabileceğiniz adımları `(insan)` ile işaretleyin, zor ya da kolay bir adıma `(opus)` veya `(sonnet)` ile modelini verin ve dosyayı okuduktan sonra ona bir kez güvenin.
+- Claude onu yürütür ve yol boyunca commit atar, uzun derlemeleri `noctis job` işleri olarak çalıştırır, takıldığı bir maddeyi kenara almadan önce daha güçlü bir modele bir kez verir, oturum dışındaki bir şeyi bekleyeni kenara alır ve başka iş kalmayınca sizde olanların listesiyle durur.
+- Uzun bir beklemeden sonraki yeniden başlatma tmux'ta yeni bir pencere olarak açılır; `noctis queue status --json` bir izleme betiğine kuyruğun nerede olduğunu söyler.
+- `alarm.digestAt` ayarlıysa webhook'unuz her gün size kuyruğun özetini gönderir: bir maddenin haftalık limitten ne aldığı, kalanın ne zaman bitebileceği ve sayılar yetince kuyruğu hangi profilin daha ucuza bitireceği.
+
+[Sunucuda büyük projeler](docs/GUIDE.tr.md#sunucuda-büyük-projeler).
+
+### Nasıl kapatır ya da kaldırırım?
 
 Bir süreliğine: `/noctis:pause 120`. Tamamen, Claude Code içinde; ilk satırı ikincisinden önce çalıştırın, çünkü eklentiyi kaldırmak ayarları geri alacak binary'yi de siler:
 
@@ -150,13 +155,10 @@ Bir süreliğine: `/noctis:pause 120`. Tamamen, Claude Code içinde; ilk satır�
 ```
 
 İlk satır bekleyen devamları iptal eder ve `settings.json`'ı geri yükler; `--purge` ayrıca `~/.claude/noctis/` klasörünü siler. [Kaldırmanın yaptığı her şey](docs/GUIDE.tr.md#makinenizde-neyi-değiştirir--nasıl-geri-alınır).
-</details>
 
-<details>
-<summary><b>Nasıl test ediliyor?</b></summary>
+### Nasıl test ediliyor?
 
 Her push'ta Linux, macOS ve Windows'ta Go testleri, fuzzing, hook'ları Claude Code'un ve kullanım uç noktasının taklitlerine karşı çalıştıran bir laboratuvar, simüle edilmiş iki günlük bir dayanıklılık testi, 600 işlik bir yük testi ve rastgele davranan bir kaos kullanıcısı çalışır. CI ayrıca `bin/` içindeki binary'leri yeniden derler; commit'lenmiş olanlarla bayt bayt aynı değilse başarısız olur. [TESTING.md](docs/TESTING.md) (İngilizce).
-</details>
 
 ## Belgeler
 
