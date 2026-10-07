@@ -1689,12 +1689,76 @@ func knownMarketplacesFile(configDir string) string {
 	return filepath.Join(configDir, "plugins", "known_marketplaces.json")
 }
 
-func marketplaceAutoUpdate(configDir, market string) (any, bool) {
-	if configDir == "" {
-		return nil, false
+const marketplacesLockStaleAfter = 10 * time.Second
+
+func withMarketplacesLock(knownFile string, work func() error) error {
+	lock := knownFile + ".lock"
+	wait := 100 * time.Millisecond
+	for attempt := 0; ; attempt++ {
+		err := os.Mkdir(lock, 0o700)
+		if errors.Is(err, os.ErrExist) && marketplacesLockStale(lock) && os.Remove(lock) == nil {
+			err = os.Mkdir(lock, 0o700)
+		}
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		if attempt == 5 {
+			return errors.New("known_marketplaces.json.lock is held by another process")
+		}
+		time.Sleep(wait)
+		wait = min(2*wait, time.Second)
 	}
-	value, had := getMap(readJSON(knownMarketplacesFile(configDir)), market)["autoUpdate"]
-	return value, had
+	defer os.Remove(lock)
+	return work()
+}
+
+func marketplacesLockStale(lock string) bool {
+	info, err := os.Stat(lock)
+	return err == nil && time.Since(info.ModTime()) > marketplacesLockStaleAfter
+}
+
+func changeMarketplace(knownFile, market string, change func(marketplace object) bool) error {
+	return withMarketplacesLock(knownFile, func() error {
+		known := readJSONStrict(knownFile)
+		if !known.ok {
+			return errors.New(known.err)
+		}
+		marketplace := getMap(known.data, market)
+		if marketplace == nil {
+			return fmt.Errorf("%s holds no marketplace %s", knownFile, market)
+		}
+		if !change(marketplace) {
+			return nil
+		}
+		return writeEncodedAtomic(knownFile, marshalPrettyAsBefore(known.data, known.raw))
+	})
+}
+
+func inPluginSeedDir(path string) bool {
+	for _, seed := range filepath.SplitList(os.Getenv("CLAUDE_CODE_PLUGIN_SEED_DIR")) {
+		if seed != "" && path != "" && isInside(path, seed) {
+			return true
+		}
+	}
+	return false
+}
+
+func declaredMarketplaceAutoUpdate(owner, market string) (declared, managed, set bool) {
+	declaredIn := func(settings object) (bool, bool) {
+		value, found := getMap(getMap(settings, "extraKnownMarketplaces"), market)["autoUpdate"].(bool)
+		return value, found
+	}
+	if layer, found := managedSettingsLayer(managedSettingsDir()); found {
+		if declared, set = declaredIn(layer.data); set {
+			return declared, true, true
+		}
+	}
+	user, _ := readSettingsFile(filepath.Join(owner, "settings.json"))
+	declared, set = declaredIn(user)
+	return declared, false, set
 }
 
 func recordMarketplaceAutoUpdate(owner, market string, previous any, hadPrevious bool) string {
@@ -1725,22 +1789,32 @@ func undoMarketplaceAutoUpdate(configDir string, config object) string {
 		return ""
 	}
 	knownFile := knownMarketplacesFile(configDir)
-	known := readJSONStrict(knownFile)
+	known := readJSONShared(knownFile)
 	if !known.ok {
 		return T("install.autoUpdateLeft", market, knownFile)
 	}
-	marketplace := getMap(known.data, market)
-	if marketplace == nil || marketplace["autoUpdate"] != true {
+	if getMap(known.data, market)["autoUpdate"] != true {
 		return ""
 	}
-	if previous, had := record["previous"]; had {
-		marketplace["autoUpdate"] = previous
-	} else {
-		delete(marketplace, "autoUpdate")
-	}
-	if err := writeJSONAtomic(knownFile, known.data); err != nil {
+	setBack := false
+	err := changeMarketplace(knownFile, market, func(marketplace object) bool {
+		if marketplace["autoUpdate"] != true {
+			return false
+		}
+		if previous, had := record["previous"]; had {
+			marketplace["autoUpdate"] = previous
+		} else {
+			delete(marketplace, "autoUpdate")
+		}
+		setBack = true
+		return true
+	})
+	if err != nil {
 		warn("uninstall: marketplace auto-update for %s not set back: %v", market, err)
 		return T("install.autoUpdateLeft", market, knownFile)
+	}
+	if !setBack {
+		return ""
 	}
 	return T("install.autoUpdateBack", market)
 }
@@ -1753,19 +1827,45 @@ func enableMarketplaceAutoUpdate(pluginRoot string) string {
 	if market == "" {
 		return ""
 	}
-	claudePath := claudeExecutable()
-	if claudePath == "" {
+	owner := marketplaceOwnerFor(pluginRoot)
+	if owner == "" {
 		return T("update.autoFailed", market)
 	}
-	owner := marketplaceOwnerFor(pluginRoot)
-	before, hadBefore := marketplaceAutoUpdate(owner, market)
-	if _, err := runWithTimeout(inGuardDir(claudeCommand(claudePath, []string{"plugin", "marketplace", "update", market, "--auto-update"})), 45*time.Second); err != nil {
+	knownFile := knownMarketplacesFile(owner)
+	marketplace := getMap(readJSONShared(knownFile).data, market)
+	source := getString(getMap(marketplace, "source"), "source")
+	switch {
+	case marketplace == nil:
+		return T("update.autoFailed", market)
+	case inPluginSeedDir(owner) || inPluginSeedDir(getString(marketplace, "installLocation")) || source == "claudeai" || source == "pluginDirectory":
+		return ""
+	}
+	if declared, managed, set := declaredMarketplaceAutoUpdate(owner, market); set {
+		switch {
+		case declared:
+			return T("update.autoEnabled", market)
+		case managed:
+			return ""
+		}
+		return T("update.autoFailed", market)
+	}
+	if marketplace["autoUpdate"] == true {
+		return T("update.autoEnabled", market)
+	}
+	var before any
+	hadBefore := false
+	err := changeMarketplace(knownFile, market, func(marketplace object) bool {
+		before, hadBefore = marketplace["autoUpdate"]
+		marketplace["autoUpdate"] = true
+		return before != true
+	})
+	if err != nil {
 		warn("marketplace auto-update could not be enabled for %s: %v", market, err)
 		return T("update.autoFailed", market)
 	}
 	logInfo("marketplace auto-update enabled for %s", market)
 	enabled := T("update.autoEnabled", market)
-	if after, _ := marketplaceAutoUpdate(owner, market); owner != "" && before != true && after == true {
+	if before != true {
 		if note := recordMarketplaceAutoUpdate(owner, market, before, hadBefore); note != "" {
 			enabled += "\n" + note
 		}

@@ -558,9 +558,6 @@ func TestProbesNeverRunAnInterpreterPlantedInTheProject(t *testing.T) {
 		{"codex app-server (usage refresh from the hooks)", func() { _, _ = fetchCodexRateLimits(host, 5*time.Second) }},
 		{"claude --help (permission mode probe in setup)", func() { supportedPermissionMode(object{"resume": object{"permissionMode": "auto"}}, host, "") }},
 		{"claude --version (selftest)", func() { claudeVersion(host) }},
-		{"claude plugin marketplace update (setup)", func() {
-			enableMarketplaceAutoUpdate(filepath.Join(trusted, "plugins", "cache", "zzmarket", pluginName, "1.0.0"))
-		}},
 	}
 	for _, probe := range probes {
 		probe.run()

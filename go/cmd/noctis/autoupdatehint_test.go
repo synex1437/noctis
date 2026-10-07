@@ -2,7 +2,6 @@ package main
 
 import (
 	"maps"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -16,13 +15,6 @@ func TestTheAutoUpdateHintsPointToThePluginMenuInEveryLanguage(t *testing.T) {
 	args = parseArgs([]string{"setup"})
 	root := filepath.Join(t.TempDir(), "plugins", "cache", "test-mkt", pluginName, "1.0.0")
 	files.pluginRoot = root
-	bin := t.TempDir()
-	if isWindows {
-		writeScript(t, filepath.Join(bin, "claude.cmd"), "@exit /b 1\r\n")
-	} else {
-		writeScript(t, filepath.Join(bin, "claude"), "#!/bin/sh\nexit 1\n")
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("NOCTIS_UPDATE_URL", "https://example.invalid/plugin.json")
 	now := nowSec()
 	mustWriteJSON(files.release, object{"checkedAt": float64(now), "latest": "99.0.0"})

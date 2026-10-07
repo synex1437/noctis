@@ -2999,21 +2999,26 @@ async function scenarioHosts(acc) {
   const updDir = path.join(LAB_ROOT, 'update-account');
   fs.mkdirSync(updDir, { recursive: true });
   writeJson(path.join(updDir, 'settings.json'), {});
+  const knownFile = path.join(LAB_ROOT, 'plugins', 'known_marketplaces.json');
+  const knownEntry = { source: { source: 'github', repo: 'synex1437/noctis' }, installLocation: path.join(LAB_ROOT, 'plugins', 'marketplaces', 'synex-mkt'), lastUpdated: '2026-09-01T00:00:00.000Z' };
+  const knownBefore = JSON.stringify({ 'synex-mkt': knownEntry }, null, 2);
+  fs.writeFileSync(knownFile, knownBefore);
   resetCalls();
   const cacheSetup = spawnSync(acc.engine()[0], ['setup', '--config-dir', updDir, '--profile', 'balanced'], { encoding: 'utf8', env: { ...acc.env(), NOCTIS_PLUGIN_ROOT: cacheRoot, NOCTIS_NO_TASKS: '1' } });
-  const autoUpdateCalled = callsLog().some((line) => line.includes('plugin marketplace update synex-mkt --auto-update'));
+  const knownAfter = fs.readFileSync(knownFile, 'utf8');
+  const autoUpdateWritten = knownAfter === JSON.stringify({ 'synex-mkt': { ...knownEntry, autoUpdate: true } }, null, 2);
   const autoUpdateSaid = /auto-update on|otomatik güncelleme açık/.test(cacheSetup.stdout);
-  if (cacheSetup.status !== 0 || !autoUpdateCalled || !autoUpdateSaid) {
-    process.stdout.write(`  auto-update: status=${cacheSetup.status} called=${autoUpdateCalled} said=${autoUpdateSaid}\n`);
+  const removedFlagAsked = callsLog().some((line) => line.includes('--auto-update'));
+  if (cacheSetup.status !== 0 || !autoUpdateWritten || !autoUpdateSaid || removedFlagAsked) {
+    process.stdout.write(`  auto-update: status=${cacheSetup.status} written=${autoUpdateWritten} said=${autoUpdateSaid} flag=${removedFlagAsked}\n`);
     process.stdout.write(`  auto-update stdout: ${JSON.stringify(cacheSetup.stdout.slice(-400))}\n`);
     process.stdout.write(`  auto-update stderr: ${JSON.stringify((cacheSetup.stderr || '').slice(-300))}\n`);
-    process.stdout.write(`  auto-update calls: ${JSON.stringify(callsLog())}\n`);
+    process.stdout.write(`  auto-update file: ${JSON.stringify(knownAfter)}\n`);
   }
-  check('auto-update: setup enables marketplace auto-update via claude', cacheSetup.status === 0 && autoUpdateCalled && autoUpdateSaid, true);
-  resetCalls();
+  check('auto-update: setup switches marketplace auto-update on in known_marketplaces.json, as /plugin does', cacheSetup.status === 0 && autoUpdateWritten && autoUpdateSaid && !removedFlagAsked, true);
+  fs.writeFileSync(knownFile, knownBefore);
   const keptSetup = spawnSync(acc.engine()[0], ['setup', '--config-dir', updDir, '--profile', 'balanced', '--updates', 'keep'], { encoding: 'utf8', env: { ...acc.env(), NOCTIS_PLUGIN_ROOT: cacheRoot, NOCTIS_NO_TASKS: '1' } });
-  check('auto-update: --updates keep leaves the marketplace setting alone', callsLog().some((line) => line.includes('--auto-update')), false);
-  resetCalls();
+  check('auto-update: --updates keep leaves the marketplace setting alone', fs.readFileSync(knownFile, 'utf8'), knownBefore);
   const cloneRoot = path.join(LAB_ROOT, 'clone-root');
   fs.rmSync(cloneRoot, { recursive: true, force: true });
   for (const entry of ['.claude-plugin', 'hooks', 'agents', 'skills', 'config.default.json']) {
@@ -3025,7 +3030,7 @@ async function scenarioHosts(acc) {
   fs.mkdirSync(cloneDir, { recursive: true });
   writeJson(path.join(cloneDir, 'settings.json'), {});
   const cloneSetup = spawnSync(acc.engine()[0], ['setup', '--config-dir', cloneDir, '--profile', 'balanced'], { encoding: 'utf8', env: { ...acc.env(), NOCTIS_PLUGIN_ROOT: cloneRoot, NOCTIS_NO_TASKS: '1' } });
-  check('auto-update: clone installs (no marketplace path) do not touch marketplaces', callsLog().some((line) => line.includes('plugin marketplace')), false);
+  check('auto-update: clone installs (no marketplace path) do not touch marketplaces', fs.readFileSync(knownFile, 'utf8'), knownBefore);
   check('auto-update: the keep and clone setups both finish, so the two checks above saw a real run', [keptSetup.status, cloneSetup.status], [0, 0]);
 
   const versionFile = path.join(lab.mockDir, 'plugin-version.json');
