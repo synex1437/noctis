@@ -1047,6 +1047,7 @@ func migrateConfig(user object) {
 	migrateCompaction(user)
 	if numberOr(user, configVersionKey, 0) < configVersion {
 		migrateFanOutHeadroom(user)
+		migrateHaikuEfforts(user)
 		user[configVersionKey] = configVersion
 	}
 }

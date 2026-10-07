@@ -10,7 +10,7 @@ import (
 const perModelEffortClaudeMin = "2.1.251"
 
 // canonicalModels are the models the profiles' aliases stand for; modelSettings is keyed by these ids.
-var canonicalModels = map[string]string{"opus": "claude-opus-5-5", "sonnet": "claude-sonnet-5-5", "fable": "claude-fable-5-1"}
+var canonicalModels = map[string]string{"opus": "claude-opus-5-5", "sonnet": "claude-sonnet-5-5", "fable": "claude-fable-5-1", "haiku": "claude-haiku-5-5"}
 
 var (
 	modelDateSuffix  = lazyRegexp(`-\d{8}$`)

@@ -12,9 +12,9 @@ func TestSetupWithACodeRoleThatHasNoEffortWritesNoEffortLevel(t *testing.T) {
 	for _, c := range []struct {
 		code, byHand, want string
 	}{
-		{"haiku:high", "", "medium"},
+		{"claude-haiku-4-5:high", "", "medium"},
 		{"sonnet", "", "medium"},
-		{"haiku:high", "high", "high"},
+		{"claude-haiku-4-5:high", "high", "high"},
 	} {
 		t.Run(c.code+" "+c.byHand, func(t *testing.T) {
 			box := newCLIBox(t)

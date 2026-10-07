@@ -139,7 +139,11 @@ var retiredProfiles = map[string][]object{
 }
 
 func modelTakesEffort(model string) bool {
-	return modelFamily(model) != "haiku"
+	if modelFamily(model) != "haiku" {
+		return true
+	}
+	canonical := canonicalModel(strings.ToLower(strings.TrimSpace(model)))
+	return canonical != "claude-haiku-4-5" && !strings.Contains(canonical, "claude-3-")
 }
 
 func appliedEffort(role string, spec object) string {
@@ -147,6 +151,15 @@ func appliedEffort(role string, spec object) string {
 		return ""
 	}
 	return getString(spec, "effort")
+}
+
+func migrateHaikuEfforts(user object) {
+	roles := getMap(user, "roles")
+	for _, role := range roleNames {
+		if spec := getMap(roles, role); modelFamily(getString(spec, "model")) == "haiku" {
+			delete(spec, "effort")
+		}
+	}
 }
 
 func roleValueParts(value string, anyModel bool) (model, effort string, hasEffort bool) {

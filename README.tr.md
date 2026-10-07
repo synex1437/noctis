@@ -47,7 +47,7 @@ Noctis üçünü de çözer. Claude Code'u limite çarptıktan sonra değil, ça
 - **Claude akıllı bölgesinde kalır.** Claude Code 1M pencerede de bağlam yaklaşık 280 bin token'a varınca sıkıştırır, pencerenin sonunu beklemez; noctis, sizin seçtiğiniz başka bir noktaya da uyar (bir token sayısı, her modelin penceresinin bir yüzdesi, `/autocompact` ya da Claude Code'un kendi noktası); oturumun bağlamı 100 bin token'ı geçince sıradaki her madde kendi brifiyle taze bir `noctis:worker` alt-ajanına gider; bir sıkıştırmadan sonra Claude'a eldeki madde, değişen dosyalar ve denetimin durumu söylenir; başarısız bir denetim testlerinde değil kodda düzeltilir; Claude'un takılıp kaldığı madde bir kez daha güçlü bir modele gider; `noctis queue status` her maddenin neye mal olduğunu gösterir, sonrakileri ona göre boyutlandırırsınız.
 - **Ücretli kredilerinize dokunmaz.** Eşikler kapalı olsa bile bir pencerenin %100'ünde durur ve kalan paya sığmayacak çok parçalı bir workflow'u reddeder.
 - **Karar başına sıfır token.** Kullanım verileriniz üzerinde sabit kurallar işler ve her karar kaydedilir (`noctis why`). Kendi başına çalışan tek bir Go binary'si, Linux'ta hook başına yaklaşık 5 ms; Node, Git Bash, derleyici gerekmez.
-- **Her işe uygun model.** Varsayılan olarak kod Opus 5.5 · xhigh'ta (Code profili), daha az harcamak için Sonnet 5.5 · high'da (Balanced), dosya arama ve çıktı özetleri Haiku 4.5'te; yönlendirici açıkken araştırma ve yazı kendi alt-ajanında.
+- **Her işe uygun model.** Varsayılan olarak kod Opus 5.5 · xhigh'ta (Code profili), daha az harcamak için Sonnet 5.5 · high'da (Balanced), dosya arama ve çıktı özetleri Haiku 5.5'te; yönlendirici açıkken araştırma ve yazı kendi alt-ajanında.
 - **Yalın sıkıştırma, durum çubuğu ve 15 dil.** Bağlam sıkıştırma noktasına giden yolun %90'ına varınca turlar arasında sıkıştırır, iki kullanım penceresini ve sıfırlanma zamanlarını gösteren bir durum çubuğu çizer ve yazdığınız dilde konuşur.
 - **Yalnız Claude Code değil.** OpenAI Codex CLI, Antigravity CLI, Factory Droid ve GitHub Copilot CLI içinde de, daha az özellikle çalışır.
 
@@ -71,7 +71,7 @@ Ardından Claude Code'u `claude --continue` ile yeniden açın, konuşma kaldı�
 
 Setup tek bir soru sorar — hangi model hangi işi yapsın — ve cevabı rol profiliniz olarak saklar. `/noctis:setup` henüz bulunamıyorsa önce `/reload-plugins` çalıştırın. Terminalden: `claude plugin marketplace add synex1437/noctis && claude plugin install noctis@noctis`, ardından Claude Code içinde `/noctis:setup` ve yeniden başlatma. Klon ve ZIP kurulumu, profiller ve tüm bayraklar: [kurulum ayrıntıları](docs/GUIDE.tr.md#kurulum-ayrıntı).
 
-**Gereksinimler:** Claude Code 2.1.251 veya üstü (yalın sıkıştırma 2.1.281 ile denendi); Windows, macOS ya da Linux; limit koruması için Pro ya da Max aboneliği. Her profil tüm ücretli planlarda bulunan modellerle çalışır: Opus 5.5 ve Haiku 4.5, Code ile Balanced'da ayrıca Claude Code 2.1.284 veya üstünü isteyen Sonnet 5.5.
+**Gereksinimler:** Claude Code 2.1.251 veya üstü (yalın sıkıştırma 2.1.281 ile denendi); Windows, macOS ya da Linux; limit koruması için Pro ya da Max aboneliği. Her profil tüm ücretli planlarda bulunan modellerle çalışır: Opus 5.5, Claude Code 2.1.293 veya üstünü isteyen Haiku 5.5 (daha eskisi Haiku 4.5 çalıştırır), Code ile Balanced'da ayrıca Claude Code 2.1.284 veya üstünü isteyen Sonnet 5.5.
 
 ## Hızlı başlangıç
 

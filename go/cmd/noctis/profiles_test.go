@@ -66,13 +66,14 @@ func TestOpus55IsPricedAsOpus55(t *testing.T) {
 		"claude-opus-5-5-20260922": {4, 20, 5, 0.2},
 		"claude-opus-5":            {5, 25, 6.25, 0.5},
 		"claude-fable-5-1":         {10, 50, 12.5, 0.25},
-		"claude-sonnet-5-5":        {2, 10, 2.5, 0.2},
+		"claude-sonnet-5-5":        {2, 10, 2.5, 0.1},
 		"claude-sonnet-5":          {2, 10, 2.5, 0.2},
+		"claude-haiku-5-5":         {0.1, 0.5, 0.125, 0.01},
 		"claude-haiku-4-5":         {1, 5, 1.25, 0.1},
 	}
 	for model, want := range cases {
 		got, ok := priceFor(object{}, model)
-		if !ok || got != want {
+		if !ok || got.modelPrice != want {
 			t.Errorf("%s priced as %+v (found %v), want %+v", model, got, ok, want)
 		}
 	}
@@ -93,20 +94,79 @@ func TestNoProfilePromisesAnEffortItsModelCannotTake(t *testing.T) {
 	check("config.default.json", section(readJSON(filepath.Join(repoRoot(), "config.default.json")), "roles"))
 }
 
-func TestAHaikuEffortFromAFlagIsNotStored(t *testing.T) {
-	for role, value := range map[string]string{"digest": "haiku:high", "research": "claude-haiku-4-5:low", "code": "haiku:max"} {
-		spec, err := parseRoleFlag(role, value, false)
+func TestAHaikuTakesAnEffortFromHaiku55OnAsInClaudeCode(t *testing.T) {
+	for model, takes := range map[string]bool{
+		"haiku":                                           true,
+		"Haiku[1m]":                                       true,
+		"claude-haiku-5-5":                                true,
+		"claude-haiku-5-5-20261007":                       true,
+		"us.anthropic.claude-haiku-5-5-v1:0":              true,
+		"claude-haiku-5-5@20261007":                       true,
+		"claude-haiku-4-5":                                false,
+		"claude-haiku-4-5-20251001":                       false,
+		"us.anthropic.claude-haiku-4-5-20251001-v1:0":     false,
+		"global.anthropic.claude-haiku-4-5-20251001-v1:0": false,
+		"claude-haiku-4-5@20251001":                       false,
+		"claude-3-5-haiku-latest":                         false,
+		"claude-3-haiku-20240307":                         false,
+		"sonnet":                                          true,
+	} {
+		if got := modelTakesEffort(model); got != takes {
+			t.Errorf("modelTakesEffort(%q) is %v, want %v", model, got, takes)
+		}
+	}
+}
+
+func TestAnEffortFromAFlagIsStoredOnlyForAHaikuThatTakesOne(t *testing.T) {
+	for _, flag := range [][2]string{{"digest", "claude-haiku-4-5-20251001:high"}, {"research", "claude-haiku-4-5:low"}, {"code", "claude-3-5-haiku-latest:max"}} {
+		spec, err := parseRoleFlag(flag[0], flag[1], false)
 		if err != nil {
-			t.Fatalf("%s %s: %v", role, value, err)
+			t.Fatalf("%s %s: %v", flag[0], flag[1], err)
 		}
 		if effort := getString(spec, "effort"); effort != "" {
-			t.Errorf("%s stored effort %s for a model that takes none", role, effort)
+			t.Errorf("%s stored effort %s for %s, which takes none", flag[0], effort, getString(spec, "model"))
 		}
 	}
-	spec, err := parseRoleFlag("research", "sonnet:high", false)
-	if err != nil || getString(spec, "effort") != "high" {
-		t.Fatalf("a model that takes effort lost it: %v %v", spec, err)
+	for _, flag := range [][2]string{{"research", "sonnet:high"}, {"digest", "haiku:high"}, {"code", "claude-haiku-5-5:max"}} {
+		_, want, _ := strings.Cut(flag[1], ":")
+		if spec, err := parseRoleFlag(flag[0], flag[1], false); err != nil || getString(spec, "effort") != want {
+			t.Errorf("%s %s lost the effort its model takes: %v %v", flag[0], flag[1], spec, err)
+		}
 	}
+}
+
+func TestAHaikuEffortSavedBeforeHaikuTookOneIsDroppedOnce(t *testing.T) {
+	leanSandbox(t)
+	mustWriteJSON(files.config, object{"roles": object{
+		"profile":  "custom",
+		"code":     object{"model": "opus", "effort": "xhigh"},
+		"research": object{"model": "Haiku[1m]", "effort": "low"},
+		"digest":   object{"model": "haiku", "effort": "high"},
+		"fallback": object{"model": "claude-haiku-4-5", "effort": "max"},
+	}})
+	efforts := func(when string, roles object, want map[string]string) {
+		t.Helper()
+		for role, effort := range want {
+			if got := getString(getMap(roles, role), "effort"); got != effort {
+				t.Errorf("%s: the %s role has the effort %q, want %q", when, role, got, effort)
+			}
+		}
+	}
+	dropped := map[string]string{"code": "xhigh", "research": "", "digest": "", "fallback": ""}
+	efforts("a config.json from before 8.6.4, loaded", section(loadConfig(), "roles"), dropped)
+	if _, _, err := mergeConfig(files.config, shippedDefaults(t)); err != nil {
+		t.Fatal(err)
+	}
+	stored := readJSON(files.config)
+	efforts("that config.json, merged", getMap(stored, "roles"), dropped)
+
+	getMap(getMap(stored, "roles"), "digest")["effort"] = "high"
+	mustWriteJSON(files.config, stored)
+	efforts("a Haiku effort set after the merge, loaded", section(loadConfig(), "roles"), map[string]string{"digest": "high"})
+	if _, _, err := mergeConfig(files.config, shippedDefaults(t)); err != nil {
+		t.Fatal(err)
+	}
+	efforts("a Haiku effort set after the merge, merged", getMap(readJSON(files.config), "roles"), map[string]string{"digest": "high"})
 }
 
 func TestTheShippedDefaultsAreTheCodeProfileProjected(t *testing.T) {
@@ -169,11 +229,13 @@ func TestTheScopedRuleWatchesFableWhateverTheCodeModel(t *testing.T) {
 }
 
 func TestAnEarlierShippedProfileIsNamedNotSwitched(t *testing.T) {
-	sandboxFiles(t)
-	earlier := cloneObject(retiredProfiles["synex"][0])
-	earlier["profile"] = "noctis"
-	earlier["digest"] = object{"model": "haiku", "effort": "high"}
-	earlier["planning"] = object{"model": "fable", "effort": "max"}
+	leanSandbox(t)
+	shipped := cloneObject(retiredProfiles["synex"][0])
+	shipped["profile"] = "noctis"
+	shipped["digest"] = object{"model": "haiku", "effort": "high"}
+	shipped["planning"] = object{"model": "fable", "effort": "max"}
+	mustWriteJSON(files.config, object{"roles": shipped})
+	earlier := section(loadConfig(), "roles")
 	if got := retunedProfile(earlier); got != "synex" {
 		t.Fatalf("the 5.5 noctis assignment was not recognised as an earlier SYNEX profile (%q)", got)
 	}
@@ -253,7 +315,7 @@ func TestSetupNamesTheProfilesInEveryLanguage(t *testing.T) {
 // xhigh or max runs on Opus, since there Sonnet costs about as much per task, trails Opus on most
 // coding benchmarks and, at max, starts review subagents of its own; a role below that may run on
 // Sonnet at high, half Opus's price per token, and not lower, where Sonnet may stop to check in on
-// a long task; planning stays on Opus, file search and digests on Haiku 4.5, and the fallback is
+// a long task; planning stays on Opus, file search and digests on Haiku 5.5, and the fallback is
 // the code role.
 func TestEveryProfileKeepsSonnetToHighAndOpusToTheTopRoles(t *testing.T) {
 	for name, profile := range roleProfiles {
@@ -264,7 +326,7 @@ func TestEveryProfileKeepsSonnetToHighAndOpusToTheTopRoles(t *testing.T) {
 			case role == "planning" && model != "opus":
 				t.Errorf("the %s profile plans on %s; planning stays on Opus 5.5", name, model)
 			case (role == "digest" || role == "explore") && model != "haiku":
-				t.Errorf("the %s profile runs %s on %s; file search and digests run on Haiku 4.5", name, role, model)
+				t.Errorf("the %s profile runs %s on %s; file search and digests run on Haiku 5.5", name, role, model)
 			case (effort == "xhigh" || effort == "max") && model != "opus":
 				t.Errorf("the %s profile runs %s on %s at %s; a role at xhigh or max runs on Opus 5.5", name, role, model, effort)
 			case model == "sonnet" && effort != "high":

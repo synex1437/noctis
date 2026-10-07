@@ -12,14 +12,14 @@ import (
 	"unicode"
 )
 
-// Claude Code 2.1.289 files a model's own settings in modelSettings under one name for the model, the one its
+// Claude Code 2.1.293 files a model's own settings in modelSettings under one name for the model, the one its
 // mV function gives: /autocompact saves a model's window there, and a session's model finds its entry by the
 // same name. modelNaming.key transcribes mV with what it reads: the aliases and the models the environment
 // gives them, modelOverrides, and the models Claude Code's catalog knows.
 
 // claudeCatalogModels are the models Claude Code's catalog knows, and the three Claude 3 models it still names.
 var claudeCatalogModels = []string{
-	"claude-3-5-haiku", "claude-haiku-4-5", "claude-3-5-sonnet", "claude-3-7-sonnet", "claude-sonnet-4-0",
+	"claude-3-5-haiku", "claude-haiku-4-5", "claude-haiku-5-5", "claude-3-5-sonnet", "claude-3-7-sonnet", "claude-sonnet-4-0",
 	"claude-sonnet-4-5", "claude-sonnet-4-6", "claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-4-0",
 	"claude-opus-4-1", "claude-opus-4-5", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5",
 	"claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-mythos-5", "claude-mythos-5-1",
@@ -33,7 +33,7 @@ var claudeModelLadder = []string{
 	"claude-fable-5-1", "claude-fable-5", "claude-mythos-5-1", "claude-mythos-5", "claude-opus-5-5", "claude-opus-5",
 	"claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5", "claude-opus-4-1", "claude-opus-4",
 	"claude-sonnet-5-5", "claude-sonnet-5", "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4",
-	"claude-haiku-4-5", "claude-3-7-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku", "claude-3-opus",
+	"claude-haiku-5-5", "claude-haiku-4-5", "claude-3-7-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku", "claude-3-opus",
 	"claude-3-sonnet", "claude-3-haiku",
 }
 
@@ -44,8 +44,9 @@ var claudeModelLadder = []string{
 var claudeAliasModels = map[string]map[string]string{
 	"opus":   {"": "claude-opus-5-5", "foundry": "claude-opus-4-6"},
 	"sonnet": {"": "claude-sonnet-5-5", "bedrock": "claude-sonnet-4-5", "vertex": "claude-sonnet-4-5", "foundry": "claude-sonnet-4-5", "mantle": "claude-sonnet-4-5", "anthropicAws": "claude-sonnet-4-6"},
-	"haiku":  {"": "claude-haiku-4-5"},
-	"fable":  {"": "claude-fable-5-1"},
+	"haiku": {"": "claude-haiku-5-5", "bedrock": "claude-haiku-4-5", "vertex": "claude-haiku-4-5", "foundry": "claude-haiku-4-5", "mantle": "claude-haiku-4-5",
+		"anthropicAws": "claude-haiku-4-5", "anthropicGoogleCloud": "claude-haiku-4-5"},
+	"fable": {"": "claude-fable-5-1"},
 }
 
 // claudeModelIDs are the ids of the models of claudeAliasModels: on Anthropic's API (firstParty), which
@@ -63,6 +64,8 @@ var claudeModelIDs = map[string]map[string]string{
 		"anthropicAws": "claude-sonnet-4-6", "anthropicGoogleCloud": "claude-sonnet-4-6"},
 	"claude-sonnet-4-5": {"firstParty": "claude-sonnet-4-5-20250929", "bedrock": "us.anthropic.claude-sonnet-4-5-20250929-v1:0", "vertex": "claude-sonnet-4-5@20250929",
 		"foundry": "claude-sonnet-4-5", "anthropicAws": "claude-sonnet-4-5-20250929", "anthropicGoogleCloud": "claude-sonnet-4-5-20250929"},
+	"claude-haiku-5-5": {"firstParty": "claude-haiku-5-5", "bedrock": "us.anthropic.claude-haiku-5-5", "vertex": "claude-haiku-5-5", "foundry": "claude-haiku-5-5",
+		"anthropicAws": "claude-haiku-5-5", "anthropicGoogleCloud": "claude-haiku-5-5", "mantle": "anthropic.claude-haiku-5-5"},
 	"claude-haiku-4-5": {"firstParty": "claude-haiku-4-5-20251001", "bedrock": "us.anthropic.claude-haiku-4-5-20251001-v1:0", "vertex": "claude-haiku-4-5@20251001",
 		"foundry": "claude-haiku-4-5", "anthropicAws": "claude-haiku-4-5-20251001", "anthropicGoogleCloud": "claude-haiku-4-5-20251001", "mantle": "anthropic.claude-haiku-4-5"},
 	"claude-fable-5-1": {"firstParty": "claude-fable-5-1", "bedrock": "us.anthropic.claude-fable-5-1", "vertex": "claude-fable-5-1", "foundry": "claude-fable-5-1",
@@ -87,7 +90,7 @@ var legacyOpusModels = []string{"claude-opus-4-20250514", "claude-opus-4-1-20250
 
 // nativeOneMillionModels are the models with a 1M window of their own, needing no [1m]: the catalog's, and
 // the preview model Claude Code counts with them.
-var nativeOneMillionModels = []string{"claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5",
+var nativeOneMillionModels = []string{"claude-haiku-5-5", "claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5",
 	"claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-mythos-5", "claude-mythos-5-1", "claude-mythos-preview"}
 
 // modelNameVariables are the variables modelNaming reads; a test leaves them unset.

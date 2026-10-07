@@ -172,7 +172,7 @@ func TestTheReferenceGivesTheShippedDefaultRolesProfile(t *testing.T) {
 // its version, then the effort after separator (" · " in the guides, "·" in the picture).
 func docsFactsModel(t *testing.T, assignment object, separator string) string {
 	t.Helper()
-	name, known := map[string]string{"opus": "Opus 5.5", "sonnet": "Sonnet 5.5", "haiku": "Haiku 4.5"}[getString(assignment, "model")]
+	name, known := map[string]string{"opus": "Opus 5.5", "sonnet": "Sonnet 5.5", "haiku": "Haiku 5.5"}[getString(assignment, "model")]
 	if !known {
 		t.Fatalf("the docs have no name for the model %q", getString(assignment, "model"))
 	}
