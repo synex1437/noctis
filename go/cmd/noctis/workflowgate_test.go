@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-var fableWith23PointsOfRoom = builtinThresholds["weeklyFable"] - 23
+var fableWith13PointsOfRoom = builtinThresholds["weeklyFable"] - 13
 
 const opusOnlyWorkflow = "export const meta = { name: 'port-routes', description: 'port every route', phases: [{ name: 'port' }] }\nconst done = await parallel(['a', 'b'].map((route) => agent('port the ' + route + ' route', { model: 'opus', phase: 'port' })))\nreturn done\n"
 
@@ -36,9 +36,9 @@ func fanOutAdvice(cfg object, model string) string {
 }
 
 func TestTheFableWindowDoesNotHoldBackAFanOutThatCannotUseFable(t *testing.T) {
-	cfg, project := fanOutSession(t, nil, "claude-opus-5-5", fableWith23PointsOfRoom)
+	cfg, project := fanOutSession(t, nil, "claude-opus-5-5", fableWith13PointsOfRoom)
 	if output := launchVerdict(t, cfg, project, object{"script": opusOnlyWorkflow}); permissionOf(output) == "deny" {
-		t.Fatalf("an Opus session launching a script whose agents all run on Opus was refused over the Fable window (%v%%, 23 points before its %v%% switch point): %s", fableWith23PointsOfRoom, builtinThresholds["weeklyFable"], reasonOf(output))
+		t.Fatalf("an Opus session launching a script whose agents all run on Opus was refused over the Fable window (%v%%, 13 points before its %v%% switch point): %s", fableWith13PointsOfRoom, builtinThresholds["weeklyFable"], reasonOf(output))
 	}
 	script := filepath.Join(project, "port-routes.js")
 	if err := os.WriteFile(script, []byte(opusOnlyWorkflow), 0o644); err != nil {
@@ -56,12 +56,12 @@ func TestTheFableWindowDoesNotHoldBackAFanOutThatCannotUseFable(t *testing.T) {
 }
 
 func TestAFanOutThatCanUseFableStillNeedsRoomInTheFableWindow(t *testing.T) {
-	cfg, project := fanOutSession(t, nil, "claude-opus-5-5", fableWith23PointsOfRoom)
+	cfg, project := fanOutSession(t, nil, "claude-opus-5-5", fableWith13PointsOfRoom)
 	refused := func(what string, toolInput object) {
 		t.Helper()
 		output := launchVerdict(t, cfg, project, toolInput)
 		if permissionOf(output) != "deny" || !strings.Contains(reasonOf(output), scopedLabel(cfg)+" window") {
-			t.Fatalf("%s went through with 23 points of room before the Fable switch point: %v", what, output)
+			t.Fatalf("%s went through with 13 points of room before the Fable switch point: %v", what, output)
 		}
 	}
 	refused("a script with an agent on Fable", object{"script": strings.Replace(opusOnlyWorkflow, "model: 'opus'", "model: 'fable'", 1)})
@@ -82,23 +82,23 @@ func TestAFanOutThatCanUseFableStillNeedsRoomInTheFableWindow(t *testing.T) {
 	refused("a script file over the size noctis reads", object{"scriptPath": oversized})
 	nested := hookOutput(t, onPreToolUse, subagentTool("fan", project, "Workflow", object{"script": opusOnlyWorkflow}), cfg)
 	if permissionOf(nested) != "deny" || !strings.Contains(reasonOf(nested), scopedLabel(cfg)+" window") {
-		t.Fatalf("a subagent, whose own model noctis cannot see, launched a workflow with 23 points of Fable room: %v", nested)
+		t.Fatalf("a subagent, whose own model noctis cannot see, launched a workflow with 13 points of Fable room: %v", nested)
 	}
 
-	cfg, project = fanOutSession(t, nil, "claude-fable-5-1", fableWith23PointsOfRoom)
+	cfg, project = fanOutSession(t, nil, "claude-fable-5-1", fableWith13PointsOfRoom)
 	refused("an Opus-only script launched from a Fable session", object{"script": opusOnlyWorkflow})
 	if advice := fanOutAdvice(cfg, "claude-fable-5-1"); advice != "" {
-		t.Fatalf("a Fable session with 23 points of Fable room was advised to fan out: %q", advice)
+		t.Fatalf("a Fable session with 13 points of Fable room was advised to fan out: %q", advice)
 	}
 
-	cfg, _ = fanOutSession(t, object{"roles": object{"code": object{"model": "fable", "effort": "max"}}}, "claude-opus-5-5", fableWith23PointsOfRoom)
+	cfg, _ = fanOutSession(t, object{"roles": object{"code": object{"model": "fable", "effort": "max"}}}, "claude-opus-5-5", fableWith13PointsOfRoom)
 	if advice := fanOutAdvice(cfg, "claude-opus-5-5"); advice != "" {
-		t.Fatalf("the advice would put the code agents on Fable with 23 points of Fable room, and it was given: %q", advice)
+		t.Fatalf("the advice would put the code agents on Fable with 13 points of Fable room, and it was given: %q", advice)
 	}
 }
 
 func TestAFanOutWhoseAgentTypeRunsOnFableNeedsRoomInTheFableWindow(t *testing.T) {
-	cfg, project := fanOutSession(t, nil, "claude-opus-5-5", fableWith23PointsOfRoom)
+	cfg, project := fanOutSession(t, nil, "claude-opus-5-5", fableWith13PointsOfRoom)
 	for _, name := range []string{"lite.md", "digest.md"} {
 		content, err := os.ReadFile(filepath.Join(repoRoot(), "agents", name))
 		if err != nil {
@@ -119,7 +119,7 @@ func TestAFanOutWhoseAgentTypeRunsOnFableNeedsRoomInTheFableWindow(t *testing.T)
 		t.Helper()
 		output := launchVerdict(t, cfg, project, toolInput)
 		if permissionOf(output) != "deny" || !strings.Contains(reasonOf(output), scopedLabel(cfg)+" window") {
-			t.Fatalf("%s went through with 23 points of room before the Fable switch point: %v", what, output)
+			t.Fatalf("%s went through with 13 points of room before the Fable switch point: %v", what, output)
 		}
 	}
 	allowed("a script whose agents are noctis:lite, on Opus in the shipped agent file,", withAgentType("'noctis:lite'"))

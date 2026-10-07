@@ -505,9 +505,9 @@ func TestASubagentsWorkflowMeetsTheFanOutGate(t *testing.T) {
 	if output := hookOutput(t, onPreToolUse, subagentTool(sid, project, "Write", object{"file_path": filepath.Join(project, "x.go")}), cfg); output != nil {
 		t.Fatalf("inside the warn band a subagent's single write was denied: %v", output)
 	}
-	writeUsage(70, 40, 0)
-	if output := hookOutput(t, onPreToolUse, workflow, cfg); permissionOf(output) != "deny" || !strings.Contains(reasonOf(output), "only 22 points") {
-		t.Fatalf("a subagent fanned out a workflow with 22 points of room: %v", output)
+	writeUsage(80, 40, 0)
+	if output := hookOutput(t, onPreToolUse, workflow, cfg); permissionOf(output) != "deny" || !strings.Contains(reasonOf(output), "only 12 points") {
+		t.Fatalf("a subagent fanned out a workflow with 12 points of room: %v", output)
 	}
 	writeUsage(50, 40, 0)
 	if output := hookOutput(t, onPreToolUse, workflow, cfg); output != nil {
@@ -1283,20 +1283,20 @@ func TestTheFanOutAdviceSendsNoAgentToFableWhileTheFableQuotaIsOut(t *testing.T)
 }
 
 func TestNoWorkflowIsAdvisedThatTheLaunchGateWouldRefuse(t *testing.T) {
-	cfg, project := retiredProfileSandbox(t, object{"workflow": object{"suggest": true}}, 80)
+	cfg, project := retiredProfileSandbox(t, object{"workflow": object{"suggest": true}}, 85)
 	workflow := func(toolInput object) object {
 		return agentHookInput("PreToolUse", "s1", project, object{"tool_name": "Workflow", "tool_input": toolInput})
 	}
 	if advice := fanOutNotice(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg)); strings.Contains(advice, "fan-out task") {
-		t.Fatalf("with 15 points of Fable room a workflow was advised that puts its code agents on Fable, which the launch gate refuses: %q", advice)
+		t.Fatalf("with 10 points of Fable room a workflow was advised that puts its code agents on Fable, which the launch gate refuses: %q", advice)
 	}
 	onFable := object{"script": strings.Replace(opusOnlyWorkflow, "model: 'opus'", "model: 'fable'", 1)}
 	if output := hookOutput(t, onPreToolUse, workflow(onFable), cfg); permissionOf(output) != "deny" {
-		t.Fatalf("the launch gate let a workflow with agents on Fable fan out with 15 points of Fable room: %v", output)
+		t.Fatalf("the launch gate let a workflow with agents on Fable fan out with 10 points of Fable room: %v", output)
 	}
 	trustQueueFile(writeQueueFile(t, project, "# q\n- [ ] migrate every component under src/components to TypeScript\n- [ ] fix typo\n"), true)
 	if output := hookOutput(t, onStop, stopInput("s1", project), cfg); !strings.Contains(getString(output, "reason"), "Queue continues") || fanOutNotice(output) != "" {
-		t.Fatalf("with 15 points of Fable room the queue advised a workflow that the launch gate refuses: %v", output)
+		t.Fatalf("with 10 points of Fable room the queue advised a workflow that the launch gate refuses: %v", output)
 	}
 	writeFableBucket(97, float64(nowSec()), float64(nowSec()+2*86400))
 	advice := fanOutNotice(hookOutput(t, onUserPromptSubmit, fanOutPrompt("s1", project), cfg))

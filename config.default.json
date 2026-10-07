@@ -9,7 +9,7 @@
   "credits": {
     "allowPaid": false,
     "ceiling": 100,
-    "fanOutHeadroom": 25
+    "fanOutHeadroom": 15
   },
   "roles": {
     "profile": "code",

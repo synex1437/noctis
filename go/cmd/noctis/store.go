@@ -75,7 +75,10 @@ const (
 	compactionGuardGap      = 5.0
 	compactionBand          = 6.0
 	creditCeilingDefault    = 100.0
-	fanOutHeadroomDefault   = 25.0
+	fanOutHeadroomDefault   = 15.0
+	formerFanOutHeadroom    = 25.0
+	configVersionKey        = "configVersion"
+	configVersion           = 1.0
 	clearedSessionWindow    = 600
 	handoffGraceSeconds     = 60
 	waitStaleSeconds        = 2 * 86400
@@ -1028,7 +1031,7 @@ func loadConfig() object {
 	if userRead.ok && userRead.data != nil {
 		user = userRead.data
 	}
-	migrateCompaction(user)
+	migrateConfig(user)
 	merged := mergeDefaults(defaults, user)
 	keepRolesWhole(merged, user)
 	if !userRead.ok {
@@ -1038,6 +1041,14 @@ func loadConfig() object {
 	repairCompaction(merged, defaults)
 	repairWait(merged, defaults)
 	return merged
+}
+
+func migrateConfig(user object) {
+	migrateCompaction(user)
+	if numberOr(user, configVersionKey, 0) < configVersion {
+		migrateFanOutHeadroom(user)
+		user[configVersionKey] = configVersion
+	}
 }
 
 func readConfigStrict(file string) strictRead {

@@ -25,6 +25,13 @@ func fanOutHeadroom(cfg object) float64 {
 	return math.Max(0, numberOr(creditsCfg(cfg), "fanOutHeadroom", fanOutHeadroomDefault))
 }
 
+func migrateFanOutHeadroom(user object) {
+	credits := getMap(user, "credits")
+	if headroom, set := credits["fanOutHeadroom"].(float64); set && headroom == formerFanOutHeadroom {
+		credits["fanOutHeadroom"] = fanOutHeadroomDefault
+	}
+}
+
 func ceilingHit(cfg object, usage usageView) *waitPlan {
 	if paidCreditsAllowed(cfg) {
 		return nil
