@@ -1143,11 +1143,15 @@ func TestUpdatesOffLeavesMarketplaceAutoUpdateAlone(t *testing.T) {
 	for _, c := range cases {
 		t.Run(strings.Join(c.flags, " "), func(t *testing.T) {
 			box := newCLIBox(t)
-			market := filepath.Join(t.TempDir(), "plugins", "cache", "test-mkt", pluginName, pluginVersion)
+			owner := t.TempDir()
+			market := filepath.Join(owner, "plugins", "cache", "test-mkt", pluginName, pluginVersion)
 			if err := copyTree(box.root, market); err != nil {
 				t.Fatal(err)
 			}
 			box.env["NOCTIS_PLUGIN_ROOT"] = market
+			known := filepath.Join(owner, "plugins", "known_marketplaces.json")
+			before := []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}}}`)
+			cliWrite(t, known, before)
 
 			run := box.run(t, append([]string{"setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep"}, c.flags...)...)
 
@@ -1155,8 +1159,13 @@ func TestUpdatesOffLeavesMarketplaceAutoUpdateAlone(t *testing.T) {
 			if said := strings.Contains(run.stdout, "auto-update"); said != c.asked {
 				t.Fatalf("%s: auto-update mentioned=%v, want %v:\n%s", strings.Join(c.flags, " "), said, c.asked, run)
 			}
-			if calls, _ := os.ReadFile(box.calls); !c.asked && strings.Contains(string(calls), "--auto-update") {
-				t.Fatalf("%s still asked claude to switch auto-update on: %s", strings.Join(c.flags, " "), calls)
+			if !c.asked {
+				cliUnchanged(t, known, before)
+			} else if getMap(readJSON(known), "test-mkt")["autoUpdate"] != true {
+				t.Fatalf("%s: setup did not switch marketplace auto-update on:\n%s", strings.Join(c.flags, " "), run)
+			}
+			if calls, _ := os.ReadFile(box.calls); strings.Contains(string(calls), "--auto-update") {
+				t.Fatalf("%s asked claude for --auto-update, a flag Claude Code does not have: %s", strings.Join(c.flags, " "), calls)
 			}
 		})
 	}

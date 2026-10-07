@@ -213,38 +213,16 @@ func TestPurgeWithoutUninstallChangesNothing(t *testing.T) {
 	box.untouched(t, run)
 }
 
-func fakeMarketplaceClaude(t *testing.T, box cliBox, known, switchedOn string, refused bool) {
-	t.Helper()
-	bin := filepath.Dir(box.calls)
-	if isWindows {
-		refusal := ""
-		if refused {
-			refusal = "exit /b 1\r\n"
-		}
-		cliWrite(t, filepath.Join(bin, "claude.cmd"), []byte("@echo off\r\necho %*>>\""+box.calls+"\"\r\necho %*| findstr /c:\"--auto-update\" >nul || exit /b 0\r\n"+refusal+"copy /y \""+switchedOn+"\" \""+known+"\" >nul\r\n"))
-		return
-	}
-	refusal := ""
-	if refused {
-		refusal = "exit 1\n"
-	}
-	script := filepath.Join(bin, "claude")
-	cliWrite(t, script, []byte("#!/bin/sh\necho \"$*\" >> \""+box.calls+"\"\ncase \"$*\" in *--auto-update*) ;; *) exit 0 ;; esac\n"+refusal+"cp \""+switchedOn+"\" \""+known+"\"\n"))
-	if err := os.Chmod(script, 0o755); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestUninstallGivesBackTheMarketplaceAutoUpdateOnlyWhenSetupSwitchedItOn(t *testing.T) {
 	cases := []struct {
 		name, before, later, want string
-		refused, givenBack        bool
+		keptOff, givenBack        bool
 	}{
 		{"setup switched it on where it had no value", "", "", "", false, true},
 		{"setup switched it on where it was off", "false", "", "false", false, true},
 		{"it was on before setup", "true", "", "true", false, false},
 		{"the person switched it off after setup", "", "false", "false", false, false},
-		{"setup could not switch it on and the person did later", "false", "true", "true", true, false},
+		{"the person's settings kept it off at setup and the person switched it on later", "false", "true", "true", true, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -263,9 +241,9 @@ func TestUninstallGivesBackTheMarketplaceAutoUpdateOnlyWhenSetupSwitchedItOn(t *
 				return []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}, "lastUpdated": "2026-09-01T00:00:00.000Z"` + field + `}}`)
 			}
 			cliWrite(t, known, entry(c.before))
-			switchedOn := filepath.Join(t.TempDir(), "on.json")
-			cliWrite(t, switchedOn, entry("true"))
-			fakeMarketplaceClaude(t, box, known, switchedOn, c.refused)
+			if c.keptOff {
+				cliWrite(t, filepath.Join(box.account, "settings.json"), []byte(`{"extraKnownMarketplaces": {"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}, "autoUpdate": false}}}`))
+			}
 			setup := box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep")
 			box.configured(t, setup, box.account, "balanced")
 			if c.later != "" {
@@ -305,13 +283,13 @@ func TestSetupSaysWhenItCannotRecordTheAutoUpdateItSwitchedOn(t *testing.T) {
 	box.env["NOCTIS_PLUGIN_ROOT"] = root
 	known := filepath.Join(owner, "plugins", "known_marketplaces.json")
 	cliWrite(t, known, []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}}}`))
-	switchedOn := filepath.Join(t.TempDir(), "on.json")
-	cliWrite(t, switchedOn, []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}, "autoUpdate": true}}`))
-	fakeMarketplaceClaude(t, box, known, switchedOn, false)
 
 	run := box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep")
 
 	box.configured(t, run, box.account, "balanced")
+	if getMap(readJSON(known), "test-mkt")["autoUpdate"] != true {
+		t.Fatalf("setup did not switch marketplace auto-update on in %s:\n%s", known, run)
+	}
 	if !strings.Contains(run.stdout, "could not record that it switched marketplace auto-update on for test-mkt") {
 		t.Fatalf("setup switched auto-update on where no noctis config could hold the record, without saying the uninstall will not undo it:\n%s", run)
 	}
@@ -329,9 +307,6 @@ func TestUninstallSaysItLeftTheAutoUpdateWhenItCannotReadTheMarketplaces(t *test
 	box.env["NOCTIS_PLUGIN_ROOT"] = root
 	known := filepath.Join(box.account, "plugins", "known_marketplaces.json")
 	cliWrite(t, known, []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}}}`))
-	switchedOn := filepath.Join(t.TempDir(), "on.json")
-	cliWrite(t, switchedOn, []byte(`{"test-mkt": {"source": {"source": "github", "repo": "synex1437/noctis"}, "autoUpdate": true}}`))
-	fakeMarketplaceClaude(t, box, known, switchedOn, false)
 	box.configured(t, box.run(t, "setup", "--config-dir", box.account, "--profile", "balanced", "--permissions", "keep"), box.account, "balanced")
 	broken := []byte(`{"test-mkt": {"autoUpdate": true`)
 	cliWrite(t, known, broken)
