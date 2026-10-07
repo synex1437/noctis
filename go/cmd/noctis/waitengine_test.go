@@ -871,7 +871,7 @@ func TestClaimingAWaitJoinsOnlyAFreshWaitForTheSameReset(t *testing.T) {
 	for index, tc := range cases {
 		sid := "claim-" + strconv.Itoa(index)
 		updateState(func(state object) { stateMap(state, "waits")[sid] = cloneObject(tc.held) })
-		current, joined := claimWait(tc.kind, sid, cloneObject(tc.claim), cfg)
+		current, joined, _ := claimWait(tc.kind, sid, cloneObject(tc.claim), cfg)
 		kept := numberOr(getMap(getMap(readState(), "waits"), sid), "startedAt", -1)
 		want := tc.claim
 		if tc.join {
@@ -902,10 +902,10 @@ func TestClaimingAWaitStopsOnlyTheRunnerOfTheWaitItReplaces(t *testing.T) {
 		}
 		return count
 	}
-	if _, joined := claimWait("batch", sid, object{"kind": "batch", "window": "five_hour", "until": now + 601, "resumeAt": now + 601, "startedAt": now + 1, "inHook": true}, cfg); !joined || stops() != 0 {
+	if _, joined, _ := claimWait("batch", sid, object{"kind": "batch", "window": "five_hour", "until": now + 601, "resumeAt": now + 601, "startedAt": now + 1, "inHook": true}, cfg); !joined || stops() != 0 {
 		t.Fatalf("joining the wait of the same reset stopped its runner (joined %t, %d stop(s))", joined, stops())
 	}
-	if _, joined := claimWait("batch", sid, object{"kind": "batch", "window": "seven_day", "until": now + 900, "resumeAt": now + 900, "startedAt": now + 1, "inHook": true}, cfg); joined || stops() != 1 {
+	if _, joined, _ := claimWait("batch", sid, object{"kind": "batch", "window": "seven_day", "until": now + 900, "resumeAt": now + 900, "startedAt": now + 1, "inHook": true}, cfg); joined || stops() != 1 {
 		t.Fatalf("replacing the wait of another window did not stop its runner exactly once (joined %t, %d stop(s))", joined, stops())
 	}
 	if stored := getMap(getMap(readState(), "waits"), sid); getString(stored, "window") != "seven_day" || getMap(stored, "scheduled") != nil {
@@ -1204,9 +1204,9 @@ func TestAClaimWhoseWaitIsNotKeptStopsTheRunnerOfTheWaitItDisplaced(t *testing.T
 		stateMap(state, "waits")[sid] = object{"kind": "batch", "window": "five_hour", "until": now + 600, "resumeAt": now + 600, "startedAt": now, "inHook": true, "scheduled": object{"method": "systemd", "unit": systemdUnit(sid), "at": now + 600}}
 	})
 	lapsed := now - 3*86400
-	stored, joined := claimWait("batch", sid, object{"kind": "batch", "window": "seven_day", "until": lapsed, "resumeAt": lapsed, "startedAt": now + 1, "inHook": false}, cfg)
-	if stored != nil || joined {
-		t.Fatalf("a claim whose wait was dropped as soon as it was stored reported %v (joined %t)", stored, joined)
+	stored, joined, elsewhere := claimWait("batch", sid, object{"kind": "batch", "window": "seven_day", "until": lapsed, "resumeAt": lapsed, "startedAt": now + 1, "inHook": false}, cfg)
+	if stored != nil || joined || elsewhere != "" {
+		t.Fatalf("a claim whose wait was dropped as soon as it was stored reported %v (joined %t, continued elsewhere by %q)", stored, joined, elsewhere)
 	}
 	if stops := unitStops(*recorded, systemdUnit(sid)); stops != 1 {
 		t.Fatalf("the runner of the wait the claim displaced was stopped %d times, want once", stops)

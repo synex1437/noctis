@@ -184,6 +184,47 @@ func TestAnAgentSpawnHeldWhileTheSessionWentOnElsewhereEndsTheTurn(t *testing.T)
 	}
 }
 
+func takenOverRightAfterItIsStored(t *testing.T, sid string) *bool {
+	t.Helper()
+	taken := false
+	plantStaleRunner := func() {
+		state := readState()
+		stale := sid + "-stale"
+		stateMap(state, "waits")[stale] = object{"kind": "batch", "resumeAt": float64(nowSec()) - waitStaleSeconds - 3600, "scheduled": object{"method": "systemd", "unit": systemdUnit(stale)}}
+		if err := os.WriteFile(files.state, marshalState(state), 0o600); err != nil {
+			t.Error(err)
+		}
+	}
+	withFakeScheduler(t, func(*exec.Cmd) ([]byte, error) {
+		switch wait := pendingWait(sid); {
+		case taken:
+		case wait == nil:
+			plantStaleRunner()
+		case getMap(wait, "scheduled") == nil:
+			taken = takeWait(sid, wait, "resume", true)
+		}
+		return nil, nil
+	})
+	plantStaleRunner()
+	return &taken
+}
+
+func TestAPauseTakenOverAsSoonAsItIsStoredEndsTheTurnInsteadOfLettingItGoOn(t *testing.T) {
+	cfg, project, _ := limitSandbox(t, object{"wait": object{"resetMarginSeconds": 0, "earlyResetPollMinutes": 0}}, 93, 40)
+	sid := "taken-as-stored"
+	taken := takenOverRightAfterItIsStored(t, sid)
+	outcome := enforceWait("batch", agentSpawn(sid, project, object{"subagent_type": "general-purpose", "prompt": "review the parser"}), cfg, decision{wait: fiveHourPlan(float64(nowSec() + 3))})
+	if !*taken {
+		t.Fatalf("no other window took the pause between its write and the check that it was stored: %+v", outcome)
+	}
+	if outcome.stop != T("wait.continuedElsewhere") || !outcome.halt {
+		t.Fatalf("another window took the pause the moment this hook stored it, yet this window's turn was let go on as well: %+v", outcome)
+	}
+	if getString(journaledEntry(sid, "continued-elsewhere"), "by") != "resume" || journaledEntry(sid, "pause-failed") != nil {
+		t.Fatalf("a pause another window took over left %v in the journal, want continued-elsewhere by that window and no pause-failed", journaledFor(sid))
+	}
+}
+
 func TestARunnerGivesASessionWokenInPlaceItsGraceBeforeRelaunchingIt(t *testing.T) {
 	calls := takeoverSandbox(t)
 	sid := "woken-late"
