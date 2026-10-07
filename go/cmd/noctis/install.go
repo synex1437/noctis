@@ -284,7 +284,7 @@ func mergeConfig(configFile string, defaults object) (object, map[string]bool, e
 	if current == nil {
 		current = object{}
 	}
-	migrateCompaction(current)
+	migrateConfig(current)
 	added := map[string]bool{}
 	merged := object{}
 	for name, base := range defaults {
