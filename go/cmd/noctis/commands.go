@@ -1020,9 +1020,20 @@ type tokenBucket struct {
 	input, output, cacheRead, cacheWrite float64
 	cacheWrite1h                         float64 // the part of cacheWrite cached for one hour
 	calls                                int
+	longPrompt                           *tokenBucket
 }
 
 func (bucket *tokenBucket) add(usage object) {
+	bucket.tally(usage)
+	if numberOr(usage, "input_tokens", 0)+numberOr(usage, "cache_read_input_tokens", 0)+numberOr(usage, "cache_creation_input_tokens", 0) > longPromptTokens {
+		if bucket.longPrompt == nil {
+			bucket.longPrompt = &tokenBucket{}
+		}
+		bucket.longPrompt.tally(usage)
+	}
+}
+
+func (bucket *tokenBucket) tally(usage object) {
 	bucket.input += numberOr(usage, "input_tokens", 0)
 	bucket.output += numberOr(usage, "output_tokens", 0)
 	bucket.cacheRead += numberOr(usage, "cache_read_input_tokens", 0)
@@ -1076,9 +1087,9 @@ type reportData struct {
 	otherSub       tokenBucket
 	events         map[string]int
 	errors         []string
-	prices         map[string]modelPrice
+	prices         map[string]reportPrice
 	unpriced       []string
-	primaryPrice   modelPrice
+	primaryPrice   reportPrice
 	primaryPriced  bool
 }
 
@@ -1115,7 +1126,7 @@ func (data reportData) keptOffSavings() (actual, onPrimary float64) {
 }
 
 func attachPrices(cfg object, data *reportData) {
-	data.prices = map[string]modelPrice{}
+	data.prices = map[string]reportPrice{}
 	for model := range data.byModel {
 		if price, ok := priceFor(cfg, model); ok {
 			data.prices[model] = price

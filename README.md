@@ -47,7 +47,7 @@ Noctis takes care of all three. It stops Claude Code before the limit instead of
 - **Claude stays in its smart zone.** Claude Code compacts by about 280k tokens of context, in a 1M window too, rather than near its end, and noctis follows any point you pick instead (a token count, a percent of each model's window, `/autocompact`, or Claude Code's own); once a session's context passes 100k tokens, each next item goes to a fresh `noctis:worker` subagent with a brief of its own; after a compaction Claude is told the item in hand, the files changed and how the check stands; a failing check is fixed in the code, not in its tests; an item Claude keeps stopping on goes once to a stronger model; and `noctis queue status` shows what each item took, so you can size the next ones.
 - **Your paid credits stay untouched.** It stops at 100 % of a window even when the thresholds are off, and refuses a fan-out workflow that would not fit in what is left.
 - **Zero tokens per decision.** Fixed rules over your usage data, and every decision logged (`noctis why`). One self-contained Go binary, about 5 ms per hook on Linux; no Node, Git Bash or compiler.
-- **The right model for each job.** Code on Opus 5.5 · xhigh by default (the Code profile), or on Sonnet 5.5 · high to spend less (Balanced), file search and output digests on Haiku 4.5, and, with the router on, research and writing in a subagent of their own.
+- **The right model for each job.** Code on Opus 5.5 · xhigh by default (the Code profile), or on Sonnet 5.5 · high to spend less (Balanced), file search and output digests on Haiku 5.5, and, with the router on, research and writing in a subagent of their own.
 - **Lean compaction, a status line and 15 languages.** It compacts between turns once the context is 90 % of the way to the compaction point, draws a status line with both usage windows and their reset times, and speaks the language you type in.
 - **Not only Claude Code.** It also runs in OpenAI Codex CLI, Antigravity CLI, Factory Droid and GitHub Copilot CLI, with fewer features.
 
@@ -71,7 +71,7 @@ Then start Claude Code again with `claude --continue`, which picks the conversat
 
 Setup asks one question, which model does which kind of work, and keeps the answer as your roles profile. If `/noctis:setup` is not found yet, run `/reload-plugins` first. From a terminal: `claude plugin marketplace add synex1437/noctis && claude plugin install noctis@noctis`, then `/noctis:setup` inside Claude Code and the restart. Clone and ZIP installs, the profiles and every flag: [install details](docs/GUIDE.md#install-details).
 
-**Requirements:** Claude Code 2.1.251 or newer (lean compaction was tested with 2.1.281); Windows, macOS or Linux; a Pro or Max plan for the limit guard. Every profile runs on models every paid plan includes: Opus 5.5 and Haiku 4.5, and Sonnet 5.5 in Code and Balanced, which needs Claude Code 2.1.284 or newer.
+**Requirements:** Claude Code 2.1.251 or newer (lean compaction was tested with 2.1.281); Windows, macOS or Linux; a Pro or Max plan for the limit guard. Every profile runs on models every paid plan includes: Opus 5.5, Haiku 5.5, which needs Claude Code 2.1.293 or newer (an older one runs Haiku 4.5), and Sonnet 5.5 in Code and Balanced, which needs Claude Code 2.1.284 or newer.
 
 ## Quick start
 

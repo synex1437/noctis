@@ -9,6 +9,18 @@ type modelPrice struct {
 	input, output, cacheWrite, cacheRead float64
 }
 
+type reportPrice struct {
+	modelPrice
+	longPromptPrice  modelPrice
+	longPromptPriced bool
+}
+
+const longPromptTokens = 100000
+
+var longPromptPrices = map[string]modelPrice{
+	"haiku-5-5": {0.5, 2.5, 0.625, 0.05},
+}
+
 var builtinPrices = []struct {
 	match string
 	price modelPrice
@@ -25,26 +37,28 @@ var builtinPrices = []struct {
 	{"opus-4-5", modelPrice{5, 25, 6.25, 0.5}},
 	{"opus-4-1", modelPrice{15, 75, 18.75, 1.5}},
 	{"opus-4", modelPrice{15, 75, 18.75, 1.5}},
-	{"sonnet-5-5", modelPrice{2, 10, 2.5, 0.2}},
+	{"sonnet-5-5", modelPrice{2, 10, 2.5, 0.1}},
 	{"sonnet-5", modelPrice{2, 10, 2.5, 0.2}},
 	{"sonnet-4-6", modelPrice{3, 15, 3.75, 0.3}},
 	{"sonnet-4-5", modelPrice{3, 15, 3.75, 0.3}},
 	{"sonnet-4", modelPrice{3, 15, 3.75, 0.3}},
 	{"3-7-sonnet", modelPrice{3, 15, 3.75, 0.3}},
+	{"haiku-5-5", modelPrice{0.1, 0.5, 0.125, 0.01}},
 	{"haiku-4-5", modelPrice{1, 5, 1.25, 0.1}},
 	{"haiku-3-5", modelPrice{0.8, 4, 1, 0.08}},
 	{"3-5-haiku", modelPrice{0.8, 4, 1, 0.08}},
 }
 
-func priceFor(cfg object, model string) (modelPrice, bool) {
+func priceFor(cfg object, model string) (reportPrice, bool) {
 	needle := strings.ToLower(model)
 	if needle == "" {
-		return modelPrice{}, false
+		return reportPrice{}, false
 	}
-	listed, found := modelPrice{}, false
+	listed, found := reportPrice{}, false
 	for _, entry := range builtinPrices {
 		if strings.Contains(needle, entry.match) || (len(needle) >= 4 && strings.Contains(entry.match, needle)) {
-			listed, found = entry.price, true
+			listed.modelPrice, found = entry.price, true
+			listed.longPromptPrice, listed.longPromptPriced = longPromptPrices[entry.match]
 			break
 		}
 	}
@@ -66,14 +80,22 @@ func priceFor(cfg object, model string) (modelPrice, bool) {
 			continue
 		}
 		// A price the override leaves out stays the list price.
-		return modelPrice{numberOr(entry, "input", listed.input), numberOr(entry, "output", listed.output), numberOr(entry, "cacheWrite", listed.cacheWrite), numberOr(entry, "cacheRead", listed.cacheRead)}, true
+		return reportPrice{modelPrice: modelPrice{numberOr(entry, "input", listed.input), numberOr(entry, "output", listed.output), numberOr(entry, "cacheWrite", listed.cacheWrite), numberOr(entry, "cacheRead", listed.cacheRead)}}, true
 	}
 	return listed, found
 }
 
-// cost prices a five-minute cache write at price.cacheWrite and a one-hour
+func (bucket tokenBucket) cost(price reportPrice) float64 {
+	total := bucket.costAt(price.modelPrice)
+	if long := bucket.longPrompt; long != nil && price.longPromptPriced {
+		total += long.costAt(price.longPromptPrice) - long.costAt(price.modelPrice)
+	}
+	return total
+}
+
+// costAt prices a five-minute cache write at price.cacheWrite and a one-hour
 // cache write at twice the input price, as the API bills them.
-func (bucket tokenBucket) cost(price modelPrice) float64 {
+func (bucket tokenBucket) costAt(price modelPrice) float64 {
 	fiveMinute := bucket.cacheWrite - bucket.cacheWrite1h
 	return (bucket.input*price.input + bucket.output*price.output + fiveMinute*price.cacheWrite + bucket.cacheWrite1h*2*price.input + bucket.cacheRead*price.cacheRead) / 1e6
 }

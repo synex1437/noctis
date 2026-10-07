@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-// claudeCodeModels are Claude Code 2.1.289's own answers, worked out by its code, in
+// claudeCodeModels are Claude Code 2.1.293's own answers, worked out by its code, in
 // testdata/claudecode-models.json: for a model and a settings.json text, the name modelSettings files the
 // model under (keys) and the autoCompactWindow that applies to sessions on it (windows, null for none).
 type claudeCodeModels struct {

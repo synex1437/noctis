@@ -65,11 +65,12 @@ func sessionEffort(cfg object) string {
 // sessionSetup names the model family and effort a session runs on, as "sonnet/high", or is "" when
 // its model is none of the known families.
 func sessionSetup(cfg, state object, sid string) string {
-	family := modelFamily(resolveSessionModel(cfg, state, readJSON(files.usage), sid))
+	model := resolveSessionModel(cfg, state, readJSON(files.usage), sid)
+	family := modelFamily(model)
 	if family == "" {
 		return ""
 	}
-	if effort := sessionEffort(cfg); effort != "" && modelTakesEffort(family) {
+	if effort := sessionEffort(cfg); effort != "" && modelTakesEffort(model) {
 		return family + "/" + effort
 	}
 	return family

@@ -17,14 +17,14 @@ const BUFFER_TOKENS = 13000
 const EXPONENT = /^[+-]?(\d+(\.\d*)?|\.\d+)[eE][+-]?\d+$/
 const GROUPED = /^[+-]?\d{1,3}([_,\u00A0\u202F ])\d{3}(?:\1\d{3})*$/
 const GROUP_MARKS = /[_,\u00A0\u202F ]/g
-// The models Claude Code 2.1.289's catalog knows, and the three Claude 3 models it still names.
-const CATALOG_MODELS = ["claude-3-5-haiku", "claude-haiku-4-5", "claude-3-5-sonnet", "claude-3-7-sonnet", "claude-sonnet-4-0", "claude-sonnet-4-5", "claude-sonnet-4-6", "claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-4-0", "claude-opus-4-1", "claude-opus-4-5", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-mythos-5", "claude-mythos-5-1", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku"]
+// The models Claude Code 2.1.293's catalog knows, and the three Claude 3 models it still names.
+const CATALOG_MODELS = ["claude-3-5-haiku", "claude-haiku-4-5", "claude-haiku-5-5", "claude-3-5-sonnet", "claude-3-7-sonnet", "claude-sonnet-4-0", "claude-sonnet-4-5", "claude-sonnet-4-6", "claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-4-0", "claude-opus-4-1", "claude-opus-4-5", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-mythos-5", "claude-mythos-5-1", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku"]
 // The models Claude Code looks for inside a name it cannot parse, in its order; claude-opus-4 and
 // claude-sonnet-4 count where no minor version follows.
-const MODEL_LADDER = ["claude-fable-5-1", "claude-fable-5", "claude-mythos-5-1", "claude-mythos-5", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5", "claude-opus-4-1", "claude-opus-4", "claude-sonnet-5-5", "claude-sonnet-5", "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4", "claude-haiku-4-5", "claude-3-7-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku"]
+const MODEL_LADDER = ["claude-fable-5-1", "claude-fable-5", "claude-mythos-5-1", "claude-mythos-5", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5", "claude-opus-4-1", "claude-opus-4", "claude-sonnet-5-5", "claude-sonnet-5", "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4", "claude-haiku-5-5", "claude-haiku-4-5", "claude-3-7-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku"]
 // The models Claude Code's catalog gives its aliases, by provider ("" for any other); opusplan is sonnet and
 // best is opus (Claude Code takes fable for an account that may use Fable, which noctis cannot tell).
-const ALIAS_MODELS = { opus: { "": "claude-opus-5-5", foundry: "claude-opus-4-6" }, sonnet: { "": "claude-sonnet-5-5", bedrock: "claude-sonnet-4-5", vertex: "claude-sonnet-4-5", foundry: "claude-sonnet-4-5", mantle: "claude-sonnet-4-5", anthropicAws: "claude-sonnet-4-6" }, haiku: { "": "claude-haiku-4-5" }, fable: { "": "claude-fable-5-1" } }
+const ALIAS_MODELS = { opus: { "": "claude-opus-5-5", foundry: "claude-opus-4-6" }, sonnet: { "": "claude-sonnet-5-5", bedrock: "claude-sonnet-4-5", vertex: "claude-sonnet-4-5", foundry: "claude-sonnet-4-5", mantle: "claude-sonnet-4-5", anthropicAws: "claude-sonnet-4-6" }, haiku: { "": "claude-haiku-5-5", bedrock: "claude-haiku-4-5", vertex: "claude-haiku-4-5", foundry: "claude-haiku-4-5", mantle: "claude-haiku-4-5", anthropicAws: "claude-haiku-4-5", anthropicGoogleCloud: "claude-haiku-4-5" }, fable: { "": "claude-fable-5-1" } }
 // The ids of the models ALIAS_MODELS names: on Anthropic's API (firstParty), which modelOverrides names a model
 // by, and on each provider, which an alias stands for there. Where a provider has none, as Mantle for
 // claude-sonnet-4-5, Claude Code takes claude-haiku-4-5's, the first model of its catalog it has one for. A
@@ -35,6 +35,7 @@ const MODEL_IDS = {
   "claude-sonnet-5-5": { firstParty: "claude-sonnet-5-5", bedrock: "us.anthropic.claude-sonnet-5-5", vertex: "claude-sonnet-5-5", foundry: "claude-sonnet-5-5", anthropicAws: "claude-sonnet-5-5", anthropicGoogleCloud: "claude-sonnet-5-5", mantle: "anthropic.claude-sonnet-5-5" },
   "claude-sonnet-4-6": { firstParty: "claude-sonnet-4-6", bedrock: "us.anthropic.claude-sonnet-4-6", vertex: "claude-sonnet-4-6", foundry: "claude-sonnet-4-6", anthropicAws: "claude-sonnet-4-6", anthropicGoogleCloud: "claude-sonnet-4-6" },
   "claude-sonnet-4-5": { firstParty: "claude-sonnet-4-5-20250929", bedrock: "us.anthropic.claude-sonnet-4-5-20250929-v1:0", vertex: "claude-sonnet-4-5@20250929", foundry: "claude-sonnet-4-5", anthropicAws: "claude-sonnet-4-5-20250929", anthropicGoogleCloud: "claude-sonnet-4-5-20250929" },
+  "claude-haiku-5-5": { firstParty: "claude-haiku-5-5", bedrock: "us.anthropic.claude-haiku-5-5", vertex: "claude-haiku-5-5", foundry: "claude-haiku-5-5", anthropicAws: "claude-haiku-5-5", anthropicGoogleCloud: "claude-haiku-5-5", mantle: "anthropic.claude-haiku-5-5" },
   "claude-haiku-4-5": { firstParty: "claude-haiku-4-5-20251001", bedrock: "us.anthropic.claude-haiku-4-5-20251001-v1:0", vertex: "claude-haiku-4-5@20251001", foundry: "claude-haiku-4-5", anthropicAws: "claude-haiku-4-5-20251001", anthropicGoogleCloud: "claude-haiku-4-5-20251001", mantle: "anthropic.claude-haiku-4-5" },
   "claude-fable-5-1": { firstParty: "claude-fable-5-1", bedrock: "us.anthropic.claude-fable-5-1", vertex: "claude-fable-5-1", foundry: "claude-fable-5-1", anthropicAws: "claude-fable-5-1", anthropicGoogleCloud: "claude-fable-5-1", mantle: "anthropic.claude-fable-5-1" },
 }
@@ -42,7 +43,7 @@ const BEDROCK_PREFIXES = ["us", "eu", "apac", "jp", "au", "global"]
 const ALIAS_VARIABLES = { opus: "ANTHROPIC_DEFAULT_OPUS_MODEL", sonnet: "ANTHROPIC_DEFAULT_SONNET_MODEL", haiku: "ANTHROPIC_DEFAULT_HAIKU_MODEL", fable: "ANTHROPIC_DEFAULT_FABLE_MODEL" }
 const PROVIDERS = [["CLAUDE_CODE_USE_BEDROCK", "bedrock"], ["CLAUDE_CODE_USE_FOUNDRY", "foundry"], ["CLAUDE_CODE_USE_ANTHROPIC_AWS", "anthropicAws"], ["CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD", "anthropicGoogleCloud"], ["CLAUDE_CODE_USE_MANTLE", "mantle"], ["CLAUDE_CODE_USE_VERTEX", "vertex"]]
 const LEGACY_OPUS = ["claude-opus-4-20250514", "claude-opus-4-1-20250805", "claude-opus-4-0", "claude-opus-4-1"]
-const NATIVE_1M = ["claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-mythos-5", "claude-mythos-5-1", "claude-mythos-preview"]
+const NATIVE_1M = ["claude-haiku-5-5", "claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-mythos-5", "claude-mythos-5-1", "claude-mythos-preview"]
 const BEDROCK_REGIONS = ["us", "eu", "apac", "jp", "au", "us-gov", "global"]
 const DEFAULT_PORTS = { http: "80", https: "443", ws: "80", wss: "443", ftp: "21", file: "" }
 const ONE_MILLION = /\[1m\]/i
@@ -272,7 +273,7 @@ function resolve(naming, model) {
   return marked ? `${trimmed.replace(ONE_MILLION_TAIL, "").trim()}[1m]` : trimmed
 }
 
-// modelKey is the name Claude Code 2.1.289 files a model's own settings under in modelSettings, its mV, for a
+// modelKey is the name Claude Code 2.1.293 files a model's own settings under in modelSettings, its mV, for a
 // session's model and an entry's name alike: the id of the model an alias stands for; the catalog id of a
 // model's dated, [1m], Bedrock, Vertex and Foundry ids; the model modelOverrides maps a provider's id back to;
 // else the name in lower case without [1m] or a date. "" for none.
