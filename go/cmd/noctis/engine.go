@@ -1797,7 +1797,7 @@ func sameWait(record object, startedAt float64, holder string) bool {
 	return record != nil && numberOr(record, "startedAt", -1) == startedAt && getString(record, "holder") == holder
 }
 
-func claimWait(kind, sid string, record object, cfg object) (object, bool) {
+func claimWait(kind, sid string, record object, cfg object) (object, bool, string) {
 	prepareWait(sid, record, cfg)
 	var current object
 	joined := false
@@ -1810,17 +1810,21 @@ func claimWait(kind, sid string, record object, cfg object) (object, bool) {
 		}
 	})
 	if joined {
-		return current, true
+		return current, true, ""
 	}
-	stored := getMap(getMap(readState(), "waits"), sid)
+	state := readState()
+	stored := getMap(getMap(state, "waits"), sid)
 	if !sameWait(stored, numberOr(current, "startedAt", -1), getString(current, "holder")) {
 		cancelScheduled(sid, getMap(current, "scheduled"))
 	}
 	if stored == nil {
+		if elsewhere := continuedElsewhere(state, sid, numberOr(record, "startedAt", -1), getString(record, "holder")); elsewhere != "" {
+			return nil, false, elsewhere
+		}
 		fail("wait for %s could not be stored; not pausing the session", sid)
-		return nil, false
+		return nil, false, ""
 	}
-	return record, false
+	return record, false, ""
 }
 
 type waitHold struct {
@@ -2400,7 +2404,12 @@ func enforceWait(kind string, input object, cfg object, result decision) waitOut
 		runnerAt += math.Max(0, numberOr(waitCfg, "builtinGraceSeconds", 0))
 	}
 
-	stored, joined := claimWait(kind, sid, record, cfg)
+	stored, joined, elsewhere := claimWait(kind, sid, record, cfg)
+	if elsewhere != "" {
+		journal(sid, kind, "continued-elsewhere", hitLabel(wait), object{"by": elsewhere})
+		logInfo("wait for %s: the session went on elsewhere (%s) as soon as this hook stored the pause; stopping this window", sid, elsewhere)
+		return waitOutcome{stop: T("wait.continuedElsewhere"), halt: true}
+	}
 	if stored == nil {
 		journal(sid, kind, "pause-failed", reasonLine, object{"window": wait.window, "used": wait.used})
 		return waitOutcome{notice: T("wait.notStored", pluginName)}
