@@ -1091,7 +1091,11 @@ func TestEveryControlCommandIsAShippedSkill(t *testing.T) {
 
 func retiredProfileSandbox(t *testing.T, overrides object, fable float64) (object, string) {
 	t.Helper()
-	_, project, _ := limitSandbox(t, overrides, 20, 10)
+	settings := object{"subagents": object{"guard": false}}
+	for key, value := range overrides {
+		settings[key] = value
+	}
+	_, project, _ := limitSandbox(t, settings, 20, 10)
 	roles := cloneObject(retiredProfiles["synex"][0])
 	roles["profile"] = "noctis"
 	applyRoles(files.config, readJSON(files.config), roles)

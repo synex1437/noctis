@@ -85,19 +85,42 @@ func priceFor(cfg object, model string) (reportPrice, bool) {
 	return listed, found
 }
 
-func (bucket tokenBucket) cost(price reportPrice) float64 {
-	total := bucket.costAt(price.modelPrice)
-	if long := bucket.longPrompt; long != nil && price.longPromptPriced {
-		total += long.costAt(price.longPromptPrice) - long.costAt(price.modelPrice)
-	}
-	return total
+type costParts struct {
+	input, cacheWrite, cacheRead, output float64
 }
 
-// costAt prices a five-minute cache write at price.cacheWrite and a one-hour
-// cache write at twice the input price, as the API bills them.
-func (bucket tokenBucket) costAt(price modelPrice) float64 {
+func (parts costParts) total() float64 {
+	return parts.input + parts.cacheWrite + parts.cacheRead + parts.output
+}
+
+func (parts costParts) plus(other costParts) costParts {
+	return costParts{parts.input + other.input, parts.cacheWrite + other.cacheWrite, parts.cacheRead + other.cacheRead, parts.output + other.output}
+}
+
+func (parts costParts) minus(other costParts) costParts {
+	return costParts{parts.input - other.input, parts.cacheWrite - other.cacheWrite, parts.cacheRead - other.cacheRead, parts.output - other.output}
+}
+
+func (bucket tokenBucket) cost(price reportPrice) float64 {
+	return bucket.parts(price).total()
+}
+
+func (bucket tokenBucket) parts(price reportPrice) costParts {
+	parts := bucket.partsAt(price.modelPrice)
+	if long := bucket.longPrompt; long != nil && price.longPromptPriced {
+		parts = parts.plus(long.partsAt(price.longPromptPrice)).minus(long.partsAt(price.modelPrice))
+	}
+	return parts
+}
+
+func (bucket tokenBucket) partsAt(price modelPrice) costParts {
 	fiveMinute := bucket.cacheWrite - bucket.cacheWrite1h
-	return (bucket.input*price.input + bucket.output*price.output + fiveMinute*price.cacheWrite + bucket.cacheWrite1h*2*price.input + bucket.cacheRead*price.cacheRead) / 1e6
+	return costParts{
+		input:      bucket.input * price.input / 1e6,
+		cacheWrite: (fiveMinute*price.cacheWrite + bucket.cacheWrite1h*2*price.input) / 1e6,
+		cacheRead:  bucket.cacheRead * price.cacheRead / 1e6,
+		output:     bucket.output * price.output / 1e6,
+	}
 }
 
 func formatUSD(value float64) string {

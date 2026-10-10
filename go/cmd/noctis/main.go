@@ -34,6 +34,7 @@ var ported = map[string]commandFunc{
 	"refresh":          runRefresh,
 	"state-write":      runStateWrite,
 	"report":           runReport,
+	"cost":             runCost,
 	"install":          runInstall,
 	"setup":            runSetup,
 	"ensure":           runEnsure,

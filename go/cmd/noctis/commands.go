@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"html"
 	"math"
@@ -215,7 +213,10 @@ func runStatus() {
 	fmt.Println(describeState(loadConfig(), readState(), currentUsage(now), now))
 }
 
-const selftestSession = "selftest"
+const (
+	selftestSession    = "selftest"
+	selftestProbeCalls = 500
+)
 
 func runCheck() {
 	now := nowSec()
@@ -947,10 +948,11 @@ func runSelftest() {
 	}
 	started := time.Now()
 	executable, _ := os.Executable()
-	probe := probeHook(executable, []string{"hook", "--account", files.configDir}, string(marshalCompact(object{"hook_event_name": "PostToolBatch", "session_id": selftestSession, "cwd": os.TempDir()})))
+	probe := probeHook(executable, object{"hook_event_name": "PostToolBatch", "session_id": selftestSession, "cwd": os.TempDir()})
 
 	if numberOr(state, "disabledUntil", 0) <= float64(now) {
 		report(probe, T("selftest.hookSpeed", time.Since(started).Milliseconds()))
+		report(probeSubagentHooks(executable))
 	}
 
 	if getMap(getMap(readState(), "waits"), selftestSession) != nil {
@@ -1023,9 +1025,9 @@ type tokenBucket struct {
 	longPrompt                           *tokenBucket
 }
 
-func (bucket *tokenBucket) add(usage object) {
+func (bucket *tokenBucket) add(usage costUsage) {
 	bucket.tally(usage)
-	if numberOr(usage, "input_tokens", 0)+numberOr(usage, "cache_read_input_tokens", 0)+numberOr(usage, "cache_creation_input_tokens", 0) > longPromptTokens {
+	if usage.context() > longPromptTokens {
 		if bucket.longPrompt == nil {
 			bucket.longPrompt = &tokenBucket{}
 		}
@@ -1033,13 +1035,12 @@ func (bucket *tokenBucket) add(usage object) {
 	}
 }
 
-func (bucket *tokenBucket) tally(usage object) {
-	bucket.input += numberOr(usage, "input_tokens", 0)
-	bucket.output += numberOr(usage, "output_tokens", 0)
-	bucket.cacheRead += numberOr(usage, "cache_read_input_tokens", 0)
-	written := numberOr(usage, "cache_creation_input_tokens", 0)
-	bucket.cacheWrite += written
-	bucket.cacheWrite1h += min(numberOr(getMap(usage, "cache_creation"), "ephemeral_1h_input_tokens", 0), written)
+func (bucket *tokenBucket) tally(usage costUsage) {
+	bucket.input += usage.input
+	bucket.output += usage.output
+	bucket.cacheRead += usage.cacheRead
+	bucket.cacheWrite += usage.cacheWrite
+	bucket.cacheWrite1h += usage.cacheWrite1h
 	bucket.calls++
 }
 
@@ -1152,72 +1153,27 @@ func reportPrimary(cfg object) string {
 func collectReport(cfg object, days float64) reportData {
 	since := time.Now().Add(-time.Duration(days*24) * time.Hour)
 	data := reportData{days: days, byModel: map[string]*tokenBucket{}, byDay: map[string]*tokenBucket{}, byDayModel: map[string]map[string]*tokenBucket{}, keptOffByModel: map[string]*tokenBucket{}, events: map[string]int{}}
-	transcripts := walkTranscripts(filepath.Join(files.configDir, "projects"), since)
-	data.transcripts = len(transcripts)
+	scan := scanTranscripts(filepath.Join(files.configDir, "projects"), since)
+	data.transcripts = scan.files
 	primary := regexp.MustCompile("(?i)" + regexp.QuoteMeta(reportPrimary(cfg)))
-	counted := map[string]bool{}
-	for _, file := range transcripts {
-		transcript, err := os.Open(file)
-		if err != nil {
-			continue
+	for _, call := range scan.calls {
+		model, usage := call.model, call.costUsage
+		bucketFor(data.byModel, model).add(usage)
+		day := call.day()
+		if data.byDay[day] == nil {
+			data.byDay[day] = &tokenBucket{}
+			data.byDayModel[day] = map[string]*tokenBucket{}
 		}
-		lines := bufio.NewScanner(transcript)
-		lines.Buffer(make([]byte, 0, 64*1024), 64*1024*1024)
-		for lines.Scan() {
-			line := lines.Bytes()
-			if !bytes.Contains(line, []byte(`"usage"`)) {
-				continue
-			}
-			var raw object
-			if err := jsonUnmarshalObject(line, &raw); err != nil || raw == nil || getString(raw, "type") != "assistant" {
-				continue
-			}
-			message := getMap(raw, "message")
-			usage := getMap(message, "usage")
-			if usage == nil {
-				continue
-			}
-			if response := orDefault(getString(message, "id"), getString(raw, "requestId")); response != "" {
-				if counted[response] {
-					continue
-				}
-				counted[response] = true
-			}
-			at, parseErr := time.Parse(time.RFC3339Nano, getString(raw, "timestamp"))
-			if parseErr == nil && at.Before(since) {
-				continue
-			}
-			model := orDefault(getString(message, "model"), "unknown")
-			if data.byModel[model] == nil {
-				data.byModel[model] = &tokenBucket{}
-			}
-			data.byModel[model].add(usage)
-			day := "unknown"
-			if parseErr == nil {
-				day = at.Local().Format("2006-01-02")
-			}
-			if data.byDay[day] == nil {
-				data.byDay[day] = &tokenBucket{}
-				data.byDayModel[day] = map[string]*tokenBucket{}
-			}
-			data.byDay[day].add(usage)
-			if data.byDayModel[day][model] == nil {
-				data.byDayModel[day][model] = &tokenBucket{}
-			}
-			data.byDayModel[day][model].add(usage)
-			if getBool(raw, "isSidechain", false) {
-				if primary.MatchString(model) {
-					data.otherSub.add(usage)
-				} else {
-					data.keptOff.add(usage)
-					if data.keptOffByModel[model] == nil {
-						data.keptOffByModel[model] = &tokenBucket{}
-					}
-					data.keptOffByModel[model].add(usage)
-				}
+		data.byDay[day].add(usage)
+		bucketFor(data.byDayModel[day], model).add(usage)
+		if call.sidechain {
+			if primary.MatchString(model) {
+				data.otherSub.add(usage)
+			} else {
+				data.keptOff.add(usage)
+				bucketFor(data.keptOffByModel, model).add(usage)
 			}
 		}
-		transcript.Close()
 	}
 	for _, file := range []string{files.log, files.log + ".1"} {
 		content, err := os.ReadFile(file)
@@ -1473,12 +1429,70 @@ func runReport() {
 	}
 }
 
-func probeHook(binary string, arguments []string, stdin string) bool {
-	command := execCommand(binary, arguments...)
-	command.Stdin = strings.NewReader(stdin)
+func probeHook(executable string, input object) bool {
+	command := execCommand(executable, "hook", "--account", files.configDir)
+	command.Stdin = strings.NewReader(string(marshalCompact(input)))
 	command.Env = os.Environ()
 	_, err := runWithTimeout(command, 30*time.Second)
 	return err == nil
+}
+
+func probeSubagentHooks(executable string) (bool, string) {
+	dir, err := os.MkdirTemp("", "noctis-selftest-")
+	if err != nil {
+		return false, T("selftest.subagentHooksFailed", err.Error())
+	}
+	agent := selftestSession + hashKey(dir)[:8]
+	defer forgetSubagentProbe(dir, agent)
+	transcript := filepath.Join(dir, selftestSession, "subagents", "agent-"+agent+".jsonl")
+	size, err := writeProbeTranscript(transcript, selftestProbeCalls)
+	if err != nil {
+		return false, T("selftest.subagentHooksFailed", err.Error())
+	}
+	mainTranscript := filepath.Join(dir, selftestSession+".jsonl")
+	probe := func(event string, fields object) object {
+		fields["hook_event_name"], fields["session_id"], fields["cwd"], fields["transcript_path"] = event, selftestSession, dir, mainTranscript
+		return fields
+	}
+	probes := []object{
+		probe("PreToolUse", object{"tool_name": "Agent", "tool_input": object{"subagent_type": "general-purpose", "description": "noctis selftest", "prompt": "noctis selftest"}}),
+		probe("SubagentStart", object{"agent_id": agent, "agent_type": "general-purpose"}),
+		probe("PostToolBatch", object{"agent_id": agent, "agent_type": "general-purpose", "tool_calls": []any{object{"tool_name": "Read", "tool_input": object{}, "tool_use_id": "toolu_selftest"}}}),
+		probe("SubagentStop", object{"agent_id": agent, "agent_type": "general-purpose", "agent_transcript_path": transcript, "stop_hook_active": false}),
+	}
+	ok, timings := true, []any{}
+	for _, input := range probes {
+		started := time.Now()
+		ok = probeHook(executable, input) && ok
+		timings = append(timings, time.Since(started).Milliseconds())
+	}
+	return ok, T("selftest.subagentHookSpeed", append(timings, formatNumber(roundTo(float64(size)/1e6, 1)), selftestProbeCalls)...)
+}
+
+func writeProbeTranscript(path string, calls int) (int, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return 0, err
+	}
+	thinking, result := strings.Repeat("probe ", 500), strings.Repeat("probe ", 1000)
+	stamp := time.Now().UTC().Format(time.RFC3339Nano)
+	var transcript strings.Builder
+	for call := 1; call <= calls; call++ {
+		id, tool := fmt.Sprintf("msg_selftest_%d", call), fmt.Sprintf("toolu_selftest_%d", call)
+		usage := object{"input_tokens": 5.0, "cache_creation_input_tokens": 1500.0, "cache_read_input_tokens": float64(50000 + 100*call), "output_tokens": 300.0}
+		for _, block := range []object{{"type": "thinking", "thinking": thinking}, {"type": "tool_use", "id": tool, "name": "Read", "input": object{"file_path": "probe.go"}}} {
+			transcript.Write(marshalCompact(object{"type": "assistant", "timestamp": stamp, "message": object{"id": id, "model": "claude-sonnet-5-5", "role": "assistant", "content": []any{block}, "usage": usage}}))
+			transcript.WriteByte('\n')
+		}
+		transcript.Write(marshalCompact(object{"type": "user", "timestamp": stamp, "message": object{"role": "user", "content": []any{object{"type": "tool_result", "tool_use_id": tool, "content": result}}}}))
+		transcript.WriteByte('\n')
+	}
+	return transcript.Len(), os.WriteFile(path, []byte(transcript.String()), 0o600)
+}
+
+func forgetSubagentProbe(dir, agent string) {
+	os.RemoveAll(dir)
+	os.Remove(growthRecordPath(object{"session_id": selftestSession, "agent_id": agent}))
+	forgetSpend(selftestSession)
 }
 
 func hostDoctorLines(cfg object, host hostSpec, lines []string) []string {

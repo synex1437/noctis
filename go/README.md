@@ -22,7 +22,7 @@ Layout of `cmd/noctis`:
 | `store.go` | paths, config loading, state/usage files, PID-aware file locks, atomic JSON writes, logging |
 | `usage.go` | usage sources (statusLine capture, OAuth usage endpoint), burst/slope/projection, threshold evaluation, clock-skew correction, stale-lock sweeping |
 | `engine.go` | decisions: checkpoints, waits, in-hook waiting, scoped-model switch, daily budget, notifications |
-| `hooks.go` | hook handlers (SessionStart/End, UserPromptSubmit, PreToolUse, PostToolUse, PostToolBatch, Stop, StopFailure, Notification, PostModelSwitch, Task*, PreCompact) |
+| `hooks.go` | hook handlers (SessionStart/End, UserPromptSubmit, PreToolUse, PostToolUse, PostToolBatch, Stop, StopFailure, Notification, PostModelSwitch, Task*, PreCompact, SubagentStart/Stop) |
 | `router.go` | deterministic research router (RE2-safe Unicode word boundaries), learned misroute signals |
 | `runtime.go` | status line, pace marker, hooks self-heal, resume runner, `claude` launching, sleeper |
 | `host.go` | the other AI coding tools: capability table, hook-file wiring, input/output translation, Codex rate limits, Antigravity quota, update check, coexistence notes |
@@ -31,7 +31,12 @@ Layout of `cmd/noctis`:
 | `lang.go` | deterministic language detection, per-session locale, the thirteen-language catalog subset |
 | `workflow.go` | dynamic-workflow detection, suggestion and relaunch notes |
 | `github.go` | `queue import` from GitHub issues, closing issues when items are ticked |
-| `pricing.go` | price table for `report --cost` |
+| `pricing.go` | price table for `report --cost` and `cost` |
+| `cost.go` | `noctis cost`: main and subagent transcripts read once per API response, by day, session, model and subagent type, the costliest subagents |
+| `spawngate.go` | the subagent spawn gate in PreToolUse: per-session and per-hour counts, weekly room, the burn stop, the no-subagent note |
+| `growth.go` | subagent budgets and the growth limit: tool calls and context per subagent, wrap-up note, stop |
+| `spend.go` | SubagentStart (count, budget note) and SubagentStop (report), the week's spend ledger in usage.json, the status line's 🤖 |
+| `burn.go` | weekly pace from the usage history, the burn alarm's notice and its stop for new subagents |
 | `scheduler.go` | scheduled relaunch: Task Scheduler / launchd / systemd-run / detached sleeper |
 | `journal.go` | decision journal (`decisions.jsonl`), observe mode, `noctis why` |
 | `webhook.go` | webhook delivery with presets, retries and a circuit breaker |

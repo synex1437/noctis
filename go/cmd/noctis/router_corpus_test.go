@@ -17,11 +17,11 @@ type routerCase struct {
 }
 
 var routerCorpus = []routerCase{
-	{"research", "what is the latest news about european ai regulation"},
+	{"fact", "what is the latest news about european ai regulation"},
 	{"research", "compare postgres and mysql for time series workloads, which is better"},
 	{"research", "en iyi vektör veritabanı hangisi karşılaştırma yapar mısın"},
 	{"research", "summarize the pros and cons of remote work for a 40 person company"},
-	{"research", "look up the current pricing of aws lambda and azure functions"},
+	{"fact", "look up the current pricing of aws lambda and azure functions"},
 	{"research", "2025 yılında çıkan en yeni dil modellerini araştır"},
 	{"research", "https://example.com/whitepaper.pdf bunu özetle ve ana fikirleri çıkar"},
 	{"research", "find recent papers on retrieval augmented generation evaluation"},
@@ -107,7 +107,7 @@ var routerCorpus = []routerCase{
 	{"neutral", "hmm bekle"},
 }
 
-const routerRecallFloor = 21
+const routerRecallFloor = 19
 
 func TestTheRouterNeverSendsCodeWorkToTheLiteAgent(t *testing.T) {
 	cfg := object{"router": object{"enabled": true}}
@@ -124,6 +124,10 @@ func TestTheRouterNeverSendsCodeWorkToTheLiteAgent(t *testing.T) {
 			if result.route {
 				t.Errorf("a bare continuation was routed (%s): %q", result.reason, entry.prompt)
 			}
+		case "fact":
+			if result.route {
+				t.Errorf("a short fact question was handed to the lite agent (%s): %q", result.reason, entry.prompt)
+			}
 		case "research":
 			research++
 			if result.route {
@@ -139,7 +143,7 @@ func TestTheRouterNeverSendsCodeWorkToTheLiteAgent(t *testing.T) {
 func TestACodeWordDoesNotPinResearchToTheExpensiveModelInAColdSession(t *testing.T) {
 	cfg := object{"router": object{"enabled": true}}
 	for _, prompt := range []string{
-		"look up the current pricing of aws lambda and azure functions",
+		"compare the current pricing of aws lambda and azure functions",
 		"en iyi vektör veritabanı hangisi karşılaştırma yapar mısın",
 	} {
 		if !classifyPrompt(cfg, nil, prompt, "", nowSec()).route {
@@ -386,11 +390,11 @@ var labelledRouterCorpus = []routerCase{
 	{"code", "benim yazdığımla main'deki implementasyonu karşılaştır"},
 	{"code", "api'mizdeki son 500 hatası artışını araştır"},
 
-	{"research", "what is the latest news about the eu ai act"},
+	{"fact", "what is the latest news about the eu ai act"},
 	{"research", "compare postgres and mysql for analytics workloads"},
 	{"research", "what are the best note taking apps for students"},
 	{"research", "find recent papers on speculative decoding"},
-	{"research", "look up the current price of a raspberry pi 5"},
+	{"fact", "look up the current price of a raspberry pi 5"},
 	{"research", "investigate the history of the ottoman navy"},
 	{"research", "research the pros and cons of a four day work week"},
 	{"research", "summarize the main arguments for and against nuclear power"},
@@ -416,11 +420,11 @@ var labelledRouterCorpus = []routerCase{
 	{"research", "compose a newsletter intro about our autumn sale"},
 	{"research", "investigate whether solar panels pay off in northern germany"},
 	{"research", "best python web frameworks in 2026"},
-	{"research", "yapay zeka düzenlemeleriyle ilgili son haberler neler"},
+	{"fact", "yapay zeka düzenlemeleriyle ilgili son haberler neler"},
 	{"research", "postgres ile mysql'i analitik iş yükleri için karşılaştır"},
 	{"research", "öğrenciler için en iyi not alma uygulamaları hangileri"},
 	{"research", "speculative decoding üzerine yeni makaleleri bul"},
-	{"research", "raspberry pi 5'in güncel fiyatı ne kadar"},
+	{"fact", "raspberry pi 5'in güncel fiyatı ne kadar"},
 	{"research", "osmanlı donanmasının tarihini araştır"},
 	{"research", "dört günlük çalışma haftasının avantaj ve dezavantajlarını araştır"},
 	{"research", "nükleer enerji lehine ve aleyhine argümanları özetle"},
@@ -496,7 +500,6 @@ var researchKeptOnTheMainModel = map[string]bool{
 
 var researchKeptOnTheMainModelInACodingSession = map[string]bool{
 	"en iyi vektör veritabanı hangisi karşılaştırma yapar mısın":      true,
-	"look up the current pricing of aws lambda and azure functions":   true,
 	"araştır bakalım türkiye'de kvkk uyumu için neler gerekiyor":      true,
 	"investigate the history of the ottoman navy":                     true,
 	"what's the best database for our startup":                        true,
@@ -510,7 +513,7 @@ var researchKeptOnTheMainModelInACodingSession = map[string]bool{
 }
 
 type routerTally struct {
-	ownWork, ownWorkKept, research, researchRouted, routed int
+	ownWork, ownWorkKept, research, researchRouted, facts, factsKept, routed int
 }
 
 func percentOf(part, whole int) float64 {
@@ -521,10 +524,11 @@ func percentOf(part, whole int) float64 {
 }
 
 func (tally routerTally) String() string {
-	return fmt.Sprintf("own work kept on the main model %d of %d (%.1f%%), research precision %d of %d routed (%.1f%%), research recall %d of %d (%.1f%%)",
+	return fmt.Sprintf("own work kept on the main model %d of %d (%.1f%%), research precision %d of %d routed (%.1f%%), research recall %d of %d (%.1f%%), short fact questions kept in the session %d of %d",
 		tally.ownWorkKept, tally.ownWork, percentOf(tally.ownWorkKept, tally.ownWork),
 		tally.researchRouted, tally.routed, percentOf(tally.researchRouted, tally.routed),
-		tally.researchRouted, tally.research, percentOf(tally.researchRouted, tally.research))
+		tally.researchRouted, tally.research, percentOf(tally.researchRouted, tally.research),
+		tally.factsKept, tally.facts)
 }
 
 func unionOf(sets ...map[string]bool) map[string]bool {
@@ -596,6 +600,13 @@ func TestTheRouterCorpusReportsOwnWorkRecallAndResearchPrecision(t *testing.T) {
 				if result.route {
 					t.Errorf("%s a prompt that asks for no research was routed (%s): %q", session.name, result.reason, entry.prompt)
 				}
+			case "fact":
+				tally.facts++
+				if !result.route {
+					tally.factsKept++
+				} else {
+					t.Errorf("%s a short fact question was routed (%s): %q", session.name, result.reason, entry.prompt)
+				}
 			}
 		}
 		t.Logf("router over %d prompts %s: %s", len(corpus), session.name, tally)
@@ -644,9 +655,6 @@ var ownWorkNamingASourcePriceTrendOrArticle = []string{
 }
 
 var researchNamingSourcesPricesTrendsOrArticles = []string{
-	"look up the current price of a raspberry pi 5",
-	"what's the price of the new macbook air",
-	"price of gold today",
 	"compare the prices of the top three vpn providers",
 	"find sources on the economic impact of remote work",
 	"best sources on the history of rome",
@@ -704,13 +712,11 @@ var researchAskedWithAWebWord = []string{
 	"what's the best database for our startup",
 	"compare the iPhone 17 and Pixel 10 cameras for our trip",
 	"which is better for students, macOS or Windows",
-	"latest news from @the_verge about foldable phones",
 	"bu yıl çıkan en iyi filmler hangileri",
 	"bu yıl yapılan en iyi filmler hangileri",
 	"şirketimiz için en iyi muhasebe programı hangisi",
 	"en iyi ev yapımı pizza tarifi",
 	"find the latest papers on arXiv about speculative decoding",
-	"what are the latest changes to useState in React 19",
 	"what's the best theme for my code editor",
 	"what are this year's best code editors",
 	"is this promo code the best deal",
@@ -736,7 +742,57 @@ var comparisonsAboutThis = []string{
 var researchAboutThisWithANewsOrPriceWord = []string{
 	"what are the latest reviews of this laptop",
 	"compare the prices of this phone and the Pixel 10",
+}
+
+var shortFactQuestions = []string{
+	"look up the current price of a raspberry pi 5",
+	"what's the price of the new macbook air",
+	"price of gold today",
+	"latest news from @the_verge about foldable phones",
+	"what are the latest changes to useState in React 19",
 	"bu telefonla ilgili en son haberler neler",
+	"what's the latest Go version?",
+	"Look up the current USD/TRY exchange rate news",
+	"raspberry pi 5'in güncel fiyatı ne kadar",
+	"look up the population of Istanbul",
+}
+
+var broadResearchAsks = []string{
+	"What are the latest findings on intermittent fasting?",
+	"latest news about the eu ai act, with sources",
+	"son yapay zeka haberlerini araştır",
+	"uzaktan çalışmanın ekonomik etkisi üzerine kaynak bul",
+	"compare the price of gold and silver today",
+	"what is the latest news about the eu ai act and how it will change the rules for small shops that sell online to customers across europe",
+	"what is the latest news about the eu ai act\nand what the uk plans to do",
+}
+
+func TestAShortFactQuestionStaysInTheSessionInsteadOfGoingToAnAgent(t *testing.T) {
+	cfg := object{"router": object{"enabled": true}}
+	now := nowSec()
+	coding := sessionTranscript(t, editTurns(now-120)...)
+	for _, prompt := range shortFactQuestions {
+		for _, session := range []struct{ name, transcript string }{{"in a session that has touched no file", ""}, {"in a coding session", coding}} {
+			if result := classifyPrompt(cfg, nil, prompt, session.transcript, now); result.route || result.reason != "short-question" {
+				t.Errorf("%s a short fact question was not kept in the session (route %t, %s/%s): %q", session.name, result.route, result.reason, result.signal, prompt)
+			}
+		}
+	}
+}
+
+func TestBroadLongOrMultiLineResearchStillGoesToTheLiteAgent(t *testing.T) {
+	cfg := object{"router": object{"enabled": true}}
+	for _, prompt := range broadResearchAsks {
+		if result := classifyPrompt(cfg, nil, prompt, "", nowSec()); !result.route {
+			t.Errorf("research that needs more than one lookup stayed on the main model (%s): %q", result.reason, prompt)
+		}
+	}
+	off := object{"router": object{"enabled": true, "shortQuestionWords": 0.0}}
+	for _, prompt := range shortFactQuestions {
+		if result := classifyPrompt(off, nil, prompt, "", nowSec()); !result.route {
+			t.Errorf("with router.shortQuestionWords 0 a short question stayed on the main model (%s): %q", result.reason, prompt)
+		}
+	}
 }
 
 func TestAWebWordLeavesAQuestionAboutTheUsersOwnCodeOnTheMainModel(t *testing.T) {

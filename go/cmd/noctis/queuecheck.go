@@ -608,6 +608,7 @@ func gateQueue(cfg, input object, sid, path, content, label string, snapshot que
 	if same {
 		facts["same"] = true
 	}
+	model, agent, noRoom := checkFixEscalation(cfg, record, sid, int64(now))
 	if !same && failures < queueCheckAttempts(cfg) {
 		updateState(func(next object) {
 			stateMap(next, "queueVerify")[key] = stored
@@ -616,12 +617,12 @@ func gateQueue(cfg, input object, sid, path, content, label string, snapshot que
 		journal(sid, "Stop", "verify-queue", outcome, facts)
 		logInfo("queue check %q for %s %s (%s in a row); Claude is sent back to fix it", command, sid, outcome, formatNumber(failures))
 		last := ""
-		if model, _ := checkFixEscalation(cfg, record, sid, int64(now)); model == "" && failures+1 >= queueCheckAttempts(cfg) {
+		if model == "" && failures+1 >= queueCheckAttempts(cfg) {
 			last = queueCheckLastRule(path)
 		}
 		return object{"decision": "block", "reason": fmt.Sprintf("[noctis] Queue check failed: `%s` %s (run in %s). Fix the failure before you start another item, and leave the item you were on unticked until the command passes (untick it if you already marked it done); it runs again when you stop.%s Do not ask for confirmation; decide yourself. %s", command, outcome, folder, last, checkOutputText(tail))}
 	}
-	if model, agent := checkFixEscalation(cfg, record, sid, int64(now)); model != "" {
+	if model != "" {
 		stored["escalated"] = now
 		storeEscalatedCheck(key, sid, stored, int64(now))
 		facts["escalateTo"], facts["escalated"] = model, true
@@ -633,6 +634,9 @@ func gateQueue(cfg, input object, sid, path, content, label string, snapshot que
 		}
 		reason := fmt.Sprintf("[noctis] Queue check failed again: `%s` %s (run in %s), %s time(s) in a row.%s Hand the fix once to %s It runs again when you stop.%s Do not ask for confirmation; decide yourself. %s", command, outcome, folder, formatNumber(failures), repeated, handOff(escalationAgentText(model, agent), "the command, its output verbatim, what you changed and tried and why it did not work, the files involved"), queueCheckLastRule(path), checkOutputText(tail))
 		return object{"decision": "block", "reason": reason, "systemMessage": T("queue.escalateCheck", truncateText(command, 120), int(failures), escalationModelTitle(model, agent))}
+	}
+	if noRoom != "" {
+		facts["escalateNoRoom"] = noRoom
 	}
 	stored["held"] = now
 	updateState(func(next object) {

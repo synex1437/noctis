@@ -77,8 +77,9 @@ const (
 	creditCeilingDefault    = 100.0
 	fanOutHeadroomDefault   = 15.0
 	formerFanOutHeadroom    = 25.0
+	formerSubagentAbove     = 100000.0
 	configVersionKey        = "configVersion"
-	configVersion           = 1.0
+	configVersion           = 2.0
 	clearedSessionWindow    = 600
 	handoffGraceSeconds     = 60
 	waitStaleSeconds        = 2 * 86400
@@ -94,7 +95,6 @@ const (
 	hooksDeadMinStatuslines = 4
 	statuslineRecentSeconds = 300
 	interruptedSamples      = 3
-	etaMinSpanSeconds       = 1800
 	queueMaxBytes           = 1024 * 1024
 	queueMaxItems           = 15
 	queueUnmatchedKept      = 50
@@ -1045,9 +1045,15 @@ func loadConfig() object {
 
 func migrateConfig(user object) {
 	migrateCompaction(user)
-	if numberOr(user, configVersionKey, 0) < configVersion {
+	version := numberOr(user, configVersionKey, 0)
+	if version < 1 {
 		migrateFanOutHeadroom(user)
 		migrateHaikuEfforts(user)
+	}
+	if version < 2 {
+		migrateSubagentHandOff(user)
+	}
+	if version < configVersion {
 		user[configVersionKey] = configVersion
 	}
 }
@@ -1244,6 +1250,7 @@ func emptyState() object {
 		// queueCompactions is, by queueTrustKey, how many compactions the item in hand of a queue file
 		// has seen (item, count), and when the last one came (at), for compactnote.go.
 		"queueCompactions": object{},
+		"spawns":           object{},
 		// usedCheckpointsDue is when the oldest record in used-checkpoints.json expires, 0 when
 		// it holds none.
 		"usedCheckpointsDue": float64(0),
@@ -1510,10 +1517,11 @@ func pruneState(state object, now int64) {
 			delete(stateMap(state, "overload"), sid)
 		}
 	}
+	pruneSpawns(getMap(state, spawnStateKey), now)
 	for key, raw := range stateMap(state, "notified") {
 		at, _ := toNumber(raw)
 		ttl := float64(stateEntryTTLSeconds)
-		if strings.HasPrefix(key, "queue:") || strings.HasPrefix(key, "update:") || strings.HasPrefix(key, "restart:") || key == "signInExpired" {
+		if strings.HasPrefix(key, "queue:") || strings.HasPrefix(key, "update:") || strings.HasPrefix(key, "restart:") || strings.HasPrefix(key, "burn:") || key == "signInExpired" {
 			ttl = 30 * 86400
 		}
 		if float64(now)-at > ttl {
@@ -1955,6 +1963,14 @@ func localISO(epoch float64) string {
 }
 
 func durationText(seconds float64) string {
+	return durationTextIn(durationUnitsNow(), seconds)
+}
+
+func englishDurationText(seconds float64) string {
+	return durationTextIn(durationUnits["en"], seconds)
+}
+
+func durationTextIn(units [3]string, seconds float64) string {
 	total := int64(seconds + 0.5)
 	if total < 0 {
 		total = 0
@@ -1964,12 +1980,12 @@ func durationText(seconds float64) string {
 	minutes := (total % 3600) / 60
 	parts := []string{}
 	if days > 0 {
-		parts = append(parts, fmt.Sprintf("%d%s", days, durationUnit(0)))
+		parts = append(parts, fmt.Sprintf("%d%s", days, units[0]))
 	}
 	if hours > 0 {
-		parts = append(parts, fmt.Sprintf("%d%s", hours, durationUnit(1)))
+		parts = append(parts, fmt.Sprintf("%d%s", hours, units[1]))
 	}
-	parts = append(parts, fmt.Sprintf("%d%s", minutes, durationUnit(2)))
+	parts = append(parts, fmt.Sprintf("%d%s", minutes, units[2]))
 	return strings.Join(parts, " ")
 }
 

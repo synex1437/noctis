@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -22,6 +23,10 @@ var effortlessRoles = map[string]bool{"planning": true, "explore": true}
 var roleModelPattern = lazyRegexp(`^[A-Za-z0-9._:@/\[\]-]+$`)
 
 var frontmatterLine = lazyRegexp(`(?m)^(model|effort):[^\n]*\n`)
+
+var compactWindowLine = lazyRegexp(`(?m)^autoCompactWindow:[^\n]*\n`)
+
+var pluginAgentFiles = []string{"lite.md", "worker.md", "deep.md", "digest.md"}
 
 var familyFreeModels = map[string]bool{"best": true, "default": true, "inherit": true}
 
@@ -491,15 +496,10 @@ func syncAgentFiles(pluginRoot string, roles object, anyModel bool) int {
 			continue
 		}
 		text := string(content)
-		if !strings.HasPrefix(text, "---\n") {
+		front, rest, found := splitFrontmatter(text)
+		if !found {
 			continue
 		}
-		end := strings.Index(text[4:], "\n---")
-		if end < 0 {
-			continue
-		}
-		front := text[:4+end+1]
-		rest := text[4+end+1:]
 		stripped := frontmatterLine.ReplaceAllString(front, "")
 		lines := "model: " + getString(spec, "model") + "\n"
 		if effort := appliedEffort(role, spec); effort != "" {
@@ -507,6 +507,64 @@ func syncAgentFiles(pluginRoot string, roles object, anyModel bool) int {
 		}
 		next := strings.TrimSuffix(stripped, "\n") + "\n" + lines + rest
 		if next == text {
+			continue
+		}
+		if err := os.WriteFile(target, []byte(next), 0o644); err == nil {
+			changed++
+		}
+	}
+	return changed
+}
+
+func splitFrontmatter(text string) (front, rest string, found bool) {
+	if !strings.HasPrefix(text, "---\n") {
+		return "", "", false
+	}
+	end := strings.Index(text[4:], "\n---")
+	if end < 0 {
+		return "", "", false
+	}
+	return text[:4+end+1], text[4+end+1:], true
+}
+
+func agentCompactWindowLine(cfg object) (string, bool) {
+	window := numberOr(section(cfg, "subagents"), "compactWindow", subagentCompactWindowDefault)
+	switch {
+	case window == 0:
+		return "", true
+	case window != math.Trunc(window) || window < agentCompactWindowMin || window > agentCompactWindowMax:
+		return "", false
+	}
+	return "autoCompactWindow: " + formatNumber(window) + "\n", true
+}
+
+func syncAgentWindows(pluginRoot string, cfg object) int {
+	if pluginRoot == "" {
+		return 0
+	}
+	line, valid := agentCompactWindowLine(cfg)
+	if !valid {
+		warn("agent files left unchanged: subagents.compactWindow must be 0 or a whole number from %s to %s", formatNumber(agentCompactWindowMin), formatNumber(agentCompactWindowMax))
+		return 0
+	}
+	changed := 0
+	for _, file := range pluginAgentFiles {
+		target := filepath.Join(pluginRoot, "agents", file)
+		content, err := os.ReadFile(target)
+		if err != nil {
+			continue
+		}
+		front, rest, found := splitFrontmatter(string(content))
+		if !found {
+			continue
+		}
+		front = compactWindowLine.ReplaceAllString(front, "")
+		at := len(front)
+		if index := strings.Index(front, "\nmodel:"); index >= 0 {
+			at = index + 1
+		}
+		next := front[:at] + line + front[at:] + rest
+		if next == string(content) {
 			continue
 		}
 		if err := os.WriteFile(target, []byte(next), 0o644); err == nil {

@@ -33,11 +33,18 @@ func sessionContextTokens(sid string) (float64, bool) {
 }
 
 func subagentNote(cfg object, tokens float64, known bool) string {
-	above := numberOr(section(cfg, "queue"), "subagentAboveTokens", 100000)
+	above := numberOr(section(cfg, "queue"), "subagentAboveTokens", 0)
 	if !known || above <= 0 || tokens < above || !currentHost().agents {
 		return ""
 	}
 	return fmt.Sprintf(" This session's context already holds about %s tokens: unless the item is a quick edit, hand it to %s", approxCount(tokens), handOff(workerText("")+", a fresh context,", handOffBrief))
+}
+
+func migrateSubagentHandOff(user object) {
+	queue := getMap(user, "queue")
+	if above, set := queue["subagentAboveTokens"].(float64); set && above == formerSubagentAbove {
+		queue["subagentAboveTokens"] = 0.0
+	}
 }
 
 // handOffBrief is what the brief of a subagent that takes a queue item holds.

@@ -47,7 +47,7 @@ const acc = lab.account('accountA');
 
 const SESSIONS = ['m1', 'm2', 'm3', 'weird id with spaces', '../escape', 'çok-uzun-türkçe-oturum-kimliği', ''];
 const MODELS = ['claude-fable-5-1', 'claude-opus-5', 'claude-haiku-4-5-20251001', 'claude-sonnet-5', '', 'something-unknown'];
-const EVENTS = ['UserPromptSubmit', 'PostToolBatch', 'Stop', 'SessionStart', 'SessionEnd', 'PreToolUse', 'StopFailure', 'Notification', 'PostModelSwitch', 'TaskCreated', 'TaskCompleted', 'PreCompact', 'NotAnEvent'];
+const EVENTS = ['UserPromptSubmit', 'PostToolBatch', 'Stop', 'SessionStart', 'SessionEnd', 'PreToolUse', 'StopFailure', 'Notification', 'PostModelSwitch', 'TaskCreated', 'TaskCompleted', 'PreCompact', 'SubagentStart', 'SubagentStop', 'NotAnEvent'];
 const PROMPTS = [
   'fix the typo',
   'ne yapıyorsun',
@@ -356,6 +356,7 @@ const ACTIONS = [
     if (event === 'Notification') input.message = pick(['quota_auto_resume_fired', 'quota_auto_resume_stale', 'hello']);
     if (event === 'PostModelSwitch') input.to_model = pick(MODELS);
     if (event === 'PreCompact') input.trigger = pick(['auto', 'manual']);
+    if (event.startsWith('Subagent')) { input.agent_id = `a${between(1, 4)}`; input.agent_type = pick(['general-purpose', 'Explore', 'noctis:lite', 'noctis:digest']); }
     if (event.startsWith('Task')) { input.task_id = `t${between(1, 5)}`; input.task_subject = 'thing'; }
     const since = clock();
     checkResult(round, `hook ${event}`, runEngine(['hook'], input), { since, sid });

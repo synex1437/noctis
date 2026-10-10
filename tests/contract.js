@@ -57,6 +57,10 @@ function payloadFor(event, sid, lab, account) {
       return { ...base, task: { id: 't1', subject: 'write the parser', status: 'completed' } };
     case 'PreCompact':
       return { ...base, trigger: 'auto', custom_instructions: '' };
+    case 'SubagentStart':
+      return { ...base, agent_id: `${sid}-agent`, agent_type: 'general-purpose' };
+    case 'SubagentStop':
+      return { ...base, stop_hook_active: false, agent_id: `${sid}-agent`, agent_type: 'general-purpose', agent_transcript_path: path.join(account.dir, `agent-${sid}.jsonl`) };
     default:
       return base;
   }

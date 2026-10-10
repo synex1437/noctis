@@ -173,19 +173,25 @@ func countEscalation(state object, now int64) {
 	addNumber(stateMap(state, "escalateDay"), "count", 1)
 }
 
-func checkFixEscalation(cfg, record object, sid string, now int64) (model, agent string) {
+func checkFixEscalation(cfg, record object, sid string, now int64) (model, agent, noRoom string) {
 	perDay := numberOr(section(cfg, "queue"), "maxEscalationsPerDay", 5)
 	if numberOr(record, "escalated", 0) > 0 || perDay <= 0 {
-		return "", ""
+		return "", "", ""
 	}
 	if limit := stopBlockCap(); limit > 0 && queueCheckAttempts(cfg) >= math.Floor(limit) {
-		return "", ""
+		return "", "", ""
 	}
 	state := readState()
 	if escalationsToday(state, now) >= perDay {
-		return "", ""
+		return "", "", ""
 	}
-	return escalationTarget(cfg, state, sid, "")
+	if model, agent = escalationTarget(cfg, state, sid, ""); model == "" {
+		return "", "", ""
+	}
+	if noRoom = spawnHeadroomNow(cfg, sid, now); noRoom != "" {
+		return "", "", noRoom
+	}
+	return model, agent, ""
 }
 
 func escalationAgentText(model, agent string) string {
@@ -218,6 +224,7 @@ type stuckStep struct {
 	setup string
 	// capped: the item would have gone up, but queue.maxEscalationsPerDay items went up today.
 	capped bool
+	noRoom string
 }
 
 // stuckItemStep decides what the continuation after a stop without progress does about the next
@@ -262,6 +269,11 @@ func stuckItemStep(cfg, state object, sid, path string, idle, maxIdle float64, v
 	if escalationsToday(state, now) >= perDay {
 		step.capped = true
 		logInfo("queue item not escalated for %s: queue.maxEscalationsPerDay (%s) reached; set aside instead", sid, formatNumber(perDay))
+		return step
+	}
+	if why := spawnHeadroomNow(cfg, sid, now); why != "" {
+		step.noRoom = why
+		logInfo("queue item not escalated for %s: no subagent can be opened now (%s); set aside instead", sid, why)
 		return step
 	}
 	step.escalate, step.setAside, step.model, step.agent = true, false, model, agent

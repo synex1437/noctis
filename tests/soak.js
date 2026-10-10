@@ -18,6 +18,7 @@ const DAY = 86400;
 const SHIPPED = readJson(path.join(__dirname, '..', 'config.default.json'));
 const THRESHOLDS = { five: SHIPPED.thresholds.session5h, week: SHIPPED.thresholds.weeklyAll, fable: SHIPPED.thresholds.weeklyFable };
 const FAN_OUT_HEADROOM = SHIPPED.credits.fanOutHeadroom;
+const BURN_LOOKBACK = SHIPPED.burn.lookbackHours * HOUR;
 const CODING_PROMPTS = ['auth.js dosyasındaki hatayı düzelt', 'Refactor the payment module and add unit tests', 'npm test çalıştır ve kırmızıları düzelt', 'Implement caching for the api layer', 'Bu fonksiyonu optimize et', 'Add a migration for the orders table'];
 const RESEARCH_PROMPTS = ['En iyi mekanik klavye 2026 araştır', 'Compare pricing of Claude Max and ChatGPT Pro plans', 'Anthropic güncel haberleri neler', 'Latest research on intermittent fasting', 'Şu yazıyı özetle https://example.com/article'];
 const OTHER_PROMPTS = ['Bu konuşmayı özetle', 'devam et', 'Write a short poem about autumn', 'JWT nasıl çalışır kısaca anlat'];
@@ -71,6 +72,8 @@ const stats = {
   queueContinues: 0,
   stuckStops: 0,
   subagentGates: 0,
+  spawnRefusals: 0,
+  burnRefusals: 0,
   subagentStops: 0,
   overloadStorms: 0,
   overloadRetries: 0,
@@ -125,6 +128,7 @@ function account(name) {
     week: { used: 0, resetsAt: T + 7 * DAY },
     fable: { used: 0, resetsAt: T + 7 * DAY },
   };
+  acc.weekTrail = [];
   acc.prefix = name.toLowerCase();
   return acc;
 }
@@ -153,12 +157,34 @@ function rollWindows(acc) {
 
 function publishTruth(acc) {
   const truth = acc.truth;
+  recordWeek(acc);
   const iso = (epoch) => new Date(epoch * 1000).toISOString();
   acc.setOwnLimits([
     { kind: 'session', percent: Number(truth.five.used.toFixed(1)), resets_at: iso(truth.five.resetsAt) },
     { kind: 'weekly_all', percent: Number(truth.week.used.toFixed(1)), resets_at: iso(truth.week.resetsAt) },
     { kind: 'weekly_scoped', percent: Number(truth.fable.used.toFixed(1)), resets_at: iso(truth.fable.resetsAt), scope: { group: 'model', model: { display_name: 'Fable' } } },
   ]);
+}
+
+function recordWeek(acc) {
+  const { used, resetsAt } = acc.truth.week;
+  const trail = acc.weekTrail;
+  const last = trail[trail.length - 1];
+  if (last && last.used === used && last.resetsAt === resetsAt) return;
+  trail.push({ at: T, used, resetsAt });
+  const settled = T - BURN_LOOKBACK - HOUR;
+  while (trail.length > 1 && trail[1].at <= settled) trail.shift();
+}
+
+function burnsThroughWeek(acc) {
+  const { used, resetsAt } = acc.truth.week;
+  const start = T - BURN_LOOKBACK;
+  const seen = acc.weekTrail.filter((entry) => entry.resetsAt === resetsAt && entry.at <= T).sort((a, b) => a.at - b.at);
+  const last = seen.filter((entry) => entry.at <= start).pop();
+  const base = last ? { used: last.used, at: start } : seen[0];
+  if (!base || base.at >= T) return false;
+  const perSecond = (used - base.used) / (T - base.at);
+  return perSecond > 0 && used + perSecond * (resetsAt - T) >= THRESHOLDS.week;
 }
 
 let ACCOUNTS = [];
@@ -410,6 +436,31 @@ function setModelCompactWindow(acc, settings, model) {
   settings.modelSettings = { ...(settings.modelSettings || {}) };
   settings.modelSettings[model] = { ...(settings.modelSettings[model] || {}), autoCompactWindow: window };
   return window;
+}
+
+function journalSize(acc) {
+  try {
+    return fs.statSync(path.join(acc.guardDir, 'decisions.jsonl')).size;
+  } catch {
+    return 0;
+  }
+}
+
+function journaledSince(acc, offset, sid, action, reason) {
+  let content;
+  try {
+    content = fs.readFileSync(path.join(acc.guardDir, 'decisions.jsonl'));
+  } catch {
+    return false;
+  }
+  return content.subarray(content.length >= offset ? offset : 0).toString('utf8').split('\n').some((line) => {
+    try {
+      const row = JSON.parse(line);
+      return row.sid === sid && row.action === action && (!reason || reason.test(row.reason || ''));
+    } catch {
+      return false;
+    }
+  });
 }
 
 function queueResume(acc, session, expect = {}, reason = '') {
@@ -719,8 +770,8 @@ function percentile(values, p) {
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
 }
 
-function corruptFile(file) {
-  stats.corruptions += 1;
+function corruptFile(file, backedUp = true) {
+  if (backedUp) stats.corruptions += 1;
   try {
     const text = fs.readFileSync(file, 'utf8');
     fs.writeFileSync(file, text.slice(0, Math.max(2, Math.floor(text.length / 2))));
@@ -896,10 +947,15 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
     }
     case 'workflow-launch': {
       const name = `audit-${serial}`;
+      const journaled = journalSize(acc);
       const gate = parseOutput(timedHook(acc, { hook_event_name: 'PreToolUse', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, tool_name: 'Workflow', tool_input: { script_path: `.claude/workflows/${name}.ts`, name } }));
       const denied = Boolean(gate.hookSpecificOutput && gate.hookSpecificOutput.permissionDecision === 'deny');
       const low = Object.keys(THRESHOLDS).every((key) => THRESHOLDS[key] - acc.truth[key].used >= FAN_OUT_HEADROOM + MAX_OVERSHOOT);
-      if (denied && low) anomaly(`workflow denied at low usage ${acc.name}/${session.sid}: ${gate.hookSpecificOutput.permissionDecisionReason}`);
+      if (denied && low) {
+        const reason = gate.hookSpecificOutput.permissionDecisionReason || '';
+        if (/The weekly limit is burning too fast/.test(reason) && journaledSince(acc, journaled, session.sid, 'deny-workflow', /^weekly burn /) && burnsThroughWeek(acc)) stats.burnRefusals += 1;
+        else anomaly(`workflow denied at low usage ${acc.name}/${session.sid}: ${reason}`);
+      }
       if (!denied) {
         stats.workflowLaunches += 1;
         const runs = (acc.state().workflows || {})[session.sid] || [];
@@ -1048,7 +1104,7 @@ async function injectChaos(acc, session, kindIndex, turn, accounts) {
       break;
     }
     case 'fable-corrupt':
-      corruptFile(path.join(guardDir, 'fable.json'));
+      corruptFile(path.join(guardDir, 'fable.json'), false);
       timedHook(acc, { hook_event_name: 'PostToolBatch', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript });
       break;
     case 'api-error':
@@ -1289,6 +1345,7 @@ async function marathonTurn(acc, session, turn, accounts) {
   const blackout = session.blackoutUntilTurn !== undefined && turn < session.blackoutUntilTurn;
   if (session.blackoutUntilTurn !== undefined && turn >= session.blackoutUntilTurn) session.blackoutUntilTurn = undefined;
   if (turn % 5 === 4) {
+    const journaled = journalSize(acc);
     const gate = parseOutput(timedHook(acc, { hook_event_name: 'PreToolUse', session_id: session.sid, cwd: lab.projectDir, transcript_path: session.transcript, tool_name: 'Agent', tool_input: { prompt: 'explore' } }));
     stats.subagentGates += 1;
     if (gate.hookSpecificOutput && gate.hookSpecificOutput.permissionDecision === 'deny') {
@@ -1298,8 +1355,15 @@ async function marathonTurn(acc, session, turn, accounts) {
         session.model = 'claude-opus-5';
         return 'worked';
       }
-      queueResume(acc, session, {}, gateReason);
-      return 'stopped';
+      if (!journaledSince(acc, journaled, session.sid, 'deny-subagent-spawn')) {
+        queueResume(acc, session, {}, gateReason);
+        return 'stopped';
+      }
+      stats.spawnRefusals += 1;
+      if (journaledSince(acc, journaled, session.sid, 'deny-subagent-spawn', /: weekly burn /)) {
+        if (burnsThroughWeek(acc)) stats.burnRefusals += 1;
+        else anomaly(`subagent refused for a weekly burn the usage does not show ${acc.name}/${session.sid}: ${gateReason}`);
+      }
     }
   }
   const prompt = rng() < 0.75 ? pick(CODING_PROMPTS) : pick(RESEARCH_PROMPTS);
@@ -1579,6 +1643,8 @@ async function main() {
     chaosInjections: stats.chaos,
     stateRecoveries: stats.recoveries,
     subagentGates: stats.subagentGates,
+    spawnRefusals: stats.spawnRefusals,
+    burnRefusals: stats.burnRefusals,
     subagentStops: stats.subagentStops,
     overloadStorms: stats.overloadStorms,
     overloadRetries: stats.overloadRetries,
