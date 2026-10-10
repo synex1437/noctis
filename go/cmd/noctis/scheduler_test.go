@@ -353,8 +353,8 @@ func TestSchedulingASessionDoesNotWaitForAnotherSessionsLock(t *testing.T) {
 	started := time.Now()
 	scheduled := scheduleRunner(object{}, "b", at)
 
-	if waited := time.Since(started); waited > 2*time.Second {
-		t.Fatalf("scheduling b waited %v while a's lock was held", waited)
+	if waited, noProgress := time.Since(started), lockNoProgressMs()*time.Millisecond; waited >= noProgress {
+		t.Fatalf("scheduling b waited %v while a's lock was held; a held lock makes it wait %v", waited, noProgress)
 	}
 	if getString(scheduled, "method") != "systemd" {
 		t.Fatalf("b was not scheduled while a's lock was held: %v", scheduled)
