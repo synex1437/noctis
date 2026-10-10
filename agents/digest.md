@@ -5,6 +5,7 @@ tools: Bash, Read, Grep, Glob
 disallowedTools: Write, Edit, MultiEdit, NotebookEdit, Agent, WebSearch, WebFetch
 maxTurns: 8
 omitClaudeMd: true
+autoCompactWindow: 200000
 model: haiku
 ---
 

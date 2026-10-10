@@ -16,7 +16,7 @@ func TestClaudeIsToldToChangeOnlyTheCheckboxOfAnItemItFinishes(t *testing.T) {
 		t.Errorf("the queue directive at session start does not tell Claude to change only the checkbox of an item it finishes:\n%s", context)
 	}
 	activeHost = "codex"
-	if directive := queueDirective(cfg, filepath.Join(project, "TASKS.md"), 2); !strings.Contains(directive, onlyTheCheckbox) {
+	if directive := queueDirective(cfg, filepath.Join(project, "TASKS.md"), 2, "s1", nowSec()); !strings.Contains(directive, onlyTheCheckbox) {
 		t.Errorf("the queue directive of a host without subagents does not tell the model to change only the checkbox of an item it finishes:\n%s", directive)
 	}
 	activeHost = "claude"
@@ -45,7 +45,7 @@ func TestAQueueThatNeedsNoTrustIsNotToldAboutTheTrust(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, false)
 	section(cfg, "queue")["requireTrust"] = false
 	queuePath := writeQueueFile(t, project, "# q\n- [ ] write the release notes\n")
-	if directive := queueDirective(cfg, queuePath, 1); strings.Contains(directive, "trusts the file") {
+	if directive := queueDirective(cfg, queuePath, 1, "s1", nowSec()); strings.Contains(directive, "trusts the file") {
 		t.Errorf("with queue.requireTrust off the queue directive speaks of a trust:\n%s", directive)
 	}
 	if reason := getString(stopHookOutput(t, stopInput("oc4", project), cfg), "reason"); !strings.Contains(reason, "write the release notes") || strings.Contains(reason, "trusts the file") {

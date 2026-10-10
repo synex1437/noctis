@@ -42,6 +42,7 @@ func TestTheStatusLineKeepsHowManyTokensTheContextHolds(t *testing.T) {
 
 func TestAQueueItemGoesToAFreshSubagentOnceTheContextIsBig(t *testing.T) {
 	cfg, project := queueTrustSandbox(t, false)
+	section(cfg, "queue")["subagentAboveTokens"] = float64(100000)
 	writeJobFile(t, project, "deneme.md", "- add a login page\n- add a logout button\n")
 	startedChecklist(t, cfg, "fc1", project, "deneme.md")
 	contextReading("fc1", bigContext())
@@ -61,9 +62,10 @@ func TestASmallContextOrTheSwitchOffKeepsQueueItemsInTheSession(t *testing.T) {
 		window object
 		above  any
 	}{
-		{"40k tokens of context", object{"context_window_size": float64(200000), "used_percentage": float64(20)}, nil},
-		{"no context reading yet", nil, nil},
+		{"40k tokens of context", object{"context_window_size": float64(200000), "used_percentage": float64(20)}, float64(100000)},
+		{"no context reading yet", nil, float64(100000)},
 		{"queue.subagentAboveTokens 0", bigContext(), float64(0)},
+		{"the shipped default", bigContext(), nil},
 	}
 	for index, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

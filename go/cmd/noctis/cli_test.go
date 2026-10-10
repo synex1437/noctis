@@ -147,7 +147,7 @@ func cliPluginTree(t *testing.T) string {
 	}
 	cliWrite(t, filepath.Join(root, "config.default.json"), encoded)
 	cliWrite(t, filepath.Join(root, "hooks", "hooks.json"), []byte(`{"hooks": {"SessionStart": [{"matcher": "startup", "hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/noctis", "args": ["ensure"], "timeout": 15}]}]}}`))
-	cliWrite(t, filepath.Join(root, "agents", "lite.md"), []byte("---\nname: lite\nmodel: sonnet\neffort: high\n---\n\nResearch on the model a custom profile picked.\n"))
+	cliWrite(t, filepath.Join(root, "agents", "lite.md"), []byte("---\nname: lite\nautoCompactWindow: 200000\nmodel: sonnet\neffort: high\n---\n\nResearch on the model a custom profile picked.\n"))
 	return root
 }
 

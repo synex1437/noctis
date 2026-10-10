@@ -73,6 +73,7 @@ func TestTheStopHookHandsAnItemTaggedForAnotherModelToASubagentOfIt(t *testing.T
 
 func TestTheModelNoteTakesThePlaceOfTheLargeContextNote(t *testing.T) {
 	cfg, _, frontend := modelQueueSandbox(t, "haiku")
+	section(cfg, "queue")["subagentAboveTokens"] = float64(100000)
 	runsOn("im2", "claude-opus-5-5", 150000)
 	reason := getString(stopHookOutput(t, stopInput("im2", frontend), cfg), "reason")
 	if !strings.Contains(reason, `(subagent_type "noctis:worker", model "haiku")`) || strings.Contains(reason, "context already holds") {
@@ -82,6 +83,7 @@ func TestTheModelNoteTakesThePlaceOfTheLargeContextNote(t *testing.T) {
 
 func TestAnItemTaggedForTheSessionsOwnModelKeepsTheLargeContextNote(t *testing.T) {
 	cfg, _, frontend := modelQueueSandbox(t, "opus")
+	section(cfg, "queue")["subagentAboveTokens"] = float64(100000)
 	runsOn("im3", "claude-opus-5-5", 150000)
 	reason := getString(stopHookOutput(t, stopInput("im3", frontend), cfg), "reason")
 	if strings.Contains(reason, "is tagged (opus)") || !strings.Contains(reason, "context already holds") {

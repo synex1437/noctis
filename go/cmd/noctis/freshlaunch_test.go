@@ -355,14 +355,21 @@ func TestAResumedBigSessionIsToldToGiveQueueItemsToSubagents(t *testing.T) {
 	cases := []struct {
 		name     string
 		tokens   float64
+		above    any
 		subagent bool
 	}{
-		{"160k tokens of context", 160000, true},
-		{"40k tokens of context", 40000, false},
+		{"160k tokens of context", 160000, float64(100000), true},
+		{"40k tokens of context", 40000, float64(100000), false},
+		{"160k tokens of context and the shipped default", 160000, nil, false},
 	}
 	for index, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := relaunchSandboxWith(t, fakeClaude("exit 0"))
+			if tc.above != nil {
+				config := readJSON(files.config)
+				config["queue"], config[configVersionKey] = object{"subagentAboveTokens": tc.above}, configVersion
+				mustWriteJSON(files.config, config)
+			}
 			sid := fmt.Sprintf("resumedbig%d", index+1)
 			parkBigPause(t, sid, "headless", 20, tc.tokens)
 
@@ -376,6 +383,26 @@ func TestAResumedBigSessionIsToldToGiveQueueItemsToSubagents(t *testing.T) {
 				t.Fatalf("subagent advice = %t, want %t: %q", !tc.subagent, tc.subagent, prompt)
 			}
 		})
+	}
+}
+
+func TestAResumedBigSessionGetsNoHandOffWhenNoSubagentCanBeOpened(t *testing.T) {
+	calls := relaunchSandboxWith(t, fakeClaude("exit 0"))
+	config := readJSON(files.config)
+	config["queue"], config[configVersionKey] = object{"subagentAboveTokens": float64(100000)}, configVersion
+	mustWriteJSON(files.config, config)
+	parkBigPause(t, "hr7", "headless", 20, 160000)
+	now := float64(nowSec())
+	statusReadingFrom("hr7", nowSec(), 3, now+18000, 85, now+3*86400)
+
+	resumeWait("hr7", "")
+
+	prompt := launchPromptOf(calls)
+	if !strings.Contains(prompt, "add a login page") {
+		t.Fatalf("the resume prompt does not carry the checklist: %q", prompt)
+	}
+	if strings.Contains(prompt, "a fresh context") {
+		t.Fatalf("with 10 points of weekly room the resumed session is told to hand items to a subagent: %q", prompt)
 	}
 }
 

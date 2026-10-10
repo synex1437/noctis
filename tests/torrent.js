@@ -37,6 +37,7 @@ const stats = {
   typedPasses: 0,
   parked: 0,
   parkRefused: 0,
+  spawnRefusals: 0,
   routed: 0,
   switches: 0,
   checkpoints: 0,
@@ -109,8 +110,9 @@ function runJob(lab, account, random, index, world) {
       event = 'PreToolUse';
       payload = { tool_name: pick(random, ['Task', 'Agent']), tool_input: { description: 'research the api surface' } };
     }
-    const isGate = event === 'UserPromptSubmit' || event === 'PostToolBatch'
-      || (event === 'PreToolUse' && /Task|Agent/.test(payload.tool_name || ''));
+    const spawnCall = event === 'PreToolUse' && /Task|Agent/.test(payload.tool_name || '');
+    const isGate = event === 'UserPromptSubmit' || event === 'PostToolBatch' || spawnCall;
+    const journaled = spawnCall ? account.journalMark() : 0;
 
     const out = account.run(['hook'], {
       session_id: sid,
@@ -123,7 +125,19 @@ function runJob(lab, account, random, index, world) {
     stats.hookMs.push(account.lastRunMs);
     stats.hooks += 1;
 
+    const typedTurn = Boolean((account.state().typedTurns || {})[sid]);
+    const pastPausePoint = world.fiveUsed >= thresholds.session5h + 3 || world.weekUsed >= thresholds.weeklyAll + 3;
+    const atLimit = Math.round(world.fiveUsed) >= 100 || Math.round(world.weekUsed) >= 100;
+    const overWall = isGate && (typedTurn ? atLimit : pastPausePoint);
+    const wall = typedTurn ? 'usage limit in the turn of a prompt you typed' : 'wall';
+    const levels = `5h ${world.fiveUsed.toFixed(1)}% (limit ${thresholds.session5h}), weekly ${world.weekUsed.toFixed(1)}% (limit ${thresholds.weeklyAll}); hook said ${out.slice(0, 120) || '(nothing)'}`;
+
     const blocked = /"decision":\s*"block"|"continue":\s*false|"permissionDecision":\s*"deny"/.test(out);
+    if (blocked && spawnCall && account.journalSince(journaled).some((row) => row.sid === sid && row.action === 'deny-subagent-spawn')) {
+      if (overWall) fail(`${sid} turn ${turn}: a subagent was refused past the ${wall} instead of the session pausing`, levels);
+      stats.spawnRefusals += 1;
+      continue;
+    }
     if (blocked) {
       stats.blocked += 1;
       blockedAt = { turn, five: world.fiveUsed, week: world.weekUsed };
@@ -131,13 +145,9 @@ function runJob(lab, account, random, index, world) {
     }
     stats.allowed += 1;
 
-    const typedTurn = Boolean((account.state().typedTurns || {})[sid]);
-    const pastPausePoint = world.fiveUsed >= thresholds.session5h + 3 || world.weekUsed >= thresholds.weeklyAll + 3;
-    const atLimit = Math.round(world.fiveUsed) >= 100 || Math.round(world.weekUsed) >= 100;
-    if (isGate && (typedTurn ? atLimit : pastPausePoint)) {
+    if (overWall) {
       stats.allowedOverThreshold += 1;
-      fail(`${sid} turn ${turn}: ${event} let the session past the ${typedTurn ? 'usage limit in the turn of a prompt you typed' : 'wall'}`,
-        `5h ${world.fiveUsed.toFixed(1)}% (limit ${thresholds.session5h}), weekly ${world.weekUsed.toFixed(1)}% (limit ${thresholds.weeklyAll}); hook said ${out.slice(0, 120) || '(nothing)'}`);
+      fail(`${sid} turn ${turn}: ${event} let the session past the ${wall}`, levels);
     } else if (isGate && typedTurn && pastPausePoint) {
       stats.typedPasses += 1;
     }
@@ -285,6 +295,7 @@ async function main() {
     console.log(`  duvara girmeden durdurulan oturum : ${stats.blocked}`);
     console.log(`  bunlardan park edilen             : ${stats.parked}`);
     console.log(`  park edilemeyip söylenen          : ${stats.parkRefused}`);
+    console.log(`  reddedilen alt ajan, iş oturumda  : ${stats.spawnRefusals}`);
     console.log(`  eşiği aşmasına izin verilen       : ${stats.allowedOverThreshold}  ${stats.allowedOverThreshold === 0 ? '✓' : '✗ KORUMA SIZDIRDI'}`);
     console.log(`  yazılan prompt'un turunda eşikten geçen: ${stats.typedPasses}`);
     console.log('');

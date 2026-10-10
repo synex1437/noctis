@@ -162,11 +162,16 @@ func selfCheckIssues(cfg object) []string {
 	return issues
 }
 
-func queueDirective(cfg object, queuePath string, total int) string {
+func queueDirective(cfg object, queuePath string, total int, sid string, now int64) string {
+	directive := fmt.Sprintf(`[noctis] Queue mode (%s: %d open). Work items in order; mark each done in the file before starting the next.%s`, filepath.Base(queuePath), total, queueEditRule(cfg, queuePath))
 	if !currentHost().agents {
-		return fmt.Sprintf(`[noctis] Queue mode (%s: %d open). Work items in order; mark each done in the file before starting the next.%s Do not stop or ask for confirmation between items; decide yourself.`, filepath.Base(queuePath), total, queueEditRule(cfg, queuePath))
+		return directive + " Do not stop or ask for confirmation between items; decide yourself."
 	}
-	directive := fmt.Sprintf(`[noctis] Queue mode (%s: %d open). Work items in order; mark each done in the file before starting the next.%s Items needing no code or file edits (research, copy, docs, analysis) go to "%s" in one Agent call each; code stays with you.`, filepath.Base(queuePath), total, queueEditRule(cfg, queuePath), liteAgentType(cfg))
+	if why := spawnHeadroomNow(cfg, sid, now); why != "" {
+		directive += " No subagent can be opened now (" + why + "): do every item in this session yourself, reading only what it needs."
+	} else {
+		directive += fmt.Sprintf(` Items needing no code or file edits that take several searches or reads (research, copy, docs, analysis) go to "%s" in one Agent call each, with a brief that carries what it needs. Look up a short fact yourself with one search; code stays with you.`, liteAgentType(cfg))
+	}
 	if digestEnabled(cfg) {
 		directive += fmt.Sprintf(` Long test runs, big diffs and noisy logs go to "%s" (it runs the command and returns a short digest) so your context stays small.`, digestAgentType(cfg))
 	}
@@ -238,7 +243,7 @@ func onSessionStart(input, cfg object) {
 			rememberOpenIssues(cfg, queuePath)
 			switch {
 			case !isAutoQueue(queuePath):
-				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total)+humanItemsRule(snapshot)+deferredRule(snapshot, queuePath)+itemModelRule(snapshot)+queueDeferHint(queuePath)+queueNotesRule(queuePath)+jobHint())
+				contexts = append(contexts, queueDirective(cfg, queuePath, snapshot.total, sid, now)+humanItemsRule(snapshot)+deferredRule(snapshot, queuePath)+itemModelRule(snapshot)+queueDeferHint(queuePath)+queueNotesRule(queuePath)+jobHint())
 				touchQueueTrust(queuePath, now)
 			case snapshot.total > 0:
 				contexts = append(contexts, sessionQueueDirective(sid, queuePath, snapshot.total)+humanItemsRule(snapshot)+deferredRule(snapshot, queuePath)+queueDeferHint(queuePath)+jobHint())
@@ -712,6 +717,12 @@ func onUserPromptSubmit(input, cfg object) {
 		journal(sid, "UserPromptSubmit", "would-route", verdict.reason, object{"signal": verdict.signal})
 		verdict.route = false
 	}
+	if verdict.route {
+		if why := spawnHeadroom(cfg, result.usage, result.burn, sid, now); why != "" {
+			journal(sid, "UserPromptSubmit", "skip-route", why, object{"signal": verdict.signal})
+			verdict.route = false
+		}
+	}
 	if verdict.route || getMap(state, "routes")[sid] != nil {
 		updateState(func(next object) {
 			if verdict.route {
@@ -864,6 +875,13 @@ func onAgentSpawn(input, cfg, state object, now int64) {
 			specific["additionalContext"] = context
 		}
 	}
+	gate := applySpawnGate(input, cfg, result.usage, result.burn, now)
+	if gate.deny {
+		emit(spawnDenial(gate.claude, joinNotices(systemMessage, result.notice, gate.user)))
+		return
+	}
+	withContext(specific, gate.claude)
+	systemMessage = joinNotices(systemMessage, gate.user)
 	pinSpawnedModel(input, cfg, sid, specific)
 	if observing {
 		return
@@ -908,16 +926,31 @@ func pinSpawnedModel(input, cfg object, sid string, specific object) {
 // allows that up to CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH) once denySubagentTool let it through: the
 // new subagent runs on the model a spawn from the main thread would get.
 func onSubagentSpawn(input, cfg object) {
-	if guardPaused(cfg, readState(), nowSec()) {
+	now := nowSec()
+	if guardPaused(cfg, readState(), now) {
+		return
+	}
+	limit := subagentLimit(cfg, now)
+	gate := applySpawnGate(input, cfg, limit.usage, limit.burn, now)
+	if gate.deny {
+		emit(spawnDenial(gate.claude, gate.user))
 		return
 	}
 	specific := object{}
+	withContext(specific, gate.claude)
 	pinSpawnedModel(input, cfg, sessionKey(input), specific)
-	if observing || len(specific) == 0 {
+	if observing || (len(specific) == 0 && gate.user == "") {
 		return
 	}
-	specific["hookEventName"] = "PreToolUse"
-	emit(object{"hookSpecificOutput": specific})
+	output := object{}
+	if len(specific) > 0 {
+		specific["hookEventName"] = "PreToolUse"
+		output["hookSpecificOutput"] = specific
+	}
+	if gate.user != "" {
+		output["systemMessage"] = gate.user
+	}
+	emit(output)
 }
 
 func textExtensionList() string {
@@ -1256,7 +1289,9 @@ func subagentLimit(cfg object, now int64) decision {
 		refreshFableWaiting(cfg, now, "subagent", maxAge, false, wait)
 		usage = currentUsage(now)
 	}
-	return evaluate(cfg, usage, "", 0, false)
+	result := evaluate(cfg, usage, "", 0, false)
+	result.burn = weeklyBurn(cfg, usage, now)
+	return result
 }
 
 func subagentLimitReason(wait, ceiling *waitPlan) string {
@@ -1409,12 +1444,14 @@ func onSubagentBatch(input, cfg object) {
 	}
 	result := subagentLimit(cfg, now)
 	wait := result.wait
-	if wait == nil {
+	sid, agent, agentType := sessionKey(input), getString(input, "agent_id"), getString(input, "agent_type")
+	if wait == nil || sid == selftestSession {
+		limitGrowth(input, cfg, now)
 		return
 	}
-	sid, agent, agentType := sessionKey(input), getString(input, "agent_id"), getString(input, "agent_type")
 	if typedTurn(state, sid) && typedPromptGoesAhead(wait) {
 		noteTypedTurn(state, sid, "PostToolBatch", result)
+		limitGrowth(input, cfg, now)
 		return
 	}
 	who := strings.TrimSpace(agentType + " " + agent)
@@ -1531,6 +1568,8 @@ func hitLabelOrWarn(result decision) string {
 		return "warn band " + result.warnWindow.label
 	case result.fableHit:
 		return "scoped quota"
+	case result.burn.stop:
+		return "weekly burn " + result.burn.paceText() + " points/h"
 	}
 	return ""
 }
@@ -1957,6 +1996,14 @@ func onStop(input, cfg object) {
 	if stuck.capped {
 		facts["escalateCapped"] = true
 	}
+	if stuck.noRoom != "" {
+		facts["escalateNoRoom"] = stuck.noRoom
+	}
+	if subagent != "" {
+		if why := spawnHeadroom(cfg, result.usage, result.burn, sid, now); why != "" {
+			subagent, facts["noSubagent"] = noSubagentNote(why), why
+		}
+	}
 	journal(sid, "Stop", "continue-queue", why, facts)
 	logInfo("queue continue #%s for %s: %d open", formatNumber(numberOr(guard, "forced", 0)), sid, snapshot.total)
 	nextItem := ""
@@ -2188,6 +2235,9 @@ func onPostToolBatch(input, cfg object) {
 	}
 	if observing {
 		return
+	}
+	if note := takeGrowthStops(sid); note != "" {
+		waitContext = strings.TrimPrefix(waitContext+"\n"+note, "\n")
 	}
 	systemMessage = joinNotices(systemMessage, result.notice)
 	output := object{}
@@ -2985,6 +3035,8 @@ func runHook() {
 		"TaskCompleted":     onTaskEvent,
 		"PermissionRequest": onPermissionRequest,
 		"PreCompact":        onPreCompact,
+		"SubagentStart":     onSubagentStart,
+		"SubagentStop":      onSubagentStop,
 	}
 	handler, ok := handlers[event]
 	if !ok {

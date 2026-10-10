@@ -227,6 +227,9 @@ func etaSeconds(history []any, win *window, threshold float64, now int64, offset
 }
 
 func appendHistory(history object, key string, used, resetsAt float64, now int64) {
+	if key == "seven_day" {
+		appendPace(history, used, resetsAt, now)
+	}
 	list := getList(history, key)
 	if len(list) > 0 {
 		last, _ := list[len(list)-1].(object)
@@ -1330,6 +1333,7 @@ type decision struct {
 	model      string
 	usage      usageView
 	notice     string
+	burn       burnView
 
 	usageStale     bool
 	contextPercent float64

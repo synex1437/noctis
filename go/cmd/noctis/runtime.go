@@ -28,33 +28,6 @@ var (
 	scriptExtension    = lazyRegexp(`(?i)\.(exe|cmd)$`)
 )
 
-func weeklyEta(usage usageView, cfg object, now int64) (float64, bool) {
-	history := getList(getMap(readJSON(files.usage), "history"), "seven_day")
-	win := usage.sevenDay
-	if win == nil || history == nil {
-		return 0, false
-	}
-	samples := historySamples(history, win.resetsAt+usage.clockOffset, nil)
-	if len(samples) < 2 {
-		return 0, false
-	}
-	first, last := samples[0], samples[len(samples)-1]
-	span := numberOr(last, "at", 0) - numberOr(first, "at", 0)
-	rise := numberOr(last, "used", 0) - numberOr(first, "used", 0)
-	if span < etaMinSpanSeconds || rise <= 0 {
-		return 0, false
-	}
-	remaining := thresholdOf(cfg, "weeklyAll") - win.used
-	if remaining <= 0 {
-		return 0, false
-	}
-	eta := remaining / (rise / span)
-	if eta < win.resetsAt-float64(now) {
-		return eta, true
-	}
-	return 0, false
-}
-
 func hooksLookDead(state, usageFile object, now int64) bool {
 	samples := getList(getMap(usageFile, "history"), "five_hour")
 	lastHook := numberOr(state, "lastHookAt", 0)
@@ -305,6 +278,9 @@ func recordStatusline(input object, now int64, multiSessionMax bool) (string, bo
 				info["windows"] = shown
 			}
 			sessions[sid] = info
+			if cost, ok := getNumber(getMap(input, "cost"), "total_cost_usd"); ok && cost >= 0 {
+				noteSessionCost(next, sid, cost, now)
+			}
 		}
 		heal = float64(now)-numberOr(previous, "selfHealAt", 0) > selfHealIntervalSeconds
 		if heal {
@@ -373,12 +349,12 @@ func runStatusline() {
 		fill.tokens, _ = contextTokensOf(contextWindow)
 		fill.window, _ = getNumber(contextWindow, "context_window_size")
 	}
-	context := leanContextText(cfg, sid, getString(modelInfo, "id"), fill)
+	context := leanContextText(cfg, sid, getString(modelInfo, "id"), fill) + subagentStatusText(readJSONShared(files.usage).data, sid)
 	marker := "∞"
 	if !getBool(statuslineCfg, "emoji", true) {
 		marker = "NOCTIS"
 	}
-	if numberOr(state, "disabledUntil", 0) > float64(now) && ceilingHit(cfg, usage) == nil {
+	if pauseHolds(cfg, state, usage, now) {
 		marker += "⏸"
 	}
 	waitText := ""
@@ -390,10 +366,7 @@ func runStatusline() {
 			waitText = T("statusline.paused", formatTime(numberOr(wait, "resumeAt", 0)))
 		}
 	}
-	etaText := ""
-	if eta, ok := weeklyEta(usage, cfg, now); ok {
-		etaText += T("statusline.weekEta", durationText(eta))
-	}
+	etaText := burnStatusText(burnVerdict(cfg, state, usage, now))
 	if usage.fable != nil && scopedModelPattern(cfg).MatchString(model) {
 		fableHistory := getList(getMap(readJSON(files.fable), "history"), "fable")
 		if eta, ok := etaSeconds(fableHistory, usage.fable, scopedThreshold(cfg), now, usage.clockOffset); ok {
@@ -1160,7 +1133,9 @@ func resumeWait(sid, release string) {
 			}
 			if plan.sid == "" {
 				tokens, known := getNumber(wait, "contextTokens")
-				prompt += subagentNote(cfg, tokens, known)
+				if note := subagentNote(cfg, tokens, known); note != "" && spawnHeadroomNow(cfg, sid, nowSec()) == "" {
+					prompt += note
+				}
 			}
 		}
 		prompt += queueEditRule(cfg, queuePath)

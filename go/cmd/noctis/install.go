@@ -475,6 +475,9 @@ func runEnsure() {
 	if !readable {
 		return
 	}
+	if changed := syncAgentWindows(files.pluginRoot, cfg); changed > 0 {
+		logInfo("ensure: %d agent file(s) synced with subagents.compactWindow", changed)
+	}
 	if note := syncCompaction(cfg); note != "" {
 		emit(object{"systemMessage": note})
 	}

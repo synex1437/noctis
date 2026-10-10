@@ -738,13 +738,13 @@ async function scenarioRouter(acc) {
     ['Compare pricing of Claude Max and ChatGPT Pro plans', 'web-words'],
     ['Docker compose ile deploy nasıl yapılır araştır', 'code-signal'],
     ['Research the best approach to implement caching in our api', 'code-signal'],
-    ['look up the current pricing of aws lambda and azure functions', 'web-words'],
+    ['look up the current pricing of aws lambda and azure functions', 'short-question'],
     ['en iyi vektör veritabanı hangisi karşılaştırma yapar mısın', 'web-words'],
     ['What are the latest findings on intermittent fasting?', 'web-words'],
     ['Write a short poem about autumn in Ankara', 'writing'],
     ['hataları araştır ve logları incele', 'code-signal'],
     ['the logic behind quantum computing, latest research', 'web-words'],
-    ['Look up the current USD/TRY exchange rate news', 'web-words'],
+    ['Look up the current USD/TRY exchange rate news', 'short-question'],
     ['Bu konuşmayı özetle lütfen', 'summary-needs-context'],
     [`Şu metni özetle: ${'lorem ipsum dolor sit amet '.repeat(50)}`, 'long-text-summary'],
     ['Kuantum bilgisayarların temellerini araştır', 'investigate'],
@@ -919,6 +919,55 @@ async function scenarioAgentGateAndWarnBand(accA) {
   accA.statusline('fo4', 'claude-opus-5', 10, now + 7400, 10, now + 3 * 86400);
 }
 
+async function scenarioSubagentGuard(acc) {
+  const now = nowSec();
+  acc.editState((state) => { delete state.spawns; });
+  acc.statusline('sg1', 'claude-opus-5', 20, now + 7200, 10, now + 3 * 86400);
+  const spawn = (sid, type = 'general-purpose') => acc.hook({ hook_event_name: 'PreToolUse', session_id: sid, cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, tool_name: 'Agent', tool_input: { subagent_type: type, prompt: 'look into it' } });
+  const quiet = [1, 2, 3, 4, 5].map(() => spawn('sg1'));
+  check('subagent guard: five subagents in an hour open without a word', quiet.every((output) => output === ''), true);
+  const sixth = spawn('sg1');
+  check('subagent guard: the sixth subagent in an hour tells Claude and the person what it costs', sixth.includes('[noctis] This session has opened 6 subagents (6 in the last hour)') && sixth.includes('Bu oturumda 6 alt ajan açıldı (son bir saatte 6)') && !sixth.includes('"permissionDecision":"deny"'), true);
+  const seventh = spawn('sg1');
+  check('subagent guard: the person hears it once, Claude at each subagent past the warning', seventh.includes('This session has opened 7 subagents') && !seventh.includes('systemMessage'), true);
+  for (let opened = 8; opened <= 12; opened += 1) spawn('sg1');
+  const refused = spawn('sg1');
+  check('subagent guard: the 13th subagent in an hour is refused and Claude does the work itself', refused.includes('"permissionDecision":"deny"') && refused.includes('New subagent refused') && refused.includes('do not call the Agent tool for it again') && refused.includes('son bir saatte sınır olan 12 alt ajan açıldı'), true);
+  const refusal = acc.run(['why', '--last', '1']);
+  check('subagent guard: the refusal and its reason are in noctis why', refusal.includes('deny-subagent-spawn') && refusal.includes('12 opened in the last hour, limit subagents.perHourDeny 12'), true);
+  check('subagent guard: the digest agent, exempt, still opens past the hourly limit', spawn('sg1', `${PLUGIN_NAME}:digest`), '');
+  acc.editState((state) => { delete state.spawns; });
+  acc.statusline('sg1', 'claude-opus-5', 20, now + 7200, 85, now + 3 * 86400);
+  const roomless = spawn('sg1');
+  check('subagent guard: 10 points from the weekly pause point no subagent opens', roomless.includes('"permissionDecision":"deny"') && roomless.includes('too little for a subagent') && roomless.includes('haftalık duraklama noktasına 10 puan kaldı'), true);
+  check('subagent guard: the weekly room refusal is journaled with its reason', acc.run(['why', '--last', '1']).includes('10 points left before the weekly pause point, under subagents.weeklyRoom 15'), true);
+  acc.statusline('sg1', 'claude-opus-5', 20, now + 7200, 10, now + 3 * 86400);
+
+  const lite = { session_id: 'sg2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, agent_id: 'lite-a1', agent_type: `${PLUGIN_NAME}:lite` };
+  const started = acc.hook({ ...lite, hook_event_name: 'SubagentStart' });
+  check('subagent guard: the lite agent starts with its budget and a cap on its report', started.includes('Budget for this subagent: about 20 tool calls') && started.includes('Keep your final report under 450 words') && started.includes('work from the text of your brief'), true);
+  const batch = (calls) => acc.hook({ ...lite, hook_event_name: 'PostToolBatch', tool_calls: Array.from({ length: calls }, (_, index) => ({ tool_name: 'WebSearch', tool_input: { query: `pricing page ${index}` } })) });
+  check('subagent guard: under its budget the lite agent works undisturbed', batch(19).includes('[noctis]'), false);
+  const wrapUp = batch(1);
+  check('subagent guard: at 20 tool calls the lite agent is told to wrap up and return its result', wrapUp.includes('This subagent has made 20 tool calls') && wrapUp.includes('After 10 more tool calls this agent is stopped') && !wrapUp.includes('"continue":false'), true);
+  check('subagent guard: the grace calls after the note go through', batch(9).includes('"continue":false'), false);
+  const stopped = batch(1);
+  check('subagent guard: ten calls past the note the lite agent is stopped', stopped.includes('"continue":false') && stopped.includes('30 araç çağrısından sonra durdurdu'), true);
+  const told = acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'sg2', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
+  check('subagent guard: the session hears that its subagent was stopped and finishes the task itself', told.includes('noctis stopped subagents of this session') && told.includes('lite-a1 after 30 tool calls') && told.includes('Do not open another subagent for the same task'), true);
+  const agentLog = path.join(acc.dir, 'sg2-agent-lite-a1.jsonl');
+  const usage = { input_tokens: 100, cache_creation_input_tokens: 2000, cache_read_input_tokens: 50000, output_tokens: 300 };
+  fs.writeFileSync(agentLog, [1, 2, 3].map((call) => JSON.stringify({ type: 'assistant', timestamp: new Date().toISOString(), requestId: `req-${call}`, message: { id: `msg-${call}`, model: 'claude-sonnet-5-5', content: [{ type: 'tool_use', id: `tool-${call}`, name: 'WebSearch', input: {} }], usage } })).join('\n') + '\n');
+  acc.hook({ ...lite, hook_event_name: 'SubagentStop', stop_hook_active: false, agent_transcript_path: agentLog });
+  const report = acc.run(['why', '--last', '1']);
+  check('subagent guard: an ended subagent is measured from its transcript', report.includes('subagent-report') && report.includes('3 tool calls, 3 API calls'), true);
+  const costed = (cost) => acc.run(['statusline'], { ...acc.statuslineInput('sg2', 'claude-opus-5', 20, now + 7200, 10, now + 3 * 86400), cost: { total_cost_usd: cost } });
+  costed(1);
+  check('subagent guard: the status line counts the session\'s subagents and their share of the spend', costed(3).includes('🤖 1, haftalık harcamada payı'), true);
+  fs.rmSync(agentLog, { force: true });
+  acc.editState((state) => { delete state.spawns; });
+}
+
 async function scenarioQueueMode(acc) {
   const now = nowSec();
   acc.manualSchedule = true;
@@ -1041,15 +1090,21 @@ async function scenarioUptime(acc) {
     reset.hookCapSeconds = 0;
     reset.interruptedWaits = [];
   });
-  const etaUsage = readJson(usageFile);
-  etaUsage.history.seven_day = [{ used: 40, resetsAt: now + 3 * 86400, at: now - 3600 }, { used: 50, resetsAt: now + 3 * 86400, at: now - 1800 }];
-  writeJson(usageFile, etaUsage);
-  const etaLine = acc.statusline('eta', 'claude-opus-5', 20, now + 7200, 60, now + 3 * 86400);
-  check('weekly threshold ETA shown when it lands before reset', etaLine.includes('⌛ hafta eşiği'), true);
-  const calmUsage = readJson(usageFile);
-  calmUsage.history.seven_day = [{ used: 59, resetsAt: now + 86400, at: now - 7200 }, { used: 60, resetsAt: now + 86400, at: now - 3600 }];
-  writeJson(usageFile, calmUsage);
-  check('no ETA when reset comes first', acc.statusline('eta', 'claude-opus-5', 20, now + 7200, 60, now + 86400).includes('⌛'), false);
+  const paceBefore = readJson(usageFile).history.seven_day_pace;
+  const weeklyPace = (samples, weeklyReset) => {
+    const usage = readJson(usageFile);
+    usage.history.seven_day_pace = samples.map(([used, ago]) => ({ used, resetsAt: weeklyReset, at: now - ago }));
+    writeJson(usageFile, usage);
+    return acc.statusline('eta', 'claude-opus-5', 20, now + 7200, 60, weeklyReset);
+  };
+  const etaLine = weeklyPace([[57.5, 3 * 3600]], now + 3 * 86400);
+  check('weekly threshold ETA shown when it lands before reset', etaLine.includes('⌛ hafta eşiği') && !etaLine.includes('alt ajan'), true);
+  check('a weekly burn that reaches the pause point in the first half of the time to the reset stops new subagents', weeklyPace([[40, 3600]], now + 3 * 86400).includes('⛔ hafta eşiği'), true);
+  check('no ETA when reset comes first', weeklyPace([[57.5, 3 * 3600]], now + 86400).includes('hafta eşiği'), false);
+  const restored = readJson(usageFile);
+  if (paceBefore) restored.history.seven_day_pace = paceBefore;
+  else delete restored.history.seven_day_pace;
+  writeJson(usageFile, restored);
 }
 
 async function scenarioSmartDecisions(accA) {
@@ -1489,6 +1544,7 @@ async function scenarioMultiSessionAndScoped(acc) {
 
 async function scenarioSubagentsAndObserve(acc) {
   const now = nowSec();
+  acc.editState((state) => { delete state.spawns; });
   acc.statusline('sp1', 'claude-fable-5-1', 20, now + 7200, 10, now + 3 * 86400);
   const explore = acc.hook({ hook_event_name: 'PreToolUse', session_id: 'sp1', cwd: PROJECT_DIR, tool_name: 'Agent', tool_input: { subagent_type: 'Explore', prompt: 'find the parser' } });
   check('Explore subagent pinned to haiku', explore.includes('"updatedInput"') && explore.includes('"model":"haiku"') && explore.includes('"permissionDecision":"allow"'), true);
@@ -2427,7 +2483,18 @@ async function scenarioFreshContext(acc) {
   acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'fc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, prompt: `/noctis:start ${jobs}` });
   check('fresh context: /noctis:start runs the job file', (acc.state().autoQueues.fc1 || {}).items, 3);
   const stop = acc.hook({ hook_event_name: 'Stop', session_id: 'fc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
-  check('fresh context: with 142k tokens of context the next item goes to a fresh subagent', stop.includes('"decision":"block"') && stop.includes('add a login page') && stop.includes('hand it to the noctis:worker subagent') && stop.includes('a fresh context, with a brief') && stop.includes('142k tokens'), true);
+  check('fresh context: by default the next item stays in the session with 142k tokens of context', stop.includes('"decision":"block"') && stop.includes('add a login page') && !stop.includes('noctis:worker'), true);
+  let handOffBefore;
+  acc.setConfig((config) => {
+    handOffBefore = config.queue.subagentAboveTokens;
+    config.queue.subagentAboveTokens = 100000;
+  });
+  const handed = acc.hook({ hook_event_name: 'Stop', session_id: 'fc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT, stop_hook_active: false });
+  acc.setConfig((config) => {
+    if (handOffBefore === undefined) delete config.queue.subagentAboveTokens;
+    else config.queue.subagentAboveTokens = handOffBefore;
+  });
+  check('fresh context: with queue.subagentAboveTokens 100000 and 142k tokens of context the next item goes to a fresh subagent', handed.includes('"decision":"block"') && handed.includes('add a login page') && handed.includes('hand it to the noctis:worker subagent') && handed.includes('a fresh context, with a brief') && handed.includes('142k tokens'), true);
   reading(95, now + 2 * 86400);
   acc.hook({ hook_event_name: 'PostToolBatch', session_id: 'fc1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT });
   check('fresh context: the pause keeps how big the context was', (acc.state().waits.fc1 || {}).contextTokens, 142200);
@@ -3276,6 +3343,7 @@ async function scenarioChannelBudget(acc) {
   });
 
   const long = 'x'.repeat(4000);
+  acc.editState((state) => { delete state.spawns; });
   const pinned = acc.hook({ hook_event_name: 'PreToolUse', session_id: 'c1', cwd: PROJECT_DIR, tool_name: 'Agent', tool_input: { subagent_type: 'Explore', prompt: long } });
   const echoed = JSON.parse(pinned).hookSpecificOutput.updatedInput;
   check('subagent pin returns the input intact, with only the model added', echoed.prompt === long && echoed.model === 'haiku', true);
@@ -3414,6 +3482,7 @@ async function main() {
     ['foundation: locks, clock skew, self-heal, self-check', () => scenarioFoundation(accA)],
     ['compaction + /clear', () => scenarioCompactAndClear(accA)],
     ['subagent gate + adaptive warn', () => scenarioAgentGateAndWarnBand(accA)],
+    ['subagent guard: spawn limits, weekly room, budgets, growth stop, report', () => scenarioSubagentGuard(accA)],
     ['queue mode + lite write policy', () => scenarioQueueMode(accA)],
     ['uptime: headless inference, dead hooks, learned cap, ETA', () => scenarioUptime(accA)],
     ['smart decisions: learned routing, fable ETA, git', () => scenarioSmartDecisions(accA)],

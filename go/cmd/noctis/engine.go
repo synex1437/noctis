@@ -2316,7 +2316,7 @@ var hookBudgets = map[string]map[string]float64{
 	"claude": {
 		"SessionStart": 20, "SessionEnd": 10, "UserPromptSubmit": 21600, "PreToolUse": 21600, "PostToolBatch": 21600, "StopFailure": 21600,
 		"Notification": 20, "PostModelSwitch": 10, "TaskCreated": 10, "TaskCompleted": 10, "PostToolUse": 15, "Stop": 21600,
-		"PermissionRequest": 10, "PreCompact": 10,
+		"PermissionRequest": 10, "PreCompact": 10, "SubagentStart": 10, "SubagentStop": 30,
 	},
 	"codex":       {"SessionStart": 20, "SessionEnd": 3, "UserPromptSubmit": 21600, "PreToolUse": 20, "PostToolUse": 21600, "Stop": 60},
 	"droid":       {"SessionStart": 20, "SessionEnd": 10, "UserPromptSubmit": 21600, "PreToolUse": 20, "PostToolUse": 21600, "Stop": 60},
@@ -2719,13 +2719,20 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 	}
 	result := evaluateSession(cfg, usage, model, fill)
 	result.usageStale, result.contextPercent, result.hasContext = usageStale, fill.percent, fill.known
+	result.burn = burnVerdict(cfg, state, usage, now)
 	notices, marks := planNotices(cfg, state, usage, &result, sid, now, currentHost().limits)
+	if sid == selftestSession {
+		marks = nil
+	}
 	if len(marks) > 0 {
 		updateState(func(next object) {
 			for _, key := range marks {
 				stateMap(next, "notified")[key] = float64(now)
 			}
 		})
+	}
+	if slices.Contains(marks, burnMark("stop", result.burn)) {
+		notify(cfg, pluginName, burnNoticeText(cfg, "notice.burnStop", result.burn))
 	}
 	if reverted := maybeRevertDefaultModel(cfg, state, usage, now); reverted != "" {
 		notices = append(notices, reverted)
@@ -2763,6 +2770,10 @@ func planNotices(cfg, state object, usage usageView, result *decision, sid strin
 			notices = append(notices, T("notice.budget", formatNumber(math.Round(used*10)/10), formatNumber(cap)))
 			marks = append(marks, budgetKey)
 		}
+	}
+	if notice, fresh := burnNotice(cfg, notified, result.burn); notice != "" {
+		notices = append(notices, notice)
+		marks = append(marks, fresh...)
 	}
 	return notices, marks
 }

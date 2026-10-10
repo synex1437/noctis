@@ -46,6 +46,7 @@
     "enabled": false,
     "agent": "lite",
     "minPromptLength": 15,
+    "shortQuestionWords": 20,
     "maxDeniesPerPrompt": 3,
     "digest": true,
     "digestAgent": "digest",
@@ -107,6 +108,35 @@
     "dailyWeeklyPercent": 0,
     "hardStop": false
   },
+  "burn": {
+    "alarm": true,
+    "lookbackHours": 3,
+    "stopSubagents": 0.5
+  },
+  "subagents": {
+    "guard": true,
+    "perSessionWarn": 10,
+    "perSessionDeny": 20,
+    "perHourWarn": 6,
+    "perHourDeny": 12,
+    "weeklyRoom": 15,
+    "maxToolCalls": 60,
+    "maxContextTokens": 120000,
+    "graceToolCalls": 10,
+    "compactWindow": 200000,
+    "budgets": {
+      "noctis:lite": {
+        "maxToolCalls": 20,
+        "reportWords": 450
+      },
+      "noctis:worker": {
+        "reportWords": 300
+      }
+    },
+    "exempt": [
+      "noctis:digest"
+    ]
+  },
   "alarm": {
     "enabled": true,
     "wakePc": true,
@@ -139,7 +169,7 @@
     "maxIdleContinues": 3,
     "maxContinuesPerSession": 200,
     "maxContinuesPerDay": 600,
-    "subagentAboveTokens": 100000,
+    "subagentAboveTokens": 0,
     "escalate": "auto",
     "maxEscalationsPerDay": 5,
     "completionPromise": "",

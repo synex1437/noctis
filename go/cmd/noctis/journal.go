@@ -15,6 +15,9 @@ func setMode(cfg object) {
 }
 
 func journal(sid, event, action, reason string, extra object) {
+	if sid == selftestSession {
+		return
+	}
 	entry := object{"at": float64(nowSec()), "sid": sid, "event": event, "action": action, "reason": reason}
 	for key, value := range extra {
 		if _, own := entry[key]; !own {

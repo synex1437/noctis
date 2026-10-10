@@ -74,6 +74,10 @@ func pauseHonoured(wait *waitPlan) bool {
 	return wait.hit != "ceiling" && !wait.pauseIgnored
 }
 
+func pauseHolds(cfg, state object, usage usageView, now int64) bool {
+	return numberOr(state, "disabledUntil", 0) > float64(now) && ceilingHit(cfg, usage) == nil
+}
+
 func guardPaused(cfg, state object, now int64) bool {
 	if numberOr(state, "disabledUntil", 0) <= float64(now) {
 		return false

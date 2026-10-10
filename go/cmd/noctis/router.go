@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-const codingTailMaxBytes = 16 * codingTailBytes
+const (
+	codingTailMaxBytes        = 16 * codingTailBytes
+	shortQuestionWordsDefault = 20.0
+)
 
 type wordMatcher struct {
 	pattern *lazyRe
@@ -87,7 +90,11 @@ var (
 	)
 	deicticPattern   = lazyRegexp(`(?i)(?:^|[^\p{L}\p{N}_])(?:this|these|here|it|bu|şu|bunu|bunun|buna|bunlar\p{L}*|şunu|şunun|şunlar\p{L}*|burada\p{L}*|ikisi\p{L}*)(?:[^\p{L}\p{N}_]|$)`)
 	investigateWords = newWordMatcher([]string{"araştır", "incele"}, []string{"research", "investigate", "look (up|into)"})
-	codeActionWords  = newWordMatcher(
+	breadthWords     = newWordMatcher(
+		[]string{"karşılaştır", "kaynaklar", "kaynakça", "literatür", "makale", "trendler", "piyasa", "avantaj", "dezavantaj", "en iyi", "hangisi daha iyi", "bulgular", "araştır", "incele"},
+		[]string{"compar(e|ison)", "which is better", "pros and cons", "best", "reviews", "sources", "literature", "papers?", "preprints?", "articles", "benchmarks", "trends", "market", "findings", "studies", "kaynak", "research", "investigate", "look into"},
+	)
+	codeActionWords = newWordMatcher(
 		[]string{"derle", "çalıştır", "uygula", "entegre", "düzelt", "optimiz", "refaktör", "kur", "kurma", "kurulum", "taşı", "dağıt", "test"},
 		[]string{"implement(ation)?", "integrate", "fix(es)?", "patch", "optimi[sz]e", "migrat(e|ion)", "deploy(ment)?", "build", "compile", "run", "install", "refactor(ing)?", "debug(ging)?", "lint", "merge", "rebase", "commit", "tests?", "add", "write"},
 	)
@@ -249,6 +256,9 @@ func classifyPrompt(cfg object, learned object, prompt, transcriptPath string, n
 		if _, strong := strongWebWords.find(withoutURLs); !strong && deicticPattern.MatchString(withoutURLs) && transcriptPath != "" && recentCodingActivity(transcriptPath, now) {
 			return verdict{reason: "coding-session"}
 		}
+		if shortQuestion(router, withoutURLs) {
+			return verdict{reason: "short-question", signal: signal}
+		}
 		return decide("web-words", signal)
 	}
 	if signal, found := writeWords.find(withoutURLs); found {
@@ -261,12 +271,25 @@ func classifyPrompt(cfg object, learned object, prompt, transcriptPath string, n
 		return verdict{reason: "summary-needs-context"}
 	}
 	if signal, found := investigateWords.find(withoutURLs); found {
+		if shortQuestion(router, withoutURLs) {
+			return verdict{reason: "short-question", signal: signal}
+		}
 		if transcriptPath != "" && recentCodingActivity(transcriptPath, now) {
 			return verdict{reason: "coding-session"}
 		}
 		return decide("investigate", signal)
 	}
 	return verdict{reason: "no-research-signal"}
+}
+
+func shortQuestion(router object, text string) bool {
+	limit := numberOr(router, "shortQuestionWords", shortQuestionWordsDefault)
+	if limit <= 0 || strings.Contains(text, "\n") || float64(len(strings.Fields(text))) > limit {
+		return false
+	}
+	_, broad := breadthWords.find(text)
+	_, writing := writeWords.find(text)
+	return !broad && !writing
 }
 
 func coldSessionResearch(text, transcriptPath string, now int64) bool {
