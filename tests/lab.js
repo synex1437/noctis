@@ -939,7 +939,7 @@ async function scenarioSubagentGuard(acc) {
   acc.editState((state) => { delete state.spawns; });
   const usageFile = path.join(acc.guardDir, 'usage.json');
   writeJson(usageFile, { ...readJson(usageFile), history: {} });
-  acc.statusline('sg1', 'claude-opus-5', 20, now + 7200, 85, now + 3 * 86400);
+  acc.statusline('sg1', 'claude-opus-5', 20, now + 7200, SHIPPED_THRESHOLDS.weeklyAll - 10, now + 3 * 86400);
   const roomless = spawn('sg1');
   check('subagent guard: 10 points from the weekly pause point no subagent opens', roomless.includes('"permissionDecision":"deny"') && roomless.includes('too little for a subagent') && roomless.includes('haftalık duraklama noktasına 10 puan kaldı'), true);
   check('subagent guard: the weekly room refusal is journaled with its reason', acc.run(['why', '--last', '1']).includes('10 points left before the weekly pause point, under subagents.weeklyRoom 15'), true);

@@ -16,10 +16,10 @@ func TestAWorkflowNeedsFifteenPointsOfRoomOnTheShippedConfig(t *testing.T) {
 		fiveHour, weekly float64
 		launches         bool
 	}{
-		{77, 80, true},
+		{77, 82, true},
 		{67, 70, true},
 		{77.5, 30, false},
-		{30, 80.5, false},
+		{30, 82.5, false},
 	} {
 		refusal := gateWorkflowLaunch(cfg, decision{usage: usageFrom(at.fiveHour, at.weekly, reset)}, nil)
 		if launches := refusal == ""; launches != at.launches {

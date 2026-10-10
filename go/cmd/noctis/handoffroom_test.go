@@ -15,7 +15,7 @@ func leaveLittleWeeklyRoom(t *testing.T) {
 	if week == nil {
 		t.Fatal("the usage file has no weekly window")
 	}
-	week["used"] = float64(85)
+	week["used"] = float64(87)
 	mustWriteJSON(files.usage, usage)
 }
 
@@ -148,8 +148,8 @@ func TestSpawnHeadroomNamesWhatLeavesNoRoomForASubagent(t *testing.T) {
 	}
 	updateState(func(state object) { delete(state, spawnStateKey) })
 	section(cfg, "subagents")["weeklyRoom"] = float64(80)
-	if why := spawnHeadroom(cfg, usage, burnView{}, "hr8", now); why != "75 points left before the weekly pause point, under subagents.weeklyRoom 80" {
-		t.Fatalf("75 points of weekly room under subagents.weeklyRoom 80: spawnHeadroom = %q", why)
+	if why := spawnHeadroom(cfg, usage, burnView{}, "hr8", now); why != "77 points left before the weekly pause point, under subagents.weeklyRoom 80" {
+		t.Fatalf("77 points of weekly room under subagents.weeklyRoom 80: spawnHeadroom = %q", why)
 	}
 	section(cfg, "subagents")["guard"] = false
 	if why := spawnHeadroom(cfg, usage, burn, "hr8", now); why != "" {

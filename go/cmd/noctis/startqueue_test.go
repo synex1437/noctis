@@ -273,8 +273,8 @@ func TestWhileNoctisIsPausedStartSaysSoAndStopStillStops(t *testing.T) {
 }
 
 func TestAtTheCreditCeilingStartIsRefusedLikeTheOtherControlCommands(t *testing.T) {
-	cfg, project := controlSandbox(t, 40, 95)
-	writeUsage(100, 95, float64(nowSec()+7200))
+	cfg, project := controlSandbox(t, 40, 97)
+	writeUsage(100, 97, float64(nowSec()+7200))
 	writeJobFile(t, project, "deneme.md", "- add a login page\n- add a logout button\n")
 	if output := startQueue(t, cfg, "sq10", project, "/noctis:start deneme.md"); getString(output, "decision") != "block" {
 		t.Errorf("/noctis:start went past the paid-credit ceiling: %v", output)

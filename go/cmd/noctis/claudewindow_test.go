@@ -33,10 +33,10 @@ func TestAPromptPastThePausePointTellsClaudeTheWindowInEnglish(t *testing.T) {
 }
 
 func TestTheWarnBandTellsClaudeTheWindowInEnglish(t *testing.T) {
-	cfg, project := controlSandbox(t, 40, 93)
+	cfg, project := controlSandbox(t, 40, 95)
 	speakTurkish(t)
 	output := hookOutput(t, onUserPromptSubmit, promptInput("cw-warn", project, "fix the parser"), cfg)
-	if context := contextOf(output); !strings.Contains(context, "[noctis] weekly usage 93% (auto-pause at 95%)") || strings.Contains(context, windowLabel("seven_day")) {
+	if context := contextOf(output); !strings.Contains(context, "[noctis] weekly usage 95% (auto-pause at 97%)") || strings.Contains(context, windowLabel("seven_day")) {
 		t.Fatalf("the warn band reached Claude in Turkish window terms: %q", context)
 	}
 }

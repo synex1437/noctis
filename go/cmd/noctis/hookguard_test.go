@@ -66,7 +66,7 @@ func pendingWait(sid string) object {
 }
 
 func TestAnAgentSessionsMainThreadPausesAtTheBatch(t *testing.T) {
-	cfg, project := agentSessionSandbox(t, 95)
+	cfg, project := agentSessionSandbox(t, 97)
 	subagent := agentHookInput("PostToolBatch", "ag-sub", project, object{"agent_id": "a1", "agent_type": "security-reviewer"})
 	if output := hookOutput(t, onPostToolBatch, subagent, cfg); stoppedBy(output) || !strings.Contains(contextOf(output), "start no new work") {
 		t.Fatalf("a subagent's first batch past the weekly pause point was not told to wrap up on its own loop: %v", output)
@@ -85,14 +85,14 @@ func TestAnAgentSessionsMainThreadPausesAtTheBatch(t *testing.T) {
 }
 
 func TestAnAgentSessionsMainThreadMeetsTheSpawnAndWorkflowGates(t *testing.T) {
-	cfg, project := agentSessionSandbox(t, 95)
+	cfg, project := agentSessionSandbox(t, 97)
 	workflow := object{"agent_type": "security-reviewer", "tool_name": "Workflow", "tool_input": object{"name": "audit-everything"}}
 	if output := hookOutput(t, onPreToolUse, agentHookInput("PreToolUse", "ag-workflow", project, workflow), cfg); permissionOf(output) != "deny" {
-		t.Fatalf("the main thread of a claude --agent session launched a workflow at 95%% weekly: %v", output)
+		t.Fatalf("the main thread of a claude --agent session launched a workflow at 97%% weekly: %v", output)
 	}
 	spawn := object{"agent_type": "security-reviewer", "tool_name": "Agent", "tool_input": object{"subagent_type": "Explore", "prompt": "map the parser"}}
 	if output := hookOutput(t, onPreToolUse, agentHookInput("PreToolUse", "ag-spawn", project, spawn), cfg); permissionOf(output) != "deny" {
-		t.Fatalf("the main thread of a claude --agent session spawned an agent at 95%% weekly: %v", output)
+		t.Fatalf("the main thread of a claude --agent session spawned an agent at 97%% weekly: %v", output)
 	}
 	nested := object{"agent_id": "a1", "agent_type": "security-reviewer", "tool_name": "Workflow", "tool_input": object{"name": "audit-everything"}}
 	if output := hookOutput(t, onPreToolUse, agentHookInput("PreToolUse", "ag-nested", project, nested), cfg); permissionOf(output) != "deny" || !strings.Contains(reasonOf(output), "start no new work") {
@@ -222,7 +222,7 @@ func TestAnAgentSessionsMainThreadTakesTheQuietPath(t *testing.T) {
 }
 
 func TestOtherHostsStillTreatAnAgentTypeAsASubagent(t *testing.T) {
-	cfg, project := agentSessionSandbox(t, 95)
+	cfg, project := agentSessionSandbox(t, 97)
 	previous := activeHost
 	t.Cleanup(func() { activeHost = previous })
 	for _, host := range []string{"codex", "droid"} {
@@ -860,10 +860,10 @@ func TestAControlCommandLeavesAParkedPromptAlone(t *testing.T) {
 	if getString(parked, "queuedPrompt") != work {
 		t.Fatalf("the work prompt was not queued for the relaunch: %v", parked)
 	}
-	writeUsage(40, 95, float64(nowSec()+7200))
+	writeUsage(40, 97, float64(nowSec()+7200))
 	for _, prompt := range []string{"/noctis:pause 120", "/noctis:status"} {
 		if output := hookOutput(t, onUserPromptSubmit, promptInput(sid, project, prompt), cfg); output != nil {
-			t.Fatalf("%q at 95%% weekly was not let through: %v", prompt, output)
+			t.Fatalf("%q at 97%% weekly was not let through: %v", prompt, output)
 		}
 		wait := pendingWait(sid)
 		if getString(wait, "queuedPrompt") != work || numberOr(wait, "startedAt", -1) != numberOr(parked, "startedAt", 0) {
@@ -873,10 +873,10 @@ func TestAControlCommandLeavesAParkedPromptAlone(t *testing.T) {
 }
 
 func TestAtTheCreditCeilingAControlCommandIsStillRefused(t *testing.T) {
-	cfg, project := controlSandbox(t, 40, 95)
+	cfg, project := controlSandbox(t, 40, 97)
 	sid := "cc-parked"
 	work := "fix the parser so that nested brackets are handled"
-	writeUsage(100, 95, float64(nowSec()+7200))
+	writeUsage(100, 97, float64(nowSec()+7200))
 	hookOutput(t, onUserPromptSubmit, promptInput(sid, project, work), cfg)
 	parked := pendingWait(sid)
 	if getString(parked, "queuedPrompt") != work {

@@ -10,7 +10,7 @@ func TestACloudSessionPausedPastWhatItsHookHoldsIsToldToResumeItItself(t *testin
 	t.Cleanup(func() { locale = previous })
 	locale = "en"
 	cfg, project := cloudSandbox(t, t.TempDir(), nil)
-	writeUsage(40, 96, 0)
+	writeUsage(40, 98, 0)
 	sid := "cloud-weekly"
 	batch := agentHookInput("PostToolBatch", sid, project, nil)
 	output := hookOutput(t, onPostToolBatch, batch, cfg)

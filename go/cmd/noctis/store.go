@@ -78,8 +78,9 @@ const (
 	fanOutHeadroomDefault   = 15.0
 	formerFanOutHeadroom    = 25.0
 	formerSubagentAbove     = 100000.0
+	formerWeeklyAll         = 95.0
 	configVersionKey        = "configVersion"
-	configVersion           = 2.0
+	configVersion           = 3.0
 	clearedSessionWindow    = 600
 	handoffGraceSeconds     = 60
 	waitStaleSeconds        = 2 * 86400
@@ -1053,6 +1054,9 @@ func migrateConfig(user object) {
 	if version < 2 {
 		migrateSubagentHandOff(user)
 	}
+	if version < 3 {
+		migrateWeeklyThreshold(user)
+	}
 	if version < configVersion {
 		user[configVersionKey] = configVersion
 	}
@@ -1113,7 +1117,14 @@ func repairWait(merged, defaults object) {
 	}
 }
 
-var builtinThresholds = map[string]float64{"session5h": 92, "weeklyAll": 95, "weeklyFable": 97}
+var builtinThresholds = map[string]float64{"session5h": 92, "weeklyAll": 97, "weeklyFable": 97}
+
+func migrateWeeklyThreshold(user object) {
+	thresholds := getMap(user, "thresholds")
+	if weekly, set := thresholds["weeklyAll"].(float64); set && weekly == formerWeeklyAll {
+		thresholds["weeklyAll"] = builtinThresholds["weeklyAll"]
+	}
+}
 
 func thresholdSwitchedOff(value any) bool {
 	switch typed := value.(type) {
