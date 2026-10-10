@@ -88,7 +88,7 @@ func TestTheSpawnGateCountsTheLastHourAcrossSessions(t *testing.T) {
 }
 
 func TestTheSpawnGateKeepsTheLastWeeklyPointsForTheSession(t *testing.T) {
-	cfg, project, _ := limitSandbox(t, nil, 10, 85)
+	cfg, project, _ := limitSandbox(t, nil, 10, 87)
 
 	refused := spawnAgent(t, cfg, "sg-room", project, "general-purpose")
 	if permissionOf(refused) != "deny" || !strings.Contains(reasonOf(refused), "only 10 points of the weekly window are left") || !strings.Contains(getString(refused, "systemMessage"), "subagents.weeklyRoom") {
@@ -177,7 +177,7 @@ func TestASubagentsOwnSubagentsCountForItsSession(t *testing.T) {
 }
 
 func TestTheSpawnGateOnlyJournalsInObserveMode(t *testing.T) {
-	cfg, project, _ := limitSandbox(t, nil, 10, 85)
+	cfg, project, _ := limitSandbox(t, nil, 10, 87)
 	defer func(previous bool) { observing = previous }(observing)
 	observing = true
 
@@ -193,7 +193,7 @@ func TestTheSpawnGateOnlyJournalsInObserveMode(t *testing.T) {
 }
 
 func TestARefusedSubagentLiftsTheResearchRoute(t *testing.T) {
-	cfg, project, _ := limitSandbox(t, object{"router": object{"enabled": true}}, 10, 85)
+	cfg, project, _ := limitSandbox(t, object{"router": object{"enabled": true}}, 10, 87)
 	updateState(func(state object) {
 		stateMap(state, "routes")["sg-route"] = object{"at": float64(nowSec()), "denies": float64(0), "signal": "web-words"}
 	})
@@ -211,7 +211,7 @@ func TestARefusedSubagentLiftsTheResearchRoute(t *testing.T) {
 }
 
 func TestTheSpawnGateCanBeTurnedOffOrLoosened(t *testing.T) {
-	cfg, project, _ := limitSandbox(t, object{"subagents": object{"guard": false}}, 10, 85)
+	cfg, project, _ := limitSandbox(t, object{"subagents": object{"guard": false}}, 10, 87)
 	for i := 0; i < 25; i++ {
 		if output := spawnAgent(t, cfg, "sg-off", project, "general-purpose"); permissionOf(output) == "deny" || output != nil {
 			t.Fatalf("subagents.guard false still gated spawn %d: %v", i+1, output)
@@ -228,7 +228,7 @@ func TestTheSpawnGateCanBeTurnedOffOrLoosened(t *testing.T) {
 		}
 	}
 
-	strict, project, _ := limitSandbox(t, object{"subagents": object{"exempt": []any{}}}, 10, 85)
+	strict, project, _ := limitSandbox(t, object{"subagents": object{"exempt": []any{}}}, 10, 87)
 	if output := spawnAgent(t, strict, "sg-strict", project, digestAgentType(strict)); permissionOf(output) != "deny" {
 		t.Fatalf("an empty exempt list still let the digest agent through: %v", output)
 	}

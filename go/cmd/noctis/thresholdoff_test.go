@@ -80,10 +80,10 @@ func TestStatusShowsASwitchedOffThresholdAsOff(t *testing.T) {
 	locale = "en"
 	for _, off := range []any{nil, float64(0), false} {
 		for _, tc := range []struct{ key, want string }{
-			{"session5h", "Thresholds   : 5h off · weekly ≥95% · Fable ≥97%"},
+			{"session5h", "Thresholds   : 5h off · weekly ≥97% · Fable ≥97%"},
 			{"weeklyAll", "Thresholds   : 5h ≥92% · weekly off · Fable ≥97%"},
-			{"weeklyFable", "Thresholds   : 5h ≥92% · weekly ≥95% · Fable off"},
-			{"weeklyScoped", "Thresholds   : 5h ≥92% · weekly ≥95% · Fable off"},
+			{"weeklyFable", "Thresholds   : 5h ≥92% · weekly ≥97% · Fable off"},
+			{"weeklyScoped", "Thresholds   : 5h ≥92% · weekly ≥97% · Fable off"},
 		} {
 			if line := statusThresholdsLine(t, object{tc.key: off}, "Thresholds"); line != tc.want {
 				t.Errorf("thresholds.%s = %v switches that window off, but status shows\n  %q\nwant\n  %q", tc.key, off, line, tc.want)
@@ -94,7 +94,7 @@ func TestStatusShowsASwitchedOffThresholdAsOff(t *testing.T) {
 		thresholds object
 		want       string
 	}{
-		{object{}, "Thresholds   : 5h ≥92% · weekly ≥95% · Fable ≥97%"},
+		{object{}, "Thresholds   : 5h ≥92% · weekly ≥97% · Fable ≥97%"},
 		{object{"session5h": "90%", "weeklyAll": float64(88.5)}, "Thresholds   : 5h ≥92% · weekly ≥88.5% · Fable ≥97%"},
 	} {
 		if line := statusThresholdsLine(t, tc.thresholds, "Thresholds"); line != tc.want {
@@ -102,7 +102,7 @@ func TestStatusShowsASwitchedOffThresholdAsOff(t *testing.T) {
 		}
 	}
 	locale = "tr"
-	if line, want := statusThresholdsLine(t, object{"session5h": false}, "Eşikler"), "Eşikler      : 5sa kapalı · hafta ≥%95 · Fable ≥%97"; line != want {
+	if line, want := statusThresholdsLine(t, object{"session5h": false}, "Eşikler"), "Eşikler      : 5sa kapalı · hafta ≥%97 · Fable ≥%97"; line != want {
 		t.Errorf("in Turkish a switched-off 5-hour threshold shows\n  %q\nwant\n  %q", line, want)
 	}
 }

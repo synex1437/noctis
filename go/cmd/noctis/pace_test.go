@@ -54,8 +54,8 @@ func TestThePaceSaysWhatAnItemTakesAndWhenTheItemsLeftAreDone(t *testing.T) {
 	setPaceNotes(path, [4]float64{start, 1, 10, reset}, [4]float64{start + 3600, 2, 12, reset}, [4]float64{start + 7200, 3, 14, reset + 30}, [4]float64{start + 3*3600, 4, 16, reset})
 	usage := usageView{sevenDay: &window{used: 18, resetsAt: reset}}
 	pace := paceOf(cfg, readState(), path, 10, usage, now)
-	if pace.items != 3 || pace.weeklyItems != 3 || pace.secondsPerItem != 3600 || pace.weeklyPerItem != 2 || pace.weeklyNeeded != 20 || pace.weeklyRoom != 77 {
-		t.Fatalf("the pace is %+v, want 3 items at an hour and 2 %% each, 20 %% needed of the 77 %% left", pace)
+	if pace.items != 3 || pace.weeklyItems != 3 || pace.secondsPerItem != 3600 || pace.weeklyPerItem != 2 || pace.weeklyNeeded != 20 || pace.weeklyRoom != 79 {
+		t.Fatalf("the pace is %+v, want 3 items at an hour and 2 %% each, 20 %% needed of the 79 %% left", pace)
 	}
 	if want := float64(now + 10*3600); pace.finishAt != want {
 		t.Fatalf("the items left are done at %s, want %s", formatTime(pace.finishAt), formatTime(want))
@@ -63,7 +63,7 @@ func TestThePaceSaysWhatAnItemTakesAndWhenTheItemsLeftAreDone(t *testing.T) {
 	lines := paceLines(pace)
 	want := []string{
 		T("queue.pace", durationText(3600), 3, 50),
-		T("queue.paceLeft", 10, T("badge.percent", 20), T("badge.percent", 77), formatTime(pace.finishAt)),
+		T("queue.paceLeft", 10, T("badge.percent", 20), T("badge.percent", 79), formatTime(pace.finishAt)),
 	}
 	if strings.Join(lines, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("the pace reads\n%s\nwant\n%s", strings.Join(lines, "\n"), strings.Join(want, "\n"))

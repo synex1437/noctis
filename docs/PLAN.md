@@ -4,7 +4,7 @@
 
 ## 1. Hedefler
 
-1. 5 saatlik pencere %92, haftalık (tüm modeller) %95 → işi unutmadan durdur/beklet, sıfırlanınca alarm + kaldığı yerden devam.
+1. 5 saatlik pencere %92, haftalık (tüm modeller) %97 → işi unutmadan durdur/beklet, sıfırlanınca alarm + kaldığı yerden devam.
 2. Haftalık Fable %97 → oturum yedek modele (`models.fallback`; Code profilinde Opus 5.5 · xhigh) geçsin ve aktif iş onunla sürsün.
 3. Kendi limitini doğru takip etsin (resmi veri), sıfırlanma saatini bilsin.
 4. Token maliyeti fark edilemez olsun; kodsuz araştırma ve yazı işleri rol profilinin araştırma modelindeki bir alt-ajana gitsin (Code'da Sonnet 5.5 · high), kod profilin kod modelinde yazılsın (Code'da Opus 5.5 · xhigh).
@@ -44,7 +44,7 @@ Tek yazar ilkesi: her dosyanın tek bir yazar süreci var; `state.json` için `w
 
 **B. Aynı durumda kullanıcı Esc'ye bastı / VS Code kapandı.** Hook öldü; bekleme kaydı kaldı. Kullanıcı aynı oturumda yazmaya devam ederse ilk hook "yarım kalmış hook içi bekleme" görür ve izleyiciyi iptal eder. Kimse devam etmezse izleyici görev reset+270 s'de çalışır: transcript reset'ten sonra değişmemişse yeni pencerede `--resume` ile devam eder.
 
-**C. Haftalık %95, 2 gün kaldı.** PostToolBatch → checkpoint → `continue:false` + stopReason (≈45 token, konuşmada kalır) → görev reset+90 s. Kullanıcı bu noktada bir prompt yazarsa prompt geçer: pencere ve sıfırlanma başına bir kez uyarılır (`⚠ haftalık pencere %96 (eşik %95): prompt'un yine de devam ediyor.`), bekleme runner'ıyla iptal edilir ve prompt'un başlattığı tur (araç turları, Agent/Task çağrıları, alt ajanlar) sonuna kadar sürer. Tur Stop'ta ya da StopFailure'da biter; ardından kendi kendine süren iş (kuyruğun sıradaki maddesi, yeniden başlatma, uyandırma) yine duraklama noktasına takılır. Prompt yalnızca kullanım sınırında (%100), veri yokken (blind) ve `budget.hardStop`'ta bloklanır; metni `queuedPrompt` olarak saklanır ve devamda gönderilir.
+**C. Haftalık %97, 2 gün kaldı.** PostToolBatch → checkpoint → `continue:false` + stopReason (≈45 token, konuşmada kalır) → görev reset+90 s. Kullanıcı bu noktada bir prompt yazarsa prompt geçer: pencere ve sıfırlanma başına bir kez uyarılır (`⚠ haftalık pencere %98 (eşik %97): prompt'un yine de devam ediyor.`), bekleme runner'ıyla iptal edilir ve prompt'un başlattığı tur (araç turları, Agent/Task çağrıları, alt ajanlar) sonuna kadar sürer. Tur Stop'ta ya da StopFailure'da biter; ardından kendi kendine süren iş (kuyruğun sıradaki maddesi, yeniden başlatma, uyandırma) yine duraklama noktasına takılır. Prompt yalnızca kullanım sınırında (%100), veri yokken (blind) ve `budget.hardStop`'ta bloklanır; metni `queuedPrompt` olarak saklanır ve devamda gönderilir.
 
 **D. Fable %97 (OAuth verisi).** UserPromptSubmit → settings.model=opus, `modelSwitched` kaydı, prompt bloklanır ve "/model opus sonra tekrar gönder" denir (token 0; PostModelSwitch hook'u yeni modeli kaydeder, tekrar gönderilen prompt geçer). PostToolBatch'te yakalanırsa checkpoint + dur + 20 s sonra runner Opus ile yeni pencerede `--resume`. Yeni pencere `NOCTIS_HANDOFF=<sid>` ortam değişkeniyle tanınır; eski pencere kilitlenir. Fable kovası sıfırlanınca (`fableResetsAt` geçince) varsayılan `fable`'a döner.
 
