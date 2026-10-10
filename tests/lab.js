@@ -937,6 +937,8 @@ async function scenarioSubagentGuard(acc) {
   check('subagent guard: the refusal and its reason are in noctis why', refusal.includes('deny-subagent-spawn') && refusal.includes('12 opened in the last hour, limit subagents.perHourDeny 12'), true);
   check('subagent guard: the digest agent, exempt, still opens past the hourly limit', spawn('sg1', `${PLUGIN_NAME}:digest`), '');
   acc.editState((state) => { delete state.spawns; });
+  const usageFile = path.join(acc.guardDir, 'usage.json');
+  writeJson(usageFile, { ...readJson(usageFile), history: {} });
   acc.statusline('sg1', 'claude-opus-5', 20, now + 7200, 85, now + 3 * 86400);
   const roomless = spawn('sg1');
   check('subagent guard: 10 points from the weekly pause point no subagent opens', roomless.includes('"permissionDecision":"deny"') && roomless.includes('too little for a subagent') && roomless.includes('haftalık duraklama noktasına 10 puan kaldı'), true);
