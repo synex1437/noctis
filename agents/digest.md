@@ -1,6 +1,6 @@
 ---
 name: digest
-description: Runs noisy commands (test suites, builds, linters, long logs, big diffs) on a cheap model and returns a compact digest instead of the raw output, so the main session's context stays small. Use for any command whose output is long and only the verdict matters.
+description: Runs a noisy command (a test suite, a build, a long log, a big diff) on a cheap model and returns a short digest of its output. Use it only when the user or noctis's instructions name it; otherwise run the command yourself.
 tools: Bash, Read, Grep, Glob
 disallowedTools: Write, Edit, MultiEdit, NotebookEdit, Agent, WebSearch, WebFetch
 maxTurns: 8

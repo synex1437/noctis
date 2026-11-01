@@ -48,7 +48,7 @@
     "minPromptLength": 15,
     "shortQuestionWords": 20,
     "maxDeniesPerPrompt": 3,
-    "digest": true,
+    "digest": false,
     "digestAgent": "digest",
     "subagentModels": {
       "Explore": "haiku",
@@ -170,12 +170,12 @@
     "maxContinuesPerSession": 200,
     "maxContinuesPerDay": 600,
     "subagentAboveTokens": 0,
-    "escalate": "auto",
+    "escalate": "off",
     "maxEscalationsPerDay": 5,
     "completionPromise": "",
     "github": {
       "closeOnDone": false,
-      "comment": "Completed by Claude Code (noctis queue)."
+      "comment": "Completed by the noctis queue."
     },
     "requireTrust": true,
     "headless": false,

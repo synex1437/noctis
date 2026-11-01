@@ -33,7 +33,7 @@ func digestAgentType(cfg object) string {
 }
 
 func digestEnabled(cfg object) bool {
-	return getBool(section(cfg, "router"), "digest", true)
+	return getBool(section(cfg, "router"), "digest", false)
 }
 
 var unhookedFileTools = []string{"Edit", "MultiEdit", "NotebookEdit"}
@@ -170,7 +170,7 @@ func queueDirective(cfg object, queuePath string, total int, sid string, now int
 	if why := spawnHeadroomNow(cfg, sid, now); why != "" {
 		directive += " No subagent can be opened now (" + why + "): do every item in this session yourself, reading only what it needs."
 	} else {
-		directive += fmt.Sprintf(` Items needing no code or file edits that take several searches or reads (research, copy, docs, analysis) go to "%s" in one Agent call each, with a brief that carries what it needs. Look up a short fact yourself with one search; code stays with you.`, liteAgentType(cfg))
+		directive += " Do the work in this session yourself, reading only what each item needs; open a subagent only where these instructions name one."
 	}
 	if digestEnabled(cfg) {
 		directive += fmt.Sprintf(` Long test runs, big diffs and noisy logs go to "%s" (it runs the command and returns a short digest) so your context stays small.`, digestAgentType(cfg))

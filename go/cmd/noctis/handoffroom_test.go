@@ -157,19 +157,24 @@ func TestSpawnHeadroomNamesWhatLeavesNoRoomForASubagent(t *testing.T) {
 	}
 }
 
-func TestTheQueueDirectiveSendsOnlyResearchThatNeedsSeveralReadsToTheLiteAgent(t *testing.T) {
+func TestTheQueueDirectiveAsksForNoSubagentOfItsOwn(t *testing.T) {
 	cfg, project, _, _ := deferSandbox(t)
 	start := func(sid string) string {
 		input := object{"hook_event_name": "SessionStart", "source": "startup", "session_id": sid, "cwd": project}
 		return getString(getMap(hookOutput(t, onSessionStart, input, cfg), "hookSpecificOutput"), "additionalContext")
 	}
 	context := start("hr9")
-	if !strings.Contains(context, `Items needing no code or file edits that take several searches or reads (research, copy, docs, analysis) go to "noctis:lite"`) || !strings.Contains(context, "Look up a short fact yourself with one search; code stays with you.") {
-		t.Fatalf("the queue directive does not keep short facts out of the lite agent: %q", context)
+	if !strings.Contains(context, "Do the work in this session yourself, reading only what each item needs; open a subagent only where these instructions name one.") || strings.Contains(context, "noctis:lite") || strings.Contains(context, "noctis:digest") {
+		t.Fatalf("the queue directive still sends items to a subagent of its own: %q", context)
 	}
+	cfg["router"] = object{"digest": true}
+	if context = start("hr9a"); !strings.Contains(context, `Long test runs, big diffs and noisy logs go to "noctis:digest"`) {
+		t.Fatalf("with router.digest turned on the queue directive leaves out the digest agent: %q", context)
+	}
+	delete(cfg, "router")
 	leaveLittleWeeklyRoom(t)
 	context = start("hr9b")
-	if !strings.Contains(context, "No subagent can be opened now (10 points left before the weekly pause point, under subagents.weeklyRoom 15): do every item in this session yourself") || strings.Contains(context, `go to "noctis:lite"`) {
-		t.Fatalf("with 10 points of weekly room the queue directive still sends items to the lite agent: %q", context)
+	if !strings.Contains(context, "No subagent can be opened now (10 points left before the weekly pause point, under subagents.weeklyRoom 15): do every item in this session yourself") || strings.Contains(context, "noctis:lite") {
+		t.Fatalf("with 10 points of weekly room the queue directive does not keep every item in the session: %q", context)
 	}
 }

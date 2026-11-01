@@ -13,6 +13,7 @@ func failingCheckSandbox(t *testing.T, sid, model string) (object, string, strin
 	t.Helper()
 	command := shellFor("echo run >> runs.txt; cat fixed.txt", "echo run>> runs.txt & type fixed.txt")
 	cfg, project, frontend := queueCheckSandbox(t, command)
+	section(cfg, "queue")["escalate"] = "auto"
 	runsOn(sid, model, 20000)
 	tickFirstQueueItem(t, project)
 	return cfg, project, frontend, command

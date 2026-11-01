@@ -37,7 +37,7 @@
 - Oturum üçüncü işte *"şimdi diğer işe geçiyorum"* deyip durdu ve "devam et" diyecek kimse yoktu.
 - Haftalık limit cuma gecesi doldu, pazartesi sabahı sıfırlandı ve siz dönene kadar hiçbir şey ilerlemedi.
 
-Noctis üçünü de çözer. Claude Code'u limite çarptıktan sonra değil, çarpmadan önce durdurur, limit sıfırlanınca geri döner ve listenizde ilerlemeye devam eder. Bu arada Claude'u keskin tutar: konuşma uzayınca taze bir bağlam, maddeler arasında sizin denetiminiz, takıldığı madde için daha güçlü bir model.
+Noctis üçünü de çözer. Claude Code'u limite çarptıktan sonra değil, çarpmadan önce durdurur, limit sıfırlanınca geri döner ve listenizde ilerlemeye devam eder. Bu arada Claude'u keskin tutar: konuşma uzayınca taze bir bağlam ve maddeler arasında sizin denetiminiz; iş alt-ajanlara verilmez, oturumda yapılır.
 
 ## Neler kazanırsınız
 
@@ -140,7 +140,7 @@ Kuyruk bunun için var:
 
 - Sunucuda `claude`'u tmux içinde çalıştırın ve planı öncelikleri, bağımlılıkları ve bir `noctis-verify` denetim satırı olan bir `TASKS.md` olarak yazın.
 - Yalnızca sizin yapabileceğiniz adımları `(insan)` ile işaretleyin, zor ya da kolay bir adıma `(opus)` veya `(sonnet)` ile modelini verin ve dosyayı okuduktan sonra ona bir kez güvenin.
-- Claude onu yürütür ve yol boyunca commit atar, uzun derlemeleri `noctis job` işleri olarak çalıştırır, takıldığı bir maddeyi kenara almadan önce daha güçlü bir modele bir kez verir, oturum dışındaki bir şeyi bekleyeni kenara alır ve başka iş kalmayınca sizde olanların listesiyle durur.
+- Claude onu yürütür ve yol boyunca commit atar, uzun derlemeleri `noctis job` işleri olarak çalıştırır, takıldığı maddeyi ve oturum dışındaki bir şeyi bekleyeni kenara alır ve başka iş kalmayınca sizde olanların listesiyle durur.
 - Uzun bir beklemeden sonraki yeniden başlatma tmux'ta yeni bir pencere olarak açılır; `noctis queue status --json` bir izleme betiğine kuyruğun nerede olduğunu söyler.
 - `alarm.digestAt` ayarlıysa webhook'unuz her gün size kuyruğun özetini gönderir: bir maddenin haftalık limitten ne aldığı, kalanın ne zaman bitebileceği ve sayılar yetince kuyruğu hangi profilin daha ucuza bitireceği.
 

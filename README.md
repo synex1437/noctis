@@ -37,7 +37,7 @@
 - The session stopped at task three with *"moving on to the next thing"*, and nobody was there to say continue.
 - The weekly limit ran out on a Friday night, reset on Monday morning, and nothing moved until you came back.
 
-Noctis takes care of all three. It stops Claude Code before the limit instead of after it, comes back when the limit resets and keeps going down your list. Along the way it keeps Claude sharp: a fresh context once the conversation grows long, your check between items, and a stronger model for the item it gets stuck on.
+Noctis takes care of all three. It stops Claude Code before the limit instead of after it, comes back when the limit resets and keeps going down your list. Along the way it keeps Claude sharp: a fresh context once the conversation grows long and your check between items, with the work done in the session rather than handed to subagents.
 
 ## What you get
 
@@ -140,7 +140,7 @@ That is what the queue is for:
 
 - Run `claude` inside tmux on the server and write the plan as a `TASKS.md` with priorities, dependencies and a `noctis-verify` check line.
 - Mark the steps only you can do `(human)`, give a hard or an easy step its model with `(opus)` or `(sonnet)`, and trust the file once you have read it.
-- Claude works through it and commits as it goes, runs long builds as `noctis job` jobs, hands an item it gets stuck on once to a stronger model before it sets it aside, sets aside what waits on something outside the session, and stops with the list of what is yours once nothing else is left.
+- Claude works through it and commits as it goes, runs long builds as `noctis job` jobs, sets aside an item it gets stuck on and what waits on something outside the session, and stops with the list of what is yours once nothing else is left.
 - A relaunch after a long wait opens as a new tmux window, and `noctis queue status --json` tells a monitoring script where the queue stands.
 - With `alarm.digestAt` set, your webhook sends you a digest every day: what an item takes of the weekly limit, when the rest may be done and, once the numbers say so, which profile finishes the queue for less.
 

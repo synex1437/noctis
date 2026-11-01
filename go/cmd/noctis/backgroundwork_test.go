@@ -103,12 +103,8 @@ func TestAQueueGivesUpAfterThreeStopsWithoutProgressByDefault(t *testing.T) {
 		escalate any
 		stops    int
 	}{
-		// The third stop, the second without progress, is the last continuation and asks Claude to set
-		// the item aside; the fourth gives up.
-		{"with nothing to go up to", "off", 4},
-		// As shipped the session codes on Opus at xhigh: the last continuation hands the item to Opus at
-		// max effort, and setting it aside and giving up each come one stop later.
-		{"as shipped", nil, 5},
+		{"as shipped", nil, 4},
+		{"with escalation turned on", "auto", 5},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			cfg, _, frontend := queueCheckSandbox(t, "")
