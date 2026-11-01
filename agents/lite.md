@@ -1,6 +1,6 @@
 ---
 name: lite
-description: Non-code work that takes several searches or reads, in its own context, on the model and effort noctis sets for research — web research, comparisons, summaries, copywriting, marketing and documentation text, analysis. Not for a short fact one search answers: look that up yourself. It needs no code and no code-file edits, and may save results only as .md/.txt documents.
+description: Research or writing that takes several searches or reads, in a context of its own, on the model and effort noctis sets for research; it may save results only as .md/.txt documents. Use it only when the user or noctis's instructions name it; otherwise do the work yourself.
 tools: WebSearch, WebFetch, Read, Grep, Glob, Write
 disallowedTools: Edit, MultiEdit, NotebookEdit, Bash, Agent
 maxTurns: 25

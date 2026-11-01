@@ -15,6 +15,7 @@ func escalationSandbox(t *testing.T, sid, model, effort string) (object, string,
 	cfg, project, frontend, path := deferSandbox(t)
 	t.Setenv("CLAUDE_CODE_EFFORT_LEVEL", effort)
 	section(cfg, "queue")["maxIdleContinues"] = float64(3)
+	section(cfg, "queue")["escalate"] = "auto"
 	runsOn(sid, model, 20000)
 	return cfg, project, frontend, path
 }

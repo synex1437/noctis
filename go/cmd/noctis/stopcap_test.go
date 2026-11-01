@@ -101,6 +101,7 @@ func TestAStuckItemGoesUpOnlyWhenTheStopBlockCapLeavesRoomForItsTurn(t *testing.
 		{"4", 4, 1},
 	} {
 		cfg, project := stopCapSandbox(t, "claude", 3, 3)
+		section(cfg, "queue")["escalate"] = "auto"
 		t.Setenv("CLAUDE_CODE_STOP_HOOK_BLOCK_CAP", c.value)
 		sid := "up" + c.value
 		// A session on Sonnet has Opus to go up to at any effort.

@@ -79,8 +79,11 @@ const (
 	formerFanOutHeadroom    = 25.0
 	formerSubagentAbove     = 100000.0
 	formerWeeklyAll         = 95.0
+	formerEscalate          = "auto"
+	formerIssueComment      = "Completed by Claude Code (noctis queue)."
+	issueClosingComment     = "Completed by the noctis queue."
 	configVersionKey        = "configVersion"
-	configVersion           = 3.0
+	configVersion           = 4.0
 	clearedSessionWindow    = 600
 	handoffGraceSeconds     = 60
 	waitStaleSeconds        = 2 * 86400
@@ -1057,6 +1060,10 @@ func migrateConfig(user object) {
 	if version < 3 {
 		migrateWeeklyThreshold(user)
 	}
+	if version < 4 {
+		migrateSubagentRequests(user)
+		migrateIssueComment(user)
+	}
 	if version < configVersion {
 		user[configVersionKey] = configVersion
 	}
@@ -1123,6 +1130,21 @@ func migrateWeeklyThreshold(user object) {
 	thresholds := getMap(user, "thresholds")
 	if weekly, set := thresholds["weeklyAll"].(float64); set && weekly == formerWeeklyAll {
 		thresholds["weeklyAll"] = builtinThresholds["weeklyAll"]
+	}
+}
+
+func migrateSubagentRequests(user object) {
+	if router := getMap(user, "router"); router["digest"] == true {
+		router["digest"] = false
+	}
+	if queue := getMap(user, "queue"); getString(queue, "escalate") == formerEscalate {
+		queue["escalate"] = "off"
+	}
+}
+
+func migrateIssueComment(user object) {
+	if github := getMap(getMap(user, "queue"), "github"); getString(github, "comment") == formerIssueComment {
+		github["comment"] = issueClosingComment
 	}
 }
 

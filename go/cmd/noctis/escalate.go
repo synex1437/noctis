@@ -112,7 +112,7 @@ func escalationTarget(cfg, state object, sid, tagged string) (model, agent strin
 	if !currentHost().agents {
 		return "", ""
 	}
-	setting := strings.ToLower(strings.TrimSpace(orDefault(getString(section(cfg, "queue"), "escalate"), "auto")))
+	setting := strings.ToLower(strings.TrimSpace(orDefault(getString(section(cfg, "queue"), "escalate"), "off")))
 	// A Fable whose quota is out takes no item: the choice falls back to the step up.
 	if setting == "fable" && getMap(state, "modelSwitched") != nil {
 		setting = "auto"

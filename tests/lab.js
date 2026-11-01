@@ -998,7 +998,7 @@ async function scenarioQueueMode(acc) {
   acc.run(['queue', 'trust', '--file', queueFile]);
   check('trust is recorded against the file', Object.keys(acc.state().queueTrust || {}).length, 1);
   const startup = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'q1', cwd: PROJECT_DIR });
-  check('queue directive on startup with open count', startup.includes('Queue mode (TASKS.md: 4 open)') && startup.includes('code stays with you'), true);
+  check('queue directive on startup with open count', startup.includes('Queue mode (TASKS.md: 4 open)') && startup.includes('Do the work in this session yourself'), true);
   const compact = acc.hook({ hook_event_name: 'SessionStart', source: 'compact', session_id: 'q1', cwd: PROJECT_DIR });
   check('queue directive re-injected after compaction', compact.includes('Queue mode'), true);
   check('no checkpoint note on compaction', compact.includes('devam notu'), false);
@@ -1356,6 +1356,9 @@ async function scenarioQueueChecks(acc) {
   acc.editState((state) => {
     delete state.escalateDay;
   });
+  acc.setConfig((config) => {
+    config.queue.escalate = 'auto';
+  });
   acc.statusline('qx1', 'claude-sonnet-5-5', 20, now + 7200, 10, now + 3 * 86400, 30);
   const first = stop('qx1', fixRepo, false);
   const second = stop('qx1', fixRepo, true);
@@ -1366,6 +1369,9 @@ async function scenarioQueueChecks(acc) {
   check('check escalation: noctis why journals the hand-off, and it counts toward the day', [handed.escalated, handed.escalateTo, (acc.state().escalateDay || {}).count], [true, 'opus', 1]);
   fs.writeFileSync(path.join(fixRepo, 'fixed.txt'), 'ok\n');
   check('check escalation: the fix the stronger model made passes and the queue goes on', [outcome(stop('qx1', fixRepo, true)), runs('fix')], ['1 open', 3]);
+  acc.setConfig((config) => {
+    config.queue.escalate = 'off';
+  });
   acc.run(['queue', 'untrust', '--file', fixFile]);
   for (const target of [repo, fixRepo, counter]) fs.rmSync(target, { recursive: true, force: true });
 }
@@ -1560,8 +1566,15 @@ async function scenarioSubagentsAndObserve(acc) {
   fs.writeFileSync(path.join(PROJECT_DIR, 'TASKS.md'), '# q\n- [ ] item one\n- [ ] item two\n');
   acc.run(['queue', 'trust', '--file', path.join(PROJECT_DIR, 'TASKS.md')]);
   const queueStart = acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'sp1', cwd: PROJECT_DIR });
-  check('queue directive mentions the digest agent', queueStart.includes(`${PLUGIN_NAME}:digest`), true);
+  check('queue directive asks for no subagent of its own', [queueStart.includes('Do the work in this session yourself'), queueStart.includes(`${PLUGIN_NAME}:digest`), queueStart.includes(`${PLUGIN_NAME}:lite`)], [true, false, false]);
   check('no queue file -> no digest mention', start.includes('digest'), false);
+  acc.setConfig((config) => {
+    config.router.digest = true;
+  });
+  check('router.digest turned on: the queue directive names the digest agent', acc.hook({ hook_event_name: 'SessionStart', source: 'startup', session_id: 'sp1', cwd: PROJECT_DIR }).includes(`${PLUGIN_NAME}:digest`), true);
+  acc.setConfig((config) => {
+    config.router.digest = false;
+  });
   acc.setConfig((config) => {
     config.mode = 'observe';
   });

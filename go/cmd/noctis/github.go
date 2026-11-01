@@ -797,7 +797,7 @@ func syncDoneIssues(cfg object, queuePath, content, cwd string) {
 	if len(pending) == 0 {
 		return
 	}
-	comment := orDefault(getString(github, "comment"), "Completed by Claude Code (noctis queue).")
+	comment := orDefault(getString(github, "comment"), issueClosingComment)
 	dir := filepath.Dir(queuePath)
 	if isAutoQueue(queuePath) && cwd != "" {
 		dir = cwd

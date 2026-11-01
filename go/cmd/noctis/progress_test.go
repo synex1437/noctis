@@ -12,6 +12,7 @@ import (
 func progressSandbox(t *testing.T, repository bool) (object, string) {
 	t.Helper()
 	cfg, project := stopCapSandbox(t, "claude", 3, 3)
+	section(cfg, "queue")["escalate"] = "auto"
 	t.Setenv("CLAUDE_CODE_STOP_HOOK_BLOCK_CAP", "")
 	if repository {
 		gitIn(t, project, "init", "-q")
