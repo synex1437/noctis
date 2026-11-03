@@ -50,8 +50,8 @@ func TestNoctisAgentsCompactAtSubagentsCompactWindow(t *testing.T) {
 		t.Fatalf("subagents.compactWindow 400000 rewrote %d agent files, want %d", changed, len(pluginAgentFiles))
 	}
 	roles := object{"research": object{"model": "opus", "effort": "xhigh"}, "digest": object{"model": "haiku"}}
-	syncAgentFiles(root, roles, false)
-	if changed := syncAgentWindows(root, loosened) + syncAgentFiles(root, roles, false); changed != 0 {
+	syncAgentFiles(root, roles, nil)
+	if changed := syncAgentWindows(root, loosened) + syncAgentFiles(root, roles, nil); changed != 0 {
 		t.Fatalf("the roles sync and the window sync undo each other: %d rewrites", changed)
 	}
 	for _, file := range pluginAgentFiles {

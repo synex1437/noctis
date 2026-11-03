@@ -479,7 +479,8 @@ func badRoleValues(roles object, anyModel bool) []string {
 	return problems
 }
 
-func syncAgentFiles(pluginRoot string, roles object, anyModel bool) int {
+func syncAgentFiles(pluginRoot string, roles, settings object) int {
+	anyModel, configured := providerModels(settings), settingsEnvironment(settings)
 	changed := 0
 	for role, file := range map[string]string{"research": "lite.md", "digest": "digest.md"} {
 		spec := getMap(roles, role)
@@ -501,8 +502,12 @@ func syncAgentFiles(pluginRoot string, roles object, anyModel bool) int {
 			continue
 		}
 		stripped := frontmatterLine.ReplaceAllString(front, "")
-		lines := "model: " + getString(spec, "model") + "\n"
-		if effort := appliedEffort(role, spec); effort != "" {
+		model, effort := getString(spec, "model"), appliedEffort(role, spec)
+		if !servedOn(model, configured) {
+			model, effort = "inherit", ""
+		}
+		lines := "model: " + model + "\n"
+		if effort != "" {
 			lines += "effort: " + effort + "\n"
 		}
 		next := strings.TrimSuffix(stripped, "\n") + "\n" + lines + rest

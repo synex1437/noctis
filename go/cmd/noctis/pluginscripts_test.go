@@ -13,7 +13,11 @@ import (
 
 func init() {
 	if marker := os.Getenv("NOCTIS_TEST_POWERSHELL_MARKER"); marker != "" {
-		_ = os.WriteFile(marker, []byte(strings.Join(os.Args[1:], "\n")), 0o600)
+		lines := os.Args[1:]
+		if name := os.Getenv("NOCTIS_TEST_MARKER_ENV"); name != "" {
+			lines = append(lines, name+"="+os.Getenv(name))
+		}
+		_ = os.WriteFile(marker, []byte(strings.Join(lines, "\n")), 0o600)
 		os.Exit(0)
 	}
 	if os.Getenv("NOCTIS_TEST_REPORT_SCRIPTS") != "" {

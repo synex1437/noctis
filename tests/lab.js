@@ -120,6 +120,9 @@ async function scenarioBaseline(acc) {
   const now = nowSec();
   const line = acc.statusline('s1', 'claude-fable-5-1', 41, now + 7200, 23, now + 3 * 86400);
   check('statusline badge', line.startsWith('∞ 5sa %41'), true);
+  const localInput = { ...acc.statuslineInput('loc1', 'qwen3-coder:30b', 0, 0, 0, 0, 11), rate_limits: undefined };
+  const local = acc.run(['statusline'], localInput, { CLAUDECODE: '1', ANTHROPIC_BASE_URL: 'http://localhost:11434' });
+  check('statusline on a local model says the plan has no limits there', local.startsWith('∞ plan limiti yok') && !local.includes('5sa'), true);
   check('usage.json written', readJson(path.join(acc.guardDir, 'usage.json')).five_hour.used, 41);
   check('below threshold silent', acc.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', cwd: PROJECT_DIR, prompt: 'fix the auth.js bug please' }), '');
   check('post batch silent', acc.hook({ hook_event_name: 'PostToolBatch', session_id: 's1', cwd: PROJECT_DIR, transcript_path: TRANSCRIPT }), '');

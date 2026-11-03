@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -303,7 +302,7 @@ func scheduleTimedRunner(cfg object, key, what string, at float64, previous obje
 	}
 	wake := getBool(section(cfg, "alarm"), "wakePc", true)
 	if replacingTask {
-		keepEnvironmentForRunner(key, slices.Concat(carriedEnvNames, proxyEnvNames))
+		keepEnvironmentForRunner(key, runnerEnvNames())
 		result := scheduleWindowsTask(taskName(key), at, argv(`"`+files.configDir+`"`), wake)
 		if result.ok {
 			return object{"method": "task", "taskName": taskName(key), "at": at}

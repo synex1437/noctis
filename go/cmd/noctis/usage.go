@@ -388,6 +388,9 @@ func oauthReadingWins(fromStatus, fromOauth object, usageAt, fetchedAt, now, liv
 }
 
 func currentUsage(now int64) usageView {
+	if !sessionOnAnthropicAPI() {
+		return usageView{}
+	}
 	return currentUsageIn(now, files.guardDir)
 }
 

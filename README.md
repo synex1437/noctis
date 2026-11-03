@@ -134,6 +134,10 @@ No telemetry. When the status line is not enough, it asks the usage endpoint the
 
 An API key has no usage windows, so the limit guard has nothing to act on, and the status line shows *waiting for limit data*. The queue, the router and the 529/5xx retry still work.
 
+### Does it work with local models?
+
+Yes, installed the same way, when Claude Code runs on Ollama, LM Studio, llama.cpp, vLLM or any other endpoint that `ANTHROPIC_BASE_URL` names. A model there spends none of the plan's limits, so noctis switches its limit guard off for that session and the status line says *no plan limits*. The queue, compaction, the 529/5xx retry, relaunches and the scheduler work as usual, and a relaunch starts on the same endpoint with the same token and model. Run `/noctis:setup --context-window 64k` there, with the window you load the model with: Claude Code counts 200k tokens for a model it does not know and would compact too late. [Local models](docs/GUIDE.md#local-models).
+
 ### Can a cloned repository's TASKS.md make Claude run things?
 
 Not until you trust it. A `TASKS.md` drives nothing until you type `!noctis queue trust`, and a line added or changed later stops it again until you trust it anew. When Claude runs `noctis queue trust` itself, the hook refuses the call. A check command the file names on a `noctis-verify` line runs only while your trust covers that line. [Queue file](docs/GUIDE.md#queue-file).

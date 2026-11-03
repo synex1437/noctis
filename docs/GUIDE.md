@@ -13,6 +13,7 @@ Everything the [README](../README.md) keeps short: what noctis changes on your m
 - [Lean compaction](#lean-compaction)
 - [Status line](#status-line)
 - [Install (details)](#install-details)
+- [Local models](#local-models)
 - [Other AI coding tools](#other-ai-coding-tools)
 - [Works alongside other plugins](#works-alongside-other-plugins)
 - [In your language](#in-your-language)
@@ -276,6 +277,27 @@ Setup makes six edits to `settings.json` — status line, permission mode, defau
 - **Anything else**: run `bin/<os>-<arch>/noctis version` (`bin/darwin/noctis version` on macOS) in a terminal — the error it prints is the real one. Outside Claude Code, use the full path setup prints, or add that folder to your PATH. To build from source, follow [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 In the VS Code and Cursor extensions everything works, except that a relaunch after a long wait happens outside the editor — in a terminal tab or window, or, on macOS and Linux, headless when none can be opened — never in an editor tab.
+
+## Local models
+
+noctis installs and works the same way when Claude Code runs on a model your own machine serves, or on any other endpoint that speaks Anthropic's Messages API: Claude Code goes wherever `ANTHROPIC_BASE_URL` points.
+
+| Launcher | `ANTHROPIC_BASE_URL` | Its guide |
+|---|---|---|
+| Ollama 0.14 or later (`ollama launch claude` sets it up) | `http://localhost:11434` | [docs.ollama.com](https://docs.ollama.com/integrations/claude-code) |
+| LM Studio 0.4.1 or later | `http://localhost:1234` | [lmstudio.ai](https://lmstudio.ai/docs/integrations/claude-code) |
+| llama.cpp (`llama-server`) | `http://127.0.0.1:8080` | [Hugging Face](https://huggingface.co/blog/ggml-org/anthropic-messages-api-in-llamacpp) |
+| vLLM | `http://localhost:8000` | [docs.vllm.ai](https://docs.vllm.ai/en/latest/serving/integrations/claude_code/) |
+
+Set `ANTHROPIC_AUTH_TOKEN` to what the launcher asks for (any text, for most of them) and start Claude Code on the local model, such as `claude --model qwen3-coder:30b`. Put the variables in the `env` of `settings.json` when every session should run there, or leave them to your shell or the launcher when only some should.
+
+On such an endpoint:
+
+- **The limit guard is off.** The model spends none of the plan's 5-hour or weekly limits, so noctis neither pauses nor warns there, and the status line reads `∞ no plan limits · qwen3-coder:30b · ctx 11%`. The same goes for Bedrock, Vertex AI and Microsoft Foundry. A session on `https://api.anthropic.com`, or behind a proxy you mark with `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`, keeps it.
+- **Everything else works as usual**: the queue, compaction (lean compaction too), the 529/5xx retry, relaunches and the scheduler. A relaunch, and the runner that resumes a session after a wait, start Claude Code on the session's own endpoint with its token, model and model mappings; the token stays off command lines and out of launchd plists.
+- **The context window.** Claude Code knows the window of Claude models only and counts 200,000 tokens for any other, so with a 32k or 64k model it compacts too late. `noctis setup --context-window 64k` (a count from 1000 to 10,000,000, such as `32768`) writes `CLAUDE_CODE_MAX_CONTEXT_TOKENS`, which Claude Code takes as the window of a model it does not know; `--context-window off` and uninstall take it back, and `noctis doctor` says when a model needs it. Load the model with a big enough window in the first place: Ollama asks for 64k or more and LM Studio for more than about 25k, because Claude Code's own instructions and tools take a large part of it.
+- **Subagents.** Claude Code asks the endpoint for a subagent's model by name, and a local server has no `sonnet` or `haiku`. So noctis pins a subagent's model, and gives its research agent one, only where the endpoint serves it: a Claude name once you map it with `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL` or `ANTHROPIC_DEFAULT_HAIKU_MODEL`, any other name as it is; the rest run on the session's own model. Mapping all three to your model, as vLLM's guide does, gives every alias a model the server has.
+- **Setup**, when the `settings.json` it configures names the endpoint, writes no Claude model and no effort level (where it had written a model before, it puts yours back), and sets `CLAUDE_CODE_ATTRIBUTION_HEADER=0`: the attribution line Claude Code puts at the top of the system prompt changes with every request, so a local server could not reuse the prompt it has already read and would read the whole conversation again each turn (LM Studio's and vLLM's guides set it too). A value of yours is kept, and uninstall takes setup's back. An endpoint only your shell or a launcher names leaves `settings.json` as it is, for the sessions that still run on Anthropic's API.
 
 ## Other AI coding tools
 

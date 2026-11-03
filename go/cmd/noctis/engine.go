@@ -1688,7 +1688,7 @@ func scheduleRunnerLocked(cfg object, sid string, atEpoch, rearms float64) objec
 	cancelRunnerKeepingTask(sid, readState(), replacingTask)
 	var scheduled object
 	if replacingTask {
-		keepEnvironmentForRunner(sid, slices.Concat(carriedEnvNames, proxyEnvNames))
+		keepEnvironmentForRunner(sid, runnerEnvNames())
 		result := scheduleWindowsTask(taskName(sid), at, runnerArgs("resume", sid, `"`+files.configDir+`"`), getBool(section(cfg, "alarm"), "wakePc", true))
 		if result.ok {
 			scheduled = object{"method": "task", "taskName": taskName(sid), "at": at, "watcherPid": float64(startResetWatcher(cfg, sid, at))}
@@ -2630,8 +2630,9 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 	}
 
 	usageAt := numberOr(usageFile, "updatedAt", 0)
+	planLimits := sessionOnAnthropicAPI()
 	snapshot := currentUsage(now)
-	usageStale := usageAt == 0 || float64(now)-usageAt > staleSeconds || windowStale(snapshot, staleSeconds)
+	usageStale := planLimits && (usageAt == 0 || float64(now)-usageAt > staleSeconds || windowStale(snapshot, staleSeconds))
 	fableCandidate := scopedModelPattern(cfg).MatchString(model)
 	edge := nearEdge(cfg, snapshot)
 	fableLimit, fableGuarded := scopedThresholdEnabled(cfg)
@@ -2639,7 +2640,7 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 	projecting := projectionAhead(cfg, snapshot)
 	usage := snapshot
 	refreshError := ""
-	if fableCandidate || usageStale || options.force || edge || projecting {
+	if planLimits && (fableCandidate || usageStale || options.force || edge || projecting) {
 		reason := "stale-usage-fallback"
 		maxAge := -1.0
 		switch {
@@ -2720,7 +2721,7 @@ func decide(cfg object, state object, input object, now int64, options decideOpt
 	result := evaluateSession(cfg, usage, model, fill)
 	result.usageStale, result.contextPercent, result.hasContext = usageStale, fill.percent, fill.known
 	result.burn = burnVerdict(cfg, state, usage, now)
-	notices, marks := planNotices(cfg, state, usage, &result, sid, now, currentHost().limits)
+	notices, marks := planNotices(cfg, state, usage, &result, sid, now, currentHost().limits && planLimits)
 	if sid == selftestSession {
 		marks = nil
 	}

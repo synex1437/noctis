@@ -141,22 +141,24 @@ func selfCheckIssues(cfg object) []string {
 	if getString(cfg, "configError") != "" {
 		issues = append(issues, T("selfcheck.config"))
 	}
-	if repaired := repairedThresholds(cfg); host.limits && len(repaired) > 0 {
+	onAnthropicAPI := sessionOnAnthropicAPI()
+	planLimits := host.limits && onAnthropicAPI
+	if repaired := repairedThresholds(cfg); planLimits && len(repaired) > 0 {
 		issues = append(issues, T("selfcheck.thresholdFixed", strings.Join(repaired, ", ")))
 	}
-	if unguarded := unguardedWindows(cfg); host.limits && len(unguarded) > 0 {
+	if unguarded := unguardedWindows(cfg); planLimits && len(unguarded) > 0 {
 		issues = append(issues, T("selfcheck.threshold", strings.Join(unguarded, ", ")))
 	}
 	if host.agents {
 		issues = append(issues, unguardedAgentTools(cfg)...)
 	}
-	if host.limits && paidCreditsAllowed(cfg) {
+	if planLimits && paidCreditsAllowed(cfg) {
 		issues = append(issues, T("credits.allowed"))
 	}
 	if profile := retunedProfile(section(cfg, "roles")); profile != "" {
 		issues = append(issues, retunedNotice(profile))
 	}
-	if getString(section(cfg, "fable"), "source") == "oauth" && oauthToken() == "" {
+	if getString(section(cfg, "fable"), "source") == "oauth" && onAnthropicAPI && oauthToken() == "" {
 		issues = append(issues, T("selfcheck.token", scopedLabel(cfg)))
 	}
 	return issues
@@ -786,7 +788,11 @@ func pinnedSubagentModel(cfg, input object) string {
 	if requested == "" || strings.HasPrefix(requested, pluginName+":") {
 		return ""
 	}
-	return getString(getMap(section(cfg, "router"), "subagentModels"), requested)
+	pinned := getString(getMap(section(cfg, "router"), "subagentModels"), requested)
+	if !backendServes(pinned) {
+		return ""
+	}
+	return pinned
 }
 
 func scopedFallbackFor(cfg object, model string) string {
