@@ -67,7 +67,7 @@ const (
 	fetchTimeout            = 5 * time.Second
 	fetchBackoffMaxSeconds  = 3600
 	appServerExitGrace      = time.Second
-	pluginVersion           = "8.7.2"
+	pluginVersion           = "8.8.0"
 	codingActivityWindow    = 45 * 60
 	codingTailBytes         = 64 * 1024
 	longTextSummaryChars    = 1200
