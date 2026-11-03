@@ -13,6 +13,7 @@ noctis'in iki işi var: uzun Claude Code işlerini kullanım limitlerine rağmen
 - [Yalın sıkıştırma](#yalın-sıkıştırma)
 - [Durum çubuğu](#durum-çubuğu)
 - [Kurulum (ayrıntı)](#kurulum-ayrıntı)
+- [Yerel modeller](#yerel-modeller)
 - [Diğer yapay zekâ kodlama araçları](#diğer-yapay-zekâ-kodlama-araçları)
 - [Diğer eklentilerle yan yana](#diğer-eklentilerle-yan-yana)
 - [Sizin dilinizde](#sizin-dilinizde)
@@ -276,6 +277,27 @@ Setup `settings.json`'da altı düzenleme yapar: durum çubuğu, izin modu, vars
 - **Başka bir şeyse**: terminalde `bin/<os>-<arch>/noctis version` (macOS'ta `bin/darwin/noctis version`) çalıştırın — yazdığı hata gerçek hatadır. Claude Code dışında setup'ın yazdığı tam yolu kullanın ya da o klasörü PATH'e ekleyin. Kaynaktan derlemek için [CONTRIBUTING.md](../CONTRIBUTING.md) dosyasını izleyin (İngilizce).
 
 VS Code ve Cursor eklentilerinde her şey çalışır; tek fark, uzun bir beklemeden sonraki yeniden başlatmanın editörün dışında olmasıdır — bir terminal sekmesinde ya da penceresinde, macOS ve Linux'ta hiçbiri açılamazsa arka planda — asla bir editör sekmesinde değil.
+
+## Yerel modeller
+
+noctis, Claude Code kendi makinenizin sunduğu bir modelde ya da Anthropic'in Messages API'sini konuşan başka bir uç noktada çalıştığında da aynı şekilde kurulur ve çalışır: Claude Code, `ANTHROPIC_BASE_URL` nereyi gösteriyorsa oraya gider.
+
+| Başlatıcı | `ANTHROPIC_BASE_URL` | Kendi kılavuzu |
+|---|---|---|
+| Ollama 0.14 ya da üstü (`ollama launch claude` kendisi kurar) | `http://localhost:11434` | [docs.ollama.com](https://docs.ollama.com/integrations/claude-code) |
+| LM Studio 0.4.1 ya da üstü | `http://localhost:1234` | [lmstudio.ai](https://lmstudio.ai/docs/integrations/claude-code) |
+| llama.cpp (`llama-server`) | `http://127.0.0.1:8080` | [Hugging Face](https://huggingface.co/blog/ggml-org/anthropic-messages-api-in-llamacpp) |
+| vLLM | `http://localhost:8000` | [docs.vllm.ai](https://docs.vllm.ai/en/latest/serving/integrations/claude_code/) |
+
+`ANTHROPIC_AUTH_TOKEN` değişkenine başlatıcının istediği değeri verin (çoğunda herhangi bir metin olur) ve Claude Code'u yerel modelle başlatın, örneğin `claude --model qwen3-coder:30b`. Her oturum orada çalışacaksa değişkenleri `settings.json` içindeki `env`'e yazın; yalnızca bazı oturumlar çalışacaksa kabuğunuza ya da başlatıcıya bırakın.
+
+Böyle bir uç noktada:
+
+- **Limit koruması kapalıdır.** Model planın 5 saatlik ya da haftalık limitlerinden harcamaz; noctis orada ne durdurur ne uyarır ve durum çubuğunda `∞ plan limiti yok · qwen3-coder:30b · ctx %11` yazar. Bedrock, Vertex AI ve Microsoft Foundry için de böyledir. `https://api.anthropic.com` üzerindeki ya da `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` ile işaretlediğiniz bir vekil sunucunun arkasındaki oturumda koruma sürer.
+- **Geri kalan her şey her zamanki gibi çalışır**: kuyruk, sıkıştırma (yalın sıkıştırma da), 529/5xx sonrası yeniden deneme, yeniden başlatmalar ve zamanlayıcı. Bir yeniden başlatma da, bekleyişten sonra oturumu sürdüren çalıştırıcı da Claude Code'u oturumun kendi uç noktasında, kendi token'ı, modeli ve model eşlemeleriyle açar; token komut satırına ve launchd plist'ine girmez.
+- **Bağlam penceresi.** Claude Code yalnızca Claude modellerinin penceresini bilir, başka her model için 200.000 token sayar; bu yüzden 32k ya da 64k'lık bir modelde geç sıkıştırır. `noctis setup --context-window 64k` (1000 ile 10.000.000 arasında bir sayı, örneğin `32768`) `CLAUDE_CODE_MAX_CONTEXT_TOKENS` değişkenini yazar; Claude Code bunu tanımadığı bir modelin penceresi sayar. `--context-window off` ve kaldırma bunu geri alır; `noctis doctor` bir modelin buna ihtiyacı olduğunda söyler. Modeli baştan yeterince büyük bir pencereyle yükleyin: Claude Code'un kendi talimatları ve araçları pencerenin büyük kısmını kapladığı için Ollama 64k ya da üstünü, LM Studio yaklaşık 25k'nın üstünü ister.
+- **Alt ajanlar.** Claude Code bir alt ajanın modelini uç noktadan adıyla ister ve yerel bir sunucuda `sonnet` ya da `haiku` yoktur. Bu yüzden noctis bir alt ajanın modelini sabitlerken ve araştırma ajanına model verirken yalnızca uç noktanın sunduğu modeli kullanır: bir Claude adını ancak `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL` ya da `ANTHROPIC_DEFAULT_HAIKU_MODEL` ile eşlediğinizde, başka her adı olduğu gibi; gerisi oturumun kendi modelinde çalışır. vLLM'in kılavuzundaki gibi üçünü de kendi modelinize eşlemek her takma ada sunucuda olan bir model verir.
+- **Setup**, yapılandırdığı `settings.json` uç noktayı gösteriyorsa Claude modeli ve effort seviyesi yazmaz (daha önce bir model yazdıysa yerine sizinkini geri koyar) ve `CLAUDE_CODE_ATTRIBUTION_HEADER=0` yazar: Claude Code'un sistem isteminin başına koyduğu atıf satırı her istekte değişir; bu yüzden yerel sunucu daha önce okuduğu istemi yeniden kullanamaz ve her turda konuşmanın tamamını yeniden okur (LM Studio'nun ve vLLM'in kılavuzları da bunu ayarlar). Sizin bir değeriniz varsa korunur; kaldırma setup'ın yazdığını geri alır. Uç noktayı yalnızca kabuğunuz ya da bir başlatıcı gösteriyorsa setup, Anthropic'in API'sinde çalışmayı sürdüren oturumlar için `settings.json`'ı olduğu gibi bırakır.
 
 ## Diğer yapay zekâ kodlama araçları
 

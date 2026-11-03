@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -80,9 +81,9 @@ func TestMain(m *testing.M) {
 	// test into one about that kind of session, its effort, its compaction
 	// point, its stop block cap or its id. A command-line child keeps the
 	// environment its test handed it, which starts from this cleaned one.
-	for _, name := range append([]string{"CLAUDE_CODE_REMOTE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_EFFORT", "CLAUDE_CODE_EFFORT_LEVEL",
+	for _, name := range slices.Concat([]string{"CLAUDE_CODE_REMOTE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_EFFORT", "CLAUDE_CODE_EFFORT_LEVEL",
 		autoCompactPercentVar, autoCompactWindowVar, maxOutputTokensVar, "DISABLE_AUTO_COMPACT", "DISABLE_COMPACT",
-		"CLAUDE_CODE_CUSTOM_OAUTH_URL", "CLAUDE_CODE_STOP_HOOK_BLOCK_CAP", "CLAUDE_CODE_SESSION_ID", queueEnv}, modelNameVariables...) {
+		"CLAUDE_CODE_CUSTOM_OAUTH_URL", "CLAUDE_CODE_STOP_HOOK_BLOCK_CAP", "CLAUDE_CODE_SESSION_ID", queueEnv}, modelNameVariables, backendEnvNames, providerSwitches) {
 		if os.Getenv(cliChildArgs) == "" {
 			_ = os.Unsetenv(name)
 		}

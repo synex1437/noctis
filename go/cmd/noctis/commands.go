@@ -71,26 +71,34 @@ func thresholdText(threshold float64, guarded bool) string {
 	return T("status.thresholdAt", formatNumber(threshold))
 }
 
-func describeState(cfg, state object, usage usageView, now int64) string {
-	models := section(cfg, "models")
-	lines := []string{T("status.accountDir", files.configDir)}
-	if statSafe(files.config) == nil {
-		lines = append(lines, T("status.notSetUp", pluginName))
-	}
+func planStatusLines(cfg object, usage usageView, now int64) []string {
 	usageText := orDefault(usageBadgeAt(usage, cfg, now), T("status.noData"))
 	if usage.updatedAt > 0 {
 		usageText += T("status.updated", formatTime(usage.updatedAt))
 	}
-	lines = append(lines, T("status.usage", usageText))
-	lines = append(lines, T("status.plan", planWindows(usage, cfg)))
-	lines = append(lines, T("status.thresholds", thresholdText(thresholdEnabled(cfg, "session5h")), thresholdText(thresholdEnabled(cfg, "weeklyAll")), scopedLabel(cfg), thresholdText(scopedThresholdEnabled(cfg))))
+	lines := []string{T("status.usage", usageText), T("status.plan", planWindows(usage, cfg)),
+		T("status.thresholds", thresholdText(thresholdEnabled(cfg, "session5h")), thresholdText(thresholdEnabled(cfg, "weeklyAll")), scopedLabel(cfg), thresholdText(scopedThresholdEnabled(cfg)))}
 	if repaired := repairedThresholds(cfg); len(repaired) > 0 {
 		lines = append(lines, T("status.thresholdsFixed", strings.Join(repaired, ", ")))
 	}
 	if unguarded := unguardedWindows(cfg); len(unguarded) > 0 {
 		lines = append(lines, T("status.thresholdsBad", strings.Join(unguarded, ", ")))
 	}
-	lines = append(lines, T("status.credits", creditsText(cfg)))
+	return append(lines, T("status.credits", creditsText(cfg)))
+}
+
+func describeState(cfg, state object, usage usageView, now int64) string {
+	models := section(cfg, "models")
+	lines := []string{T("status.accountDir", files.configDir)}
+	if statSafe(files.config) == nil {
+		lines = append(lines, T("status.notSetUp", pluginName))
+	}
+	backend := foreignBackend()
+	if backend != "" {
+		lines = append(lines, T("status.usage", T("doctor.planLimitsOff", backendLabel(backend))))
+	} else {
+		lines = append(lines, planStatusLines(cfg, usage, now)...)
+	}
 	if currentHost().id == "claude" {
 		lines = append(lines, leanStatusLines(cfg)...)
 	}
@@ -125,7 +133,9 @@ func describeState(cfg, state object, usage usageView, now int64) string {
 	if note := getString(fable, "note"); note != "" {
 		fableText += " · " + refreshNoteText(cfg, note)
 	}
-	lines = append(lines, T("status.scopedData", scopedLabel(cfg), fableText))
+	if backend == "" {
+		lines = append(lines, T("status.scopedData", scopedLabel(cfg), fableText))
+	}
 	if usage.clockOffset != 0 {
 		direction := T("status.skewAhead")
 		if usage.clockOffset > 0 {
@@ -628,25 +638,37 @@ func doctorLines(cfg object) []string {
 	lines = append(lines, fixLine(settings.ok, T("doctor.settings", settingsText), settingsRemedy, files.settings)...)
 	statusLine := getString(getMap(settings.data, "statusLine"), "command")
 	lines = append(lines, statusLineDoctorLines(statusLine, "doctor.fixStatusline")...)
-	lines = append(lines, effortDoctorLines(cfg, settings.data)...)
-	lines = append(lines, fixLine(getString(settings.data, "model") != "", T("doctor.model", orDefault(getString(settings.data, "model"), T("doctor.none"))), "doctor.fixSetup")...)
+	backend := foreignBackend()
+	if backend == "" {
+		lines = append(lines, effortDoctorLines(cfg, settings.data)...)
+	}
+	lines = append(lines, fixLine(getString(settings.data, "model") != "" || backend != "", T("doctor.model", orDefault(getString(settings.data, "model"), T("doctor.none"))), "doctor.fixSetup")...)
 	if profile := retunedProfile(section(cfg, "roles")); profile != "" {
 		lines = append(lines, checkLine(false, retunedNotice(profile)))
 	}
 	if notice := oldSonnetNotice(section(cfg, "roles")); notice != "" {
 		lines = append(lines, checkLine(false, notice))
 	}
-	lines = append(lines, tokenDoctorLines(cfg)...)
-	thresholdText, thresholdsGuarded := thresholdDoctorText(cfg)
-	lines = append(lines, fixLine(thresholdsGuarded, thresholdText, "doctor.fixThresholds")...)
+	if backend != "" {
+		lines = append(lines, checkLine(true, T("doctor.planLimitsOff", backendLabel(backend))))
+		if line := contextWindowDoctorLine(settings.data); line != "" {
+			lines = append(lines, line)
+		}
+	} else {
+		lines = append(lines, tokenDoctorLines(cfg)...)
+		thresholdText, thresholdsGuarded := thresholdDoctorText(cfg)
+		lines = append(lines, fixLine(thresholdsGuarded, thresholdText, "doctor.fixThresholds")...)
+	}
 	lines = append(lines, leanDoctorLines(cfg)...)
 	lines = append(lines, compactWindowDoctorLines(cfg)...)
-	lines = append(lines, fixLine(!paidCreditsAllowed(cfg), T("doctor.credits", creditsText(cfg)), "doctor.fixCredits")...)
-	lines = append(lines, "    "+T("doctor.creditsNote"))
-	// Fast mode draws from usage credits from its first request, where no pause point of noctis's
-	// reaches: /fast saves it in settings.json, so it stays on in every session after.
-	if fast, _ := settings.data["fastMode"].(bool); fast {
-		lines = append(lines, fixLine(false, T("doctor.fastMode"), "doctor.fixFastMode")...)
+	if backend == "" {
+		lines = append(lines, fixLine(!paidCreditsAllowed(cfg), T("doctor.credits", creditsText(cfg)), "doctor.fixCredits")...)
+		lines = append(lines, "    "+T("doctor.creditsNote"))
+		// Fast mode draws from usage credits from its first request, where no pause point of noctis's
+		// reaches: /fast saves it in settings.json, so it stays on in every session after.
+		if fast, _ := settings.data["fastMode"].(bool); fast {
+			lines = append(lines, fixLine(false, T("doctor.fastMode"), "doctor.fixFastMode")...)
+		}
 	}
 	if isWindows {
 		result := runPowershell("$PSVersionTable.PSVersion.ToString()", 15*time.Second)
@@ -669,13 +691,14 @@ func doctorLines(cfg object) []string {
 		lines = append(lines, fixLine(false, problem, "doctor.fixRoles")...)
 	}
 	lines = append(lines, doctorConfigLines(cfg)...)
-	usage := readJSON(files.usage)
-	usageAt := numberOr(usage, "updatedAt", 0)
-	usageText := T("doctor.usageNone")
-	if usageAt > 0 {
-		usageText = T("doctor.usageAt", formatTime(usageAt))
+	if backend == "" {
+		usageAt := numberOr(readJSON(files.usage), "updatedAt", 0)
+		usageText := T("doctor.usageNone")
+		if usageAt > 0 {
+			usageText = T("doctor.usageAt", formatTime(usageAt))
+		}
+		lines = append(lines, fixLine(usageAt > 0, T("doctor.usage", usageText), "doctor.fixUsage")...)
 	}
-	lines = append(lines, fixLine(usageAt > 0, T("doctor.usage", usageText), "doctor.fixUsage")...)
 	lines = append(lines, errorsDoctorLines()...)
 	for _, note := range coexistenceNotes(settings.data) {
 		lines = append(lines, "ℹ "+note)
@@ -773,6 +796,34 @@ func collectHookBinaries(value any, into *[]string) {
 			collectHookBinaries(item, into)
 		}
 	}
+}
+
+func contextWindowDoctorLine(settings object) string {
+	lookup := sessionEnvironment()
+	if window := strings.TrimSpace(lookup(maxContextTokensVar)); window != "" {
+		return checkLine(true, T("doctor.contextWindowSet", window))
+	}
+	model := strings.ToLower(orDefault(strings.TrimSpace(lookup("ANTHROPIC_MODEL")), orDefault(getString(settings, "model"), lastSeenModel())))
+	if variable := claudeAliasVariables[strings.TrimSuffix(model, "[1m]")]; variable != "" {
+		if mapped := strings.TrimSpace(lookup(variable)); mapped != "" {
+			model = strings.ToLower(mapped)
+		}
+	}
+	if model == "" || knownModelName(model) {
+		return ""
+	}
+	return checkLine(false, T("doctor.contextWindowUnknown"))
+}
+
+func lastSeenModel() string {
+	latest, model := -1.0, ""
+	for _, value := range getMap(readJSONShared(files.usage).data, "sessions") {
+		info, _ := value.(object)
+		if seen := getString(info, "model"); seen != "" && numberOr(info, "updatedAt", 0) > latest {
+			latest, model = numberOr(info, "updatedAt", 0), seen
+		}
+	}
+	return model
 }
 
 func tokenDoctorLines(cfg object) []string {

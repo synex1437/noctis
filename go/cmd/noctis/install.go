@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -467,7 +469,7 @@ func runEnsure() {
 	cfg := loadConfig()
 	readable := getString(cfg, "configError") == ""
 	if roles := section(cfg, "roles"); readable && len(roles) > 0 {
-		if changed := syncAgentFiles(files.pluginRoot, roles, providerModels(readJSONStrict(files.settings).data)); changed > 0 {
+		if changed := syncAgentFiles(files.pluginRoot, roles, readJSONStrict(files.settings).data); changed > 0 {
 			logInfo("ensure: %d agent file(s) synced with the roles profile", changed)
 		}
 	}
@@ -570,7 +572,8 @@ func statusLineGone(command string) string {
 	return goneBinary(statusLineBinary(command))
 }
 
-func configureRoles(configFile string, config object, pluginRoot string, rolesAreNew, anyModel bool) error {
+func configureRoles(configFile string, config object, pluginRoot string, rolesAreNew bool, settings object) error {
+	anyModel := providerModels(settings)
 	current := section(config, "roles")
 	if rolesAreNew {
 
@@ -584,7 +587,7 @@ func configureRoles(configFile string, config object, pluginRoot string, rolesAr
 		roles = askRoles(current, anyModel)
 	}
 	applyRoles(configFile, config, roles)
-	syncAgentFiles(pluginRoot, roles, anyModel)
+	syncAgentFiles(pluginRoot, roles, settings)
 	fmt.Println(T("roles.applied", describeRoles(roles)))
 	return nil
 }
@@ -646,6 +649,10 @@ func applyPreset(configFile string, config object, preset string) error {
 }
 
 func wireSettings(configDir, binary string, config object, configFile string, defaults object, noModel bool) error {
+	contextWindow, windowGiven, windowOK := contextWindowFlag()
+	if windowGiven && !windowOK {
+		return errors.New(T("setup.badContextWindow", flagString("context-window")))
+	}
 	settingsFile := filepath.Join(configDir, "settings.json")
 	settings := readConfigStrict(settingsFile)
 	if !settings.ok {
@@ -666,6 +673,18 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	managed := getMap(config, "managedModel")
 	ours := managed != nil && current != "" && current == getString(managed, "set")
 	primary := orDefault(getString(section(config, "models"), "primary"), getString(section(defaults, "models"), "primary"))
+	backend := backendIn(settingsEnvironment(data))
+	if backend != "" {
+		noModel = true
+		if ours {
+			if previous, kept := managed["previous"].(string); kept && previous != "" {
+				data["model"] = previous
+			} else {
+				delete(data, "model")
+			}
+			delete(config, "managedModel")
+		}
+	}
 	wroteModel := !noModel && (ours || !keepModelPattern.MatchString(current))
 	if wroteModel {
 		if current != primary {
@@ -685,10 +704,25 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 	if !chosen {
 		effort = getString(section(defaults, "models"), "effort")
 	}
+	if backend != "" {
+		effort = ""
+	}
 	env := getMap(data, "env")
 	if env == nil {
 		env = object{}
 	}
+	windowNote := ""
+	switch record := getMap(config, managedContextKey); {
+	case windowGiven && contextWindow != "":
+		config[managedContextKey] = object{"previous": valueSetupFound(env, maxContextTokensVar, record["previous"], record != nil), "set": contextWindow}
+		env[maxContextTokensVar] = contextWindow
+		windowNote = T("install.contextWindow", contextWindow)
+	case windowGiven:
+		takeBackVariable(env, maxContextTokensVar, record)
+		delete(config, managedContextKey)
+		windowNote = T("install.contextWindowOff", orDefault(getString(env, maxContextTokensVar), T("doctor.none")))
+	}
+	headerNote := wireAttributionHeader(config, env, backend)
 	// The level is saved for the model sessions run on once a scoped-model switch in force gives its
 	// model back at the reset; until then the switch's own level for the fallback role stays in force.
 	effortModel, switched := getString(data, "model"), accountModelSwitch(configDir)
@@ -798,12 +832,19 @@ func wireSettings(configDir, binary string, config object, configFile string, de
 		backupText = T("install.backup", filepath.Base(backup))
 	}
 	switch {
+	case backend != "":
+		fmt.Println(T("install.settingsBackend", backupText, backendLabel(backend), orDefault(getString(data, "model"), T("doctor.none"))))
 	case savedIn != "":
 		fmt.Println(T("install.settingsModel", backupText, savedIn, effort, getString(data, "model")))
 	case effort != "":
 		fmt.Println(T("install.settings", backupText, effort, getString(data, "model")))
 	default:
 		fmt.Println(T("install.settingsNoEffort", backupText, getString(data, "model"), orDefault(getString(getMap(data, "env"), "CLAUDE_CODE_EFFORT_LEVEL"), T("doctor.none"))))
+	}
+	for _, note := range []string{windowNote, headerNote} {
+		if note != "" {
+			fmt.Println(note)
+		}
 	}
 	fmt.Println(leanNote)
 	fmt.Println(compactNote)
@@ -822,6 +863,63 @@ func placeSetupObject(data, config object, key string, holder object) {
 		created[key] = true
 	}
 	data[key] = holder
+}
+
+func contextWindowFlag() (tokens string, given, valid bool) {
+	text := strings.ToLower(strings.TrimSpace(flagString("context-window")))
+	switch {
+	case text == "" && !args.present["context-window"]:
+		return "", false, true
+	case text == "off":
+		return "", true, true
+	}
+	match := compactAtPattern.FindStringSubmatch(text)
+	if match == nil || match[2] == "%" {
+		return "", true, false
+	}
+	number, err := strconv.ParseFloat(match[1], 64)
+	if err != nil {
+		return "", true, false
+	}
+	switch match[2] {
+	case "k":
+		number *= 1e3
+	case "m":
+		number *= 1e6
+	}
+	rounded := math.Round(number)
+	if math.Abs(number-rounded) >= 1e-6 || rounded < contextWindowMin || rounded > contextWindowMax {
+		return "", true, false
+	}
+	return strconv.FormatFloat(rounded, 'f', 0, 64), true, true
+}
+
+func wireAttributionHeader(config, env object, backend string) string {
+	record := getMap(config, managedAttributionKey)
+	if !customEndpoint(backend) {
+		takeBackVariable(env, attributionHeaderVar, record)
+		delete(config, managedAttributionKey)
+		return ""
+	}
+	ownValue := record == nil && strings.TrimSpace(envVariable(env, attributionHeaderVar)) != ""
+	changedSinceSetup := record != nil && getString(env, attributionHeaderVar) != getString(record, "set")
+	if ownValue || changedSinceSetup {
+		delete(config, managedAttributionKey)
+		return ""
+	}
+	config[managedAttributionKey] = object{"previous": valueSetupFound(env, attributionHeaderVar, record["previous"], record != nil), "set": "0"}
+	env[attributionHeaderVar] = "0"
+	return T("install.attributionHeader", backendLabel(backend))
+}
+
+func takeBackVariable(env object, name string, record object) {
+	switch {
+	case record == nil, getString(env, name) != getString(record, "set"):
+	case getString(record, "previous") != "":
+		env[name] = getString(record, "previous")
+	default:
+		delete(env, name)
+	}
 }
 
 // takeBackEffort puts back the effort level found before the first setup when env still holds the one
@@ -979,7 +1077,7 @@ func installInto(configDir, sourceRoot string, noModel bool, defaults object) er
 	if err := applyPreset(configFile, config, flagString("preset")); err != nil {
 		return err
 	}
-	if err := configureRoles(configFile, config, installRoot, added["roles"], providerModels(readJSONStrict(filepath.Join(configDir, "settings.json")).data)); err != nil {
+	if err := configureRoles(configFile, config, installRoot, added["roles"], readJSONStrict(filepath.Join(configDir, "settings.json")).data); err != nil {
 		return err
 	}
 	configureRouter(configFile, config)
@@ -1070,7 +1168,7 @@ func settleStateDir(configDir string) {
 	fmt.Println(T("install.purged", guardDir))
 }
 
-var setupRecords = []string{"managedModel", "managedEffort", "managedModelEffort", "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep", "managedFunctionHooks", managedWindowKey, managedPercentKey, takenPercentKey, "managedAutoUpdate", "managedCreated"}
+var setupRecords = []string{"managedModel", "managedEffort", "managedModelEffort", managedContextKey, managedAttributionKey, "managedPermissionMode", "managedPermissionPrevious", "managedPermissionKeep", "managedFunctionHooks", managedWindowKey, managedPercentKey, takenPercentKey, "managedAutoUpdate", "managedCreated"}
 
 func forgetSetupRecords(configFile string, config object) {
 	forgotten := false
@@ -1106,6 +1204,8 @@ func undoSetupSettings(settingsFile string, data, guardConfig object) error {
 	}
 	if env := getMap(data, "env"); env != nil {
 		takeBackEffort(env, getMap(guardConfig, "managedEffort"))
+		takeBackVariable(env, maxContextTokensVar, getMap(guardConfig, managedContextKey))
+		takeBackVariable(env, attributionHeaderVar, getMap(guardConfig, managedAttributionKey))
 	}
 	takeBackModelEfforts(data, getMap(guardConfig, "managedModelEffort"), "")
 	if env := getMap(data, "env"); env != nil {
@@ -1214,7 +1314,7 @@ func applySettingsChanges(fresh, before, after object) {
 	}
 }
 
-var setupFlags = []string{"profile", "preset", "permissions", "updates", "router", "no-model", "no-lean", "compact-at", "no-ask", "config-dir", "account", "host", "code", "research", "planning", "digest", "explore", "fallback"}
+var setupFlags = []string{"profile", "preset", "permissions", "updates", "router", "no-model", "no-lean", "compact-at", "context-window", "no-ask", "config-dir", "account", "host", "code", "research", "planning", "digest", "explore", "fallback"}
 
 var installFlags = append([]string{"source", "uninstall", "purge"}, setupFlags...)
 
@@ -1649,7 +1749,7 @@ func setupInto(configDir, pluginRoot string, defaults object) error {
 	if err := applyPreset(configFile, config, flagString("preset")); err != nil {
 		return err
 	}
-	if err := configureRoles(configFile, config, pluginRoot, added["roles"], providerModels(readJSONStrict(filepath.Join(configDir, "settings.json")).data)); err != nil {
+	if err := configureRoles(configFile, config, pluginRoot, added["roles"], readJSONStrict(filepath.Join(configDir, "settings.json")).data); err != nil {
 		return err
 	}
 	configureRouter(configFile, config)

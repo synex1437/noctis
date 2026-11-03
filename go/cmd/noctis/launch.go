@@ -284,6 +284,13 @@ func launchInWindowsTerminal(cfg object, launch launchSpec, claudePath string, c
 	}
 	title := pluginName + " · " + filepath.Base(launch.cwd)
 	details := object{"claude": claudePath, "cwd": launch.cwd, "configDir": launch.configDir, "sessionId": launch.sid, "effort": effort, "arguments": strings.Join(quoted, " "), "title": title}
+	backend := object{}
+	for _, pair := range environmentOf(backendEnvNames) {
+		backend[pair[0]] = pair[1]
+	}
+	if len(backend) > 0 {
+		details["env"] = backend
+	}
 	written := []string{}
 	defer func() {
 		for _, file := range written {
@@ -395,7 +402,7 @@ func unixLaunchScript(launch launchSpec, claudePath string, claudeArgs []string,
 		"unset " + strings.Join(unset, " "),
 		configLine,
 	}
-	for _, pair := range environmentOf(slices.Concat(carriedEnvNames, proxyEnvNames)) {
+	for _, pair := range environmentOf(runnerEnvNames()) {
 		lines = append(lines, "export "+pair[0]+"="+shellQuote(pair[1]))
 	}
 	lines = append(lines,

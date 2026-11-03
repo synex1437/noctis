@@ -23,6 +23,7 @@ Remove-Item Env:TRACEPARENT -ErrorAction SilentlyContinue
 Remove-Item Env:CLAUDE_CODE_ENTRYPOINT -ErrorAction SilentlyContinue
 if ($launch.configDir) { $env:CLAUDE_CONFIG_DIR = $launch.configDir } else { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue }
 if ($launch.effort) { $env:CLAUDE_CODE_EFFORT_LEVEL = $launch.effort }
+if ($launch.env) { foreach ($variable in $launch.env.PSObject.Properties) { [System.Environment]::SetEnvironmentVariable($variable.Name, [string]$variable.Value, 'Process') } }
 $env:NOCTIS_HANDOFF = $launch.sessionId
 if ($launch.title) { try { $Host.UI.RawUI.WindowTitle = $launch.title } catch {} }
 if ($Attached) {

@@ -384,7 +384,11 @@ func runStatusline() {
 	if observing {
 		alert += T("statusline.observe")
 	}
-	badge := orDefault(usageBadgeAt(usage, cfg, now), T("statusline.waiting"))
+	waiting := T("statusline.waiting")
+	if !sessionOnAnthropicAPI() {
+		waiting = T("statusline.noPlanLimits")
+	}
+	badge := orDefault(usageBadgeAt(usage, cfg, now), waiting)
 	line := fmt.Sprintf("%s %s%s · %s%s%s%s%s", marker, badge, etaText, model, effort, context, waitText, alert)
 	if chainOutput != "" {
 		fmt.Printf("%s\n%s\n", chainOutput, line)

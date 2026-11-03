@@ -134,6 +134,10 @@ Telemetri yok. Durum çubuğu yetmediğinde `api.anthropic.com` üzerinde Claude
 
 API anahtarında kullanım pencereleri olmaz; bu yüzden limit korumasının izleyeceği bir şey yoktur ve durum çubuğunda *limit verisi bekleniyor* yazar. Kuyruk, yönlendirici ve 529/5xx sonrası yeniden deneme yine çalışır.
 
+### Yerel modellerle çalışır mı?
+
+Evet; Claude Code Ollama, LM Studio, llama.cpp, vLLM ya da `ANTHROPIC_BASE_URL` ile gösterilen başka bir uç nokta üzerinde çalışırken aynı şekilde kurulur. Oradaki model planın limitlerinden harcamaz; bu yüzden noctis o oturumda limit korumasını kapatır ve durum çubuğunda *plan limiti yok* yazar. Kuyruk, sıkıştırma, 529/5xx sonrası yeniden deneme, yeniden başlatmalar ve zamanlayıcı her zamanki gibi çalışır; yeniden başlatılan oturum aynı uç noktada, aynı token ve modelle açılır. Orada modeli yüklediğiniz pencereyle `/noctis:setup --context-window 64k` çalıştırın: Claude Code tanımadığı bir model için 200k token sayar ve geç sıkıştırır. [Yerel modeller](docs/GUIDE.tr.md#yerel-modeller).
+
 ### Klonlanan bir deponun TASKS.md'si Claude'a iş yaptırabilir mi?
 
 Siz izin verene kadar hayır. Bir `TASKS.md`, siz `!noctis queue trust` yazana kadar hiçbir şeyi sürüklemez; sonradan eklenen ya da değişen bir satır, siz yeniden izin verene kadar onu yine durdurur. Claude `noctis queue trust`'ı kendisi çalıştırırsa hook bu çağrıyı reddeder. Dosyanın bir `noctis-verify` satırında adını verdiği denetim komutu da yalnızca verdiğiniz güven o satırı kapsadığı sürece çalışır. [Kuyruk dosyası](docs/GUIDE.tr.md#kuyruk-dosyası).

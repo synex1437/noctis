@@ -7,6 +7,13 @@ import (
 	"testing"
 )
 
+func settingsTaking(providerIDs bool) object {
+	if providerIDs {
+		return object{"env": object{"CLAUDE_CODE_USE_BEDROCK": "1"}}
+	}
+	return nil
+}
+
 func TestARoleValueThatIsNotAModelNameNeverReachesAnAgentFile(t *testing.T) {
 	sandboxFiles(t)
 	root := t.TempDir()
@@ -24,7 +31,7 @@ func TestARoleValueThatIsNotAModelNameNeverReachesAnAgentFile(t *testing.T) {
 		{"model": "sonnet # the fast one"},
 	} {
 		for _, anyModel := range []bool{false, true} {
-			syncAgentFiles(root, object{"research": spec}, anyModel)
+			syncAgentFiles(root, object{"research": spec}, settingsTaking(anyModel))
 			if content, _ := os.ReadFile(lite); string(content) != original {
 				t.Fatalf("research role %q was written into the agent's frontmatter (provider ids taken: %v):\n%s", spec, anyModel, content)
 			}
@@ -33,7 +40,7 @@ func TestARoleValueThatIsNotAModelNameNeverReachesAnAgentFile(t *testing.T) {
 			}
 		}
 	}
-	if changed := syncAgentFiles(root, object{"research": object{"model": "claude-sonnet-5[1m]", "effort": "high"}}, false); changed != 1 {
+	if changed := syncAgentFiles(root, object{"research": object{"model": "claude-sonnet-5[1m]", "effort": "high"}}, nil); changed != 1 {
 		t.Fatal("a real model name with a context suffix was not written")
 	}
 	if content, _ := os.ReadFile(lite); !strings.Contains(string(content), "model: claude-sonnet-5[1m]\neffort: high\n---") {

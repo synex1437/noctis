@@ -16,6 +16,12 @@ import (
 
 const (
 	autoCompactWindowVar   = "CLAUDE_CODE_AUTO_COMPACT_WINDOW"
+	maxContextTokensVar    = "CLAUDE_CODE_MAX_CONTEXT_TOKENS"
+	contextWindowMin       = 1000
+	contextWindowMax       = 10000000
+	managedContextKey      = "managedContextWindow"
+	attributionHeaderVar   = "CLAUDE_CODE_ATTRIBUTION_HEADER"
+	managedAttributionKey  = "managedAttributionHeader"
 	autoCompactPercentVar  = "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"
 	maxOutputTokensVar     = "CLAUDE_CODE_MAX_OUTPUT_TOKENS"
 	autoCompactWindowMin   = 100000.0

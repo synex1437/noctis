@@ -147,6 +147,18 @@ var carriedEnvNames = []string{"PATH", "TZ", "DISPLAY", "WAYLAND_DISPLAY", "TMUX
 
 var proxyEnvNames = []string{"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy"}
 
+var backendEnvNames = []string{"ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL",
+	"ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL",
+	"ANTHROPIC_SMALL_FAST_MODEL", "ANTHROPIC_CUSTOM_MODEL_OPTION", "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME",
+	"ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION", "ANTHROPIC_CUSTOM_MODEL_OPTION_SUPPORTED_CAPABILITIES",
+	"CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "CLAUDE_CODE_ATTRIBUTION_HEADER",
+	"DISABLE_PROMPT_CACHING", "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL", "ANTHROPIC_CUSTOM_HEADERS", "API_TIMEOUT_MS",
+	"DISABLE_TELEMETRY", "DISABLE_COST_WARNINGS", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"}
+
+func runnerEnvNames() []string {
+	return slices.Concat(carriedEnvNames, proxyEnvNames, backendEnvNames)
+}
+
 func environmentOf(names []string) [][2]string {
 	carried := [][2]string{}
 	for _, name := range names {
@@ -166,7 +178,7 @@ func runnerProxiesFile(sid string) string {
 }
 
 func keepProxiesForRunner(sid string) {
-	keepEnvironmentForRunner(sid, proxyEnvNames)
+	keepEnvironmentForRunner(sid, slices.Concat(proxyEnvNames, backendEnvNames))
 }
 
 func keepEnvironmentForRunner(sid string, names []string) {
@@ -186,7 +198,7 @@ func dropProxiesForRunner(sid string) {
 
 func takeProxiesForRunner(sid string) {
 	stored := readJSON(runnerProxiesFile(sid))
-	for _, name := range slices.Concat(carriedEnvNames, proxyEnvNames) {
+	for _, name := range runnerEnvNames() {
 		if value := getString(stored, name); value != "" {
 			_ = os.Setenv(name, value)
 		}

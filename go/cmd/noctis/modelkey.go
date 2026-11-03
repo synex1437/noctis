@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/url"
+	"os"
 	"reflect"
 	"slices"
 	"strconv"
@@ -254,6 +255,66 @@ func anthropicURL(base string) bool {
 		}
 	}
 	return host == "api.anthropic.com"
+}
+
+func sessionEnvironment() func(string) string {
+	if os.Getenv("CLAUDECODE") != "" {
+		return os.Getenv
+	}
+	env := getMap(sharedSettings(), "env")
+	return func(name string) string { return envVariable(env, name) }
+}
+
+func settingsEnvironment(settings object) func(string) string {
+	env := getMap(settings, "env")
+	return func(name string) string { return getString(env, name) }
+}
+
+func backendIn(lookup func(string) string) string {
+	for _, name := range providerSwitches {
+		if switchIsOn(lookup(name)) {
+			return name
+		}
+	}
+	base := strings.TrimSpace(lookup("ANTHROPIC_BASE_URL"))
+	if switchIsOn(lookup("_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL")) || anthropicURL(base) {
+		return ""
+	}
+	return base
+}
+
+func foreignBackend() string {
+	if currentHost().id != "claude" {
+		return ""
+	}
+	return backendIn(sessionEnvironment())
+}
+
+func sessionOnAnthropicAPI() bool {
+	return foreignBackend() == ""
+}
+
+func servedOn(model string, lookup func(string) string) bool {
+	if model == "" || !knownModelName(model) || !customEndpoint(backendIn(lookup)) {
+		return true
+	}
+	variable := claudeAliasVariables[strings.TrimSuffix(strings.ToLower(strings.TrimSpace(model)), "[1m]")]
+	return variable != "" && strings.TrimSpace(lookup(variable)) != ""
+}
+
+func backendServes(model string) bool {
+	return currentHost().id != "claude" || servedOn(model, sessionEnvironment())
+}
+
+func customEndpoint(backend string) bool {
+	return backend != "" && !slices.Contains(providerSwitches, backend)
+}
+
+func backendLabel(backend string) string {
+	if parsed, err := url.Parse(backend); err == nil && parsed.Host != "" {
+		return parsed.Host
+	}
+	return backend
 }
 
 // key is the name Claude Code files the settings of model under in modelSettings, for a session's model and
